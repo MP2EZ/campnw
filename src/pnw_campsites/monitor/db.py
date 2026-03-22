@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS watches (
     min_nights INTEGER DEFAULT 1,
     days_of_week TEXT,           -- JSON array of ints, null means all days
     notify_topic TEXT DEFAULT '', -- ntfy topic or Pushover key
+    session_token TEXT DEFAULT '',  -- anonymous ownership token
     enabled INTEGER DEFAULT 1,
     created_at TEXT,
     UNIQUE(facility_id, start_date, end_date)
@@ -51,6 +52,7 @@ class Watch:
     min_nights: int = 1
     days_of_week: list[int] | None = None
     notify_topic: str = ""
+    session_token: str = ""
     enabled: bool = True
     created_at: str = ""
 
@@ -98,8 +100,8 @@ class WatchDB:
             """\
             INSERT INTO watches
                 (facility_id, name, start_date, end_date, min_nights,
-                 days_of_week, notify_topic, enabled, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 days_of_week, notify_topic, session_token, enabled, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 watch.facility_id,
@@ -109,6 +111,7 @@ class WatchDB:
                 watch.min_nights,
                 json.dumps(watch.days_of_week) if watch.days_of_week else None,
                 watch.notify_topic,
+                watch.session_token,
                 int(watch.enabled),
                 now,
             ),
@@ -148,6 +151,30 @@ class WatchDB:
             json.loads(d["days_of_week"]) if d["days_of_week"] else None
         )
         return Watch(**d)
+
+    def list_watches_by_session(self, session_token: str) -> list[Watch]:
+        """List watches owned by a session token."""
+        rows = self._conn.execute(
+            "SELECT * FROM watches WHERE session_token=? ORDER BY created_at DESC",
+            (session_token,),
+        ).fetchall()
+        return [self._row_to_watch(r) for r in rows]
+
+    def toggle_enabled(self, watch_id: int, session_token: str) -> bool:
+        """Toggle a watch's enabled state. Returns new state, or None if not found."""
+        row = self._conn.execute(
+            "SELECT enabled FROM watches WHERE id=? AND session_token=?",
+            (watch_id, session_token),
+        ).fetchone()
+        if not row:
+            return False
+        new_state = not bool(row[0])
+        self._conn.execute(
+            "UPDATE watches SET enabled=? WHERE id=?",
+            (int(new_state), watch_id),
+        )
+        self._conn.commit()
+        return new_state
 
     # -------------------------------------------------------------------
     # Snapshots

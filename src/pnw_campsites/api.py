@@ -13,7 +13,9 @@ from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.responses import Response
 
+from pnw_campsites.monitor.db import Watch, WatchDB
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.registry.db import CampgroundRegistry
@@ -33,11 +35,12 @@ _registry: CampgroundRegistry | None = None
 _recgov: RecGovClient | None = None
 _goingtocamp: GoingToCampClient | None = None
 _engine: SearchEngine | None = None
+_watch_db: WatchDB | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _registry, _recgov, _goingtocamp, _engine
+    global _registry, _recgov, _goingtocamp, _engine, _watch_db
     load_dotenv()
 
     _registry = CampgroundRegistry()
@@ -50,8 +53,12 @@ async def lifespan(app: FastAPI):
     await _goingtocamp.__aenter__()
 
     _engine = SearchEngine(_registry, _recgov, _goingtocamp)
+    _watch_db = WatchDB()
 
     yield
+
+    if _watch_db:
+        _watch_db.close()
 
     if _recgov:
         await _recgov.__aexit__(None, None, None)
@@ -68,8 +75,9 @@ app = FastAPI(title="PNW Campsites", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "DELETE", "PATCH"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 # ---------------------------------------------------------------------------
@@ -380,6 +388,126 @@ async def list_campgrounds(
         )
         for cg in results
     ]
+
+
+# ---------------------------------------------------------------------------
+# Watch CRUD
+# ---------------------------------------------------------------------------
+
+SESSION_COOKIE = "campnw_session"
+
+
+def _get_session_token(request: Request, response: Response) -> str:
+    """Get or create a session token cookie for anonymous watch ownership."""
+    import uuid
+
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        token = str(uuid.uuid4())
+        response.set_cookie(
+            SESSION_COOKIE, token,
+            max_age=90 * 24 * 3600,  # 90 days
+            httponly=True,
+            samesite="lax",
+        )
+    return token
+
+
+class WatchRequest(BaseModel):
+    facility_id: str
+    name: str = ""
+    start_date: str
+    end_date: str
+    min_nights: int = 1
+    days_of_week: list[int] | None = None
+    notify_topic: str = ""
+
+
+class WatchResponse(BaseModel):
+    id: int
+    facility_id: str
+    name: str
+    start_date: str
+    end_date: str
+    min_nights: int
+    days_of_week: list[int] | None
+    notify_topic: str
+    enabled: bool
+    created_at: str
+
+
+@app.post("/api/watches", response_model=WatchResponse)
+async def create_watch(body: WatchRequest, request: Request, response: Response):
+    token = _get_session_token(request, response)
+
+    # Look up name from registry if not provided
+    name = body.name
+    if not name:
+        cg = _registry.get_by_facility_id(body.facility_id)
+        name = cg.name if cg else f"Facility {body.facility_id}"
+
+    watch = Watch(
+        facility_id=body.facility_id,
+        name=name,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        min_nights=body.min_nights,
+        days_of_week=body.days_of_week,
+        notify_topic=body.notify_topic,
+        session_token=token,
+    )
+    saved = _watch_db.add_watch(watch)
+    return WatchResponse(
+        id=saved.id,
+        facility_id=saved.facility_id,
+        name=saved.name,
+        start_date=saved.start_date,
+        end_date=saved.end_date,
+        min_nights=saved.min_nights,
+        days_of_week=saved.days_of_week,
+        notify_topic=saved.notify_topic,
+        enabled=saved.enabled,
+        created_at=saved.created_at,
+    )
+
+
+@app.get("/api/watches", response_model=list[WatchResponse])
+async def list_watches(request: Request, response: Response):
+    token = _get_session_token(request, response)
+    watches = _watch_db.list_watches_by_session(token)
+    return [
+        WatchResponse(
+            id=w.id,
+            facility_id=w.facility_id,
+            name=w.name,
+            start_date=w.start_date,
+            end_date=w.end_date,
+            min_nights=w.min_nights,
+            days_of_week=w.days_of_week,
+            notify_topic=w.notify_topic,
+            enabled=w.enabled,
+            created_at=w.created_at,
+        )
+        for w in watches
+    ]
+
+
+@app.delete("/api/watches/{watch_id}")
+async def delete_watch(watch_id: int, request: Request, response: Response):
+    token = _get_session_token(request, response)
+    # Verify ownership
+    watch = _watch_db.get_watch(watch_id)
+    if not watch or watch.session_token != token:
+        return {"ok": False, "error": "Not found"}
+    _watch_db.remove_watch(watch_id)
+    return {"ok": True}
+
+
+@app.patch("/api/watches/{watch_id}/toggle")
+async def toggle_watch(watch_id: int, request: Request, response: Response):
+    token = _get_session_token(request, response)
+    new_state = _watch_db.toggle_enabled(watch_id, token)
+    return {"ok": True, "enabled": new_state}
 
 
 # ---------------------------------------------------------------------------
