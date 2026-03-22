@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { searchCampsitesStream } from "./api";
 import type { CampgroundResult, SearchParams, SearchResponse, Window } from "./api";
-import { WatchPanel, WatchButton } from "./WatchPanel";
-import { CalendarHeatMap } from "./CalendarHeatMap";
+import { WatchPanel, WatchButton } from "./components/WatchPanel";
+import { CalendarHeatMap } from "./components/CalendarHeatMap";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 

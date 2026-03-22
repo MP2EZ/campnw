@@ -136,7 +136,7 @@ header {
 header h1 {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #2d5016;
+  color: var(--accent);
 }
 
 /* Wordmark sits where h1 was — same vertical rhythm */
@@ -174,7 +174,7 @@ header p {
 
 .mode-toggle button.active {
   background: var(--bg-card);
-  color: #2d5016;
+  color: var(--accent);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
@@ -309,7 +309,7 @@ header p {
 .tag-btn.active {
   background: var(--accent);
   color: #fff;
-  border-color: #2d5016;
+  border-color: var(--accent);
 }
 
 .tag-btn:hover:not(.active) {
@@ -320,7 +320,7 @@ header p {
   appearance: none;
   background: none;
   border: none;
-  color: #2d5016;
+  color: var(--accent);
   font-size: 0.8rem;
   font-weight: 500;
   padding: 0.25rem 0;
@@ -377,7 +377,7 @@ header p {
 .day-btn.active {
   background: var(--accent);
   color: #fff;
-  border-color: #2d5016;
+  border-color: var(--accent);
 }
 
 /* ─── Results header ───────────────────────────────────────────────── */
@@ -440,7 +440,7 @@ header p {
 }
 
 .result-card.error {
-  border-color: #e55;
+  border-color: var(--error-border);
 }
 
 .result-header {
@@ -479,7 +479,7 @@ header p {
 
 .source-recgov {
   background: #e8f0e0;
-  color: #2d5016;
+  color: var(--accent);
 }
 
 .source-wa_state {
@@ -566,7 +566,7 @@ header p {
 
 .book-link {
   font-size: 0.8rem;
-  color: #2d5016;
+  color: var(--accent);
   text-decoration: none;
   font-weight: 500;
 }
@@ -667,7 +667,7 @@ header p {
   background: var(--chip-bg);
   border: 1px solid var(--chip-border);
   border-radius: 6px;
-  color: #2d5016;
+  color: var(--accent);
   text-decoration: none;
   font-weight: 500;
 }
@@ -694,7 +694,7 @@ header p {
   background: none;
   border: 1px dashed #ccc;
   border-radius: 6px;
-  color: #2d5016;
+  color: var(--accent);
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
@@ -767,7 +767,7 @@ header p {
   background: var(--chip-bg);
   border: 1px solid var(--chip-border);
   border-radius: 6px;
-  color: #2d5016;
+  color: var(--accent);
   text-decoration: none;
   white-space: nowrap;
 }
