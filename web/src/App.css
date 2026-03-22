@@ -26,28 +26,43 @@
 }
 
 [data-theme="dark"] {
-  --bg: #1a1a1e;
-  --bg-card: #25252a;
-  --bg-hover: #2a2a30;
-  --bg-input: #2f2f35;
-  --bg-toggle: #35353b;
-  --text: #e0e0dc;
-  --text-muted: #999;
-  --text-light: #777;
-  --border: #3a3a40;
-  --border-light: #333338;
-  --border-input: #4a4a50;
-  --accent: #5a9a30;
-  --accent-hover: #6aaa40;
-  --chip-bg: #2a3525;
-  --chip-border: #3a4a30;
-  --chip-hover: #354530;
-  --warning-bg: #332d1a;
-  --warning-border: #554a20;
-  --warning-text: #d4b860;
-  --error-bg: #331a1a;
-  --error-border: #553030;
-  --error-text: #e08080;
+  /* Page + card surfaces — warm dark, not cold grey */
+  --bg: #171714;
+  --bg-card: #21211e;
+  --bg-hover: #2a2a26;
+  /* Inputs sit darker than card so fields visually recede */
+  --bg-input: #161614;
+  /* Toggle track darker than card so active pill "floats" */
+  --bg-toggle: #161614;
+
+  /* Text — warm off-white, never pure white */
+  --text: #deded8;
+  --text-muted: #8a8a82;
+  --text-light: #66665e;
+
+  /* Borders — warm-tinted, low contrast */
+  --border: #38382e;
+  --border-light: #2e2e26;
+  --border-input: #3e3e34;
+
+  /* Accent — deep forest green, subtle against dark surfaces */
+  --accent: #4a7a38;
+  --accent-hover: #5a8a48;
+
+  /* Chips — visibly green-tinted dark with a readable border */
+  --chip-bg: #1c2618;
+  --chip-border: #3d5530;
+  --chip-hover: #243020;
+
+  /* Warning — warm amber, low saturation */
+  --warning-bg: #2a2418;
+  --warning-border: #4a3e20;
+  --warning-text: #c8a84a;
+
+  /* Error — muted red */
+  --error-bg: #281818;
+  --error-border: #4a2828;
+  --error-text: #d07070;
 }
 
 * {
@@ -888,6 +903,173 @@ header p {
 .watch-cta-btn:hover {
   background: var(--accent);
   color: #fff;
+}
+
+/* ─── Dark mode overrides for hardcoded light-theme colors ─────────── */
+/*
+ * Many rules above use hardcoded hex values that don't respond to the
+ * [data-theme="dark"] variables. These overrides fix them selectively.
+ */
+
+[data-theme="dark"] {
+  /* ── Accent-colored text and borders ─── */
+  /* header h1 color, book-link, advanced-toggle, show-more-btn text,
+     site-chip / window-chip text, .watch-created */
+  header h1,
+  .book-link,
+  .advanced-toggle,
+  .show-more-btn,
+  .site-chip,
+  .window-chip,
+  .watch-created {
+    color: var(--accent);
+  }
+
+  /* active tag/day buttons: keep white text, swap border to match accent */
+  .tag-btn.active,
+  .day-btn.active {
+    border-color: var(--accent);
+  }
+
+  /* mode toggle active pill: accent text */
+  .mode-toggle button.active {
+    color: var(--accent);
+    /* Slightly lighter than bg-card so the pill reads against the track */
+    background: #2a2a26;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
+
+  /* ── Input and select backgrounds ─── */
+  /* Browser-native inputs ignore CSS variables unless explicitly set */
+  .form-row input,
+  .form-row select,
+  .form-row-full input {
+    background: var(--bg-input);
+    color: var(--text);
+    border-color: var(--border-input);
+    color-scheme: dark;
+  }
+
+  /* ── Source badges ─── */
+  .source-recgov {
+    background: #1e2e14;
+    color: #90c060;
+  }
+
+  .source-wa_state {
+    background: #162030;
+    color: #60a0c8;
+  }
+
+  .source-or_state {
+    background: #2a2010;
+    color: #c89050;
+  }
+
+  .source-id_state {
+    background: #221830;
+    color: #a070d0;
+  }
+
+  /* ── Card left-border accents ─── */
+  /* Slightly muted from their light-mode values so they glow softly */
+  .result-card.card-recgov {
+    border-left-color: #5a8a38;
+  }
+
+  .result-card.card-wa_state {
+    border-left-color: #3a88a8;
+  }
+
+  .result-card.card-or_state {
+    border-left-color: #c08820;
+  }
+
+  .result-card.card-id_state {
+    border-left-color: #7a40a8;
+  }
+
+  /* ── Tag badge (inline label on result card) ─── */
+  .tag-badge {
+    background: #2a2a22;
+    color: var(--text-light);
+  }
+
+  /* ── Drive badge ─── */
+  .drive-badge {
+    background: #2a2418;
+    color: #b09060;
+  }
+
+  /* ── Warning / error banners (hardcoded backgrounds) ─── */
+  .warning-banner {
+    background: var(--warning-bg);
+    border-color: var(--warning-border);
+    color: var(--warning-text);
+  }
+
+  .error-banner {
+    background: var(--error-bg);
+    border-color: var(--error-border);
+    color: var(--error-text);
+  }
+
+  .error-text {
+    color: var(--error-text);
+  }
+
+  /* ── WA data note (hardcoded amber) ─── */
+  .wa-data-note {
+    background: var(--warning-bg);
+    border-color: var(--warning-border);
+    color: var(--warning-text);
+  }
+
+  /* ── FCFS label ─── */
+  .fcfs-label {
+    color: #b09040;
+  }
+
+  /* ── FCFS section top border ─── */
+  .fcfs-section {
+    border-top-color: var(--border-light);
+  }
+
+  /* ── Chip hover border ─── */
+  .site-chip:hover,
+  .window-chip:hover {
+    border-color: #5a7a48;
+  }
+
+  /* ── Show more button ─── */
+  .show-more-btn {
+    border-color: var(--border-input);
+  }
+
+  .show-more-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border);
+  }
+
+  /* ── View toggle inner border ─── */
+  .view-toggle button {
+    border-right-color: var(--border-input);
+  }
+
+  /* ── Result card error border ─── */
+  .result-card.error {
+    border-color: var(--error-border);
+  }
+
+  /* ── Card toolbar bottom border ─── */
+  .card-toolbar {
+    border-bottom-color: var(--border-light);
+  }
+
+  /* ── No-results text ─── */
+  .no-results {
+    color: var(--text-muted);
+  }
 }
 
 .watch-created {
