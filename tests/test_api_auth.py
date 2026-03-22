@@ -2,50 +2,17 @@
 
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
 import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
 from pnw_campsites.auth import TOKEN_COOKIE
-from pnw_campsites.monitor.db import WatchDB
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    """FastAPI TestClient with temp WatchDB."""
-    # Patch sqlite3.connect to disable thread check for testing
-    original_connect = sqlite3.connect
-
-    def patched_connect(path, *args, **kwargs):
-        kwargs.setdefault("check_same_thread", False)
-        return original_connect(path, *args, **kwargs)
-
-    with patch("sqlite3.connect", patched_connect):
-        # Create fresh DB for this test
-        db_path = tmp_path / "test_watches.db"
-        db = WatchDB(db_path)
-
-        # Patch module-level globals
-        api_module._watch_db = db
-        registry_mock = MagicMock()
-        registry_mock.get_by_facility_id.return_value = None
-        api_module._registry = registry_mock
-
-        # Create TestClient with base_url that uses https to satisfy secure=True
-        test_client = TestClient(
-            api_module.app,
-            raise_server_exceptions=True,
-            base_url="https://testserver",
-        )
-
-        yield test_client
-
-        # Cleanup
-        db.close()
+def client(api_client: TestClient) -> TestClient:
+    """Alias shared api_client fixture for backward compatibility."""
+    return api_client
 
 
 class TestSignup:

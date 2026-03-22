@@ -1,7 +1,6 @@
 """Tests for WatchDB user and search history methods."""
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -9,10 +8,9 @@ from pnw_campsites.monitor.db import User, Watch, WatchDB
 
 
 @pytest.fixture
-def db(tmp_path: Path) -> WatchDB:
-    """Create an isolated test database."""
-    db_path = tmp_path / "test.db"
-    return WatchDB(db_path=db_path)
+def db(watch_db: WatchDB) -> WatchDB:
+    """Alias shared watch_db fixture for backward compatibility."""
+    return watch_db
 
 
 class TestUserCRUD:
