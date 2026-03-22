@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from pnw_campsites.monitor.db import Snapshot, Watch, WatchDB
+from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
-from pnw_campsites.registry.models import AvailabilityStatus
+from pnw_campsites.registry.db import CampgroundRegistry
+from pnw_campsites.registry.models import (
+    AvailabilityStatus,
+    BookingSystem,
+    CampgroundAvailability,
+)
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -37,38 +47,94 @@ class PollResult:
         return len(self.changes) > 0
 
 
+async def _fetch_availability(
+    facility_id: str,
+    start: date,
+    end: date,
+    booking_system: BookingSystem,
+    recgov: RecGovClient | None,
+    goingtocamp: GoingToCampClient | None,
+    watch_db: WatchDB,
+) -> CampgroundAvailability:
+    """Fetch availability from the right provider, using cache."""
+    source = booking_system.value
+    month_key = start.strftime("%Y-%m")
+
+    # Check cache
+    cached = watch_db.get_cached_availability(
+        facility_id, month_key, source,
+    )
+    if cached:
+        return CampgroundAvailability.model_validate_json(cached)
+
+    # Fetch from provider
+    if booking_system == BookingSystem.WA_STATE:
+        if not goingtocamp:
+            raise RuntimeError("GoingToCamp client not available")
+        avail = await goingtocamp.get_availability(
+            int(facility_id), start, end,
+        )
+    else:
+        if not recgov:
+            raise RuntimeError("RecGov client not available")
+        avail = await recgov.get_availability_range(
+            facility_id, start, end,
+        )
+
+    # Store in cache
+    watch_db.set_cached_availability(
+        facility_id, month_key, avail.model_dump_json(), source,
+    )
+
+    return avail
+
+
 async def poll_watch(
     watch: Watch,
-    client: RecGovClient,
+    recgov: RecGovClient | None,
+    goingtocamp: GoingToCampClient | None,
     watch_db: WatchDB,
+    registry: CampgroundRegistry | None = None,
 ) -> PollResult:
     """Poll a single watch: fetch availability, diff, store snapshot."""
     result = PollResult(watch=watch)
 
     try:
-        # Fetch current availability
         start = date.fromisoformat(watch.start_date)
         end = date.fromisoformat(watch.end_date)
-        availability = await client.get_availability_range(
-            watch.facility_id, start, end
+
+        # Determine booking system from registry or default to recgov
+        booking_system = BookingSystem.RECGOV
+        if registry:
+            cg = registry.get_by_facility_id(watch.facility_id)
+            if cg:
+                booking_system = cg.booking_system
+
+        availability = await _fetch_availability(
+            watch.facility_id, start, end,
+            booking_system, recgov, goingtocamp, watch_db,
         )
 
         # Build current snapshot: site_id -> [available dates]
         current: dict[str, list[str]] = {}
-        site_meta: dict[str, dict] = {}  # site_id -> metadata for change reports
-
-        days_filter = set(watch.days_of_week) if watch.days_of_week else None
+        site_meta: dict[str, dict] = {}
+        days_filter = (
+            set(watch.days_of_week) if watch.days_of_week else None
+        )
+        history_records: list[tuple[str, str, str]] = []
 
         for site_id, site in availability.campsites.items():
             available_dates = []
             for dt, status in site.availabilities.items():
+                d = date.fromisoformat(dt[:10])
+                # Record all statuses for history
+                history_records.append(
+                    (site_id, dt[:10], status.value)
+                )
                 if status != AvailabilityStatus.AVAILABLE:
                     continue
-                d = date.fromisoformat(dt[:10])
-                # Apply date range filter
                 if d < start or d > end:
                     continue
-                # Apply day-of-week filter
                 if days_filter and d.weekday() not in days_filter:
                     continue
                 available_dates.append(dt[:10])
@@ -84,13 +150,19 @@ async def poll_watch(
 
         result.current_available = len(current)
 
-        # Get previous snapshot
+        # Record availability history (silent, for predictions)
+        if history_records:
+            source = booking_system.value
+            watch_db.record_availability_history(
+                watch.facility_id, history_records, source,
+            )
+
+        # Diff against previous snapshot
         prev_snapshot = watch_db.get_latest_snapshot(watch.id)
         prev: dict[str, list[str]] = (
             prev_snapshot.available_sites if prev_snapshot else {}
         )
 
-        # Diff: find newly available dates per site
         for site_id, dates in current.items():
             prev_dates = set(prev.get(site_id, []))
             new_dates = [d for d in dates if d not in prev_dates]
@@ -102,7 +174,9 @@ async def poll_watch(
                         site_id=site_id,
                         site_name=meta.get("site_name", site_id),
                         loop=meta.get("loop", ""),
-                        campsite_type=meta.get("campsite_type", ""),
+                        campsite_type=meta.get(
+                            "campsite_type", "",
+                        ),
                         new_dates=sorted(new_dates),
                         max_people=meta.get("max_people", 0),
                     )
@@ -120,20 +194,31 @@ async def poll_watch(
 
     except Exception as e:
         result.error = str(e)
+        _logger.warning("Poll failed for watch %s: %s", watch.id, e)
 
     return result
 
 
 async def poll_all(
-    client: RecGovClient,
+    recgov: RecGovClient | None,
+    goingtocamp: GoingToCampClient | None,
     watch_db: WatchDB,
+    registry: CampgroundRegistry | None = None,
 ) -> list[PollResult]:
-    """Poll all enabled watches and return results."""
+    """Poll all enabled watches, grouping by facility to minimize API calls."""
     watches = watch_db.list_watches(enabled_only=True)
-    results: list[PollResult] = []
 
+    # Group watches by facility_id to share availability data
+    by_facility: dict[str, list[Watch]] = defaultdict(list)
     for watch in watches:
-        result = await poll_watch(watch, client, watch_db)
-        results.append(result)
+        by_facility[watch.facility_id].append(watch)
+
+    results: list[PollResult] = []
+    for _facility_id, facility_watches in by_facility.items():
+        for watch in facility_watches:
+            result = await poll_watch(
+                watch, recgov, goingtocamp, watch_db, registry,
+            )
+            results.append(result)
 
     return results

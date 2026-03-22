@@ -208,15 +208,21 @@ Performance:
 - [x] axe-core in dev mode for continuous a11y feedback
 - [x] Search form restructure: trip type buttons, compact layout
 
-### v0.4 "Accounts"
-- [ ] User auth (email + Google OAuth via Clerk or Auth.js)
-- [ ] Saved home base and default preferences
-- [ ] Watch email collection (anonymous watches need notification channel)
-- [ ] Persistent watch ownership (migrate anonymous watches)
-- [ ] Search history (recent 5-10 as quick-fill, not full log)
-- [ ] Privacy controls (data export, account deletion)
-- [ ] Fix watch UNIQUE constraint to scope per-user (not cross-user)
-- [ ] Redact from_location from search logs
+### v0.4 "Accounts" — DONE
+- [x] User auth (PyJWT + bcrypt, httpOnly cookie, no external service)
+- [x] Saved home base and default preferences
+- [x] Persistent watch ownership (migrate anonymous watches on signup/login)
+- [x] Search history (recent searches as quick-fill chips)
+- [x] Privacy controls (data export JSON, account deletion)
+- [x] Fix watch UNIQUE constraint to scope per-user (app-level duplicate check)
+- [x] Redact from_location from search logs
+
+### v0.45 "Testing" — DONE
+- [x] 346 tests (295 backend + 51 frontend)
+- [x] 82% backend coverage, 70% CI threshold
+- [x] Shared conftest.py with fixtures and factories
+- [x] CI test job gates deployment in deploy.yml
+- [x] Vitest + React Testing Library configured
 
 ### v0.5 "Background Engine"
 - [ ] Server-side watch polling (APScheduler, 15-min cycles)

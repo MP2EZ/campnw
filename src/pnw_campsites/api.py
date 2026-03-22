@@ -7,7 +7,7 @@ import logging
 import os
 import re
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -47,6 +47,75 @@ _recgov: RecGovClient | None = None
 _goingtocamp: GoingToCampClient | None = None
 _engine: SearchEngine | None = None
 _watch_db: WatchDB | None = None
+_poll_state: dict = {
+    "last_poll": None,
+    "next_poll": None,
+    "active_watches": 0,
+    "last_changes": 0,
+    "last_errors": 0,
+}
+
+
+async def _poll_all_watches() -> None:
+    """Background job: poll all watches and dispatch notifications."""
+    from pnw_campsites.monitor.notify import notify_ntfy
+    from pnw_campsites.monitor.watcher import poll_all
+
+    if not _watch_db:
+        return
+
+    _poll_logger.info("Starting watch poll cycle")
+    results = await poll_all(
+        _recgov, _goingtocamp, _watch_db, _registry,
+    )
+
+    total_changes = 0
+    total_errors = 0
+    for result in results:
+        if result.error:
+            total_errors += 1
+            continue
+        if not result.has_changes:
+            continue
+        total_changes += len(result.changes)
+        channel = result.watch.notification_channel or ""
+        topic = result.watch.notify_topic
+        # Dispatch notification based on channel
+        if channel == "ntfy" and topic:
+            try:
+                await notify_ntfy(topic, result)
+                _watch_db.log_notification(
+                    result.watch.id, "ntfy", "sent",
+                    len(result.changes),
+                )
+            except Exception as e:
+                _poll_logger.warning(
+                    "ntfy failed for watch %s: %s",
+                    result.watch.id, e,
+                )
+                _watch_db.log_notification(
+                    result.watch.id, "ntfy", "failed",
+                )
+        elif topic:
+            # Legacy: if notify_topic is set but no channel,
+            # treat as ntfy for backward compatibility
+            try:
+                await notify_ntfy(topic, result)
+                _watch_db.log_notification(
+                    result.watch.id, "ntfy", "sent",
+                    len(result.changes),
+                )
+            except Exception:
+                pass
+
+    _poll_state["last_poll"] = datetime.now().isoformat()
+    _poll_state["last_changes"] = total_changes
+    _poll_state["last_errors"] = total_errors
+    _poll_state["active_watches"] = len(results)
+    _poll_logger.info(
+        "Poll cycle complete: %d watches, %d changes, %d errors",
+        len(results), total_changes, total_errors,
+    )
 
 
 @asynccontextmanager
@@ -66,7 +135,31 @@ async def lifespan(app: FastAPI):
     _engine = SearchEngine(_registry, _recgov, _goingtocamp)
     _watch_db = WatchDB()
 
+    # Start background watch poller (every 15 minutes)
+    scheduler = None
+    if os.getenv("DISABLE_SCHEDULER") != "1":
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(
+            _poll_all_watches,
+            "interval",
+            minutes=15,
+            id="watch_poller",
+            max_instances=1,
+            coalesce=True,
+        )
+        scheduler.start()
+        next_run = scheduler.get_job("watch_poller").next_run_time
+        _poll_state["next_poll"] = (
+            next_run.isoformat() if next_run else None
+        )
+        _poll_logger.info("Watch poller started (15-min interval)")
+
     yield
+
+    if scheduler:
+        scheduler.shutdown(wait=False)
 
     if _watch_db:
         _watch_db.close()
@@ -259,6 +352,7 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
 
 
 _track_logger = logging.getLogger("pnw_campsites.track")
+_poll_logger = logging.getLogger("pnw_campsites.poller")
 _search_logger = logging.getLogger("pnw_campsites.api")
 
 
@@ -673,6 +767,23 @@ async def save_search(body: SaveSearchRequest, request: Request):
         return {"ok": False}
     _watch_db.save_search(user_id, json.dumps(body.params), body.result_count)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Poll status
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/poll-status")
+async def poll_status(request: Request):
+    user_id = _get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    recent = _watch_db.get_recent_notifications(limit=10) if _watch_db else []
+    return {
+        **_poll_state,
+        "recent_notifications": recent,
+    }
 
 
 # ---------------------------------------------------------------------------

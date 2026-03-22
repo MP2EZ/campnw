@@ -57,7 +57,7 @@ class TestPollWatchFirstPoll:
         )
         client.get_availability_range.return_value = availability
 
-        result = await poll_watch(watch, client, watch_db)
+        result = await poll_watch(watch, client, None, watch_db)
 
         # First poll reports all available as new
         assert len(result.changes) == 1
@@ -109,7 +109,7 @@ class TestPollWatchFirstPoll:
         )
         client.get_availability_range.return_value = availability
 
-        result = await poll_watch(watch, client, watch_db)
+        result = await poll_watch(watch, client, None, watch_db)
 
         assert result.current_available == 2
         snapshot = watch_db.get_latest_snapshot(watch.id)
@@ -153,7 +153,7 @@ class TestPollWatchChangeDetection:
         client = AsyncMock(spec=RecGovClient)
         client.get_availability_range.return_value = availability1
 
-        result1 = await poll_watch(watch, client, watch_db)
+        result1 = await poll_watch(watch, client, None, watch_db)
         # First poll reports all available as new
         assert len(result1.changes) == 1
         assert result1.changes[0].new_dates == ["2026-06-01", "2026-06-02"]
@@ -177,7 +177,12 @@ class TestPollWatchChangeDetection:
         )
         client.get_availability_range.return_value = availability2
 
-        result2 = await poll_watch(watch, client, watch_db)
+        # Clear cache so second poll hits the mock client
+        watch_db.clear_expired_cache()
+        watch_db._conn.execute("DELETE FROM availability_cache")
+        watch_db._conn.commit()
+
+        result2 = await poll_watch(watch, client, None, watch_db)
 
         assert len(result2.changes) == 1
         change = result2.changes[0]
@@ -217,11 +222,11 @@ class TestPollWatchChangeDetection:
         client = AsyncMock(spec=RecGovClient)
         client.get_availability_range.return_value = availability
 
-        result1 = await poll_watch(watch, client, watch_db)
+        result1 = await poll_watch(watch, client, None, watch_db)
         # First poll reports all available as new
         assert len(result1.changes) == 1
 
-        result2 = await poll_watch(watch, client, watch_db)
+        result2 = await poll_watch(watch, client, None, watch_db)
         # Second poll with same data has no new changes
         assert result2.changes == []
         assert result2.current_available == 1
@@ -259,7 +264,7 @@ class TestPollWatchFiltering:
         client = AsyncMock(spec=RecGovClient)
         client.get_availability_range.return_value = availability
 
-        await poll_watch(watch, client, watch_db)
+        await poll_watch(watch, client, None, watch_db)
 
         # Only June 15 is in range [10, 20]
         snapshot = watch_db.get_latest_snapshot(watch.id)
@@ -296,7 +301,7 @@ class TestPollWatchFiltering:
         client = AsyncMock(spec=RecGovClient)
         client.get_availability_range.return_value = availability
 
-        await poll_watch(watch, client, watch_db)
+        await poll_watch(watch, client, None, watch_db)
 
         snapshot = watch_db.get_latest_snapshot(watch.id)
         # Only Thu, Fri, Sat are in the filter
@@ -325,7 +330,7 @@ class TestPollWatchErrorHandling:
         client = AsyncMock(spec=RecGovClient)
         client.get_availability_range.side_effect = Exception("API error")
 
-        result = await poll_watch(watch, client, watch_db)
+        result = await poll_watch(watch, client, None, watch_db)
 
         assert result.error is not None
         assert "API error" in result.error
@@ -365,7 +370,7 @@ class TestPollWatchErrorHandling:
         client = AsyncMock(spec=RecGovClient)
         client.get_availability_range.return_value = availability
 
-        result = await poll_watch(watch, client, watch_db)
+        result = await poll_watch(watch, client, None, watch_db)
 
         # Should not crash, first poll reports all available as new
         assert result.error is None
@@ -384,7 +389,7 @@ class TestPollAll:
         """poll_all with zero watches returns empty list."""
         client = AsyncMock(spec=RecGovClient)
 
-        results = await poll_all(client, watch_db)
+        results = await poll_all(client, None, watch_db)
 
         assert results == []
         client.get_availability_range.assert_not_called()
@@ -422,7 +427,7 @@ class TestPollAll:
         )
         client.get_availability_range.return_value = availability
 
-        results = await poll_all(client, watch_db)
+        results = await poll_all(client, None, watch_db)
 
         assert len(results) == 1
         assert results[0].watch.facility_id == "232465"
@@ -458,7 +463,7 @@ class TestPollAll:
         )
         client.get_availability_range.return_value = availability
 
-        results = await poll_all(client, watch_db)
+        results = await poll_all(client, None, watch_db)
 
         assert len(results) == 2
         facility_ids = [r.watch.facility_id for r in results]

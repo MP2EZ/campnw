@@ -1,7 +1,7 @@
 # campnw Roadmap: v0.2.1 to v1.0
 
-**Last updated:** March 2026 (AI feature review — restructured v0.6, expanded v0.7/v0.9)
-**Current version:** v0.3 (deployed at campnw.palouselabs.com)
+**Last updated:** March 2026
+**Current version:** v0.45 (deployed at campnw.palouselabs.com)
 
 ---
 
@@ -12,7 +12,8 @@ v0.1    [SHIPPED]  Foundation          — Multi-provider search, CLI watches, d
 v0.2    [SHIPPED]  Watches on the Web  — Web-based watch management, dark mode
 v0.2.1  [SHIPPED]  Hardening           — Security fixes, Level A a11y failures, perf wins
 v0.3    [SHIPPED]  Calendar & Polish   — Calendar heat map, SSE streaming, shareable links
-v0.4    ------->   Accounts            — User accounts, saved preferences, persistent watches
+v0.4    [SHIPPED]  Accounts            — User accounts, saved preferences, persistent watches
+v0.45   [SHIPPED]  Testing             — 346 tests, CI gating, 82% coverage
 v0.5    ------->   Background Engine   — Server-side polling, web push, registry auto-enrichment
 v0.6    ------->   Smart Search        — Zero-result recovery, date shifting, search diagnostics
 v0.7    ------->   Oregon + Delight    — Oregon State Parks, contextual notifications, site vibe
