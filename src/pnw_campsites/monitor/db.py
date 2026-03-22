@@ -79,6 +79,13 @@ class WatchDB:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(SCHEMA)
+        # Migrate: add session_token if missing (pre-v0.2 DBs)
+        cols = [r[1] for r in self._conn.execute("PRAGMA table_info(watches)")]
+        if "session_token" not in cols:
+            self._conn.execute(
+                'ALTER TABLE watches ADD COLUMN session_token TEXT DEFAULT ""'
+            )
+            self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
