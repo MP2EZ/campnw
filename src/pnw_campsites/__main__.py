@@ -408,6 +408,22 @@ async def cmd_watch_poll(args: argparse.Namespace) -> None:
     watch_db.close()
 
 
+async def cmd_enrich(args: argparse.Namespace) -> None:
+    """Enrich registry campgrounds with LLM-extracted tags."""
+    load_dotenv()
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        print("ERROR: ANTHROPIC_API_KEY not set in .env")
+        sys.exit(1)
+
+    from pnw_campsites.enrichment.llm_tags import enrich_registry
+
+    enriched = await enrich_registry(
+        api_key=api_key, limit=args.limit, dry_run=args.dry_run
+    )
+    print(f"Enriched {enriched} campground(s).")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="pnw_campsites",
@@ -476,6 +492,20 @@ def main() -> None:
     watch_sub.add_parser("list", help="List all watches")
     watch_sub.add_parser("poll", help="Poll all watches for changes")
 
+    # --- enrich ---
+    p_enrich = sub.add_parser("enrich", help="Enrich registry with LLM-extracted tags")
+    p_enrich.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Max campgrounds to enrich (default: 50)",
+    )
+    p_enrich.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview enrichments without saving",
+    )
+
     args = parser.parse_args()
 
     if args.command == "search":
@@ -493,6 +523,8 @@ def main() -> None:
             cmd_watch_list(args)
         elif args.watch_command == "poll":
             asyncio.run(cmd_watch_poll(args))
+    elif args.command == "enrich":
+        asyncio.run(cmd_enrich(args))
 
 
 if __name__ == "__main__":

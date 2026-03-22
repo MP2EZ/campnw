@@ -58,7 +58,7 @@ _poll_state: dict = {
 
 async def _poll_all_watches() -> None:
     """Background job: poll all watches and dispatch notifications."""
-    from pnw_campsites.monitor.notify import notify_ntfy
+    from pnw_campsites.monitor.notify import notify_ntfy, notify_web_push
     from pnw_campsites.monitor.watcher import poll_all
 
     if not _watch_db:
@@ -96,6 +96,26 @@ async def _poll_all_watches() -> None:
                 _watch_db.log_notification(
                     result.watch.id, "ntfy", "failed",
                 )
+        elif channel == "web_push" and result.watch.user_id:
+            subs = _watch_db.get_push_subscriptions_for_user(result.watch.user_id)
+            for sub in subs:
+                try:
+                    await notify_web_push(
+                        {
+                            "endpoint": sub["endpoint"],
+                            "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]},
+                        },
+                        result,
+                    )
+                    _watch_db.log_notification(
+                        result.watch.id, "web_push", "sent", len(result.changes),
+                    )
+                except Exception as e:
+                    _poll_logger.warning(
+                        "web_push failed for watch %s: %s",
+                        result.watch.id, e,
+                    )
+                    _watch_db.log_notification(result.watch.id, "web_push", "failed")
         elif topic:
             # Legacy: if notify_topic is set but no channel,
             # treat as ntfy for backward compatibility
@@ -787,6 +807,40 @@ async def poll_status(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Push notification endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/push/vapid-key")
+async def get_vapid_key():
+    """Return the VAPID public key for client-side push subscription setup."""
+    key = os.getenv("VAPID_PUBLIC_KEY", "")
+    return {"public_key": key}
+
+
+@app.post("/api/push/subscribe")
+async def push_subscribe(body: PushSubscribeRequest, request: Request, response: Response):
+    """Register a web push subscription for the current user or session."""
+    user_id = _get_current_user(request)
+    session_token = request.cookies.get(SESSION_COOKIE, "") if not user_id else ""
+    _watch_db.save_push_subscription(
+        user_id=user_id,
+        session_token=session_token,
+        endpoint=body.endpoint,
+        p256dh=body.p256dh,
+        auth=body.auth,
+    )
+    return {"ok": True}
+
+
+@app.delete("/api/push/subscribe")
+async def push_unsubscribe(body: PushUnsubscribeRequest, request: Request):
+    """Remove a web push subscription (e.g. when the user unsubscribes)."""
+    _watch_db.delete_push_subscription(body.endpoint)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Watch CRUD
 # ---------------------------------------------------------------------------
 
@@ -799,6 +853,9 @@ class WatchRequest(BaseModel):
     min_nights: int = Field(default=1, ge=1, le=30)
     days_of_week: list[int] | None = None
     notify_topic: str = Field(default="", max_length=64, pattern=r"^[A-Za-z0-9_-]*$")
+    notification_channel: str = Field(
+        default="", max_length=20, pattern=r"^(ntfy|pushover|web_push|)?$"
+    )
 
 
 class WatchResponse(BaseModel):
@@ -810,8 +867,19 @@ class WatchResponse(BaseModel):
     min_nights: int
     days_of_week: list[int] | None
     notify_topic: str
+    notification_channel: str
     enabled: bool
     created_at: str
+
+
+class PushSubscribeRequest(BaseModel):
+    endpoint: str = Field(max_length=500)
+    p256dh: str = Field(max_length=200)
+    auth: str = Field(max_length=100)
+
+
+class PushUnsubscribeRequest(BaseModel):
+    endpoint: str = Field(max_length=500)
 
 
 def _owns_watch(watch: Watch, user_id: int | None, session_token: str) -> bool:
@@ -841,6 +909,7 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         min_nights=body.min_nights,
         days_of_week=body.days_of_week,
         notify_topic=body.notify_topic,
+        notification_channel=body.notification_channel,
         session_token=token,
         user_id=user_id,
     )
@@ -858,6 +927,7 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         min_nights=saved.min_nights,
         days_of_week=saved.days_of_week,
         notify_topic=saved.notify_topic,
+        notification_channel=saved.notification_channel,
         enabled=saved.enabled,
         created_at=saved.created_at,
     )
@@ -881,6 +951,7 @@ async def list_watches(request: Request, response: Response):
             min_nights=w.min_nights,
             days_of_week=w.days_of_week,
             notify_topic=w.notify_topic,
+            notification_channel=w.notification_channel,
             enabled=w.enabled,
             created_at=w.created_at,
         )

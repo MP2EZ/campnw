@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 from datetime import date
 
 import httpx
@@ -102,3 +104,35 @@ def notify_console(result: PollResult) -> None:
     """Print a notification to the console."""
     print(format_poll_result(result))
     print()
+
+
+async def notify_web_push(
+    subscription: dict,  # {endpoint, keys: {p256dh, auth}}
+    result: PollResult,
+) -> None:
+    """Send a web push notification."""
+    from pywebpush import WebPushException, webpush
+
+    vapid_private_key = os.getenv("VAPID_PRIVATE_KEY", "")
+    vapid_claims_email = os.getenv("VAPID_CLAIMS_EMAIL", "")
+    if not vapid_private_key:
+        return
+
+    payload = json.dumps({
+        "title": f"Campsite Alert: {result.watch.name}",
+        "body": f"{len(result.changes)} new site(s) available",
+        "url": "/",
+    })
+
+    try:
+        webpush(
+            subscription_info=subscription,
+            data=payload,
+            vapid_private_key=vapid_private_key,
+            vapid_claims={"sub": f"mailto:{vapid_claims_email}"},
+        )
+    except WebPushException as e:
+        if hasattr(e, "response") and e.response and e.response.status_code in (404, 410):
+            # Subscription expired — caller should clean up
+            raise
+        raise

@@ -214,6 +214,18 @@ class WatchDB:
                 "ALTER TABLE watches ADD COLUMN"
                 " notification_channel TEXT DEFAULT ''"
             )
+        # v0.5 push subscriptions table
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                session_token TEXT DEFAULT '',
+                endpoint TEXT NOT NULL UNIQUE,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+        """)
         self._conn.commit()
 
     # -------------------------------------------------------------------
@@ -319,6 +331,45 @@ class WatchDB:
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # -------------------------------------------------------------------
+    # Push subscriptions
+    # -------------------------------------------------------------------
+
+    def save_push_subscription(
+        self,
+        user_id: int | None,
+        session_token: str,
+        endpoint: str,
+        p256dh: str,
+        auth: str,
+    ) -> None:
+        """Upsert a web push subscription."""
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "INSERT OR REPLACE INTO push_subscriptions"
+            " (user_id, session_token, endpoint, p256dh, auth, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, session_token, endpoint, p256dh, auth, now),
+        )
+        self._conn.commit()
+
+    def get_push_subscriptions_for_user(self, user_id: int) -> list[dict]:
+        """Return all active push subscriptions for a user."""
+        rows = self._conn.execute(
+            "SELECT endpoint, p256dh, auth FROM push_subscriptions"
+            " WHERE user_id=?",
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_push_subscription(self, endpoint: str) -> None:
+        """Remove a push subscription (e.g. after 404/410 from push service)."""
+        self._conn.execute(
+            "DELETE FROM push_subscriptions WHERE endpoint=?",
+            (endpoint,),
+        )
+        self._conn.commit()
 
     # -------------------------------------------------------------------
     # Users
@@ -501,8 +552,9 @@ class WatchDB:
             """\
             INSERT INTO watches
                 (facility_id, name, start_date, end_date, min_nights,
-                 days_of_week, notify_topic, session_token, user_id, enabled, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 days_of_week, notify_topic, notification_channel,
+                 session_token, user_id, enabled, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 watch.facility_id,
@@ -512,6 +564,7 @@ class WatchDB:
                 watch.min_nights,
                 json.dumps(watch.days_of_week) if watch.days_of_week else None,
                 watch.notify_topic,
+                watch.notification_channel,
                 watch.session_token,
                 watch.user_id,
                 int(watch.enabled),
