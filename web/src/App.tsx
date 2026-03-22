@@ -634,6 +634,16 @@ export default function App() {
     setError(null);
     setResultsView(mode === "find" ? "dates" : "sites");
     setSearchDates({ start: params.start_date, end: params.end_date });
+
+    // Sync search params to URL for shareable links
+    const url = new URL(window.location.href);
+    url.search = "";
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== "" && v !== false) {
+        url.searchParams.set(k, String(v));
+      }
+    }
+    window.history.replaceState(null, "", url.toString());
     try {
       const data = await searchCampsites(params);
       setResults(data);
@@ -730,9 +740,13 @@ export default function App() {
               />
             ))}
           {results.campgrounds_with_availability === 0 && (
-            <p className="no-results">
-              No availability found. Try broadening your search.
-            </p>
+            <div className="no-results">
+              <p>No availability found for these dates.</p>
+              <p className="no-results-hint">
+                Try different dates, a wider date range, or fewer nights.
+                {searchDates && " You can also watch specific campgrounds to get notified when sites open up."}
+              </p>
+            </div>
           )}
         </div>
       )}
