@@ -136,13 +136,13 @@ export function CalendarHeatMap({
   return (
     <div className="heatmap" role="group" aria-label="Availability calendar">
       <div className="heatmap-legend">
-        <span className="heatmap-legend-label">Less</span>
+        <span className="heatmap-legend-label">Fewer sites</span>
         <span className="heatmap-swatch" style={{ background: "var(--heatmap-0)" }} />
         <span className="heatmap-swatch" style={{ background: "var(--heatmap-1)" }} />
         <span className="heatmap-swatch" style={{ background: "var(--heatmap-2)" }} />
         <span className="heatmap-swatch" style={{ background: "var(--heatmap-3)" }} />
         <span className="heatmap-swatch" style={{ background: "var(--heatmap-4)" }} />
-        <span className="heatmap-legend-label">More</span>
+        <span className="heatmap-legend-label">More sites</span>
       </div>
 
       {months.map((ym) => {
@@ -161,18 +161,15 @@ export function CalendarHeatMap({
           <div key={ym} className="heatmap-month">
             <h4 className="heatmap-month-title">{monthName}</h4>
             <div className="heatmap-grid" role="grid" aria-label={monthName}>
-              <div className="heatmap-row" role="row">
-                {dayHeaders.map((d, i) => (
-                  <span key={i} className="heatmap-header" role="columnheader">
-                    {d}
-                  </span>
-                ))}
-              </div>
-              <div className="heatmap-row" role="row">
-                {Array.from({ length: firstDow }).map((_, i) => (
-                  <span key={`pad-${i}`} className="heatmap-cell empty" />
-                ))}
-                {days.map((day) => (
+              {dayHeaders.map((d, i) => (
+                <span key={i} className="heatmap-header" role="columnheader">
+                  {d}
+                </span>
+              ))}
+              {Array.from({ length: firstDow }).map((_, i) => (
+                <span key={`pad-${i}`} className="heatmap-cell empty" />
+              ))}
+              {days.map((day) => (
                   <button
                     key={day.date}
                     className={`heatmap-cell ${selectedDate === day.date ? "selected" : ""}`}
@@ -188,7 +185,6 @@ export function CalendarHeatMap({
                     )}
                   </button>
                 ))}
-              </div>
             </div>
           </div>
         );

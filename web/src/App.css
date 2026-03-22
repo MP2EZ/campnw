@@ -764,19 +764,12 @@ header p {
 }
 
 .heatmap-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.heatmap-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
   gap: 0.15rem;
 }
 
 .heatmap-header {
-  width: 2.5rem;
   text-align: center;
   font-size: 0.6rem;
   font-weight: 600;
@@ -785,8 +778,8 @@ header p {
 }
 
 .heatmap-cell {
-  width: 2.5rem;
-  height: 2.5rem;
+  aspect-ratio: 1;
+  min-height: 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
