@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -327,6 +329,7 @@ class SearchEngine:
         batch_size = 3  # concurrent availability requests
         batch_delay = 0.5  # seconds between batches
         all_results: list[CampgroundResult] = []
+        search_start = time.monotonic()
 
         for i in range(0, len(campgrounds), batch_size):
             if i > 0:
@@ -338,6 +341,20 @@ class SearchEngine:
             ]
             batch_results = await asyncio.gather(*tasks)
             all_results.extend(batch_results)
+
+        search_elapsed = time.monotonic() - search_start
+        rate_limited = sum(1 for r in all_results if r.error == "rate_limited")
+        logger = logging.getLogger("pnw_campsites.search")
+        logger.info(
+            "Search: %d campgrounds in %.1fs (batch=%d, delay=%.1fs) "
+            "| %d rate_limited | %d with availability",
+            len(campgrounds),
+            search_elapsed,
+            batch_size,
+            batch_delay,
+            rate_limited,
+            sum(1 for r in all_results if r.total_available_sites > 0),
+        )
 
         # Step 4: Attach drive times to results
         if drive_times:

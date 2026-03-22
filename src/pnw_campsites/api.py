@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import date
@@ -59,6 +60,8 @@ async def lifespan(app: FastAPI):
     if _registry:
         _registry.close()
 
+
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="PNW Campsites", lifespan=lifespan)
 
