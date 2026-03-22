@@ -227,23 +227,26 @@ Performance:
 - [ ] Availability cache in SQLite (10-15 min TTL)
 - [ ] Availability history data collection (silent — feeds v0.9 predictions)
 - [ ] Automated registry refresh (monthly RIDB, quarterly GoingToCamp)
+- [ ] Registry auto-enrichment (LLM tag extraction from RIDB/GoingToCamp descriptions via Haiku)
+- [ ] Anthropic API spend limits in console (SDK introduced here)
 
-### v0.6 "AI Search"
-- [ ] NL search as entry point → auto-fills form → user confirms (NOT a toggle)
-- [ ] NL prompt engineering (tag taxonomy, few-shot examples)
-- [ ] Loading shimmer state while NL parses
-- [ ] aria-live on extracted parameter preview
-- [ ] NL parse accuracy tracking
-- [ ] Prompt injection defense (strict Pydantic validation on model output)
-- [ ] Anthropic API spend limits in console
+### v0.6 "Smart Search"
+- [ ] Smart date shifting (suggest nearby dates on zero/low results, one-tap re-search)
+- [ ] "Why nothing?" diagnostic (specific explanation + action chips)
+- [ ] Lightweight alternative suggestions (tag-similar campgrounds when target is full)
+- [ ] Search history (last 20, quick re-run)
+- [ ] aria-live on suggestions, keyboard-accessible action chips
 
-### v0.7 "Oregon Expansion"
+### v0.7 "Oregon + Delight"
 - [ ] Oregon State Parks provider (ReserveAmerica via Playwright)
 - [ ] Seed 200+ OR state parks into registry
 - [ ] OR State Parks source filter + color-coded badge (amber)
 - [ ] Campground detail enrichment (amenities, photos, site counts)
 - [ ] Registry enrichment pass (manual curation top 50)
 - [ ] Booking link validation
+- [ ] Contextual watch notifications (LLM-enriched alerts with urgency scoring)
+- [ ] Site character / "vibe" descriptions (pre-generated, rendered on result cards)
+- [ ] Registry gap detector (internal tool — cluster search misses by region)
 
 ### v0.8 "Trip Planner"
 - [ ] Trip planner on dedicated route (/plan), not embedded in search
@@ -254,11 +257,13 @@ Performance:
 - [ ] role="log" on transcript, aria-live for tool-call states
 - [ ] Rate limit communication UX (5/day free tier)
 
-### v0.9 "Predictions"
+### v0.9 "Predictions+"
 - [ ] Predictive availability display ("typically frees up X days before")
-- [ ] Statistical prediction model (time-series on polling history)
+- [ ] Statistical prediction model (time-series on polling history + booking window detection)
 - [ ] Smart notification scoring ("usually books within 30 min")
 - [ ] Prediction confidence display with "still learning" cold start
+- [ ] Anomaly-based deal alerts (proactive alerts for statistically unusual availability)
+- [ ] "Why did I miss it?" post-mortem (explains missed cancellations, suggests tuning)
 
 ### v1.0 "campnw 1.0"
 - [ ] Map view (Leaflet, lazy-loaded, with list alternative for a11y)

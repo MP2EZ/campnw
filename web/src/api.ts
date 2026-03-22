@@ -178,6 +178,125 @@ export interface CreateWatchParams {
 
 const fetchOpts: RequestInit = { credentials: "include" };
 
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export interface UserData {
+  id: number;
+  email: string;
+  display_name: string;
+  home_base: string;
+  default_state: string;
+  default_nights: number;
+  default_from: string;
+}
+
+export interface SearchHistoryEntry {
+  params: SearchParams;
+  result_count: number;
+  searched_at: string;
+}
+
+export async function signup(
+  email: string,
+  password: string,
+  displayName?: string
+): Promise<UserData> {
+  const resp = await fetch(`${API_BASE}/api/auth/signup`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, display_name: displayName || "" }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error(data.detail || `Signup failed: ${resp.status}`);
+  }
+  const data = await resp.json();
+  return data.user;
+}
+
+export async function login(
+  email: string,
+  password: string
+): Promise<UserData> {
+  const resp = await fetch(`${API_BASE}/api/auth/login`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error(data.detail || `Login failed: ${resp.status}`);
+  }
+  const data = await resp.json();
+  return data.user;
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE}/api/auth/logout`, {
+    ...fetchOpts,
+    method: "POST",
+  });
+}
+
+export async function getMe(): Promise<UserData | null> {
+  const resp = await fetch(`${API_BASE}/api/auth/me`, fetchOpts);
+  if (resp.status === 401) return null;
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return data.user;
+}
+
+export async function updateProfile(
+  updates: Partial<Omit<UserData, "id" | "email">>
+): Promise<UserData> {
+  const resp = await fetch(`${API_BASE}/api/auth/me`, {
+    ...fetchOpts,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!resp.ok) throw new Error(`Update failed: ${resp.status}`);
+  const data = await resp.json();
+  return data.user;
+}
+
+export async function deleteAccount(): Promise<void> {
+  await fetch(`${API_BASE}/api/auth/me`, {
+    ...fetchOpts,
+    method: "DELETE",
+  });
+}
+
+export async function exportData(): Promise<object> {
+  const resp = await fetch(`${API_BASE}/api/auth/export`, fetchOpts);
+  if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function getSearchHistory(): Promise<SearchHistoryEntry[]> {
+  const resp = await fetch(`${API_BASE}/api/search-history`, fetchOpts);
+  if (resp.status === 401) return [];
+  if (!resp.ok) return [];
+  return resp.json();
+}
+
+export async function saveSearchHistory(
+  params: SearchParams,
+  resultCount: number
+): Promise<void> {
+  // Fire-and-forget — don't await or handle errors
+  fetch(`${API_BASE}/api/search-history`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ params, result_count: resultCount }),
+  }).catch(() => {});
+}
+
 export async function getWatches(): Promise<WatchData[]> {
   const resp = await fetch(`${API_BASE}/api/watches`, fetchOpts);
   if (!resp.ok) throw new Error(`Failed to load watches: ${resp.status}`);
