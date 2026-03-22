@@ -430,11 +430,12 @@ function ResultCard({
   }
 
   const sourceLabels: Record<string, string> = {
+    recgov: "Rec.gov",
     wa_state: "WA Parks",
     or_state: "OR Parks",
     id_state: "ID Parks",
   };
-  const sourceLabel = sourceLabels[result.booking_system] || result.state;
+  const sourceLabel = sourceLabels[result.booking_system] || result.booking_system;
   const dateBlocks = groupByDateBlock(result.windows);
   const summaryText =
     view === "dates"
