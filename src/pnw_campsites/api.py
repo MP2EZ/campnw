@@ -324,6 +324,9 @@ async def list_campgrounds(
 # Static file serving (production — serves React build from /static)
 # ---------------------------------------------------------------------------
 
-_static_dir = Path(__file__).resolve().parents[2] / "static"
-if _static_dir.is_dir():
-    app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
+# Check likely locations for the static build directory
+for _depth in (2, 3, 4):
+    _static_dir = Path(__file__).resolve().parents[_depth] / "static"
+    if _static_dir.is_dir():
+        app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
+        break
