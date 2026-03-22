@@ -50,7 +50,7 @@ export function WatchPanel({
     <div className="watch-overlay" onClick={onClose}>
       <div className="watch-panel" onClick={(e) => e.stopPropagation()}>
         <div className="watch-panel-header">
-          <h2>Watches</h2>
+          <h2>Watchlist</h2>
           <button className="watch-close" onClick={onClose}>
             &times;
           </button>

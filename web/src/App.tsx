@@ -656,9 +656,9 @@ export default function App() {
             <button
               className="header-btn"
               onClick={() => setWatchPanelOpen(true)}
-              title="Watches"
+              title="Watchlist"
             >
-              Watches
+              Watchlist
             </button>
             <button
               className="header-btn theme-toggle"
