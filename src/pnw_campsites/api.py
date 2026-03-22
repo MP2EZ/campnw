@@ -5,10 +5,12 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from datetime import date
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
@@ -316,3 +318,12 @@ async def list_campgrounds(
         )
         for cg in results
     ]
+
+
+# ---------------------------------------------------------------------------
+# Static file serving (production — serves React build from /static)
+# ---------------------------------------------------------------------------
+
+_static_dir = Path(__file__).resolve().parents[2] / "static"
+if _static_dir.is_dir():
+    app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
