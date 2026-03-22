@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+from pnw_campsites.geo import estimated_drive_minutes, geocode_address, is_known_base, resolve_base
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.registry.db import CampgroundRegistry
@@ -29,6 +30,8 @@ class SearchQuery:
     state: str | None = None
     tags: list[str] | None = None
     max_drive_minutes: int | None = None
+    from_location: str | None = None  # known base name or address
+    from_coords: tuple[float, float] | None = None  # resolved (lat, lon)
     name_like: str | None = None
     booking_system: BookingSystem | None = None
 
@@ -67,6 +70,7 @@ class CampgroundResult:
     total_available_sites: int = 0
     fcfs_sites: int = 0  # FCFS/not-reservable site count (always counted)
     total_sites: int = 0  # total sites at this campground
+    estimated_drive_minutes: int | None = None
     error: str | None = None
 
 
@@ -252,10 +256,39 @@ class SearchEngine:
         campgrounds = self._registry.search(
             state=query.state,
             tags=query.tags,
-            max_drive_minutes=query.max_drive_minutes,
             booking_system=query.booking_system,
             name_like=query.name_like,
         )
+
+        # Step 1b: Resolve origin and filter/sort by distance
+        from_coords = query.from_coords
+        if not from_coords and query.from_location:
+            if is_known_base(query.from_location):
+                from_coords = resolve_base(query.from_location)
+            else:
+                from_coords = await geocode_address(query.from_location)
+            query.from_coords = from_coords
+
+        drive_times: dict[str, int] = {}  # facility_id -> minutes
+        if from_coords:
+            for cg in campgrounds:
+                if cg.latitude and cg.longitude:
+                    drive_times[cg.facility_id] = estimated_drive_minutes(
+                        from_coords[0], from_coords[1],
+                        cg.latitude, cg.longitude,
+                    )
+
+            # Filter by max drive time
+            if query.max_drive_minutes:
+                campgrounds = [
+                    cg for cg in campgrounds
+                    if drive_times.get(cg.facility_id, 9999) <= query.max_drive_minutes
+                ]
+
+            # Sort by distance (closest first)
+            campgrounds.sort(
+                key=lambda cg: drive_times.get(cg.facility_id, 9999)
+            )
 
         # Limit to avoid hammering the API
         campgrounds = campgrounds[: query.max_campgrounds]
@@ -292,7 +325,14 @@ class SearchEngine:
             batch_results = await asyncio.gather(*tasks)
             all_results.extend(batch_results)
 
-        # Step 4: Build search results
+        # Step 4: Attach drive times to results
+        if drive_times:
+            for r in all_results:
+                fid = r.campground.facility_id
+                if fid in drive_times:
+                    r.estimated_drive_minutes = drive_times[fid]
+
+        # Step 5: Build search results
         results = SearchResults(
             query=query,
             results=[
@@ -305,8 +345,15 @@ class SearchEngine:
             ),
         )
 
-        # Sort by number of available sites (most availability first)
-        results.results.sort(key=lambda r: r.total_available_sites, reverse=True)
+        # Sort by distance if filtering by location, otherwise by availability
+        if from_coords:
+            results.results.sort(
+                key=lambda r: r.estimated_drive_minutes or 9999
+            )
+        else:
+            results.results.sort(
+                key=lambda r: r.total_available_sites, reverse=True
+            )
 
         return results
 

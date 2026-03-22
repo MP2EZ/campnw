@@ -22,6 +22,7 @@ export interface CampgroundResult {
   longitude: number;
   total_available_sites: number;
   fcfs_sites: number;
+  estimated_drive_minutes: number | null;
   availability_url: string | null;
   windows: Window[];
   error: string | null;
@@ -42,6 +43,8 @@ export interface SearchParams {
   tags?: string;
   name?: string;
   source?: string;
+  from_location?: string;
+  max_drive?: number;
   no_groups?: boolean;
   include_fcfs?: boolean;
   limit?: number;
@@ -59,6 +62,8 @@ export async function searchCampsites(
   if (params.tags) query.set("tags", params.tags);
   if (params.name) query.set("name", params.name);
   if (params.source) query.set("source", params.source);
+  if (params.from_location) query.set("from", params.from_location);
+  if (params.max_drive) query.set("max_drive", String(params.max_drive));
   if (params.no_groups) query.set("no_groups", "true");
   if (params.include_fcfs) query.set("include_fcfs", "true");
   if (params.limit) query.set("limit", String(params.limit));

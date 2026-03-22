@@ -292,6 +292,17 @@ header p {
   border-left: 3px solid #7d3cb5;
 }
 
+.drive-badge {
+  font-size: 0.65rem;
+  font-weight: 500;
+  background: #f0ebe0;
+  color: #8a6d3b;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+
 .result-summary {
   font-size: 0.8rem;
   color: #666;

@@ -96,6 +96,7 @@ class CampgroundResultResponse(BaseModel):
     longitude: float
     total_available_sites: int
     fcfs_sites: int
+    estimated_drive_minutes: int | None = None
     availability_url: str | None = None
     windows: list[WindowResponse]
     error: str | None = None
@@ -198,6 +199,7 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
         longitude=cg.longitude,
         total_available_sites=r.total_available_sites,
         fcfs_sites=r.fcfs_sites,
+        estimated_drive_minutes=r.estimated_drive_minutes,
         availability_url=_build_availability_url(
             cg.facility_id, cg.booking_system, start, end
         ) if start else None,
@@ -222,6 +224,10 @@ async def search(
     ),
     tags: str | None = Query(None, description="Comma-separated tags"),
     max_drive: int | None = Query(None, description="Max drive minutes"),
+    from_location: str | None = Query(
+        None, alias="from",
+        description="Origin: seattle, bellevue, portland, spokane, or address",
+    ),
     name: str | None = Query(None, description="Campground name filter"),
     source: str | None = Query(None, description="recgov or wa_state"),
     no_groups: bool = Query(False, description="Exclude group sites"),
@@ -243,6 +249,7 @@ async def search(
         days_of_week=days_set,
         tags=tags.split(",") if tags else None,
         max_drive_minutes=max_drive,
+        from_location=from_location,
         name_like=name,
         include_group_sites=not no_groups,
         include_fcfs=include_fcfs,

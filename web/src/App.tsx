@@ -73,6 +73,8 @@ function SearchForm({
   const [customDays, setCustomDays] = useState<Set<number>>(new Set());
   const [name, setName] = useState("");
   const [source, setSource] = useState("");
+  const [fromLocation, setFromLocation] = useState("seattle");
+  const [maxDrive, setMaxDrive] = useState("");
   const [limit, setLimit] = useState(20);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -97,6 +99,8 @@ function SearchForm({
         days_of_week: getDaysOfWeek(),
         name: name || undefined,
         source: source || undefined,
+        from_location: fromLocation || undefined,
+        max_drive: maxDrive ? Number(maxDrive) : undefined,
         limit,
       },
       mode
@@ -174,6 +178,30 @@ function SearchForm({
       {mode === "find" && dayPreset === "custom" && (
         <DayPicker selected={customDays} onChange={setCustomDays} />
       )}
+
+      <div className="form-row">
+        <label>
+          From
+          <select value={fromLocation} onChange={(e) => setFromLocation(e.target.value)}>
+            <option value="seattle">Seattle</option>
+            <option value="bellevue">Bellevue</option>
+            <option value="portland">Portland</option>
+            <option value="spokane">Spokane</option>
+            <option value="bellingham">Bellingham</option>
+          </select>
+        </label>
+        <label>
+          Max Drive
+          <select value={maxDrive} onChange={(e) => setMaxDrive(e.target.value)}>
+            <option value="">Any distance</option>
+            <option value="60">Under 1 hour</option>
+            <option value="120">Under 2 hours</option>
+            <option value="180">Under 3 hours</option>
+            <option value="240">Under 4 hours</option>
+            <option value="300">Under 5 hours</option>
+          </select>
+        </label>
+      </div>
 
       <div className="form-row">
         <label>
@@ -451,6 +479,13 @@ function ResultCard({
             <span className={`source-badge source-${result.booking_system}`}>
               {sourceLabel}
             </span>
+            {result.estimated_drive_minutes != null && (
+              <span className="drive-badge">
+                {result.estimated_drive_minutes < 60
+                  ? `~${result.estimated_drive_minutes}m`
+                  : `~${Math.floor(result.estimated_drive_minutes / 60)}h ${result.estimated_drive_minutes % 60}m`}
+              </span>
+            )}
           </h3>
           <p className="result-summary">
             {summaryText}

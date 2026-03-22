@@ -10,6 +10,7 @@ from datetime import date
 
 from dotenv import load_dotenv
 
+from pnw_campsites.geo import format_drive_time
 from pnw_campsites.monitor.db import Watch, WatchDB
 from pnw_campsites.monitor.notify import notify_console, notify_ntfy
 from pnw_campsites.monitor.watcher import poll_all
@@ -75,8 +76,10 @@ def _format_results(results, show_urls: bool = True) -> None:
             continue
 
         cg = r.campground
-        # Summary line with FCFS context
+        # Summary line with FCFS context and drive time
         parts = [f"{r.total_available_sites} reservable"]
+        if r.estimated_drive_minutes is not None:
+            parts.insert(0, format_drive_time(r.estimated_drive_minutes))
         if r.fcfs_sites:
             parts.append(f"{r.fcfs_sites} FCFS")
         summary = ", ".join(parts)
@@ -150,6 +153,7 @@ async def cmd_search(args: argparse.Namespace) -> None:
         days_of_week=days_of_week,
         tags=args.tags.split(",") if args.tags else None,
         max_drive_minutes=args.max_drive,
+        from_location=getattr(args, "from_location", None),
         name_like=args.name,
         include_group_sites=not args.no_groups,
         include_fcfs=args.include_fcfs,
@@ -411,7 +415,10 @@ def main() -> None:
                           help="Minimum consecutive nights (default: 2)")
     p_search.add_argument("--days", help="Days of week: thu,fri,sat,sun or weekend/long-weekend")
     p_search.add_argument("--tags", help="Comma-separated tags: lakeside,river,kid-friendly")
-    p_search.add_argument("--max-drive", type=int, help="Max drive minutes from Bellevue")
+    p_search.add_argument("--max-drive", type=int,
+                          help="Max drive minutes from origin (use with --from)")
+    p_search.add_argument("--from", dest="from_location",
+                          help="Origin: seattle, bellevue, portland, spokane, or address")
     p_search.add_argument("--name", help="Filter by campground name (substring match)")
     p_search.add_argument("--people", type=int, help="Min site capacity")
     p_search.add_argument("--no-groups", action="store_true", help="Exclude group sites")
