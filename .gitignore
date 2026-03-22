@@ -24,8 +24,9 @@ env/
 *.swo
 *~
 
-# Data (keep structure, ignore DBs)
+# Data (keep structure, ignore DBs except registry seed data)
 data/*.db
+!data/registry.db
 data/*.sqlite
 data/*.json
 !data/.gitkeep
