@@ -163,6 +163,7 @@ export interface WatchData {
   min_nights: number;
   days_of_week: number[] | null;
   notify_topic: string;
+  notification_channel: string;
   enabled: boolean;
   created_at: string;
 }
@@ -174,6 +175,7 @@ export interface CreateWatchParams {
   end_date: string;
   min_nights?: number;
   days_of_week?: number[];
+  notification_channel?: string;
 }
 
 const fetchOpts: RequestInit = { credentials: "include" };
@@ -332,4 +334,64 @@ export async function toggleWatch(
   });
   if (!resp.ok) throw new Error(`Failed to toggle watch: ${resp.status}`);
   return resp.json();
+}
+
+// ---------------------------------------------------------------------------
+// Web Push
+// ---------------------------------------------------------------------------
+
+export async function getVapidKey(): Promise<string> {
+  const resp = await fetch(`${API_BASE}/api/push/vapid-key`, fetchOpts);
+  if (!resp.ok) return "";
+  const data = await resp.json() as { public_key?: string };
+  return data.public_key || "";
+}
+
+export async function subscribePush(
+  endpoint: string,
+  p256dh: string,
+  auth: string
+): Promise<void> {
+  await fetch(`${API_BASE}/api/push/subscribe`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint, p256dh, auth }),
+  });
+}
+
+export async function unsubscribePush(endpoint: string): Promise<void> {
+  await fetch(`${API_BASE}/api/push/subscribe`, {
+    ...fetchOpts,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Poll status
+// ---------------------------------------------------------------------------
+
+export interface RecentNotification {
+  watch_name: string;
+  channel: string;
+  status: string;
+  changes_count: number;
+  sent_at: string;
+}
+
+export interface PollStatus {
+  last_poll: string | null;
+  next_poll: string | null;
+  active_watches: number;
+  last_changes: number;
+  last_errors: number;
+  recent_notifications: RecentNotification[];
+}
+
+export async function getPollStatus(): Promise<PollStatus | null> {
+  const resp = await fetch(`${API_BASE}/api/poll-status`, fetchOpts);
+  if (!resp.ok) return null;
+  return resp.json() as Promise<PollStatus>;
 }

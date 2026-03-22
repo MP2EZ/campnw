@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getWatches, deleteWatch, toggleWatch, createWatch } from "../api";
 import type { WatchData, CreateWatchParams } from "../api";
+import { usePushNotifications } from "../hooks/usePushNotifications";
+import { useAuth } from "../hooks/useAuth";
+import { PollDashboard } from "./PollDashboard";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -11,6 +14,7 @@ export function WatchPanel({
   open: boolean;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
   const [watches, setWatches] = useState<WatchData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +156,8 @@ export function WatchPanel({
             </div>
           ))}
         </div>
+
+        {user && <PollDashboard open={open} />}
       </div>
     </div>
   );
@@ -176,6 +182,8 @@ export function WatchButton({
 }) {
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const { subscribed, subscribe } = usePushNotifications();
 
   const handleWatch = async () => {
     setCreating(true);
@@ -187,11 +195,18 @@ export function WatchButton({
         end_date: endDate,
         min_nights: minNights || 1,
         days_of_week: daysOfWeek,
+        notification_channel: "web_push",
       };
       await createWatch(params);
       setCreated(true);
       onCreated?.();
-      setTimeout(() => setCreated(false), 3000);
+      if (!subscribed) {
+        setShowPushPrompt(true);
+      }
+      setTimeout(() => {
+        setCreated(false);
+        setShowPushPrompt(false);
+      }, 8000);
     } catch {
       // ignore
     } finally {
@@ -199,8 +214,26 @@ export function WatchButton({
     }
   };
 
+  const handleEnablePush = async () => {
+    await subscribe();
+    setShowPushPrompt(false);
+  };
+
   if (created) {
-    return <span className="watch-created">Watching ✓</span>;
+    return (
+      <span className="watch-created-group">
+        <span className="watch-created">Watching</span>
+        {showPushPrompt && (
+          <button
+            className="push-opt-in-btn"
+            onClick={handleEnablePush}
+            type="button"
+          >
+            Enable notifications
+          </button>
+        )}
+      </span>
+    );
   }
 
   return (

@@ -54,6 +54,7 @@ class Watch:
     notify_topic: str = ""
     session_token: str = ""
     user_id: int | None = None
+    notification_channel: str = ""  # ntfy, pushover, web_push, or ""
     enabled: bool = True
     created_at: str = ""
 
@@ -171,6 +172,203 @@ class WatchDB:
                 searched_at TEXT NOT NULL
             );
         """)
+        # v0.5 tables: cache, history, notification log
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS availability_cache (
+                campground_id TEXT NOT NULL,
+                month TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'recgov',
+                payload TEXT NOT NULL,
+                cached_at TEXT NOT NULL,
+                PRIMARY KEY (campground_id, month, source)
+            );
+            CREATE TABLE IF NOT EXISTS availability_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campground_id TEXT NOT NULL,
+                site_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'recgov',
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_avail_hist_lookup
+                ON availability_history(campground_id, date);
+            CREATE TABLE IF NOT EXISTS notification_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                watch_id INTEGER REFERENCES watches(id)
+                    ON DELETE CASCADE,
+                channel TEXT NOT NULL,
+                status TEXT NOT NULL,
+                changes_count INTEGER DEFAULT 0,
+                sent_at TEXT NOT NULL
+            );
+        """)
+        # v0.5 watch column: notification_channel
+        watch_cols = [
+            r[1] for r in self._conn.execute(
+                "PRAGMA table_info(watches)"
+            )
+        ]
+        if "notification_channel" not in watch_cols:
+            self._conn.execute(
+                "ALTER TABLE watches ADD COLUMN"
+                " notification_channel TEXT DEFAULT ''"
+            )
+        # v0.5 push subscriptions table
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                session_token TEXT DEFAULT '',
+                endpoint TEXT NOT NULL UNIQUE,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+        """)
+        self._conn.commit()
+
+    # -------------------------------------------------------------------
+    # Availability cache
+    # -------------------------------------------------------------------
+
+    _CACHE_TTL_SECONDS = 600  # 10 minutes
+
+    def get_cached_availability(
+        self, campground_id: str, month: str, source: str = "recgov",
+    ) -> str | None:
+        """Return cached JSON payload if fresh, None if expired."""
+        row = self._conn.execute(
+            "SELECT payload, cached_at FROM availability_cache"
+            " WHERE campground_id=? AND month=? AND source=?",
+            (campground_id, month, source),
+        ).fetchone()
+        if not row:
+            return None
+        cached_at = datetime.fromisoformat(row["cached_at"])
+        age = (datetime.now() - cached_at).total_seconds()
+        if age > self._CACHE_TTL_SECONDS:
+            return None
+        return row["payload"]
+
+    def set_cached_availability(
+        self, campground_id: str, month: str,
+        payload: str, source: str = "recgov",
+    ) -> None:
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "INSERT OR REPLACE INTO availability_cache"
+            " (campground_id, month, source, payload, cached_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (campground_id, month, source, payload, now),
+        )
+        self._conn.commit()
+
+    def clear_expired_cache(self) -> int:
+        """Remove stale cache entries. Returns count removed."""
+        cutoff = datetime.now().isoformat()
+        # SQLite datetime comparison works on ISO strings
+        cursor = self._conn.execute(
+            "DELETE FROM availability_cache"
+            " WHERE datetime(cached_at, '+10 minutes') < datetime(?)",
+            (cutoff,),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    # -------------------------------------------------------------------
+    # Availability history
+    # -------------------------------------------------------------------
+
+    def record_availability_history(
+        self,
+        campground_id: str,
+        records: list[tuple[str, str, str]],
+        source: str = "recgov",
+    ) -> None:
+        """Batch-insert availability observations.
+
+        records: list of (site_id, date, status) tuples.
+        """
+        now = datetime.now().isoformat()
+        self._conn.executemany(
+            "INSERT INTO availability_history"
+            " (campground_id, site_id, date, status, source,"
+            " observed_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (campground_id, sid, dt, st, source, now)
+                for sid, dt, st in records
+            ],
+        )
+        self._conn.commit()
+
+    # -------------------------------------------------------------------
+    # Notification log
+    # -------------------------------------------------------------------
+
+    def log_notification(
+        self, watch_id: int, channel: str,
+        status: str, changes_count: int = 0,
+    ) -> None:
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "INSERT INTO notification_log"
+            " (watch_id, channel, status, changes_count, sent_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (watch_id, channel, status, changes_count, now),
+        )
+        self._conn.commit()
+
+    def get_recent_notifications(
+        self, limit: int = 10,
+    ) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT n.*, w.name as watch_name"
+            " FROM notification_log n"
+            " LEFT JOIN watches w ON n.watch_id = w.id"
+            " ORDER BY n.sent_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -------------------------------------------------------------------
+    # Push subscriptions
+    # -------------------------------------------------------------------
+
+    def save_push_subscription(
+        self,
+        user_id: int | None,
+        session_token: str,
+        endpoint: str,
+        p256dh: str,
+        auth: str,
+    ) -> None:
+        """Upsert a web push subscription."""
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "INSERT OR REPLACE INTO push_subscriptions"
+            " (user_id, session_token, endpoint, p256dh, auth, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, session_token, endpoint, p256dh, auth, now),
+        )
+        self._conn.commit()
+
+    def get_push_subscriptions_for_user(self, user_id: int) -> list[dict]:
+        """Return all active push subscriptions for a user."""
+        rows = self._conn.execute(
+            "SELECT endpoint, p256dh, auth FROM push_subscriptions"
+            " WHERE user_id=?",
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_push_subscription(self, endpoint: str) -> None:
+        """Remove a push subscription (e.g. after 404/410 from push service)."""
+        self._conn.execute(
+            "DELETE FROM push_subscriptions WHERE endpoint=?",
+            (endpoint,),
+        )
         self._conn.commit()
 
     # -------------------------------------------------------------------
@@ -354,8 +552,9 @@ class WatchDB:
             """\
             INSERT INTO watches
                 (facility_id, name, start_date, end_date, min_nights,
-                 days_of_week, notify_topic, session_token, user_id, enabled, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 days_of_week, notify_topic, notification_channel,
+                 session_token, user_id, enabled, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 watch.facility_id,
@@ -365,6 +564,7 @@ class WatchDB:
                 watch.min_nights,
                 json.dumps(watch.days_of_week) if watch.days_of_week else None,
                 watch.notify_topic,
+                watch.notification_channel,
                 watch.session_token,
                 watch.user_id,
                 int(watch.enabled),

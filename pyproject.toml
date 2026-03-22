@@ -23,9 +23,14 @@ api = [
     "uvicorn>=0.30",
     "PyJWT>=2.8",
     "bcrypt>=4.0",
+    "apscheduler>=3.10,<4",
+    "pywebpush>=2.0",
 ]
 notify = [
     "ntfy-wrapper>=0.2",
+]
+enrichment = [
+    "anthropic>=0.40",
 ]
 
 [tool.ruff]
