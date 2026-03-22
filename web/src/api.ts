@@ -83,3 +83,68 @@ export async function searchCampsites(
   if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
   return resp.json();
 }
+
+// ---------------------------------------------------------------------------
+// Watches
+// ---------------------------------------------------------------------------
+
+export interface WatchData {
+  id: number;
+  facility_id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  min_nights: number;
+  days_of_week: number[] | null;
+  notify_topic: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface CreateWatchParams {
+  facility_id: string;
+  name?: string;
+  start_date: string;
+  end_date: string;
+  min_nights?: number;
+  days_of_week?: number[];
+}
+
+const fetchOpts: RequestInit = { credentials: "include" };
+
+export async function getWatches(): Promise<WatchData[]> {
+  const resp = await fetch(`${API_BASE}/api/watches`, fetchOpts);
+  if (!resp.ok) throw new Error(`Failed to load watches: ${resp.status}`);
+  return resp.json();
+}
+
+export async function createWatch(
+  params: CreateWatchParams
+): Promise<WatchData> {
+  const resp = await fetch(`${API_BASE}/api/watches`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!resp.ok) throw new Error(`Failed to create watch: ${resp.status}`);
+  return resp.json();
+}
+
+export async function deleteWatch(watchId: number): Promise<void> {
+  await fetch(`${API_BASE}/api/watches/${watchId}`, {
+    ...fetchOpts,
+    method: "DELETE",
+  });
+}
+
+export async function toggleWatch(
+  watchId: number
+): Promise<{ enabled: boolean }> {
+  const resp = await fetch(`${API_BASE}/api/watches/${watchId}/toggle`, {
+    ...fetchOpts,
+    method: "PATCH",
+  });
+  if (!resp.ok) throw new Error(`Failed to toggle watch: ${resp.status}`);
+  return resp.json();
+}
