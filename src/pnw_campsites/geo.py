@@ -92,6 +92,8 @@ async def geocode_address(address: str) -> tuple[float, float]:
 
     Raises ValueError if the address can't be resolved.
     """
+    if not address.strip() or len(address) > 200:
+        raise ValueError("Address must be 1-200 characters")
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             "https://nominatim.openstreetmap.org/search",

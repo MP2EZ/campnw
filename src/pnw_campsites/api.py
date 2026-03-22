@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.responses import Response
 
 from pnw_campsites.monitor.db import Watch, WatchDB
@@ -490,13 +490,13 @@ def _get_session_token(request: Request, response: Response) -> str:
 
 
 class WatchRequest(BaseModel):
-    facility_id: str
-    name: str = ""
-    start_date: str
-    end_date: str
-    min_nights: int = 1
+    facility_id: str = Field(max_length=30, pattern=r"^[-\w]{1,30}$")
+    name: str = Field(default="", max_length=200)
+    start_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    min_nights: int = Field(default=1, ge=1, le=30)
     days_of_week: list[int] | None = None
-    notify_topic: str = ""
+    notify_topic: str = Field(default="", max_length=64, pattern=r"^[A-Za-z0-9_-]*$")
 
 
 class WatchResponse(BaseModel):
