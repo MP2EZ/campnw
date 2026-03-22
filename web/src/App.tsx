@@ -31,12 +31,11 @@ type ResultsView = "dates" | "sites";
 const INITIAL_BLOCKS_SHOWN = 3;
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DAY_PRESETS: Record<string, string> = {
-  "": "Any day",
-  "4,5,6": "Weekend (Fri-Sun)",
-  "3,4,5,6": "Long weekend (Thu-Sun)",
-  "0,1,2,3,4": "Weekdays",
-  custom: "Custom...",
+const DAY_PRESETS: Record<string, [string, string]> = {
+  "": ["Any", ""],
+  "4,5,6": ["Weekend", "F–Su"],
+  "3,4,5,6": ["Long wknd", "Th–Su"],
+  "0,1,2,3,4": ["Weekdays", ""],
 };
 
 // ─── Day of Week Picker ──────────────────────────────────────────────
@@ -148,7 +147,43 @@ function SearchForm({
         </button>
       </div>
 
-      <div className="form-row">
+      {/* Trip type — primary filter, only in "Find a date" mode */}
+      {mode === "find" && (
+        <>
+          <div
+            className="trip-type"
+            role="group"
+            aria-label="Trip type"
+          >
+            {Object.entries(DAY_PRESETS).map(([val, [label, hint]]) => (
+                <button
+                  key={val}
+                  type="button"
+                  className={`trip-type-btn ${dayPreset === val ? "active" : ""}`}
+                  aria-pressed={dayPreset === val}
+                  onClick={() => setDayPreset(val)}
+                >
+                  {label}
+                  {hint && <span className="trip-type-hint">{hint}</span>}
+                </button>
+              ))}
+            <button
+              type="button"
+              className={`trip-type-btn ${dayPreset === "custom" ? "active" : ""}`}
+              aria-pressed={dayPreset === "custom"}
+              onClick={() => setDayPreset("custom")}
+            >
+              Custom
+            </button>
+          </div>
+          {dayPreset === "custom" && (
+            <DayPicker selected={customDays} onChange={setCustomDays} />
+          )}
+        </>
+      )}
+
+      {/* Dates + nights */}
+      <div className={mode === "find" ? "form-row form-row-3" : "form-row"}>
         <label>
           {mode === "find" ? "From" : "Check in"}
           <input
@@ -167,12 +202,9 @@ function SearchForm({
             required
           />
         </label>
-      </div>
-
-      {mode === "find" && (
-        <div className="form-row">
+        {mode === "find" && (
           <label>
-            Min Nights
+            Nights
             <input
               type="number"
               value={nights}
@@ -181,29 +213,13 @@ function SearchForm({
               max={14}
             />
           </label>
-          <label>
-            Days
-            <select
-              value={dayPreset}
-              onChange={(e) => setDayPreset(e.target.value)}
-            >
-              {Object.entries(DAY_PRESETS).map(([val, label]) => (
-                <option key={val} value={val}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
+        )}
+      </div>
 
-      {mode === "find" && dayPreset === "custom" && (
-        <DayPicker selected={customDays} onChange={setCustomDays} />
-      )}
-
+      {/* From + Max Drive */}
       <div className="form-row">
         <label>
-          From
+          Drive from
           <select value={fromLocation} onChange={(e) => setFromLocation(e.target.value)}>
             <option value="seattle">Seattle</option>
             <option value="bellevue">Bellevue</option>
@@ -214,40 +230,78 @@ function SearchForm({
           </select>
         </label>
         <label>
-          Max Drive (approx.)
+          Max drive time
           <select value={maxDrive} onChange={(e) => setMaxDrive(e.target.value)}>
-            <option value="">Any distance</option>
-            <option value="60">Under 1 hour</option>
-            <option value="120">Under 2 hours</option>
-            <option value="180">Under 3 hours</option>
-            <option value="240">Under 4 hours</option>
-            <option value="300">Under 5 hours</option>
+            <option value="">Any length</option>
+            <option value="60">Under 1 hr</option>
+            <option value="120">Under 2 hrs</option>
+            <option value="180">Under 3 hrs</option>
+            <option value="240">Under 4 hrs</option>
+            <option value="300">Under 5 hrs</option>
           </select>
         </label>
       </div>
 
-      <div className="form-row">
-        <label>
-          State
-          <select value={state} onChange={(e) => setState(e.target.value)}>
-            <option value="">All</option>
-            <option value="WA">WA</option>
-            <option value="OR">OR</option>
-            <option value="ID">ID</option>
-          </select>
-        </label>
-        <label>
-          Source
-          <select value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="">All</option>
-            <option value="recgov">Rec.gov</option>
-            <option value="wa_state">WA State Parks</option>
-          </select>
-        </label>
-      </div>
+      {/* Name filter */}
+      <label className="form-row-full">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Filter by campground name..."
+          aria-label="Campground name filter"
+        />
+      </label>
 
+      {/* More filters — State, Source, Max Results */}
+      <button
+        type="button"
+        className="advanced-toggle"
+        onClick={() => setShowAdvanced(!showAdvanced)}
+      >
+        {showAdvanced ? "Fewer filters ▴" : "More filters ▾"}
+        {!showAdvanced && (state || source) && (
+          <span className="filter-pills">
+            {state && <span className="filter-pill">{state}</span>}
+            {source && <span className="filter-pill">{source === "wa_state" ? "WA Parks" : "Rec.gov"}</span>}
+          </span>
+        )}
+      </button>
+
+      {showAdvanced && (
+        <div className="form-row form-row-3">
+          <label>
+            State
+            <select value={state} onChange={(e) => setState(e.target.value)}>
+              <option value="">All</option>
+              <option value="WA">WA</option>
+              <option value="OR">OR</option>
+              <option value="ID">ID</option>
+            </select>
+          </label>
+          <label>
+            Source
+            <select value={source} onChange={(e) => setSource(e.target.value)}>
+              <option value="">All</option>
+              <option value="recgov">Rec.gov</option>
+              <option value="wa_state">WA State Parks</option>
+            </select>
+          </label>
+          <label>
+            Max Results
+            <input
+              type="number"
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              min={1}
+              max={50}
+            />
+          </label>
+        </div>
+      )}
+
+      {/* Tags */}
       <div className="tag-picker" role="group" aria-label="Filter by tags">
-        <span className="tag-picker-label">Tags</span>
         {[
           "lakeside", "riverside", "beach", "old-growth",
           "pet-friendly", "rv-friendly", "tent-only",
@@ -269,39 +323,6 @@ function SearchForm({
           </button>
         ))}
       </div>
-
-      <label className="form-row-full">
-        Campground Name
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Filter by campground name..."
-        />
-      </label>
-
-      <button
-        type="button"
-        className="advanced-toggle"
-        onClick={() => setShowAdvanced(!showAdvanced)}
-      >
-        {showAdvanced ? "Less options ▴" : "More options ▾"}
-      </button>
-
-      {showAdvanced && (
-        <div className="form-row">
-          <label>
-            Max Results
-            <input
-              type="number"
-              value={limit}
-              onChange={(e) => setLimit(Number(e.target.value))}
-              min={1}
-              max={50}
-            />
-          </label>
-        </div>
-      )}
 
       <button type="submit" className="search-btn" disabled={loading}>
         {loading ? "Searching..." : "Search"}

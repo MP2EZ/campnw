@@ -219,6 +219,65 @@ header p {
   width: 100%;
 }
 
+/* ─── Trip type button strip ───────────────────────────────────────── */
+
+.trip-type {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.trip-type-btn {
+  flex: 1;
+  padding: 0.45rem 0.25rem;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  background: var(--bg-input);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.trip-type-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.trip-type-btn:hover:not(.active) {
+  background: var(--bg-hover);
+}
+
+.trip-type-hint {
+  display: block;
+  font-size: 0.55rem;
+  font-weight: 400;
+  opacity: 0.7;
+  margin-top: 0.1rem;
+}
+
+.form-row-3 {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+/* ─── Filter pills (in collapsed "More filters" toggle) ────────────── */
+
+.filter-pills {
+  margin-left: 0.5rem;
+}
+
+.filter-pill {
+  font-size: 0.65rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  margin-left: 0.25rem;
+  color: var(--text-muted);
+}
+
 /* ─── Tag picker ───────────────────────────────────────────────────── */
 
 .tag-picker {
