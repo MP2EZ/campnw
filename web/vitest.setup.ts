@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom'
+import '@testing-library/jest-dom/vitest'
 
 // Mock window.matchMedia for dark mode detection
 Object.defineProperty(window, 'matchMedia', {

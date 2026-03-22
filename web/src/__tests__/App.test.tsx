@@ -19,7 +19,7 @@ vi.mock('../hooks/useAuth', () => ({
 
 // Mock fetch globally to prevent API calls
 const mockFetch = vi.fn()
-global.fetch = mockFetch
+globalThis.fetch = mockFetch
 
 beforeEach(() => {
   mockFetch.mockReset()
