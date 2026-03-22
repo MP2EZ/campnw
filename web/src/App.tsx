@@ -544,7 +544,7 @@ function ResultCard({
                   : `~${Math.floor(result.estimated_drive_minutes / 60)}h ${result.estimated_drive_minutes % 60}m`}
               </span>
             )}
-            {result.tags.slice(0, 4).map((tag) => (
+            {(result.tags || []).slice(0, 4).map((tag) => (
               <span key={tag} className="tag-badge">{tag}</span>
             ))}
           </h3>
@@ -692,7 +692,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          {results.warnings.length > 0 && (
+          {results.warnings?.length > 0 && (
             <div className="warning-banner">
               {results.warnings.map((w, i) => (
                 <p key={i}>{w.message}</p>
