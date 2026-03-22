@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -12,6 +13,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.responses import Response
@@ -347,6 +349,58 @@ async def search(
             )
             for w in results.warnings
         ],
+    )
+
+
+@app.get("/api/search/stream")
+async def search_stream(
+    start_date: date = Query(..., description="Start date"),
+    end_date: date = Query(..., description="End date"),
+    state: str | None = Query(None),
+    nights: int = Query(2),
+    mode: str | None = Query(None),
+    days_of_week: str | None = Query(None),
+    tags: str | None = Query(None),
+    max_drive: int | None = Query(None),
+    from_location: str | None = Query(None, alias="from"),
+    name: str | None = Query(None),
+    source: str | None = Query(None),
+    no_groups: bool = Query(False),
+    include_fcfs: bool = Query(False),
+    limit: int = Query(20, ge=1, le=50),
+):
+    """SSE streaming search — yields results as each batch completes."""
+    days_set = (
+        {int(d) for d in days_of_week.split(",")} if days_of_week else None
+    )
+    booking_system = BookingSystem(source) if source else None
+
+    query = SearchQuery(
+        state=state,
+        start_date=start_date,
+        end_date=end_date,
+        min_consecutive_nights=nights,
+        days_of_week=days_set,
+        tags=tags.split(",") if tags else None,
+        max_drive_minutes=max_drive,
+        from_location=from_location,
+        name_like=name,
+        include_group_sites=not no_groups,
+        include_fcfs=include_fcfs,
+        max_campgrounds=limit,
+        booking_system=booking_system,
+    )
+
+    async def event_generator():
+        async for result in _engine.search_stream(query):
+            data = _format_result(
+                result, booking_system or BookingSystem.RECGOV
+            )
+            yield f"data: {json.dumps(data.model_dump())}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_generator(), media_type="text/event-stream"
     )
 
 

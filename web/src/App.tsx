@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { searchCampsites } from "./api";
-import type { SearchParams, SearchResponse, Window } from "./api";
+import { searchCampsitesStream } from "./api";
+import type { CampgroundResult, SearchParams, SearchResponse, Window } from "./api";
 import { WatchPanel, WatchButton } from "./WatchPanel";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
@@ -644,14 +644,36 @@ export default function App() {
       }
     }
     window.history.replaceState(null, "", url.toString());
-    try {
-      const data = await searchCampsites(params);
-      setResults(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Search failed");
-    } finally {
-      setLoading(false);
-    }
+    // Stream results as they arrive
+    const streamedResults: CampgroundResult[] = [];
+    setResults({
+      campgrounds_checked: 0,
+      campgrounds_with_availability: 0,
+      results: [],
+      warnings: [],
+    });
+
+    await searchCampsitesStream(
+      params,
+      (result) => {
+        streamedResults.push(result);
+        setResults({
+          campgrounds_checked: streamedResults.length,
+          campgrounds_with_availability: streamedResults.filter(
+            (r) => r.total_available_sites > 0
+          ).length,
+          results: [...streamedResults],
+          warnings: [],
+        });
+      },
+      () => {
+        setLoading(false);
+      },
+      (err) => {
+        setError(err.message);
+        setLoading(false);
+      },
+    );
   };
 
   return (

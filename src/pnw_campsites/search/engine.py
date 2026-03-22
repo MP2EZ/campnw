@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -401,6 +402,83 @@ class SearchEngine:
             )
 
         return results
+
+    async def search_stream(
+        self, query: SearchQuery
+    ) -> AsyncIterator[CampgroundResult]:
+        """Stream search results as each batch completes."""
+        # Reuse the same setup as search() — registry filter + distance
+        campgrounds = self._registry.search(
+            state=query.state,
+            tags=query.tags,
+            booking_system=query.booking_system,
+            name_like=query.name_like,
+        )
+
+        from_coords = query.from_coords
+        if not from_coords and query.from_location:
+            if is_known_base(query.from_location):
+                from_coords = resolve_base(query.from_location)
+            else:
+                from_coords = await geocode_address(query.from_location)
+            query.from_coords = from_coords
+
+        drive_times: dict[str, int] = {}
+        if from_coords:
+            for cg in campgrounds:
+                if cg.latitude and cg.longitude:
+                    drive_times[cg.facility_id] = estimated_drive_minutes(
+                        from_coords[0], from_coords[1],
+                        cg.latitude, cg.longitude,
+                    )
+            if query.max_drive_minutes:
+                campgrounds = [
+                    cg for cg in campgrounds
+                    if drive_times.get(cg.facility_id, 9999)
+                    <= query.max_drive_minutes
+                ]
+            campgrounds.sort(
+                key=lambda cg: drive_times.get(cg.facility_id, 9999)
+            )
+
+        campgrounds = campgrounds[: query.max_campgrounds]
+        if not campgrounds:
+            return
+
+        if query.start_date and query.end_date:
+            start_month = query.start_date
+            end_month = query.end_date
+        elif query.start_date:
+            start_month = query.start_date
+            end_month = query.start_date
+        else:
+            today = date.today()
+            start_month = today
+            end_month = today.replace(
+                month=today.month + 1 if today.month < 12 else 1,
+                year=today.year if today.month < 12 else today.year + 1,
+            )
+
+        batch_size = 5
+        batch_delay = 0.3
+
+        for i in range(0, len(campgrounds), batch_size):
+            if i > 0:
+                await asyncio.sleep(batch_delay)
+            batch = campgrounds[i : i + batch_size]
+            tasks = [
+                self._check_campground(cg, start_month, end_month, query)
+                for cg in batch
+            ]
+            batch_results = await asyncio.gather(*tasks)
+            for r in batch_results:
+                if drive_times:
+                    fid = r.campground.facility_id
+                    if fid in drive_times:
+                        r.estimated_drive_minutes = drive_times[fid]
+                # Only yield results with availability or FCFS
+                if r.total_available_sites > 0 or r.fcfs_sites > 0:
+                    yield r
 
     async def _check_campground(
         self,

@@ -85,6 +85,72 @@ export async function searchCampsites(
 }
 
 // ---------------------------------------------------------------------------
+// Streaming search (SSE)
+// ---------------------------------------------------------------------------
+
+export async function searchCampsitesStream(
+  params: SearchParams,
+  onResult: (result: CampgroundResult) => void,
+  onDone: () => void,
+  onError: (err: Error) => void,
+): Promise<void> {
+  const query = new URLSearchParams();
+  query.set("start_date", params.start_date);
+  query.set("end_date", params.end_date);
+  if (params.state) query.set("state", params.state);
+  if (params.nights) query.set("nights", String(params.nights));
+  if (params.days_of_week) query.set("days_of_week", params.days_of_week);
+  if (params.tags) query.set("tags", params.tags);
+  if (params.name) query.set("name", params.name);
+  if (params.source) query.set("source", params.source);
+  if (params.from_location) query.set("from", params.from_location);
+  if (params.max_drive) query.set("max_drive", String(params.max_drive));
+  if (params.mode) query.set("mode", params.mode);
+  if (params.no_groups) query.set("no_groups", "true");
+  if (params.include_fcfs) query.set("include_fcfs", "true");
+  if (params.limit) query.set("limit", String(params.limit));
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/search/stream?${query}`);
+    if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
+
+    const reader = resp.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") {
+            onDone();
+            return;
+          }
+          try {
+            const result = JSON.parse(data) as CampgroundResult;
+            onResult(result);
+          } catch {
+            // skip malformed lines
+          }
+        }
+      }
+    }
+    onDone();
+  } catch (e) {
+    onError(e instanceof Error ? e : new Error("Stream failed"));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Watches
 // ---------------------------------------------------------------------------
 
