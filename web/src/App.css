@@ -379,6 +379,12 @@ header p {
   cursor: pointer;
   user-select: none;
   min-height: 56px;
+  width: 100%;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
 }
 
 .result-header:hover {

@@ -55,13 +55,14 @@ function DayPicker({
   };
 
   return (
-    <div className="day-picker">
+    <div className="day-picker" role="group" aria-label="Days of week">
       {DAY_NAMES.map((name, i) => (
         <button
           key={i}
           type="button"
           className={`day-btn ${selected.has(i) ? "active" : ""}`}
           onClick={() => toggle(i)}
+          aria-pressed={selected.has(i)}
         >
           {name}
         </button>
@@ -132,6 +133,7 @@ function SearchForm({
           type="button"
           className={mode === "find" ? "active" : ""}
           onClick={() => setMode("find")}
+          aria-pressed={mode === "find"}
         >
           Find a date
         </button>
@@ -139,6 +141,7 @@ function SearchForm({
           type="button"
           className={mode === "exact" ? "active" : ""}
           onClick={() => setMode("exact")}
+          aria-pressed={mode === "exact"}
         >
           Exact dates
         </button>
@@ -242,7 +245,7 @@ function SearchForm({
         </label>
       </div>
 
-      <div className="tag-picker">
+      <div className="tag-picker" role="group" aria-label="Filter by tags">
         <span className="tag-picker-label">Tags</span>
         {[
           "lakeside", "riverside", "beach", "old-growth",
@@ -253,6 +256,7 @@ function SearchForm({
             key={tag}
             type="button"
             className={`tag-btn ${selectedTags.has(tag) ? "active" : ""}`}
+            aria-pressed={selectedTags.has(tag)}
             onClick={() => {
               const next = new Set(selectedTags);
               if (next.has(tag)) next.delete(tag);
@@ -266,6 +270,7 @@ function SearchForm({
       </div>
 
       <label className="form-row-full">
+        Campground Name
         <input
           type="text"
           value={name}
@@ -530,7 +535,12 @@ function ResultCard({
 
   return (
     <div className={`result-card card-${result.booking_system}`} ref={cardRef}>
-      <div className="result-header" onClick={handleToggle}>
+      <button
+        className="result-header"
+        onClick={handleToggle}
+        aria-expanded={expanded}
+        type="button"
+      >
         <div>
           <h3>
             {result.name}{" "}
@@ -553,8 +563,8 @@ function ResultCard({
             {result.fcfs_sites > 0 && ` + ${result.fcfs_sites} FCFS`}
           </p>
         </div>
-        <span className="expand-icon">{expanded ? "−" : "+"}</span>
-      </div>
+        <span className="expand-icon" aria-hidden="true">{expanded ? "−" : "+"}</span>
+      </button>
 
       {expanded && (
         <>
@@ -653,7 +663,7 @@ export default function App() {
             <button
               className="header-btn theme-toggle"
               onClick={() => setDarkMode(!darkMode)}
-              title={darkMode ? "Light mode" : "Dark mode"}
+              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
             >
               {darkMode ? "☀" : "☾"}
             </button>
@@ -666,6 +676,7 @@ export default function App() {
         onClose={() => setWatchPanelOpen(false)}
       />
 
+      <main>
       <SearchForm onSearch={handleSearch} loading={loading} />
 
       {error && <div className="error-banner">{error}</div>}
@@ -681,12 +692,14 @@ export default function App() {
               <button
                 className={resultsView === "dates" ? "active" : ""}
                 onClick={() => setResultsView("dates")}
+                aria-pressed={resultsView === "dates"}
               >
                 By date
               </button>
               <button
                 className={resultsView === "sites" ? "active" : ""}
                 onClick={() => setResultsView("sites")}
+                aria-pressed={resultsView === "sites"}
               >
                 By site
               </button>
@@ -723,6 +736,7 @@ export default function App() {
           )}
         </div>
       )}
+      </main>
     </div>
   );
 }

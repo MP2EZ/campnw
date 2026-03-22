@@ -326,8 +326,8 @@ class SearchEngine:
             )
 
         # Step 3: Fetch availability in parallel (batched to respect rate limits)
-        batch_size = 3  # concurrent availability requests
-        batch_delay = 0.5  # seconds between batches
+        batch_size = 5  # concurrent availability requests
+        batch_delay = 0.3  # seconds between batches
         all_results: list[CampgroundResult] = []
         search_start = time.monotonic()
 

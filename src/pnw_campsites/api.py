@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -72,9 +73,12 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="PNW Campsites", lifespan=lifespan)
 
+_cors_origins = os.getenv(
+    "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "DELETE", "PATCH"],
     allow_headers=["*"],
     allow_credentials=True,
@@ -248,12 +252,26 @@ _track_logger = logging.getLogger("pnw_campsites.track")
 _search_logger = logging.getLogger("pnw_campsites.api")
 
 
+ALLOWED_TRACK_EVENTS = {"card_expand", "book_click", "search"}
+ALLOWED_TRACK_FIELDS = {"event", "facility_id", "name", "source", "type", "site"}
+
+
 @app.post("/api/track")
 async def track(request: Request):
     """Lightweight event tracking — logs to stdout, no external service."""
     try:
+        raw = await request.body()
+        if len(raw) > 4096:
+            return {"ok": False}
         body = await request.json()
-        _track_logger.info("event: %s", body)
+        if not isinstance(body, dict):
+            return {"ok": False}
+        event = body.get("event")
+        if event not in ALLOWED_TRACK_EVENTS:
+            return {"ok": False}
+        # Only log allowed fields
+        safe = {k: str(v)[:200] for k, v in body.items() if k in ALLOWED_TRACK_FIELDS}
+        _track_logger.info("event: %s", safe)
     except Exception:
         pass
     return {"ok": True}
@@ -279,7 +297,7 @@ async def search(
     source: str | None = Query(None, description="recgov or wa_state"),
     no_groups: bool = Query(False, description="Exclude group sites"),
     include_fcfs: bool = Query(False, description="Include FCFS sites"),
-    limit: int = Query(20, description="Max campgrounds to check"),
+    limit: int = Query(20, ge=1, le=50, description="Max campgrounds to check"),
 ):
     days_set = (
         {int(d) for d in days_of_week.split(",")}
@@ -340,6 +358,8 @@ async def check(
     nights: int = Query(1),
     source: str | None = Query(None, description="recgov or wa_state"),
 ):
+    if not _FACILITY_ID_RE.match(facility_id):
+        raise HTTPException(status_code=400, detail="Invalid facility_id")
     booking_system = BookingSystem(source) if source else None
     result = await _engine.check_specific(
         facility_id=facility_id,
@@ -395,6 +415,7 @@ async def list_campgrounds(
 # ---------------------------------------------------------------------------
 
 SESSION_COOKIE = "campnw_session"
+_FACILITY_ID_RE = re.compile(r"^[-\w]{1,30}$")
 
 
 def _get_session_token(request: Request, response: Response) -> str:
@@ -408,6 +429,7 @@ def _get_session_token(request: Request, response: Response) -> str:
             SESSION_COOKIE, token,
             max_age=90 * 24 * 3600,  # 90 days
             httponly=True,
+            secure=True,
             samesite="lax",
         )
     return token
