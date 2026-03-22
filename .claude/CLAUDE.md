@@ -164,12 +164,12 @@ Full roadmap details: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs
 - [x] Custom domain (campnw.palouselabs.com)
 - [x] Registry enrichment: auto-tags from RIDB + GoingToCamp descriptions
 
-### v0.2 "Watches on the Web"
-- [ ] Watch CRUD API endpoints (POST/GET/DELETE/PATCH)
-- [ ] Web watch management UI (create, list, pause, delete)
-- [ ] "Watch this campground" CTA on zero-result searches
-- [ ] Dark mode (system-preference-aware + manual toggle)
-- [ ] Watch confirmation animation
+### v0.2 "Watches on the Web" — DONE
+- [x] Watch CRUD API endpoints (POST/GET/DELETE/PATCH)
+- [x] Web watch management UI (create, list, pause, delete)
+- [x] "Watch this campground" CTA on result cards
+- [x] Dark mode (system-preference-aware + manual toggle, warm forest palette)
+- [x] Watch confirmation animation
 
 ### v0.3 "Calendar & Polish"
 - [ ] Calendar heat map — aggregate availability density across months
