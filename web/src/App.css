@@ -336,6 +336,17 @@ header p {
   border-left: 3px solid #7d3cb5;
 }
 
+.tag-badge {
+  font-size: 0.6rem;
+  font-weight: 400;
+  background: #f0f0e8;
+  color: #777;
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
+  margin-left: 0.2rem;
+  vertical-align: middle;
+}
+
 .drive-badge {
   font-size: 0.65rem;
   font-weight: 500;

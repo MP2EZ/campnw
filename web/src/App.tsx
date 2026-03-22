@@ -513,6 +513,9 @@ function ResultCard({
                   : `~${Math.floor(result.estimated_drive_minutes / 60)}h ${result.estimated_drive_minutes % 60}m`}
               </span>
             )}
+            {result.tags.slice(0, 4).map((tag) => (
+              <span key={tag} className="tag-badge">{tag}</span>
+            ))}
           </h3>
           <p className="result-summary">
             {summaryText}

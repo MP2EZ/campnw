@@ -96,6 +96,7 @@ class CampgroundResultResponse(BaseModel):
     longitude: float
     total_available_sites: int
     fcfs_sites: int
+    tags: list[str] = []
     estimated_drive_minutes: int | None = None
     availability_url: str | None = None
     windows: list[WindowResponse]
@@ -217,6 +218,7 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
         longitude=cg.longitude,
         total_available_sites=r.total_available_sites,
         fcfs_sites=r.fcfs_sites,
+        tags=cg.tags,
         estimated_drive_minutes=r.estimated_drive_minutes,
         availability_url=_build_availability_url(
             cg.facility_id, cg.booking_system, start, end

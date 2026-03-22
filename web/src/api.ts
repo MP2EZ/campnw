@@ -22,6 +22,7 @@ export interface CampgroundResult {
   longitude: number;
   total_available_sites: number;
   fcfs_sites: number;
+  tags: string[];
   estimated_drive_minutes: number | null;
   availability_url: string | null;
   windows: Window[];
