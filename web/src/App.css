@@ -107,6 +107,44 @@ header p {
   width: 100%;
 }
 
+/* ─── Tag picker ───────────────────────────────────────────────────── */
+
+.tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.tag-picker-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #555;
+  margin-right: 0.25rem;
+}
+
+.tag-btn {
+  padding: 0.25rem 0.55rem;
+  border: 1px solid #ccc;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #555;
+  cursor: pointer;
+}
+
+.tag-btn.active {
+  background: #2d5016;
+  color: #fff;
+  border-color: #2d5016;
+}
+
+.tag-btn:hover:not(.active) {
+  background: #f0f0e8;
+}
+
 .advanced-toggle {
   appearance: none;
   background: none;

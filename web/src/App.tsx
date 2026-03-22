@@ -74,6 +74,7 @@ function SearchForm({
   const [customDays, setCustomDays] = useState<Set<number>>(new Set());
   const [name, setName] = useState("");
   const [source, setSource] = useState("");
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [fromLocation, setFromLocation] = useState("seattle");
   const [maxDrive, setMaxDrive] = useState("");
   const [limit, setLimit] = useState(20);
@@ -100,6 +101,7 @@ function SearchForm({
         days_of_week: getDaysOfWeek(),
         name: name || undefined,
         source: source || undefined,
+        tags: selectedTags.size > 0 ? Array.from(selectedTags).join(",") : undefined,
         from_location: fromLocation || undefined,
         max_drive: maxDrive ? Number(maxDrive) : undefined,
         limit,
@@ -223,6 +225,29 @@ function SearchForm({
             <option value="wa_state">WA State Parks</option>
           </select>
         </label>
+      </div>
+
+      <div className="tag-picker">
+        <span className="tag-picker-label">Tags</span>
+        {[
+          "lakeside", "riverside", "beach", "old-growth",
+          "pet-friendly", "rv-friendly", "tent-only",
+          "trails", "swimming", "shade",
+        ].map((tag) => (
+          <button
+            key={tag}
+            type="button"
+            className={`tag-btn ${selectedTags.has(tag) ? "active" : ""}`}
+            onClick={() => {
+              const next = new Set(selectedTags);
+              if (next.has(tag)) next.delete(tag);
+              else next.add(tag);
+              setSelectedTags(next);
+            }}
+          >
+            {tag}
+          </button>
+        ))}
       </div>
 
       <label className="form-row-full">
