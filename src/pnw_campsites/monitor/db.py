@@ -8,7 +8,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parents[3] / "data" / "watches.db"
+_docker_db = Path("/app/data/watches.db")
+_local_db = Path(__file__).resolve().parents[3] / "data" / "watches.db"
+DEFAULT_DB_PATH = _docker_db if _docker_db.parent.exists() else _local_db
 
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS watches (

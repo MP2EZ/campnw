@@ -9,7 +9,10 @@ from pathlib import Path
 
 from pnw_campsites.registry.models import BookingSystem, Campground
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parents[3] / "data" / "registry.db"
+# Check Docker path first, then relative path for local dev
+_docker_db = Path("/app/data/registry.db")
+_local_db = Path(__file__).resolve().parents[3] / "data" / "registry.db"
+DEFAULT_DB_PATH = _docker_db if _docker_db.exists() else _local_db
 
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS campgrounds (
