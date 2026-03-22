@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { searchCampsitesStream } from "./api";
 import type { CampgroundResult, SearchParams, SearchResponse, Window } from "./api";
 import { WatchPanel, WatchButton } from "./WatchPanel";
+import { CalendarHeatMap } from "./CalendarHeatMap";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
@@ -737,6 +738,13 @@ export default function App() {
               </button>
             </div>
           </div>
+          {searchDates && results.campgrounds_with_availability > 0 && (
+            <CalendarHeatMap
+              results={results}
+              startDate={searchDates.start}
+              endDate={searchDates.end}
+            />
+          )}
           {results.warnings?.length > 0 && (
             <div className="warning-banner">
               {results.warnings.map((w, i) => (
