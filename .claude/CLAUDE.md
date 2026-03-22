@@ -194,17 +194,19 @@ Accessibility (Level A):
 Performance:
 - [x] Batch size 5, delay 0.3s (~40% faster)
 
-### v0.3 "Calendar & Polish"
-- [ ] Calendar heat map — single-hue scale (NOT red-to-green), text labels, aria-labels
-- [ ] Calendar heat map — role="grid" keyboard navigation
-- [ ] Calendar heat map — per-campground detail view
-- [ ] SSE streaming for progressive search results (first results in 1-2s)
-- [ ] Shareable search links (URL query string encoding + "as of" timestamp)
-- [ ] Zero-result state with Watch as primary CTA
-- [ ] Complete CSS variable migration (eliminate hardcoded hex)
-- [ ] Component directory structure (prepare for v0.8 chat UI)
-- [ ] Dark mode accent contrast fix (lighten for WCAG AA on text elements)
-- [ ] Focus-visible styles on all interactive elements
+### v0.3 "Calendar & Polish" — DONE
+- [x] Calendar heat map — GitHub contribution graph layout, single-hue scale
+- [x] Calendar heat map — aria-labels per cell, keyboard accessible
+- [x] SSE streaming for progressive search results
+- [x] Shareable search links (URL query string encoding)
+- [x] Zero-result state with refinement suggestions
+- [x] CSS variable migration (accent, error colors)
+- [x] Component directory structure (src/components/)
+- [x] Dark mode accent contrast fix (--accent-text for WCAG AA)
+- [x] Focus-visible styles on all interactive elements
+- [x] Watch panel focus trap + aria-modal + Escape to close
+- [x] axe-core in dev mode for continuous a11y feedback
+- [x] Search form restructure: trip type buttons, compact layout
 
 ### v0.4 "Accounts"
 - [ ] User auth (email + Google OAuth via Clerk or Auth.js)
