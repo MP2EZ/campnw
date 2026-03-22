@@ -145,47 +145,88 @@ Search results include recreation.gov availability links. The `check` command in
 
 The poll command diffs current availability against the last snapshot. First poll baselines; subsequent polls report only newly-available sites (cancellations, newly-released dates).
 
-## Build Phases
+## Roadmap & Progress (v0.1 → v1.0)
 
-### Phase 1: Core + CLI (DONE)
-- [x] Validate APIs
-- [x] Build recgov provider (availability + RIDB metadata clients)
-- [x] Design and create SQLite campground registry schema
-- [x] Seed registry with 610 PNW campgrounds from RIDB (WA/OR/ID)
-- [x] Build search/discovery engine (with day-of-week filtering)
-- [x] CLI entry point with search, check, list commands
+Full roadmap details: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs/PRFAQ-v1.0.md`
 
-### Phase 2a: Monitoring (rec.gov) — DONE (except cron setup)
-- [x] Watch/diff layer — SQLite-backed snapshots with change detection
-- [x] Notification dispatch (ntfy + Pushover + console)
-- [x] CLI commands: watch add/remove/list/poll
-- [ ] Cron/launchd timer setup for automated polling
+### v0.1 "Foundation" — DONE
+- [x] Rec.gov provider (RIDB metadata + availability)
+- [x] GoingToCamp provider (WA State Parks, curl_cffi WAF bypass)
+- [x] SQLite campground registry (685 campgrounds, 453 with tags)
+- [x] Search engine with day-of-week, distance, tag filtering
+- [x] CLI: search, check, list, watch add/remove/list/poll
+- [x] FastAPI backend with multi-provider search/check/list endpoints
+- [x] React dashboard: search modes, date-block results, source badges, drive time badges, tag badges
+- [x] Mobile-responsive UI with progressive disclosure
+- [x] Error handling: retry on 429/5xx, typed errors, warning banners
+- [x] Event tracking (search params, card expand, booking clicks)
+- [x] Fly.io deployment with GitHub Actions CI/CD
+- [x] Custom domain (campnw.palouselabs.com)
+- [x] Registry enrichment: auto-tags from RIDB + GoingToCamp descriptions
 
-### Phase 2b: WA State Parks (GoingToCamp) — DONE
-- [x] Investigate WAF bypass — `curl_cffi` with Chrome TLS impersonation works
-- [x] Research camply's GoingToCamp provider (plain requests, no WAF bypass)
-- [x] Build `providers/goingtocamp.py` with map hierarchy traversal
-- [x] Seed 75 WA State Parks into registry (`scripts/seed_wa_state.py`)
-- [x] Integrate into search engine (multi-provider dispatch by booking_system)
-- [x] CLI: `--source wa-state` flag on search/check/list commands
-- [x] WA State Parks booking URLs in results
-- **No overlap with 2a** — separate provider, different directory
+### v0.2 "Watches on the Web"
+- [ ] Watch CRUD API endpoints (POST/GET/DELETE/PATCH)
+- [ ] Web watch management UI (create, list, pause, delete)
+- [ ] "Watch this campground" CTA on zero-result searches
+- [ ] Dark mode (system-preference-aware + manual toggle)
+- [ ] Watch confirmation animation
 
-**Parallel work note**: 2a and 2b can safely run in separate Claude Code sessions on the same branch. File overlap is minimal (different subdirectories). Separate git worktrees are an option but not necessary.
+### v0.3 "Calendar & Polish"
+- [ ] Calendar heat map — aggregate availability density across months
+- [ ] Calendar heat map — per-campground detail view
+- [ ] Shareable search links (URL query string encoding)
+- [ ] Progressive loading (show fast providers first)
+- [ ] Micro-interactions (chip animations, smooth transitions)
+- [ ] Option C results view (date blocks across campgrounds)
 
-### Phase 3: Dashboard — DONE
-- [x] FastAPI backend (`src/pnw_campsites/api.py`) — search, check, list endpoints with CORS
-- [x] React + Vite + TypeScript frontend (`web/`) — search form, results cards, booking links
-- [x] Multi-provider support (rec.gov + WA State Parks) in API
-- **Run**: API: `.venv/bin/uvicorn pnw_campsites.api:app --port 8000` | Frontend: `cd web && npm run dev`
+### v0.4 "Accounts"
+- [ ] User auth (email + Google OAuth via Clerk or Auth.js)
+- [ ] Saved home base and default preferences
+- [ ] Persistent watch ownership (migrate anonymous watches)
+- [ ] Search history (last 20 searches)
+- [ ] Privacy controls (data export, account deletion)
 
-### Future: Dashboard enhancements
-- [ ] Option C results view — date blocks across campgrounds ("what's available this weekend?" flat view)
-- [ ] Cloudflare Workers deployment (Python Workers + D1 for registry, Pages for React frontend)
+### v0.5 "Background Engine"
+- [ ] Server-side watch polling (APScheduler, 15-min cycles)
+- [ ] Web push notifications (service worker + Web Push API)
+- [ ] Notification channel preferences (web push, ntfy, Pushover, email)
+- [ ] Watch polling dashboard (status view)
+- [ ] Availability history data collection (silent — feeds v0.9 predictions)
+- [ ] Automated registry refresh (monthly RIDB, quarterly GoingToCamp)
 
-### Phase 4: Oregon/Idaho (stretch)
-- [ ] ReserveAmerica scraping via Playwright
-- [ ] Expand registry
+### v0.6 "AI Search"
+- [ ] Natural language search input (Claude Haiku)
+- [ ] NL prompt engineering (tag taxonomy, few-shot examples)
+- [ ] Search mode toggle: Form vs. NL
+- [ ] NL parse accuracy tracking
+
+### v0.7 "Oregon Expansion"
+- [ ] Oregon State Parks provider (ReserveAmerica via Playwright)
+- [ ] Seed 200+ OR state parks into registry
+- [ ] OR State Parks source filter + color-coded badge (amber)
+- [ ] Registry enrichment pass (review auto-tags, manual curation top 50)
+- [ ] Booking link validation
+
+### v0.8 "Trip Planner"
+- [ ] Trip planner conversational UI (Claude Sonnet + function calling)
+- [ ] Tool-calling integration (search, check, drive time, detail)
+- [ ] Itinerary card view (day-by-day with booking links)
+- [ ] Shareable itineraries (UUID link, 30-day expiry)
+
+### v0.9 "Predictions"
+- [ ] Predictive availability display ("typically frees up X days before")
+- [ ] Statistical prediction model (time-series on polling history)
+- [ ] Smart notification scoring ("usually books within 30 min")
+- [ ] Prediction confidence display
+
+### v1.0 "campnw 1.0"
+- [ ] Map view (Leaflet/Mapbox, availability-colored pins)
+- [ ] Keyboard shortcuts (j/k nav, b bookmark, w watch, ? help)
+- [ ] Campground detail enrichment (amenities, photos)
+- [ ] Registry expansion to 1,000+ campgrounds
+- [ ] Personalized recommendations (opt-in, based on search history)
+- [ ] Performance audit (P95 search < 4s, Lighthouse)
+- [ ] Accessibility audit (WCAG 2.1 AA)
 
 ## Key Design Decisions
 
