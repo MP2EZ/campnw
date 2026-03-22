@@ -249,13 +249,47 @@ header p {
 
 .source-badge {
   font-size: 0.65rem;
-  font-weight: 500;
-  background: #e8f0e0;
-  color: #2d5016;
-  padding: 0.1rem 0.35rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
   border-radius: 3px;
   margin-left: 0.4rem;
   vertical-align: middle;
+}
+
+.source-recgov {
+  background: #e8f0e0;
+  color: #2d5016;
+}
+
+.source-wa_state {
+  background: #deeef5;
+  color: #1a5276;
+}
+
+.source-or_state {
+  background: #fef3e0;
+  color: #7d5a1a;
+}
+
+.source-id_state {
+  background: #eee5f5;
+  color: #5b2d7a;
+}
+
+.result-card.card-recgov {
+  border-left: 3px solid #5a8a32;
+}
+
+.result-card.card-wa_state {
+  border-left: 3px solid #3498b0;
+}
+
+.result-card.card-or_state {
+  border-left: 3px solid #d4920a;
+}
+
+.result-card.card-id_state {
+  border-left: 3px solid #7d3cb5;
 }
 
 .result-summary {
@@ -296,15 +330,6 @@ header p {
 
 .book-link:hover {
   text-decoration: underline;
-}
-
-.collapse-btn {
-  background: none;
-  border: none;
-  color: #888;
-  font-size: 0.75rem;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
 }
 
 /* ─── Error / empty ────────────────────────────────────────────────── */

@@ -429,8 +429,12 @@ function ResultCard({
     );
   }
 
-  const sourceLabel =
-    result.booking_system === "wa_state" ? "WA Parks" : result.state;
+  const sourceLabels: Record<string, string> = {
+    wa_state: "WA Parks",
+    or_state: "OR Parks",
+    id_state: "ID Parks",
+  };
+  const sourceLabel = sourceLabels[result.booking_system] || result.state;
   const dateBlocks = groupByDateBlock(result.windows);
   const summaryText =
     view === "dates"
@@ -438,11 +442,14 @@ function ResultCard({
       : `${result.total_available_sites} sites · ${result.windows.filter((w) => !w.is_fcfs).length} windows`;
 
   return (
-    <div className="result-card" ref={cardRef}>
+    <div className={`result-card card-${result.booking_system}`} ref={cardRef}>
       <div className="result-header" onClick={handleToggle}>
         <div>
           <h3>
-            {result.name} <span className="source-badge">{sourceLabel}</span>
+            {result.name}{" "}
+            <span className={`source-badge source-${result.booking_system}`}>
+              {sourceLabel}
+            </span>
           </h3>
           <p className="result-summary">
             {summaryText}
@@ -454,8 +461,8 @@ function ResultCard({
 
       {expanded && (
         <>
-          <div className="card-toolbar">
-            {result.availability_url && (
+          {result.availability_url && (
+            <div className="card-toolbar">
               <a
                 href={result.availability_url}
                 target="_blank"
@@ -468,11 +475,8 @@ function ResultCard({
                   : "Recreation.gov"}{" "}
                 ↗
               </a>
-            )}
-            <button className="collapse-btn" onClick={handleToggle}>
-              Collapse ▴
-            </button>
-          </div>
+            </div>
+          )}
           {view === "dates" ? (
             <DateBlockView result={result} />
           ) : (
