@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { searchCampsites } from "./api";
 import type { SearchParams, SearchResponse, Window } from "./api";
+import { Wordmark } from "./Wordmark";
 import "./App.css";
 
 function formatDate(offset: number): string {
@@ -550,7 +551,7 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>PNW Campsites</h1>
+        <Wordmark size="md" className="wordmark" />
         <p>Find available campsites across the Pacific Northwest</p>
       </header>
 

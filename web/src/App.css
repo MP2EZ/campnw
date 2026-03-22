@@ -27,6 +27,12 @@ header h1 {
   color: #2d5016;
 }
 
+/* Wordmark sits where h1 was — same vertical rhythm */
+header .wordmark {
+  display: block;
+  margin-bottom: 0.1rem;
+}
+
 header p {
   color: #666;
   font-size: 0.85rem;
@@ -554,6 +560,11 @@ header p {
 
   header h1 {
     font-size: 1.25rem;
+  }
+
+  /* Scale wordmark down on mobile to match reduced h1 size */
+  header .wordmark {
+    font-size: 20px;
   }
 
   .site-chip,
