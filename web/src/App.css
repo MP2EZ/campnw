@@ -351,6 +351,20 @@ header p {
   padding: 0 1rem 0.75rem;
 }
 
+.warning-banner {
+  background: #fef8e8;
+  border: 1px solid #e8d48a;
+  color: #8a6d3b;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.warning-banner p {
+  margin: 0.15rem 0;
+}
+
 .error-banner {
   background: #fee;
   border: 1px solid #e99;

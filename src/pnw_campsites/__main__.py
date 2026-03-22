@@ -63,6 +63,15 @@ def _format_results(results, show_urls: bool = True) -> None:
     print(f"Searched {results.campgrounds_checked} campgrounds")
     print(f"Found availability at {results.campgrounds_with_availability} campgrounds")
 
+    warning_messages = {
+        "rate_limited": "rec.gov rate limit — try fewer results or wait a minute",
+        "waf_blocked": "WA State Parks blocked requests — try again later",
+        "unavailable": "service issue",
+    }
+    for w in results.warnings:
+        msg = warning_messages.get(w.kind, w.kind)
+        print(f"Note: {w.count} campground(s) skipped ({msg})")
+
     if not results.has_availability:
         print("\nNo availability found for this search.")
         return

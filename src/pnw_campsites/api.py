@@ -102,10 +102,28 @@ class CampgroundResultResponse(BaseModel):
     error: str | None = None
 
 
+class SearchWarningResponse(BaseModel):
+    kind: str
+    count: int
+    source: str
+    message: str
+
+
+WARNING_MESSAGES = {
+    "rate_limited": (
+        "Some results may be missing — recreation.gov is rate limiting."
+        " Try a narrower search."
+    ),
+    "waf_blocked": "WA State Parks results unavailable — the booking site is blocking requests.",
+    "unavailable": "Some campgrounds couldn't be checked due to a service issue.",
+}
+
+
 class SearchResponse(BaseModel):
     campgrounds_checked: int
     campgrounds_with_availability: int
     results: list[CampgroundResultResponse]
+    warnings: list[SearchWarningResponse] = []
 
 
 class CampgroundResponse(BaseModel):
@@ -265,6 +283,15 @@ async def search(
         results=[
             _format_result(r, booking_system or BookingSystem.RECGOV)
             for r in results.results
+        ],
+        warnings=[
+            SearchWarningResponse(
+                kind=w.kind,
+                count=w.count,
+                source=w.source,
+                message=WARNING_MESSAGES.get(w.kind, "Some campgrounds couldn't be checked."),
+            )
+            for w in results.warnings
         ],
     )
 

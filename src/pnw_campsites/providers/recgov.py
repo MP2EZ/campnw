@@ -7,6 +7,7 @@ from datetime import date
 
 import httpx
 
+from pnw_campsites.providers.errors import FacilityNotFoundError, RateLimitedError
 from pnw_campsites.registry.models import (
     CampgroundAvailability,
     CampsiteAvailability,
@@ -133,9 +134,23 @@ class RecGovClient:
         """
         start_date = month.replace(day=1).strftime("%Y-%m-01T00:00:00.000Z")
         url = f"{AVAILABILITY_BASE}/{facility_id}/month"
+        params = {"start_date": start_date}
 
-        resp = await self._availability_client.get(url, params={"start_date": start_date})
-        resp.raise_for_status()
+        for attempt in range(2):
+            resp = await self._availability_client.get(url, params=params)
+            if resp.status_code == 404:
+                raise FacilityNotFoundError(f"Facility {facility_id} not found")
+            if resp.status_code == 429:
+                if attempt == 0:
+                    await asyncio.sleep(2)
+                    continue
+                raise RateLimitedError(f"Rate limited fetching {facility_id}")
+            if resp.status_code >= 500 and attempt == 0:
+                await asyncio.sleep(1)
+                continue
+            resp.raise_for_status()
+            break
+
         data = resp.json()
 
         campsites: dict[str, CampsiteAvailability] = {}

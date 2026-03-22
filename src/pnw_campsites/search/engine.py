@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from pnw_campsites.geo import estimated_drive_minutes, geocode_address, is_known_base, resolve_base
+from pnw_campsites.providers.errors import FacilityNotFoundError, RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.registry.db import CampgroundRegistry
@@ -75,6 +76,15 @@ class CampgroundResult:
 
 
 @dataclass
+class SearchWarning:
+    """Aggregated warning from a search (e.g., rate limits, WAF blocks)."""
+
+    kind: str  # "rate_limited", "waf_blocked", "unavailable"
+    count: int
+    source: str  # "recgov", "wa_state"
+
+
+@dataclass
 class SearchResults:
     """Complete results from a discovery search."""
 
@@ -82,6 +92,7 @@ class SearchResults:
     results: list[CampgroundResult] = field(default_factory=list)
     campgrounds_checked: int = 0
     campgrounds_with_availability: int = 0
+    warnings: list[SearchWarning] = field(default_factory=list)
 
     @property
     def has_availability(self) -> bool:
@@ -313,10 +324,13 @@ class SearchEngine:
             )
 
         # Step 3: Fetch availability in parallel (batched to respect rate limits)
-        batch_size = 5  # concurrent availability requests
+        batch_size = 3  # concurrent availability requests
+        batch_delay = 0.5  # seconds between batches
         all_results: list[CampgroundResult] = []
 
         for i in range(0, len(campgrounds), batch_size):
+            if i > 0:
+                await asyncio.sleep(batch_delay)
             batch = campgrounds[i : i + batch_size]
             tasks = [
                 self._check_campground(cg, start_month, end_month, query)
@@ -332,17 +346,31 @@ class SearchEngine:
                 if fid in drive_times:
                     r.estimated_drive_minutes = drive_times[fid]
 
-        # Step 5: Build search results
+        # Step 5: Aggregate errors into warnings, filter out error-only results
+        error_counts: dict[str, dict[str, int]] = {}  # error_kind -> source -> count
+        for r in all_results:
+            if r.error:
+                source = r.campground.booking_system.value
+                error_counts.setdefault(r.error, {})
+                error_counts[r.error][source] = error_counts[r.error].get(source, 0) + 1
+
+        warnings = [
+            SearchWarning(kind=kind, count=sum(sources.values()), source=src)
+            for kind, sources in error_counts.items()
+            for src, _ in sources.items()
+        ]
+
         results = SearchResults(
             query=query,
             results=[
                 r for r in all_results
-                if r.total_available_sites > 0 or r.fcfs_sites > 0 or r.error
+                if r.total_available_sites > 0 or r.fcfs_sites > 0
             ],
             campgrounds_checked=len(all_results),
             campgrounds_with_availability=sum(
                 1 for r in all_results if r.total_available_sites > 0
             ),
+            warnings=warnings,
         )
 
         # Sort by distance if filtering by location, otherwise by availability
@@ -385,11 +413,15 @@ class SearchEngine:
                     campground.facility_id, start_month, end_month
                 )
             return _process_availability(campground, availability, query)
-        except Exception as e:
-            return CampgroundResult(
-                campground=campground,
-                error=f"Failed to fetch availability: {e}",
-            )
+        except FacilityNotFoundError:
+            # Silently drop — bad registry entry, no availability to show
+            return CampgroundResult(campground=campground)
+        except RateLimitedError:
+            return CampgroundResult(campground=campground, error="rate_limited")
+        except WAFBlockedError:
+            return CampgroundResult(campground=campground, error="waf_blocked")
+        except Exception:
+            return CampgroundResult(campground=campground, error="unavailable")
 
     async def check_specific(
         self,

@@ -579,8 +579,15 @@ export default function App() {
               </button>
             </div>
           </div>
+          {results.warnings.length > 0 && (
+            <div className="warning-banner">
+              {results.warnings.map((w, i) => (
+                <p key={i}>{w.message}</p>
+              ))}
+            </div>
+          )}
           {results.results
-            .filter((r) => r.total_available_sites > 0 || r.error)
+            .filter((r) => r.total_available_sites > 0)
             .map((r) => (
               <ResultCard key={r.facility_id} result={r} view={resultsView} />
             ))}

@@ -12,6 +12,7 @@ from datetime import date, timedelta
 
 from curl_cffi import requests as curl_requests
 
+from pnw_campsites.providers.errors import WAFBlockedError
 from pnw_campsites.registry.models import (
     AvailabilityStatus,
     CampgroundAvailability,
@@ -77,7 +78,16 @@ class GoingToCampClient:
 
     def _get_sync(self, path: str, params: dict | None = None) -> dict | list:
         assert self._session is not None
-        resp = self._session.get(f"{BASE_URL}{path}", params=params, timeout=30)
+        import time
+        for attempt in range(2):
+            resp = self._session.get(f"{BASE_URL}{path}", params=params, timeout=30)
+            if resp.status_code == 403:
+                raise WAFBlockedError("GoingToCamp WAF blocked the request")
+            if resp.status_code >= 500 and attempt == 0:
+                time.sleep(1)
+                continue
+            resp.raise_for_status()
+            return resp.json()
         resp.raise_for_status()
         return resp.json()
 

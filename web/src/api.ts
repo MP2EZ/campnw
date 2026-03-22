@@ -28,10 +28,18 @@ export interface CampgroundResult {
   error: string | null;
 }
 
+export interface SearchWarning {
+  kind: string;
+  count: number;
+  source: string;
+  message: string;
+}
+
 export interface SearchResponse {
   campgrounds_checked: number;
   campgrounds_with_availability: number;
   results: CampgroundResult[];
+  warnings: SearchWarning[];
 }
 
 export interface SearchParams {
