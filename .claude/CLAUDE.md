@@ -171,62 +171,100 @@ Full roadmap details: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs
 - [x] Dark mode (system-preference-aware + manual toggle, warm forest palette)
 - [x] Watch confirmation animation
 
+### v0.2.1 "Hardening"
+Security (3 HIGH findings):
+- [ ] Cookie: add `secure=True` flag
+- [ ] CORS: env-based origin config or remove for same-origin monolith
+- [ ] /api/track: body size cap, schema validation, rate limit
+- [ ] Rate limit search endpoints (limit param cap le=50, SlowAPI)
+- [ ] Pin GitHub Actions flyctl to SHA (not @master)
+- [ ] Validate facility_id format in URL path
+
+Accessibility (8 Level A fixes):
+- [ ] Result card: replace div onClick with button + aria-expanded
+- [ ] Add `<main>` landmark wrapping search + results
+- [ ] Watch panel: focus trap, aria-modal, return focus on close
+- [ ] Theme toggle: aria-label instead of emoji+title
+- [ ] Day/tag/mode pickers: aria-pressed on toggle buttons
+- [ ] Expand icon: aria-hidden="true"
+- [ ] Name filter: visible text label (not placeholder-only)
+- [ ] Tag/day picker: role="group" with aria-labelledby
+- [ ] Add axe-core to CI
+
+Performance:
+- [ ] Increase batch_size to 5, reduce delay to 0.3s
+
 ### v0.3 "Calendar & Polish"
-- [ ] Calendar heat map — aggregate availability density across months
+- [ ] Calendar heat map — single-hue scale (NOT red-to-green), text labels, aria-labels
+- [ ] Calendar heat map — role="grid" keyboard navigation
 - [ ] Calendar heat map — per-campground detail view
-- [ ] Shareable search links (URL query string encoding)
-- [ ] Progressive loading (show fast providers first)
-- [ ] Micro-interactions (chip animations, smooth transitions)
-- [ ] Option C results view (date blocks across campgrounds)
+- [ ] SSE streaming for progressive search results (first results in 1-2s)
+- [ ] Shareable search links (URL query string encoding + "as of" timestamp)
+- [ ] Zero-result state with Watch as primary CTA
+- [ ] Complete CSS variable migration (eliminate hardcoded hex)
+- [ ] Component directory structure (prepare for v0.8 chat UI)
+- [ ] Dark mode accent contrast fix (lighten for WCAG AA on text elements)
+- [ ] Focus-visible styles on all interactive elements
 
 ### v0.4 "Accounts"
 - [ ] User auth (email + Google OAuth via Clerk or Auth.js)
 - [ ] Saved home base and default preferences
+- [ ] Watch email collection (anonymous watches need notification channel)
 - [ ] Persistent watch ownership (migrate anonymous watches)
-- [ ] Search history (last 20 searches)
+- [ ] Search history (recent 5-10 as quick-fill, not full log)
 - [ ] Privacy controls (data export, account deletion)
+- [ ] Fix watch UNIQUE constraint to scope per-user (not cross-user)
+- [ ] Redact from_location from search logs
 
 ### v0.5 "Background Engine"
 - [ ] Server-side watch polling (APScheduler, 15-min cycles)
 - [ ] Web push notifications (service worker + Web Push API)
+- [ ] PWA manifest + service worker (required for iOS Web Push)
+- [ ] In-product soft-ask for notification permission (not raw browser prompt)
 - [ ] Notification channel preferences (web push, ntfy, Pushover, email)
-- [ ] Watch polling dashboard (status view)
+- [ ] Availability cache in SQLite (10-15 min TTL)
 - [ ] Availability history data collection (silent — feeds v0.9 predictions)
 - [ ] Automated registry refresh (monthly RIDB, quarterly GoingToCamp)
 
 ### v0.6 "AI Search"
-- [ ] Natural language search input (Claude Haiku)
+- [ ] NL search as entry point → auto-fills form → user confirms (NOT a toggle)
 - [ ] NL prompt engineering (tag taxonomy, few-shot examples)
-- [ ] Search mode toggle: Form vs. NL
+- [ ] Loading shimmer state while NL parses
+- [ ] aria-live on extracted parameter preview
 - [ ] NL parse accuracy tracking
+- [ ] Prompt injection defense (strict Pydantic validation on model output)
+- [ ] Anthropic API spend limits in console
 
 ### v0.7 "Oregon Expansion"
 - [ ] Oregon State Parks provider (ReserveAmerica via Playwright)
 - [ ] Seed 200+ OR state parks into registry
 - [ ] OR State Parks source filter + color-coded badge (amber)
-- [ ] Registry enrichment pass (review auto-tags, manual curation top 50)
+- [ ] Campground detail enrichment (amenities, photos, site counts)
+- [ ] Registry enrichment pass (manual curation top 50)
 - [ ] Booking link validation
 
 ### v0.8 "Trip Planner"
-- [ ] Trip planner conversational UI (Claude Sonnet + function calling)
+- [ ] Trip planner on dedicated route (/plan), not embedded in search
+- [ ] Conversational UI (Claude Sonnet + function calling)
 - [ ] Tool-calling integration (search, check, drive time, detail)
-- [ ] Itinerary card view (day-by-day with booking links)
+- [ ] Itinerary card view (day-by-day with booking links, ol semantics)
 - [ ] Shareable itineraries (UUID link, 30-day expiry)
+- [ ] role="log" on transcript, aria-live for tool-call states
+- [ ] Rate limit communication UX (5/day free tier)
 
 ### v0.9 "Predictions"
 - [ ] Predictive availability display ("typically frees up X days before")
 - [ ] Statistical prediction model (time-series on polling history)
 - [ ] Smart notification scoring ("usually books within 30 min")
-- [ ] Prediction confidence display
+- [ ] Prediction confidence display with "still learning" cold start
 
 ### v1.0 "campnw 1.0"
-- [ ] Map view (Leaflet/Mapbox, availability-colored pins)
+- [ ] Map view (Leaflet, lazy-loaded, with list alternative for a11y)
 - [ ] Keyboard shortcuts (j/k nav, b bookmark, w watch, ? help)
-- [ ] Campground detail enrichment (amenities, photos)
 - [ ] Registry expansion to 1,000+ campgrounds
 - [ ] Personalized recommendations (opt-in, based on search history)
-- [ ] Performance audit (P95 search < 4s, Lighthouse)
-- [ ] Accessibility audit (WCAG 2.1 AA)
+- [ ] Performance audit (P95 search < 4s, Lighthouse CI)
+- [ ] Accessibility audit (WCAG 2.1 AA final sweep, axe-core in CI)
 
 ## Key Design Decisions
 
