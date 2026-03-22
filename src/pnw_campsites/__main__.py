@@ -10,6 +10,9 @@ from datetime import date
 
 from dotenv import load_dotenv
 
+from pnw_campsites.monitor.db import Watch, WatchDB
+from pnw_campsites.monitor.notify import notify_console, notify_ntfy
+from pnw_campsites.monitor.watcher import poll_all
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.search.engine import (
@@ -203,6 +206,110 @@ async def cmd_list(args: argparse.Namespace) -> None:
     registry.close()
 
 
+async def cmd_watch_add(args: argparse.Namespace) -> None:
+    """Add a campground watch."""
+    start_date, end_date = _parse_dates(args.dates)
+    days_of_week = list(_parse_days(args.days)) if args.days else None
+
+    # Look up name from registry if possible
+    name = args.name or ""
+    if not name:
+        registry = CampgroundRegistry()
+        cg = registry.get_by_facility_id(args.facility_id)
+        name = cg.name if cg else f"Facility {args.facility_id}"
+        registry.close()
+
+    watch = Watch(
+        facility_id=args.facility_id,
+        name=name,
+        start_date=start_date.isoformat(),
+        end_date=end_date.isoformat(),
+        min_nights=args.nights,
+        days_of_week=days_of_week,
+        notify_topic=args.ntfy_topic or "",
+    )
+
+    with WatchDB() as db:
+        saved = db.add_watch(watch)
+    print(f"Watch #{saved.id} added: {saved.name}")
+    print(f"  Dates: {saved.start_date} → {saved.end_date}")
+    if days_of_week:
+        print(f"  Days: {args.days}")
+    print(f"  Min nights: {saved.min_nights}")
+    if saved.notify_topic:
+        print(f"  Notify: ntfy topic '{saved.notify_topic}'")
+    else:
+        print("  Notify: console only (use --ntfy-topic to enable push)")
+
+
+def cmd_watch_remove(args: argparse.Namespace) -> None:
+    """Remove a watch."""
+    with WatchDB() as db:
+        if db.remove_watch(args.watch_id):
+            print(f"Watch #{args.watch_id} removed.")
+        else:
+            print(f"Watch #{args.watch_id} not found.")
+
+
+def cmd_watch_list(_args: argparse.Namespace) -> None:
+    """List all watches."""
+    with WatchDB() as db:
+        watches = db.list_watches(enabled_only=False)
+
+    if not watches:
+        print("No watches configured. Add one with: watch add <facility_id> --dates ...")
+        return
+
+    print(f"{len(watches)} watch(es):\n")
+    for w in watches:
+        status = "enabled" if w.enabled else "disabled"
+        days_str = ""
+        if w.days_of_week:
+            day_names = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu",
+                         4: "Fri", 5: "Sat", 6: "Sun"}
+            days_str = f" [{','.join(day_names[d] for d in w.days_of_week)}]"
+        notify = f" → ntfy:{w.notify_topic}" if w.notify_topic else ""
+        print(
+            f"  #{w.id} {w.name} ({w.facility_id}) "
+            f"{w.start_date}→{w.end_date} "
+            f"{w.min_nights}n{days_str} [{status}]{notify}"
+        )
+
+
+async def cmd_watch_poll(args: argparse.Namespace) -> None:
+    """Poll all watches and report/notify on changes."""
+    load_dotenv()
+    api_key = os.getenv("RIDB_API_KEY")
+    if not api_key:
+        print("ERROR: RIDB_API_KEY not set in .env")
+        sys.exit(1)
+
+    watch_db = WatchDB()
+    async with RecGovClient(ridb_api_key=api_key) as client:
+        results = await poll_all(client, watch_db)
+
+    changes_found = 0
+    for result in results:
+        if result.error:
+            print(f"[ERROR] {result.watch.name}: {result.error}")
+            continue
+
+        if result.has_changes:
+            changes_found += len(result.changes)
+            notify_console(result)
+
+            # Send push notification if configured
+            if result.watch.notify_topic:
+                await notify_ntfy(result.watch.notify_topic, result)
+
+    if changes_found == 0:
+        print(f"Polled {len(results)} watch(es). No new availability.")
+    else:
+        print(f"Polled {len(results)} watch(es). {changes_found} new site(s) found.")
+
+    watch_db.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="pnw_campsites",
@@ -243,6 +350,28 @@ def main() -> None:
     p_list.add_argument("--max-drive", type=int, help="Max drive minutes from Bellevue")
     p_list.add_argument("--name", help="Filter by name (substring match)")
 
+    # --- watch ---
+    p_watch = sub.add_parser("watch", help="Monitor campgrounds for changes")
+    watch_sub = p_watch.add_subparsers(dest="watch_command", required=True)
+
+    p_wa = watch_sub.add_parser("add", help="Add a campground watch")
+    p_wa.add_argument("facility_id", help="Recreation.gov facility ID")
+    p_wa.add_argument("--dates", required=True,
+                       help="Date range to monitor: YYYY-MM-DD:YYYY-MM-DD")
+    p_wa.add_argument("--nights", type=int, default=1,
+                       help="Minimum consecutive nights (default: 1)")
+    p_wa.add_argument("--days",
+                       help="Days of week: thu,fri,sat,sun or weekend/long-weekend")
+    p_wa.add_argument("--name", help="Override campground name")
+    p_wa.add_argument("--ntfy-topic",
+                       help="ntfy topic for push notifications")
+
+    p_wr = watch_sub.add_parser("remove", help="Remove a watch")
+    p_wr.add_argument("watch_id", type=int, help="Watch ID to remove")
+
+    watch_sub.add_parser("list", help="List all watches")
+    watch_sub.add_parser("poll", help="Poll all watches for changes")
+
     args = parser.parse_args()
 
     if args.command == "search":
@@ -251,6 +380,15 @@ def main() -> None:
         asyncio.run(cmd_check(args))
     elif args.command == "list":
         asyncio.run(cmd_list(args))
+    elif args.command == "watch":
+        if args.watch_command == "add":
+            asyncio.run(cmd_watch_add(args))
+        elif args.watch_command == "remove":
+            cmd_watch_remove(args)
+        elif args.watch_command == "list":
+            cmd_watch_list(args)
+        elif args.watch_command == "poll":
+            asyncio.run(cmd_watch_poll(args))
 
 
 if __name__ == "__main__":

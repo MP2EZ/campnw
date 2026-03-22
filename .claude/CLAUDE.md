@@ -109,6 +109,26 @@ Activate the venv first: `.venv/bin/python3 -m pnw_campsites <command>`
 ### Booking URLs
 Search results include recreation.gov availability links. The `check` command includes per-site booking links with dates pre-filled.
 
+### Watch/monitor campgrounds for changes
+```bash
+# Add a watch — "alert me when Ohanapecosh opens up for June weekends"
+.venv/bin/python3 -m pnw_campsites watch add 232465 --dates 2026-06-01:2026-06-30 --nights 2 --days long-weekend
+
+# With ntfy push notifications
+.venv/bin/python3 -m pnw_campsites watch add 232465 --dates 2026-06-01:2026-06-30 --ntfy-topic my-campsites
+
+# List watches
+.venv/bin/python3 -m pnw_campsites watch list
+
+# Poll all watches (run via cron for automated monitoring)
+.venv/bin/python3 -m pnw_campsites watch poll
+
+# Remove a watch
+.venv/bin/python3 -m pnw_campsites watch remove 1
+```
+
+The poll command diffs current availability against the last snapshot. First poll baselines; subsequent polls report only newly-available sites (cancellations, newly-released dates).
+
 ## Build Phases
 
 ### Phase 1: Core + CLI (DONE)
@@ -119,11 +139,22 @@ Search results include recreation.gov availability links. The `check` command in
 - [x] Build search/discovery engine (with day-of-week filtering)
 - [x] CLI entry point with search, check, list commands
 
-### Phase 2: Monitoring + WA State Parks
-- [ ] GoingToCamp provider (solve WAF issue)
-- [ ] Watch/diff layer — store last-seen availability, detect changes
-- [ ] Notification dispatch (ntfy or Pushover)
-- [ ] Cron/systemd timer setup
+### Phase 2a: Monitoring (rec.gov) — DONE (except cron setup)
+- [x] Watch/diff layer — SQLite-backed snapshots with change detection
+- [x] Notification dispatch (ntfy + Pushover + console)
+- [x] CLI commands: watch add/remove/list/poll
+- [ ] Cron/launchd timer setup for automated polling
+
+### Phase 2b: WA State Parks (GoingToCamp) — can run in parallel with 2a
+Adds WA State Parks as a data source. Research spike — WAF bypass is uncertain.
+- [ ] Investigate WAF bypass: cloudscraper, curl_cffi, Playwright session cookies
+- [ ] Check camply's GoingToCamp provider for current workaround
+- [ ] Build `providers/goingtocamp.py` if bypass works
+- [ ] Integrate into search engine (registry already has `wa_state` booking system)
+- **Files**: `providers/goingtocamp.py`, minor model/engine updates
+- **No overlap with 2a** — separate provider, different directory
+
+**Parallel work note**: 2a and 2b can safely run in separate Claude Code sessions on the same branch. File overlap is minimal (different subdirectories). Separate git worktrees are an option but not necessary.
 
 ### Phase 3: Dashboard
 - [ ] FastAPI backend exposing core library
