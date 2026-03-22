@@ -726,13 +726,17 @@ header p {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
 }
 
 .heatmap-legend {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-bottom: 0.4rem;
+  width: 100%;
   font-size: 0.55rem;
   color: var(--text-muted);
 }
@@ -748,11 +752,7 @@ header p {
 }
 
 .heatmap-month {
-  margin-bottom: 0.5rem;
-}
-
-.heatmap-month:last-child {
-  margin-bottom: 0;
+  flex-shrink: 0;
 }
 
 .heatmap-month-title {
