@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { searchCampsites } from "./api";
 import type { SearchParams, SearchResponse, Window } from "./api";
+import { WatchPanel, WatchButton } from "./WatchPanel";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
@@ -14,7 +15,7 @@ function track(event: string, data: Record<string, string | number>) {
     // ignore
   }
 }
-import { Wordmark } from "./Wordmark";
+
 import "./App.css";
 
 function formatDate(offset: number): string {
@@ -479,9 +480,11 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
 function ResultCard({
   result,
   view,
+  searchDates,
 }: {
   result: SearchResponse["results"][0];
   view: ResultsView;
+  searchDates?: { start: string; end: string };
 }) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -575,6 +578,14 @@ function ResultCard({
                   : "Recreation.gov"}{" "}
                 ↗
               </a>
+              {searchDates && (
+                <WatchButton
+                  facilityId={result.facility_id}
+                  name={result.name}
+                  startDate={searchDates.start}
+                  endDate={searchDates.end}
+                />
+              )}
             </div>
           )}
           {view === "dates" ? (
@@ -595,11 +606,24 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultsView, setResultsView] = useState<ResultsView>("dates");
+  const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
+  const [watchPanelOpen, setWatchPanelOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem("campnw-dark");
+    if (saved !== null) return saved === "true";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
+    localStorage.setItem("campnw-dark", String(darkMode));
+  }, [darkMode]);
 
   const handleSearch = async (params: SearchParams, mode: SearchMode) => {
     setLoading(true);
     setError(null);
     setResultsView(mode === "find" ? "dates" : "sites");
+    setSearchDates({ start: params.start_date, end: params.end_date });
     try {
       const data = await searchCampsites(params);
       setResults(data);
@@ -613,9 +637,34 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <Wordmark size="md" className="wordmark" />
-        <p>Find available campsites across the Pacific Northwest</p>
+        <div className="header-row">
+          <div>
+            <h1>campnw</h1>
+            <p>Find available campsites across the Pacific Northwest</p>
+          </div>
+          <div className="header-actions">
+            <button
+              className="header-btn"
+              onClick={() => setWatchPanelOpen(true)}
+              title="Watches"
+            >
+              Watches
+            </button>
+            <button
+              className="header-btn theme-toggle"
+              onClick={() => setDarkMode(!darkMode)}
+              title={darkMode ? "Light mode" : "Dark mode"}
+            >
+              {darkMode ? "☀" : "☾"}
+            </button>
+          </div>
+        </div>
       </header>
+
+      <WatchPanel
+        open={watchPanelOpen}
+        onClose={() => setWatchPanelOpen(false)}
+      />
 
       <SearchForm onSearch={handleSearch} loading={loading} />
 
@@ -660,7 +709,12 @@ export default function App() {
           {results.results
             .filter((r) => r.total_available_sites > 0)
             .map((r) => (
-              <ResultCard key={r.facility_id} result={r} view={resultsView} />
+              <ResultCard
+                key={r.facility_id}
+                result={r}
+                view={resultsView}
+                searchDates={searchDates || undefined}
+              />
             ))}
           {results.campgrounds_with_availability === 0 && (
             <p className="no-results">
