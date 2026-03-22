@@ -188,6 +188,7 @@ function SearchForm({
             <option value="portland">Portland</option>
             <option value="spokane">Spokane</option>
             <option value="bellingham">Bellingham</option>
+            <option value="moscow">Moscow, ID</option>
           </select>
         </label>
         <label>

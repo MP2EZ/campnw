@@ -16,6 +16,7 @@ KNOWN_BASES: dict[str, tuple[float, float]] = {
     "portland": (45.5152, -122.6784),
     "spokane": (47.6588, -117.4260),
     "bellingham": (48.7519, -122.4787),
+    "moscow": (46.7324, -117.0002),
 }
 
 # PNW terrain makes straight-line distance misleading (mountains, water).
