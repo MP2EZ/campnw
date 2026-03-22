@@ -587,6 +587,13 @@ export default function App() {
               ))}
             </div>
           )}
+          {results.results.some((r) => r.booking_system === "wa_state") && (
+            <p className="wa-data-note">
+              WA State Parks data is limited — site names, types, and capacity
+              aren't available from their booking system. Check GoingToCamp for
+              full details before booking.
+            </p>
+          )}
           {results.results
             .filter((r) => r.total_available_sites > 0)
             .map((r) => (

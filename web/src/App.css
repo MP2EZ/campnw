@@ -498,6 +498,17 @@ header p {
   margin-left: 0.4rem;
 }
 
+.wa-data-note {
+  font-size: 0.78rem;
+  color: #8a6d3b;
+  background: #fef8e8;
+  border: 1px solid #e8d48a;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0 1rem 0.5rem;
+  line-height: 1.4;
+}
+
 .fcfs-label {
   font-size: 0.8rem;
   color: #996600;
