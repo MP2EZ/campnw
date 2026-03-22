@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { searchCampsites } from "./api";
 import type { SearchParams, SearchResponse, Window } from "./api";
 import "./App.css";
@@ -11,6 +11,8 @@ function formatDate(offset: number): string {
 
 type SearchMode = "find" | "exact";
 type ResultsView = "dates" | "sites";
+
+const INITIAL_BLOCKS_SHOWN = 3;
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_PRESETS: Record<string, string> = {
@@ -72,6 +74,7 @@ function SearchForm({
   const [name, setName] = useState("");
   const [source, setSource] = useState("");
   const [limit, setLimit] = useState(20);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const getDaysOfWeek = (): string | undefined => {
     if (mode === "exact") return undefined;
@@ -102,17 +105,17 @@ function SearchForm({
 
   return (
     <form onSubmit={handleSubmit} className="search-form">
-      <div className="mode-tabs">
+      <div className="mode-toggle">
         <button
           type="button"
-          className={`mode-tab ${mode === "find" ? "active" : ""}`}
+          className={mode === "find" ? "active" : ""}
           onClick={() => setMode("find")}
         >
           Find a date
         </button>
         <button
           type="button"
-          className={`mode-tab ${mode === "exact" ? "active" : ""}`}
+          className={mode === "exact" ? "active" : ""}
           onClick={() => setMode("exact")}
         >
           Exact dates
@@ -121,7 +124,7 @@ function SearchForm({
 
       <div className="form-row">
         <label>
-          {mode === "find" ? "Search from" : "Check in"}
+          {mode === "find" ? "From" : "Check in"}
           <input
             type="date"
             value={startDate}
@@ -138,7 +141,10 @@ function SearchForm({
             required
           />
         </label>
-        {mode === "find" && (
+      </div>
+
+      {mode === "find" && (
+        <div className="form-row">
           <label>
             Min Nights
             <input
@@ -149,20 +155,6 @@ function SearchForm({
               max={14}
             />
           </label>
-        )}
-      </div>
-
-      <div className="form-row">
-        <label>
-          State
-          <select value={state} onChange={(e) => setState(e.target.value)}>
-            <option value="">All</option>
-            <option value="WA">WA</option>
-            <option value="OR">OR</option>
-            <option value="ID">ID</option>
-          </select>
-        </label>
-        {mode === "find" && (
           <label>
             Days
             <select
@@ -176,7 +168,23 @@ function SearchForm({
               ))}
             </select>
           </label>
-        )}
+        </div>
+      )}
+
+      {mode === "find" && dayPreset === "custom" && (
+        <DayPicker selected={customDays} onChange={setCustomDays} />
+      )}
+
+      <div className="form-row">
+        <label>
+          State
+          <select value={state} onChange={(e) => setState(e.target.value)}>
+            <option value="">All</option>
+            <option value="WA">WA</option>
+            <option value="OR">OR</option>
+            <option value="ID">ID</option>
+          </select>
+        </label>
         <label>
           Source
           <select value={source} onChange={(e) => setSource(e.target.value)}>
@@ -187,36 +195,41 @@ function SearchForm({
         </label>
       </div>
 
-      {mode === "find" && dayPreset === "custom" && (
+      <label className="form-row-full">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Filter by campground name..."
+        />
+      </label>
+
+      <button
+        type="button"
+        className="advanced-toggle"
+        onClick={() => setShowAdvanced(!showAdvanced)}
+      >
+        {showAdvanced ? "Less options ▴" : "More options ▾"}
+      </button>
+
+      {showAdvanced && (
         <div className="form-row">
-          <DayPicker selected={customDays} onChange={setCustomDays} />
+          <label>
+            Max Results
+            <input
+              type="number"
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              min={1}
+              max={50}
+            />
+          </label>
         </div>
       )}
 
-      <div className="form-row">
-        <label>
-          Campground Name
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. rainier, lake"
-          />
-        </label>
-        <label>
-          Max Results
-          <input
-            type="number"
-            value={limit}
-            onChange={(e) => setLimit(Number(e.target.value))}
-            min={1}
-            max={50}
-          />
-        </label>
-        <button type="submit" disabled={loading}>
-          {loading ? "Searching..." : "Search"}
-        </button>
-      </div>
+      <button type="submit" className="search-btn" disabled={loading}>
+        {loading ? "Searching..." : "Search"}
+      </button>
     </form>
   );
 }
@@ -224,7 +237,7 @@ function SearchForm({
 // ─── Results: Date Block View (Option B) ─────────────────────────────
 
 interface DateBlock {
-  key: string; // "start→end"
+  key: string;
   start_date: string;
   end_date: string;
   nights: number;
@@ -259,10 +272,14 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
   const blocks = groupByDateBlock(result.windows);
   const fcfsSites = result.windows.filter((w) => w.is_fcfs);
   const isWaState = result.booking_system === "wa_state";
+  const [showAll, setShowAll] = useState(false);
+
+  const visibleBlocks = showAll ? blocks : blocks.slice(0, INITIAL_BLOCKS_SHOWN);
+  const hiddenCount = blocks.length - INITIAL_BLOCKS_SHOWN;
 
   return (
     <div className="site-list">
-      {blocks.map((block) => (
+      {visibleBlocks.map((block) => (
         <div key={block.key} className="date-block">
           <div className="date-block-header">
             <span className="date-block-range">
@@ -281,7 +298,8 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                 rel="noopener"
                 className="site-chip wa-book-link"
               >
-                {block.sites.length} site{block.sites.length !== 1 ? "s" : ""} available
+                {block.sites.length} site
+                {block.sites.length !== 1 ? "s" : ""} available
                 <span className="site-chip-meta">Book on GoingToCamp</span>
               </a>
             </div>
@@ -305,6 +323,14 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
           )}
         </div>
       ))}
+      {!showAll && hiddenCount > 0 && (
+        <button
+          className="show-more-btn"
+          onClick={() => setShowAll(true)}
+        >
+          Show {hiddenCount} more window{hiddenCount !== 1 && "s"}
+        </button>
+      )}
       {fcfsSites.length > 0 && (
         <div className="fcfs-section">
           <p className="fcfs-label">
@@ -320,10 +346,7 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
 // ─── Results: Site View (Option A) ───────────────────────────────────
 
 function SiteView({ result }: { result: SearchResponse["results"][0] }) {
-  const isWaState = result.booking_system === "wa_state";
-
-  // For WA State Parks, show date-based summary instead of individual WA-- sites
-  if (isWaState) {
+  if (result.booking_system === "wa_state") {
     return <DateBlockView result={result} />;
   }
 
@@ -385,6 +408,17 @@ function ResultCard({
   view: ResultsView;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const handleToggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && cardRef.current) {
+      setTimeout(() => {
+        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+  };
 
   if (result.error) {
     return (
@@ -397,16 +431,15 @@ function ResultCard({
 
   const sourceLabel =
     result.booking_system === "wa_state" ? "WA Parks" : result.state;
-
   const dateBlocks = groupByDateBlock(result.windows);
   const summaryText =
     view === "dates"
-      ? `${result.total_available_sites} sites across ${dateBlocks.length} date window${dateBlocks.length !== 1 ? "s" : ""}`
-      : `${result.total_available_sites} reservable — ${result.windows.filter((w) => !w.is_fcfs).length} windows`;
+      ? `${result.total_available_sites} sites · ${dateBlocks.length} window${dateBlocks.length !== 1 ? "s" : ""}`
+      : `${result.total_available_sites} sites · ${result.windows.filter((w) => !w.is_fcfs).length} windows`;
 
   return (
-    <div className="result-card">
-      <div className="result-header" onClick={() => setExpanded(!expanded)}>
+    <div className="result-card" ref={cardRef}>
+      <div className="result-header" onClick={handleToggle}>
         <div>
           <h3>
             {result.name} <span className="source-badge">{sourceLabel}</span>
@@ -419,26 +452,34 @@ function ResultCard({
         <span className="expand-icon">{expanded ? "−" : "+"}</span>
       </div>
 
-      {result.availability_url && (
-        <a
-          href={result.availability_url}
-          target="_blank"
-          rel="noopener"
-          className="book-link"
-        >
-          View on{" "}
-          {result.booking_system === "wa_state"
-            ? "GoingToCamp"
-            : "Recreation.gov"}
-        </a>
+      {expanded && (
+        <>
+          <div className="card-toolbar">
+            {result.availability_url && (
+              <a
+                href={result.availability_url}
+                target="_blank"
+                rel="noopener"
+                className="book-link"
+              >
+                View on{" "}
+                {result.booking_system === "wa_state"
+                  ? "GoingToCamp"
+                  : "Recreation.gov"}{" "}
+                ↗
+              </a>
+            )}
+            <button className="collapse-btn" onClick={handleToggle}>
+              Collapse ▴
+            </button>
+          </div>
+          {view === "dates" ? (
+            <DateBlockView result={result} />
+          ) : (
+            <SiteView result={result} />
+          )}
+        </>
       )}
-
-      {expanded &&
-        (view === "dates" ? (
-          <DateBlockView result={result} />
-        ) : (
-          <SiteView result={result} />
-        ))}
     </div>
   );
 }
@@ -454,7 +495,6 @@ export default function App() {
   const handleSearch = async (params: SearchParams, mode: SearchMode) => {
     setLoading(true);
     setError(null);
-    // Default to date view for "find", site view for "exact"
     setResultsView(mode === "find" ? "dates" : "sites");
     try {
       const data = await searchCampsites(params);
@@ -502,11 +542,7 @@ export default function App() {
           {results.results
             .filter((r) => r.total_available_sites > 0 || r.error)
             .map((r) => (
-              <ResultCard
-                key={r.facility_id}
-                result={r}
-                view={resultsView}
-              />
+              <ResultCard key={r.facility_id} result={r} view={resultsView} />
             ))}
           {results.campgrounds_with_availability === 0 && (
             <p className="no-results">
