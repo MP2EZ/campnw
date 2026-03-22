@@ -283,7 +283,7 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
         <div key={block.key} className="date-block">
           <div className="date-block-header">
             <span className="date-block-range">
-              {block.dayName} {block.start_date} → {block.end_date}
+              {block.dayName} {block.start_date} → {new Date(block.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {block.end_date}
             </span>
             <span className="date-block-meta">
               {block.nights}n · {block.sites.length} site
@@ -385,7 +385,7 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
                       rel="noopener"
                       className="window-chip"
                     >
-                      {dayName} {w.start_date} → {w.end_date} ({w.nights}n)
+                      {dayName} {w.start_date} → {new Date(w.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {w.end_date} ({w.nights}n)
                     </a>
                   );
                 })}
