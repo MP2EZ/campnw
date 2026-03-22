@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import (
@@ -238,19 +239,21 @@ class SearchEngine:
     def __init__(
         self,
         registry: CampgroundRegistry,
-        recgov_client: RecGovClient,
+        recgov_client: RecGovClient | None = None,
+        goingtocamp_client: GoingToCampClient | None = None,
     ) -> None:
         self._registry = registry
         self._recgov = recgov_client
+        self._goingtocamp = goingtocamp_client
 
     async def search(self, query: SearchQuery) -> SearchResults:
         """Run a discovery search: filter registry, then check availability."""
-        # Step 1: Filter registry
+        # Step 1: Filter registry — search all providers if no specific system requested
         campgrounds = self._registry.search(
             state=query.state,
             tags=query.tags,
             max_drive_minutes=query.max_drive_minutes,
-            booking_system=query.booking_system or BookingSystem.RECGOV,
+            booking_system=query.booking_system,
             name_like=query.name_like,
         )
 
@@ -314,11 +317,26 @@ class SearchEngine:
         end_month: date,
         query: SearchQuery,
     ) -> CampgroundResult:
-        """Check availability for a single campground."""
+        """Check availability for a single campground, dispatching to the right provider."""
         try:
-            availability = await self._recgov.get_availability_range(
-                campground.facility_id, start_month, end_month
-            )
+            if campground.booking_system == BookingSystem.WA_STATE:
+                if not self._goingtocamp:
+                    return CampgroundResult(
+                        campground=campground,
+                        error="GoingToCamp client not configured",
+                    )
+                availability = await self._goingtocamp.get_availability(
+                    int(campground.facility_id), start_month, end_month
+                )
+            else:
+                if not self._recgov:
+                    return CampgroundResult(
+                        campground=campground,
+                        error="RecGov client not configured",
+                    )
+                availability = await self._recgov.get_availability_range(
+                    campground.facility_id, start_month, end_month
+                )
             return _process_availability(campground, availability, query)
         except Exception as e:
             return CampgroundResult(
@@ -332,14 +350,17 @@ class SearchEngine:
         start_date: date,
         end_date: date,
         min_nights: int = 1,
+        booking_system: BookingSystem | None = None,
     ) -> CampgroundResult:
         """Check availability for a specific known campground."""
-        campground = self._registry.get_by_facility_id(facility_id)
+        campground = self._registry.get_by_facility_id(
+            facility_id, booking_system=booking_system or BookingSystem.RECGOV
+        )
         if not campground:
             campground = Campground(
                 facility_id=facility_id,
                 name=f"Facility {facility_id}",
-                booking_system=BookingSystem.RECGOV,
+                booking_system=booking_system or BookingSystem.RECGOV,
             )
 
         query = SearchQuery(

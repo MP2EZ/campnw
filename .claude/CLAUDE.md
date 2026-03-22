@@ -15,7 +15,7 @@ Personal tool for finding and monitoring campsite availability across the Pacifi
 src/pnw_campsites/
   providers/          # Thin API clients per booking system
     recgov.py         # Recreation.gov (RIDB metadata + undocumented availability)
-    goingtocamp.py    # WA State Parks (GoingToCamp platform)
+    goingtocamp.py    # WA State Parks (GoingToCamp, curl_cffi WAF bypass)
   registry/           # Campground registry (SQLite-backed)
     models.py         # Data models (campground, campsite, availability)
     db.py             # SQLite operations
@@ -50,11 +50,14 @@ Two APIs, both critical:
 - `GET https://www.recreation.gov/api/search?q=camping&fq=state:WA`
 - Needs parameter tuning — returned 0 results in validation
 
-### WA State Parks / GoingToCamp — Phase 2
+### WA State Parks / GoingToCamp — DONE (Phase 2b)
 - Base: `https://washington.goingtocamp.com`
-- Endpoints: `/api/maps`, `/api/resourcecategory`, `POST /api/availability/map`
-- **STATUS: Blocked by Azure WAF (403)**. Needs session cookies, cloudscraper, or headless browser.
-- camply has a working GoingToCamp provider — reference their implementation
+- WAF bypass: `curl_cffi` with Chrome TLS fingerprint impersonation (`chrome131`)
+- Key endpoints: `/api/maps` (hierarchy), `/api/resourceLocation` (parks), `/api/availability/map` (per-site avail)
+- Map hierarchy: root → region → park → loop/area → individual site resources
+- Availability values: 0=Available, 1=Reserved, 2=Closed, 3=Not Reservable, 5=NYR
+- 75 WA State Parks with campsites seeded in registry (`scripts/seed_wa_state.py`)
+- Site names not available via API — identified by resource ID (e.g., `WA--2147482394`)
 
 ### Oregon/Idaho State Parks — Phase 4 (Stretch)
 - ReserveAmerica platform, blocked by bot protection
@@ -86,18 +89,31 @@ Activate the venv first: `.venv/bin/python3 -m pnw_campsites <command>`
 
 # Increase limit (default checks 20 campgrounds)
 .venv/bin/python3 -m pnw_campsites search --dates 2026-06-01:2026-06-30 --state WA --limit 50
+
+# WA State Parks only (no RIDB key needed)
+.venv/bin/python3 -m pnw_campsites search --dates 2026-07-01:2026-07-07 --source wa-state --nights 1
+
+# WA State Parks by name
+.venv/bin/python3 -m pnw_campsites search --dates 2026-07-01:2026-07-07 --source wa-state --name "deception"
+
+# Rec.gov only
+.venv/bin/python3 -m pnw_campsites search --dates 2026-06-01:2026-06-30 --source recgov --state WA
 ```
 
 ### Check a specific campground
 ```bash
+# Rec.gov (default)
 .venv/bin/python3 -m pnw_campsites check 232465 --dates 2026-06-01:2026-06-30
-# Outputs per-site booking URLs
+
+# WA State Park (use resourceLocationId from registry)
+.venv/bin/python3 -m pnw_campsites check -2147483624 --dates 2026-07-01:2026-07-07 --source wa-state
 ```
 
 ### List registry campgrounds
 ```bash
 .venv/bin/python3 -m pnw_campsites list --state WA
 .venv/bin/python3 -m pnw_campsites list --name "lake" --state OR
+.venv/bin/python3 -m pnw_campsites list --source wa-state
 ```
 
 ### Day-of-week presets
@@ -145,13 +161,14 @@ The poll command diffs current availability against the last snapshot. First pol
 - [x] CLI commands: watch add/remove/list/poll
 - [ ] Cron/launchd timer setup for automated polling
 
-### Phase 2b: WA State Parks (GoingToCamp) — can run in parallel with 2a
-Adds WA State Parks as a data source. Research spike — WAF bypass is uncertain.
-- [ ] Investigate WAF bypass: cloudscraper, curl_cffi, Playwright session cookies
-- [ ] Check camply's GoingToCamp provider for current workaround
-- [ ] Build `providers/goingtocamp.py` if bypass works
-- [ ] Integrate into search engine (registry already has `wa_state` booking system)
-- **Files**: `providers/goingtocamp.py`, minor model/engine updates
+### Phase 2b: WA State Parks (GoingToCamp) — DONE
+- [x] Investigate WAF bypass — `curl_cffi` with Chrome TLS impersonation works
+- [x] Research camply's GoingToCamp provider (plain requests, no WAF bypass)
+- [x] Build `providers/goingtocamp.py` with map hierarchy traversal
+- [x] Seed 75 WA State Parks into registry (`scripts/seed_wa_state.py`)
+- [x] Integrate into search engine (multi-provider dispatch by booking_system)
+- [x] CLI: `--source wa-state` flag on search/check/list commands
+- [x] WA State Parks booking URLs in results
 - **No overlap with 2a** — separate provider, different directory
 
 **Parallel work note**: 2a and 2b can safely run in separate Claude Code sessions on the same branch. File overlap is minimal (different subdirectories). Separate git worktrees are an option but not necessary.
@@ -184,9 +201,11 @@ Adds WA State Parks as a data source. Research spike — WAF bypass is uncertain
 
 ## Known Gotchas
 - Rec.gov availability endpoint needs browser-like User-Agent or you may get blocked
-- GoingToCamp now has Azure WAF — simple requests get 403'd
+- GoingToCamp has Azure WAF — bypassed with `curl_cffi` Chrome TLS impersonation. Plain `requests`/`httpx` get 403'd.
 - RIDB rate limit is 50 req/min — batch imports need throttling
 - Availability statuses beyond the documented ones: "Not Reservable", "Not Reservable Management", "Open", "Closed" — all handled in AvailabilityStatus enum
 - Many USFS campgrounds are first-come-first-served with no online system
 - Some RIDB facilities return 404 on the availability endpoint (scenic byways, areas, corridors) — these aren't reservable campgrounds. Errors are caught and reported gracefully.
-- Registry has 610 campgrounds across WA (146), OR (226), ID (238). Re-seed with `scripts/seed_registry.py`
+- GoingToCamp resource/site details endpoint returns 404 — site names not available via API. Sites identified by resource ID (e.g., `WA--2147482394`).
+- GoingToCamp map hierarchy must be traversed park-by-park via the `resourceLocationId → childMapId` mapping from `/api/maps` links. Starting from region maps returns ALL parks' sites.
+- Registry has 685 campgrounds: 610 rec.gov (WA 146, OR 226, ID 238) + 75 WA State Parks. Re-seed with `scripts/seed_registry.py` and `scripts/seed_wa_state.py`
