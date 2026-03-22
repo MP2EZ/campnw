@@ -754,9 +754,9 @@ export default function App() {
           )}
           {results.results.some((r) => r.booking_system === "wa_state") && (
             <p className="wa-data-note">
-              WA State Parks data is limited — site names, types, and capacity
-              aren't available from their booking system. Check GoingToCamp for
-              full details before booking.
+              <span className="source-badge source-wa_state">WA Parks</span>{" "}
+              site data is limited — names, types, and capacity aren't available
+              from their booking system. Check GoingToCamp for full details.
             </p>
           )}
           {results.results
