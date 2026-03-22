@@ -42,7 +42,7 @@ Two APIs, both critical:
 - `GET https://www.recreation.gov/api/camps/availability/campground/{facility_id}/month?start_date=YYYY-MM-01T00:00:00.000Z`
 - Requires browser-like User-Agent header
 - Returns per-campsite, per-day status for entire month
-- Statuses: Available, Reserved, Not Available, NYR (not yet released)
+- Statuses: Available, Reserved, Not Available, Not Reservable, Not Reservable Management, NYR (not yet released), Open (FCFS), Closed (seasonal)
 - Stable for years — used by camply, Campnab, Campflare, etc.
 - THIS IS THE CRITICAL ENDPOINT for the whole project
 
@@ -60,15 +60,64 @@ Two APIs, both critical:
 - ReserveAmerica platform, blocked by bot protection
 - Will need Playwright/headless browser
 
+## CLI Usage (for Claude Code conversations)
+
+Activate the venv first: `.venv/bin/python3 -m pnw_campsites <command>`
+
+### Search for available campsites
+```bash
+# Basic: WA campgrounds with 2+ night availability in a date range
+.venv/bin/python3 -m pnw_campsites search --dates 2026-06-01:2026-06-30 --state WA --nights 2
+
+# Day-of-week filter: only Thu-Sun windows
+.venv/bin/python3 -m pnw_campsites search --dates 2026-06-01:2026-06-30 --state WA --days long-weekend
+
+# Presets: this-weekend, next-weekend
+.venv/bin/python3 -m pnw_campsites search --dates this-weekend --state WA
+
+# Custom days: any combo
+.venv/bin/python3 -m pnw_campsites search --dates 2026-07-01:2026-07-31 --days fri,sat,sun
+
+# With filters
+.venv/bin/python3 -m pnw_campsites search --dates 2026-06-01:2026-06-30 --state WA --tags lakeside --max-drive 180 --no-groups --people 4
+
+# By name
+.venv/bin/python3 -m pnw_campsites search --dates 2026-06-01:2026-06-30 --name "rainier"
+
+# Increase limit (default checks 20 campgrounds)
+.venv/bin/python3 -m pnw_campsites search --dates 2026-06-01:2026-06-30 --state WA --limit 50
+```
+
+### Check a specific campground
+```bash
+.venv/bin/python3 -m pnw_campsites check 232465 --dates 2026-06-01:2026-06-30
+# Outputs per-site booking URLs
+```
+
+### List registry campgrounds
+```bash
+.venv/bin/python3 -m pnw_campsites list --state WA
+.venv/bin/python3 -m pnw_campsites list --name "lake" --state OR
+```
+
+### Day-of-week presets
+- `weekend` = Fri, Sat, Sun
+- `long-weekend` = Thu, Fri, Sat, Sun
+- `weekdays` = Mon-Fri
+- Custom: `thu,fri,sat,sun` (any comma-separated day names)
+
+### Booking URLs
+Search results include recreation.gov availability links. The `check` command includes per-site booking links with dates pre-filled.
+
 ## Build Phases
 
-### Phase 1: Core + CLI (current)
+### Phase 1: Core + CLI (DONE)
 - [x] Validate APIs
-- [ ] Build recgov provider (availability + RIDB metadata clients)
-- [ ] Design and create SQLite campground registry schema
-- [ ] Seed registry with ~30-50 PNW campgrounds from RIDB
-- [ ] Build search/discovery engine
-- [ ] Wire up as Claude Code MCP tools for conversational queries
+- [x] Build recgov provider (availability + RIDB metadata clients)
+- [x] Design and create SQLite campground registry schema
+- [x] Seed registry with 610 PNW campgrounds from RIDB (WA/OR/ID)
+- [x] Build search/discovery engine (with day-of-week filtering)
+- [x] CLI entry point with search, check, list commands
 
 ### Phase 2: Monitoring + WA State Parks
 - [ ] GoingToCamp provider (solve WAF issue)
@@ -106,5 +155,7 @@ Two APIs, both critical:
 - Rec.gov availability endpoint needs browser-like User-Agent or you may get blocked
 - GoingToCamp now has Azure WAF — simple requests get 403'd
 - RIDB rate limit is 50 req/min — batch imports need throttling
-- Availability status "NYR" means reservations haven't opened yet for that date
+- Availability statuses beyond the documented ones: "Not Reservable", "Not Reservable Management", "Open", "Closed" — all handled in AvailabilityStatus enum
 - Many USFS campgrounds are first-come-first-served with no online system
+- Some RIDB facilities return 404 on the availability endpoint (scenic byways, areas, corridors) — these aren't reservable campgrounds. Errors are caught and reported gracefully.
+- Registry has 610 campgrounds across WA (146), OR (226), ID (238). Re-seed with `scripts/seed_registry.py`
