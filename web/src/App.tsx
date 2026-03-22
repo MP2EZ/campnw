@@ -192,7 +192,7 @@ function SearchForm({
           </select>
         </label>
         <label>
-          Max Drive
+          Max Drive (approx.)
           <select value={maxDrive} onChange={(e) => setMaxDrive(e.target.value)}>
             <option value="">Any distance</option>
             <option value="60">Under 1 hour</option>
