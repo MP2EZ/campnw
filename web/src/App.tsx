@@ -88,7 +88,6 @@ function SearchForm({
   const [dayPreset, setDayPreset] = useState("");
   const [customDays, setCustomDays] = useState<Set<number>>(new Set());
   const [name, setName] = useState("");
-  const [source, setSource] = useState("");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [fromLocation, setFromLocation] = useState("seattle");
   const [maxDrive, setMaxDrive] = useState("");
@@ -116,7 +115,6 @@ function SearchForm({
         nights: mode === "exact" ? 1 : nights,
         days_of_week: getDaysOfWeek(),
         name: name || undefined,
-        source: source || undefined,
         tags: selectedTags.size > 0 ? Array.from(selectedTags).join(",") : undefined,
         from_location: fromLocation || undefined,
         max_drive: maxDrive ? Number(maxDrive) : undefined,
@@ -260,16 +258,15 @@ function SearchForm({
         onClick={() => setShowAdvanced(!showAdvanced)}
       >
         {showAdvanced ? "Fewer filters ▴" : "More filters ▾"}
-        {!showAdvanced && (state || source) && (
+        {!showAdvanced && state && (
           <span className="filter-pills">
-            {state && <span className="filter-pill">{state}</span>}
-            {source && <span className="filter-pill">{source === "wa_state" ? "WA Parks" : "Rec.gov"}</span>}
+            <span className="filter-pill">{state}</span>
           </span>
         )}
       </button>
 
       {showAdvanced && (
-        <div className="form-row form-row-3">
+        <div className="form-row">
           <label>
             State
             <select value={state} onChange={(e) => setState(e.target.value)}>
@@ -277,14 +274,6 @@ function SearchForm({
               <option value="WA">WA</option>
               <option value="OR">OR</option>
               <option value="ID">ID</option>
-            </select>
-          </label>
-          <label>
-            Source
-            <select value={source} onChange={(e) => setSource(e.target.value)}>
-              <option value="">All</option>
-              <option value="recgov">Rec.gov</option>
-              <option value="wa_state">WA State Parks</option>
             </select>
           </label>
           <label>
@@ -639,6 +628,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [resultsView, setResultsView] = useState<ResultsView>("dates");
   const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(["recgov", "wa_state"]));
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("campnw-dark");
@@ -735,12 +725,32 @@ export default function App() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      {results && (
+      {results && (() => {
+        // Client-side source filtering — instant, no re-fetch
+        const filteredResults = {
+          ...results,
+          results: results.results.filter(
+            (r) => sourceFilter.has(r.booking_system)
+          ),
+          campgrounds_with_availability: results.results.filter(
+            (r) => sourceFilter.has(r.booking_system) && r.total_available_sites > 0
+          ).length,
+        };
+        const toggleSource = (src: string) => {
+          const next = new Set(sourceFilter);
+          if (next.has(src) && next.size > 1) {
+            next.delete(src);
+          } else if (!next.has(src)) {
+            next.add(src);
+          }
+          setSourceFilter(next);
+        };
+        return (
         <div className="results">
           <div className="results-header">
             <p className="results-summary">
               Checked {results.campgrounds_checked} campgrounds —{" "}
-              {results.campgrounds_with_availability} with availability
+              {filteredResults.campgrounds_with_availability} with availability
             </p>
             <div className="view-toggle">
               <button
@@ -759,9 +769,28 @@ export default function App() {
               </button>
             </div>
           </div>
-          {searchDates && results.campgrounds_with_availability > 0 && (
+          {/* Source filter — client-side, instant toggle */}
+          <div className="source-toggle" role="group" aria-label="Filter by source">
+            <button
+              type="button"
+              className={`source-toggle-btn source-recgov ${sourceFilter.has("recgov") ? "active" : ""}`}
+              onClick={() => toggleSource("recgov")}
+              aria-pressed={sourceFilter.has("recgov")}
+            >
+              Rec.gov
+            </button>
+            <button
+              type="button"
+              className={`source-toggle-btn source-wa_state ${sourceFilter.has("wa_state") ? "active" : ""}`}
+              onClick={() => toggleSource("wa_state")}
+              aria-pressed={sourceFilter.has("wa_state")}
+            >
+              WA Parks
+            </button>
+          </div>
+          {searchDates && filteredResults.campgrounds_with_availability > 0 && (
             <CalendarHeatMap
-              results={results}
+              results={filteredResults}
               startDate={searchDates.start}
               endDate={searchDates.end}
             />
@@ -773,14 +802,14 @@ export default function App() {
               ))}
             </div>
           )}
-          {results.results.some((r) => r.booking_system === "wa_state") && (
+          {filteredResults.results.some((r) => r.booking_system === "wa_state") && (
             <p className="wa-data-note">
               <span className="source-badge source-wa_state">WA Parks</span>{" "}
               site data is limited — names, types, and capacity aren't available
               from their booking system. Check GoingToCamp for full details.
             </p>
           )}
-          {results.results
+          {filteredResults.results
             .filter((r) => r.total_available_sites > 0)
             .map((r) => (
               <ResultCard
@@ -790,7 +819,7 @@ export default function App() {
                 searchDates={searchDates || undefined}
               />
             ))}
-          {results.campgrounds_with_availability === 0 && (
+          {filteredResults.campgrounds_with_availability === 0 && (
             <div className="no-results">
               <p>No availability found for these dates.</p>
               <p className="no-results-hint">
@@ -800,7 +829,8 @@ export default function App() {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
       </main>
     </div>
   );

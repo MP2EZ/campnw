@@ -879,6 +879,46 @@ header p {
   border-radius: 3px;
 }
 
+/* ─── Source toggle ─────────────────────────────────────────────────── */
+
+.source-toggle {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.source-toggle-btn {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  border: none;
+  color: #fff;
+}
+
+.source-toggle-btn:not(.active) {
+  opacity: 0.3;
+}
+
+.source-toggle-btn.source-recgov {
+  background: #5a8a32;
+}
+
+.source-toggle-btn.source-wa_state {
+  background: #2a7a9a;
+}
+
+[data-theme="dark"] .source-toggle-btn.source-recgov {
+  background: #3a6a22;
+}
+
+[data-theme="dark"] .source-toggle-btn.source-wa_state {
+  background: #1a5a7a;
+}
+
 /* ─── Focus styles ─────────────────────────────────────────────────── */
 
 :focus-visible {
