@@ -403,6 +403,10 @@ header p {
   border-color: #9cc07a;
 }
 
+.site-chip.wa-book-link {
+  font-weight: 600;
+}
+
 .site-chip-meta {
   font-size: 0.65rem;
   font-weight: 400;

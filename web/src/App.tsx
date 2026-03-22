@@ -258,6 +258,7 @@ function groupByDateBlock(windows: Window[]): DateBlock[] {
 function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
   const blocks = groupByDateBlock(result.windows);
   const fcfsSites = result.windows.filter((w) => w.is_fcfs);
+  const isWaState = result.booking_system === "wa_state";
 
   return (
     <div className="site-list">
@@ -272,22 +273,36 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
               {block.sites.length !== 1 && "s"}
             </span>
           </div>
-          <div className="date-block-sites">
-            {block.sites.map((w, i) => (
+          {isWaState ? (
+            <div className="date-block-sites">
               <a
-                key={i}
-                href={w.booking_url || result.availability_url || "#"}
+                href={result.availability_url || "#"}
                 target="_blank"
                 rel="noopener"
-                className="site-chip"
+                className="site-chip wa-book-link"
               >
-                {w.site_name}
-                <span className="site-chip-meta">
-                  {w.loop} · max {w.max_people}p
-                </span>
+                {block.sites.length} site{block.sites.length !== 1 ? "s" : ""} available
+                <span className="site-chip-meta">Book on GoingToCamp</span>
               </a>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="date-block-sites">
+              {block.sites.map((w, i) => (
+                <a
+                  key={i}
+                  href={w.booking_url || result.availability_url || "#"}
+                  target="_blank"
+                  rel="noopener"
+                  className="site-chip"
+                >
+                  {w.site_name}
+                  <span className="site-chip-meta">
+                    {w.loop} · max {w.max_people}p
+                  </span>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       ))}
       {fcfsSites.length > 0 && (
@@ -305,6 +320,13 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
 // ─── Results: Site View (Option A) ───────────────────────────────────
 
 function SiteView({ result }: { result: SearchResponse["results"][0] }) {
+  const isWaState = result.booking_system === "wa_state";
+
+  // For WA State Parks, show date-based summary instead of individual WA-- sites
+  if (isWaState) {
+    return <DateBlockView result={result} />;
+  }
+
   const bySite = new Map<string, Window[]>();
   for (const w of result.windows) {
     if (!bySite.has(w.site_name)) bySite.set(w.site_name, []);
