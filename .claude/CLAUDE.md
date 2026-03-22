@@ -173,10 +173,11 @@ The poll command diffs current availability against the last snapshot. First pol
 
 **Parallel work note**: 2a and 2b can safely run in separate Claude Code sessions on the same branch. File overlap is minimal (different subdirectories). Separate git worktrees are an option but not necessary.
 
-### Phase 3: Dashboard
-- [ ] FastAPI backend exposing core library
-- [ ] React UI with calendar grid view
-- [ ] Filter/sort by tags, drive time, dates
+### Phase 3: Dashboard — DONE
+- [x] FastAPI backend (`src/pnw_campsites/api.py`) — search, check, list endpoints with CORS
+- [x] React + Vite + TypeScript frontend (`web/`) — search form, results cards, booking links
+- [x] Multi-provider support (rec.gov + WA State Parks) in API
+- **Run**: API: `.venv/bin/uvicorn pnw_campsites.api:app --port 8000` | Frontend: `cd web && npm run dev`
 
 ### Phase 4: Oregon/Idaho (stretch)
 - [ ] ReserveAmerica scraping via Playwright
