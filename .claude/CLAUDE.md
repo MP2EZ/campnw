@@ -179,6 +179,10 @@ The poll command diffs current availability against the last snapshot. First pol
 - [x] Multi-provider support (rec.gov + WA State Parks) in API
 - **Run**: API: `.venv/bin/uvicorn pnw_campsites.api:app --port 8000` | Frontend: `cd web && npm run dev`
 
+### Future: Dashboard enhancements
+- [ ] Option C results view — date blocks across campgrounds ("what's available this weekend?" flat view)
+- [ ] Cloudflare Workers deployment (Python Workers + D1 for registry, Pages for React frontend)
+
 ### Phase 4: Oregon/Idaho (stretch)
 - [ ] ReserveAmerica scraping via Playwright
 - [ ] Expand registry

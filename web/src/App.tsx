@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { searchCampsites } from "./api";
-import type { SearchParams, SearchResponse } from "./api";
+import type { SearchParams, SearchResponse, Window } from "./api";
 import "./App.css";
 
 function formatDate(offset: number): string {
@@ -9,56 +9,149 @@ function formatDate(offset: number): string {
   return d.toISOString().split("T")[0];
 }
 
+type SearchMode = "find" | "exact";
+type ResultsView = "dates" | "sites";
+
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_PRESETS: Record<string, string> = {
   "": "Any day",
   "4,5,6": "Weekend (Fri-Sun)",
   "3,4,5,6": "Long weekend (Thu-Sun)",
   "0,1,2,3,4": "Weekdays",
+  custom: "Custom...",
 };
 
-function SearchForm({ onSearch, loading }: {
-  onSearch: (params: SearchParams) => void;
+// ─── Day of Week Picker ──────────────────────────────────────────────
+
+function DayPicker({
+  selected,
+  onChange,
+}: {
+  selected: Set<number>;
+  onChange: (days: Set<number>) => void;
+}) {
+  const toggle = (day: number) => {
+    const next = new Set(selected);
+    if (next.has(day)) next.delete(day);
+    else next.add(day);
+    onChange(next);
+  };
+
+  return (
+    <div className="day-picker">
+      {DAY_NAMES.map((name, i) => (
+        <button
+          key={i}
+          type="button"
+          className={`day-btn ${selected.has(i) ? "active" : ""}`}
+          onClick={() => toggle(i)}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Search Form ─────────────────────────────────────────────────────
+
+function SearchForm({
+  onSearch,
+  loading,
+}: {
+  onSearch: (params: SearchParams, mode: SearchMode) => void;
   loading: boolean;
 }) {
+  const [mode, setMode] = useState<SearchMode>("find");
   const [startDate, setStartDate] = useState(formatDate(14));
   const [endDate, setEndDate] = useState(formatDate(44));
   const [state, setState] = useState("WA");
   const [nights, setNights] = useState(2);
-  const [daysOfWeek, setDaysOfWeek] = useState("");
+  const [dayPreset, setDayPreset] = useState("");
+  const [customDays, setCustomDays] = useState<Set<number>>(new Set());
   const [name, setName] = useState("");
   const [source, setSource] = useState("");
   const [limit, setLimit] = useState(20);
 
+  const getDaysOfWeek = (): string | undefined => {
+    if (mode === "exact") return undefined;
+    if (dayPreset === "custom") {
+      return customDays.size > 0
+        ? Array.from(customDays).sort().join(",")
+        : undefined;
+    }
+    return dayPreset || undefined;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSearch({
-      start_date: startDate,
-      end_date: endDate,
-      state: state || undefined,
-      nights,
-      days_of_week: daysOfWeek || undefined,
-      name: name || undefined,
-      source: source || undefined,
-      limit,
-    });
+    onSearch(
+      {
+        start_date: startDate,
+        end_date: endDate,
+        state: state || undefined,
+        nights: mode === "exact" ? 1 : nights,
+        days_of_week: getDaysOfWeek(),
+        name: name || undefined,
+        source: source || undefined,
+        limit,
+      },
+      mode
+    );
   };
 
   return (
     <form onSubmit={handleSubmit} className="search-form">
+      <div className="mode-tabs">
+        <button
+          type="button"
+          className={`mode-tab ${mode === "find" ? "active" : ""}`}
+          onClick={() => setMode("find")}
+        >
+          Find a date
+        </button>
+        <button
+          type="button"
+          className={`mode-tab ${mode === "exact" ? "active" : ""}`}
+          onClick={() => setMode("exact")}
+        >
+          Exact dates
+        </button>
+      </div>
+
       <div className="form-row">
         <label>
-          Start Date
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+          {mode === "find" ? "Search from" : "Check in"}
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            required
+          />
         </label>
         <label>
-          End Date
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+          {mode === "find" ? "Through" : "Check out"}
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            required
+          />
         </label>
-        <label>
-          Min Nights
-          <input type="number" value={nights} onChange={(e) => setNights(Number(e.target.value))} min={1} max={14} />
-        </label>
+        {mode === "find" && (
+          <label>
+            Min Nights
+            <input
+              type="number"
+              value={nights}
+              onChange={(e) => setNights(Number(e.target.value))}
+              min={1}
+              max={14}
+            />
+          </label>
+        )}
       </div>
+
       <div className="form-row">
         <label>
           State
@@ -69,14 +162,21 @@ function SearchForm({ onSearch, loading }: {
             <option value="ID">ID</option>
           </select>
         </label>
-        <label>
-          Days
-          <select value={daysOfWeek} onChange={(e) => setDaysOfWeek(e.target.value)}>
-            {Object.entries(DAY_PRESETS).map(([val, label]) => (
-              <option key={val} value={val}>{label}</option>
-            ))}
-          </select>
-        </label>
+        {mode === "find" && (
+          <label>
+            Days
+            <select
+              value={dayPreset}
+              onChange={(e) => setDayPreset(e.target.value)}
+            >
+              {Object.entries(DAY_PRESETS).map(([val, label]) => (
+                <option key={val} value={val}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           Source
           <select value={source} onChange={(e) => setSource(e.target.value)}>
@@ -86,14 +186,32 @@ function SearchForm({ onSearch, loading }: {
           </select>
         </label>
       </div>
+
+      {mode === "find" && dayPreset === "custom" && (
+        <div className="form-row">
+          <DayPicker selected={customDays} onChange={setCustomDays} />
+        </div>
+      )}
+
       <div className="form-row">
         <label>
           Campground Name
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. rainier, lake" />
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. rainier, lake"
+          />
         </label>
         <label>
           Max Results
-          <input type="number" value={limit} onChange={(e) => setLimit(Number(e.target.value))} min={1} max={50} />
+          <input
+            type="number"
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value))}
+            min={1}
+            max={50}
+          />
         </label>
         <button type="submit" disabled={loading}>
           {loading ? "Searching..." : "Search"}
@@ -103,7 +221,147 @@ function SearchForm({ onSearch, loading }: {
   );
 }
 
-function ResultCard({ result }: { result: SearchResponse["results"][0] }) {
+// ─── Results: Date Block View (Option B) ─────────────────────────────
+
+interface DateBlock {
+  key: string; // "start→end"
+  start_date: string;
+  end_date: string;
+  nights: number;
+  dayName: string;
+  sites: Window[];
+}
+
+function groupByDateBlock(windows: Window[]): DateBlock[] {
+  const blockMap = new Map<string, DateBlock>();
+  for (const w of windows) {
+    if (w.is_fcfs) continue;
+    const key = `${w.start_date}→${w.end_date}`;
+    if (!blockMap.has(key)) {
+      const start = new Date(w.start_date + "T12:00:00");
+      blockMap.set(key, {
+        key,
+        start_date: w.start_date,
+        end_date: w.end_date,
+        nights: w.nights,
+        dayName: start.toLocaleDateString("en-US", { weekday: "short" }),
+        sites: [],
+      });
+    }
+    blockMap.get(key)!.sites.push(w);
+  }
+  return Array.from(blockMap.values()).sort((a, b) =>
+    a.start_date.localeCompare(b.start_date)
+  );
+}
+
+function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
+  const blocks = groupByDateBlock(result.windows);
+  const fcfsSites = result.windows.filter((w) => w.is_fcfs);
+
+  return (
+    <div className="site-list">
+      {blocks.map((block) => (
+        <div key={block.key} className="date-block">
+          <div className="date-block-header">
+            <span className="date-block-range">
+              {block.dayName} {block.start_date} → {block.end_date}
+            </span>
+            <span className="date-block-meta">
+              {block.nights}n · {block.sites.length} site
+              {block.sites.length !== 1 && "s"}
+            </span>
+          </div>
+          <div className="date-block-sites">
+            {block.sites.map((w, i) => (
+              <a
+                key={i}
+                href={w.booking_url || result.availability_url || "#"}
+                target="_blank"
+                rel="noopener"
+                className="site-chip"
+              >
+                {w.site_name}
+                <span className="site-chip-meta">
+                  {w.loop} · max {w.max_people}p
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+      {fcfsSites.length > 0 && (
+        <div className="fcfs-section">
+          <p className="fcfs-label">
+            {fcfsSites.length} FCFS site{fcfsSites.length !== 1 && "s"} — not
+            bookable online
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Results: Site View (Option A) ───────────────────────────────────
+
+function SiteView({ result }: { result: SearchResponse["results"][0] }) {
+  const bySite = new Map<string, Window[]>();
+  for (const w of result.windows) {
+    if (!bySite.has(w.site_name)) bySite.set(w.site_name, []);
+    bySite.get(w.site_name)!.push(w);
+  }
+
+  return (
+    <div className="site-list">
+      {Array.from(bySite.entries()).map(([siteName, windows]) => {
+        const w0 = windows[0];
+        return (
+          <div key={siteName} className="site-group">
+            <h4>
+              Site {siteName}
+              <span className="site-meta">
+                {w0.loop} · {w0.campsite_type} · max {w0.max_people}p
+              </span>
+            </h4>
+            {w0.is_fcfs ? (
+              <p className="fcfs-label">FCFS — not bookable online</p>
+            ) : (
+              <div className="windows-grid">
+                {windows.map((w, i) => {
+                  const start = new Date(w.start_date + "T12:00:00");
+                  const dayName = start.toLocaleDateString("en-US", {
+                    weekday: "short",
+                  });
+                  return (
+                    <a
+                      key={i}
+                      href={w.booking_url || result.availability_url || "#"}
+                      target="_blank"
+                      rel="noopener"
+                      className="window-chip"
+                    >
+                      {dayName} {w.start_date} → {w.end_date} ({w.nights}n)
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Result Card ─────────────────────────────────────────────────────
+
+function ResultCard({
+  result,
+  view,
+}: {
+  result: SearchResponse["results"][0];
+  view: ResultsView;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   if (result.error) {
@@ -115,86 +373,67 @@ function ResultCard({ result }: { result: SearchResponse["results"][0] }) {
     );
   }
 
-  // Group windows by site
-  const bySite = new Map<string, typeof result.windows>();
-  for (const w of result.windows) {
-    if (!bySite.has(w.site_name)) bySite.set(w.site_name, []);
-    bySite.get(w.site_name)!.push(w);
-  }
+  const sourceLabel =
+    result.booking_system === "wa_state" ? "WA Parks" : result.state;
 
-  const sourceLabel = result.booking_system === "wa_state" ? "WA Parks" : result.state;
+  const dateBlocks = groupByDateBlock(result.windows);
+  const summaryText =
+    view === "dates"
+      ? `${result.total_available_sites} sites across ${dateBlocks.length} date window${dateBlocks.length !== 1 ? "s" : ""}`
+      : `${result.total_available_sites} reservable — ${result.windows.filter((w) => !w.is_fcfs).length} windows`;
 
   return (
     <div className="result-card">
       <div className="result-header" onClick={() => setExpanded(!expanded)}>
         <div>
-          <h3>{result.name} <span className="source-badge">{sourceLabel}</span></h3>
+          <h3>
+            {result.name} <span className="source-badge">{sourceLabel}</span>
+          </h3>
           <p className="result-summary">
-            {result.total_available_sites} reservable
-            {result.fcfs_sites > 0 && `, ${result.fcfs_sites} FCFS`}
-            {" — "}
-            {result.windows.filter(w => !w.is_fcfs).length} windows
+            {summaryText}
+            {result.fcfs_sites > 0 && ` + ${result.fcfs_sites} FCFS`}
           </p>
         </div>
         <span className="expand-icon">{expanded ? "−" : "+"}</span>
       </div>
 
       {result.availability_url && (
-        <a href={result.availability_url} target="_blank" rel="noopener" className="book-link">
-          View on {result.booking_system === "wa_state" ? "GoingToCamp" : "Recreation.gov"}
+        <a
+          href={result.availability_url}
+          target="_blank"
+          rel="noopener"
+          className="book-link"
+        >
+          View on{" "}
+          {result.booking_system === "wa_state"
+            ? "GoingToCamp"
+            : "Recreation.gov"}
         </a>
       )}
 
-      {expanded && (
-        <div className="site-list">
-          {Array.from(bySite.entries()).map(([siteName, windows]) => {
-            const w0 = windows[0];
-            return (
-              <div key={siteName} className="site-group">
-                <h4>
-                  Site {siteName}
-                  <span className="site-meta">
-                    {w0.loop} · {w0.campsite_type} · max {w0.max_people}p
-                  </span>
-                </h4>
-                {w0.is_fcfs ? (
-                  <p className="fcfs-label">FCFS — not bookable online</p>
-                ) : (
-                  <div className="windows-grid">
-                    {windows.map((w, i) => {
-                      const start = new Date(w.start_date + "T12:00:00");
-                      const dayName = start.toLocaleDateString("en-US", { weekday: "short" });
-                      return (
-                        <a
-                          key={i}
-                          href={w.booking_url || result.availability_url || "#"}
-                          target="_blank"
-                          rel="noopener"
-                          className="window-chip"
-                        >
-                          {dayName} {w.start_date} → {w.end_date} ({w.nights}n)
-                        </a>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {expanded &&
+        (view === "dates" ? (
+          <DateBlockView result={result} />
+        ) : (
+          <SiteView result={result} />
+        ))}
     </div>
   );
 }
+
+// ─── App ─────────────────────────────────────────────────────────────
 
 export default function App() {
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resultsView, setResultsView] = useState<ResultsView>("dates");
 
-  const handleSearch = async (params: SearchParams) => {
+  const handleSearch = async (params: SearchParams, mode: SearchMode) => {
     setLoading(true);
     setError(null);
+    // Default to date view for "find", site view for "exact"
+    setResultsView(mode === "find" ? "dates" : "sites");
     try {
       const data = await searchCampsites(params);
       setResults(data);
@@ -218,17 +457,39 @@ export default function App() {
 
       {results && (
         <div className="results">
-          <p className="results-summary">
-            Checked {results.campgrounds_checked} campgrounds —{" "}
-            {results.campgrounds_with_availability} with availability
-          </p>
+          <div className="results-header">
+            <p className="results-summary">
+              Checked {results.campgrounds_checked} campgrounds —{" "}
+              {results.campgrounds_with_availability} with availability
+            </p>
+            <div className="view-toggle">
+              <button
+                className={resultsView === "dates" ? "active" : ""}
+                onClick={() => setResultsView("dates")}
+              >
+                By date
+              </button>
+              <button
+                className={resultsView === "sites" ? "active" : ""}
+                onClick={() => setResultsView("sites")}
+              >
+                By site
+              </button>
+            </div>
+          </div>
           {results.results
             .filter((r) => r.total_available_sites > 0 || r.error)
             .map((r) => (
-              <ResultCard key={r.facility_id} result={r} />
+              <ResultCard
+                key={r.facility_id}
+                result={r}
+                view={resultsView}
+              />
             ))}
           {results.campgrounds_with_availability === 0 && (
-            <p className="no-results">No availability found. Try broadening your search.</p>
+            <p className="no-results">
+              No availability found. Try broadening your search.
+            </p>
           )}
         </div>
       )}
