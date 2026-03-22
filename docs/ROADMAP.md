@@ -1,7 +1,7 @@
 # campnw Roadmap: v0.2.1 to v1.0
 
-**Last updated:** March 2026
-**Current version:** v0.2 (deployed at campnw.palouselabs.com)
+**Last updated:** March 2026 (AI feature review — restructured v0.6, expanded v0.7/v0.9)
+**Current version:** v0.3 (deployed at campnw.palouselabs.com)
 
 ---
 
@@ -10,14 +10,14 @@
 ```
 v0.1    [SHIPPED]  Foundation          — Multi-provider search, CLI watches, dashboard
 v0.2    [SHIPPED]  Watches on the Web  — Web-based watch management, dark mode
-v0.2.1  ------->   Hardening           — Security fixes, Level A a11y failures, perf wins
-v0.3    ------->   Calendar & Polish   — Calendar heat map, SSE streaming, shareable links
+v0.2.1  [SHIPPED]  Hardening           — Security fixes, Level A a11y failures, perf wins
+v0.3    [SHIPPED]  Calendar & Polish   — Calendar heat map, SSE streaming, shareable links
 v0.4    ------->   Accounts            — User accounts, saved preferences, persistent watches
-v0.5    ------->   Background Engine   — Server-side polling, web push notifications
-v0.6    ------->   AI Search           — Natural language as entry point, search history
-v0.7    ------->   Oregon Expansion    — Oregon State Parks, registry enrichment
+v0.5    ------->   Background Engine   — Server-side polling, web push, registry auto-enrichment
+v0.6    ------->   Smart Search        — Zero-result recovery, date shifting, search diagnostics
+v0.7    ------->   Oregon + Delight    — Oregon State Parks, contextual notifications, site vibe
 v0.8    ------->   Trip Planner        — AI-powered multi-stop itinerary builder
-v0.9    ------->   Predictions         — Availability predictions, smart notifications
+v0.9    ------->   Predictions+        — Availability predictions, anomaly alerts, watch post-mortems
 v1.0    ------->   campnw 1.0          — Map view, power user features, final polish
 ```
 
@@ -180,6 +180,7 @@ Move watch polling from CLI cron to server-side background jobs. Add web push no
 | Watch polling dashboard | P0-5 | S | Simple status view: last poll time, next poll time, total active watches, recent notifications. |
 | Availability cache | Perf | M | 10–15 minute TTL cache per campground keyed on `(campground_id, month)`. Prevents redundant calls when multiple watches target the same campground. Stored in SQLite with `cached_at` timestamp. |
 | Historical data collection (silent) | AI-2 | S | Every poll result appended to `availability_history` table. No user-facing feature yet — just the data foundation for v0.9 predictions. |
+| Registry auto-enrichment (LLM) | AI-1 | S | Batch LLM pass over RIDB/GoingToCamp description fields to extract structured tags, access notes, and campground attributes. Haiku extracts signals like "walk-in only," "bear box required," "pet-friendly" from prose into structured JSON. Validated with Pydantic before writing to registry. ~$0.10 for full registry run. Runs on campgrounds where `enriched_at IS NULL`. |
 
 ### iOS Web Push Requirement
 Web push on iOS requires a PWA manifest (`manifest.json`) with `display: standalone` and a registered service worker. This must be in place for the push subscription flow to work on Safari iOS 16.4+. Add the manifest at v0.5, not as an afterthought.
@@ -210,64 +211,60 @@ Fly.io always-on cost and polling volume. Background polling requires `min_machi
 
 ---
 
-## v0.6 "AI Search"
+## v0.6 "Smart Search"
 
 ### Theme
-Natural language as the primary entry point for search. Users type what they want in plain English and campnw auto-fills the structured search form — they review the extracted parameters and execute. NL is not a toggle or a separate mode; it's the first thing users see in the search interface. The form remains fully editable before search executes.
+Zero-result and low-result states are the biggest drop-off point in any search tool. This milestone makes the search loop feel intelligent rather than broken — when a search fails, campnw explains why and suggests specific alternatives. This replaces the previously planned "AI Search" milestone (NL-to-form translation), which was assessed as low-impact relative to the integration cost. NL search is deferred to the backlog. The Anthropic SDK integration moves to v0.8 where it's load-bearing (trip planner with tool calling).
 
 ### Features
 
 | Feature | PRD Ref | Effort | Description |
 |---------|---------|--------|-------------|
-| NL search as primary entry point | P1-2 | L | The search interface leads with a natural language input. Claude Haiku parses the query into structured params, which auto-populate the form fields. User reviews and edits before running. |
-| NL parse feedback and correction | P1-2 | M | Extracted params are shown as editable chips or form fields. Any field the user edits after NL parse is tracked as a correction signal. |
-| NL parse accuracy tracking | AI-1 | S | Log extracted params vs. user edits. Track misparse rate per param type. Feed into prompt improvements. |
+| Smart date shifting | P0-1 | M | On zero/low results, analyze nearby date windows that satisfy the same constraint set (tags, radius, nights, day-of-week). Show a single inline suggestion: "Nothing for June 13-16. 3 campgrounds match June 20-22 — same tags, same radius." One tap replaces dates and re-runs the search. |
+| "Why nothing?" diagnostic | P0-1 | M | Zero-result state shows a specific diagnosis instead of generic "adjust filters." Example: "Rainier campgrounds are fully booked all June weekends. Last cancellation appeared Wednesday at 11am." Three quick-action chips below: "Expand to July", "Try weekdays", "Set a watch." Each chip is a direct one-tap action. |
+| Lightweight alternative suggestions | P0-1 | S | When a specific campground is fully booked, suggest 1-2 alternatives with similar attributes from the registry: "Colonial Creek is full. Newhalem Creek (4 mi away, also lakeside, old-growth) has 3 sites open." Uses tag similarity and geographic proximity — no behavioral data needed. |
 | Search history | P1-1 | M | Last 20 searches saved per account. Quick re-run from history list. |
 
-### NL Search UX Requirement
-This is **not a form/NL toggle**. The UX agent identified that a toggle creates friction and dilutes the entry point. The intended behavior:
+### Smart Date Shifting Design
+The date shifting must respect the user's full constraint set, not just slide dates ±7 days blindly:
+- Preserve tag filters, drive radius, night count, and day-of-week preferences
+- Only suggest windows where results actually exist (run the secondary search server-side)
+- Show the suggestion inline below the results header — not a modal, not a banner
+- One tap updates the URL and re-renders results; the interaction is seamless
 
-1. User sees a single text input: "Where do you want to camp?"
-2. User types: "somewhere near Rainier, 2 nights in July, lakeside"
-3. campnw calls `/api/search/parse`, shows a 400–800ms skeleton
-4. Form fields animate in with extracted values pre-filled
-5. User can edit any field, then runs the search
-
-The structured form below the NL input acts as the edit layer — not a separate mode.
-
-### Prompt Injection Defense (pre-ship requirement)
-NL search introduces an LLM in the request path. Before shipping:
-- System prompt must be hardened against jailbreak attempts that could exfiltrate context or produce unexpected structured output
-- `/api/search/parse` response must be validated against the `SearchQuery` schema — never passed through raw
-- Set Anthropic API spend limits in account settings before enabling the endpoint in production
+### "Why Nothing?" Diagnostic Design
+The diagnostic combines availability state analysis with actionable next steps:
+- Analyze which constraint is most restrictive (dates? tags? region?) and say so specifically
+- If polling history exists, include timing context ("cancellations for this campground tend to appear mid-week mornings")
+- Action chips are pre-configured: each one modifies a specific search parameter and re-runs immediately
+- The watch chip pre-fills a watch for the current campground + date range with no additional form
 
 ### Technical Work
-- Anthropic Python SDK integration
-- `ANTHROPIC_API_KEY` in Fly.io secrets
-- New endpoint: `POST /api/search/parse` — accepts text, returns structured `SearchQuery` JSON
-- Prompt template with registry metadata context (tag list, base cities, state codes, date presets)
-- Model: Claude Haiku (800ms P95 budget). Fallback: show the blank form with a toast if the API call fails.
-- `aria-live="polite"` region for extracted params announcement to screen readers
-- Rate limit NL parse: 10 req/min per user
+- Backend: secondary search with relaxed date windows for date-shifting suggestions
+- Backend: constraint analysis endpoint that identifies the binding constraint on a zero-result search
+- Frontend: inline suggestion component for zero/low-result states
+- Frontend: action chip component with one-tap search modification
+- Registry: tag similarity scoring for alternative suggestions (cosine similarity on tag vectors, or simpler overlap scoring)
 
 ### Quality Baseline
-- `aria-live` region for NL extraction feedback — screen readers announce what was understood
-- Loading state and error state designed before coding (skeleton during parse, graceful fallback on failure)
-- Prompt injection hardening in place before any public-facing use
-- Spend limit configured in Anthropic account
+- Zero-result state designed (not just coded) before shipping — wireframes for all three features reviewed together
+- Action chips must be keyboard-accessible (tab-focusable, enter/space to activate)
+- Date-shifting suggestions must be accurate — never suggest a window that returns zero results
+- `aria-live="polite"` region for suggestion announcements to screen readers
 
 ### Dependencies
-- v0.4 (accounts for usage tracking and rate limiting), though technically usable with anonymous sessions
+- v0.4 (accounts for search history)
+- v0.5 (polling history improves diagnostic quality, but diagnostics work without it using current availability data)
 
 ### Key Risk
-Prompt reliability on ambiguous queries. "Near Seattle" spans 1–3 hours of drive time; "this summer" spans months. Strategy: when ambiguous, choose a sensible default and show it — never silently narrow the search. Latency is the second risk: if Haiku P95 exceeds 1.5s in production, the interaction model breaks. Measure on first deploy.
+Date-shifting requires running a secondary search server-side, which adds latency to the zero-result path. Keep the secondary search fast by limiting it to a small date window (±14 days) and capping the campground set. If it exceeds 2 seconds, show the diagnostic immediately and load the date suggestion asynchronously.
 
 ---
 
-## v0.7 "Oregon Expansion"
+## v0.7 "Oregon + Delight"
 
 ### Theme
-Oregon State Parks integration completes the PNW picture. This is the last major provider integration and meaningfully expands the campground registry. Pairs provider work with registry enrichment, which has been deferred long enough — campground detail data should reach a quality bar before the trip planner uses it in v0.8.
+Oregon State Parks integration completes the PNW picture. This is the last major provider integration and meaningfully expands the campground registry. Pairs provider work with registry enrichment and two AI-driven delight features — contextual watch notifications and site character descriptions — that make existing surfaces feel alive. The delight features are low-effort additions that leverage the Haiku integration established in v0.5's registry enrichment.
 
 ### Features
 
@@ -278,6 +275,18 @@ Oregon State Parks integration completes the PNW picture. This is the last major
 | OR State Parks source filter | P1-6 | S | `--source or-state` in CLI, `source=or_state` in API. Source badge in dashboard. |
 | Registry enrichment pass | P0-2 | M | Improve auto-generated tags for all 900+ campgrounds. Fill gaps in drive time data. Manual curation for top 50 most-searched. Amenity data (site count, fire rings, bear boxes) added now — serves both this milestone and the trip planner in v0.8. |
 | Booking link validation | P0-4 | S | Verify booking links resolve before surfacing. Flag stale links from provider changes. |
+| Contextual watch notifications | AI-1 | S | When a watch fires, enrich the raw diff with LLM-generated context. Instead of "Site 004: Available," send "Ohanapecosh Site 004 just opened July 3-6 — that's a rare 4th of July weekend slot. This campground typically re-books within hours." Single Haiku call between diff detection and notification dispatch. Includes urgency scoring (1-3) based on date popularity and historical re-booking speed. |
+| Site character / "vibe" descriptions | AI-1 | S | Pre-generated one-sentence campground personality rendered on expanded result cards. Examples: "Quiet forested loop — sites spread far apart, creek sounds" or "Popular trailhead camp — fills fast, noisy mornings as day hikers arrive." Generated at enrichment time from registry tags, RIDB descriptions, site counts, and proximity to trailheads. Stored as a registry field, zero query-time cost. |
+| Registry gap detector (internal) | AI-1 | S | Internal script that clusters search misses by region — when users search for campgrounds in an area and get zero or sparse results, flag it as a registry gap. Generates specific seed recommendations with RIDB facility IDs. Run periodically, output to `data/registry_gaps.json`. Not user-facing. |
+
+### Contextual Notification Design
+The notification enrichment is a thin async call added to the existing `monitor/` pipeline:
+- Input: campground name, available dates, current date, historical re-booking speed (if available from `availability_history`)
+- Output: 1-2 sentence notification message + urgency score (1-3)
+- Urgency 1 (low): Tuesday in January — suppress if user has set quiet mode
+- Urgency 2 (medium): standard availability — always deliver
+- Urgency 3 (high): rare opening on high-demand dates — deliver immediately with emphasis
+- Fallback: if LLM call fails, send the raw diff notification (never block delivery on enrichment)
 
 ### Technical Work
 - Playwright integration for ReserveAmerica (headless Chrome in Docker)
@@ -286,14 +295,19 @@ Oregon State Parks integration completes the PNW picture. This is the last major
 - Dockerfile update: add Playwright + Chromium (significant image size — use multi-stage build)
 - `scripts/seed_or_state.py` for registry seeding
 - Rate limiting and retry logic for ReserveAmerica
+- Notification enrichment: Haiku call in `monitor/` pipeline between diff and dispatch
+- Registry `vibe` field: generated by batch enrichment script, rendered in result card component
+- Gap detector: `scripts/detect_registry_gaps.py` querying search logs + RIDB cross-reference
 
 ### Quality Baseline
 - OR State Parks results labeled "temporarily unavailable" when Playwright is blocked — graceful degradation from day one
 - Registry enrichment quality gate: top 50 campgrounds manually reviewed before v0.8 trip planner ships
 - No new axe-core failures from OR State Parks UI additions
+- Notification enrichment must never block or delay notification delivery — LLM call is fire-and-forget with timeout
+- Site vibe descriptions reviewed for accuracy on top 20 campgrounds before enabling for all
 
 ### Dependencies
-- None (provider work is independent)
+- v0.5 (Haiku integration from registry enrichment, polling history for notification context)
 
 ### Key Risk
 ReserveAmerica bot protection and Docker image size. Playwright adds ~400MB (Chromium). Consider whether this is acceptable at Fly.io scale or whether a browser API service (browserless.io, etc.) makes more sense. Registry enrichment is also a manual-curation effort — timebox it rather than chasing perfection.
@@ -337,7 +351,7 @@ The chat UI is the most complex component in the app. Before building it:
 - Cost monitoring: log token counts per session; alert if average session cost exceeds $0.15
 
 ### Dependencies
-- v0.6 (Anthropic SDK integrated)
+- v0.5 (Anthropic SDK integrated via registry enrichment)
 - v0.4 (accounts for rate limiting and itinerary saving)
 - v0.7 (registry enrichment — trip planner needs good detail data to recommend well)
 
@@ -346,36 +360,58 @@ Session cost at scale and conversation quality. A single session with 4 tool cal
 
 ---
 
-## v0.9 "Predictions"
+## v0.9 "Predictions+"
 
 ### Theme
-Predictive availability — "when will it open?" This requires 6+ months of polling data, sequenced late by design. Data collection starts silently at v0.5. Also includes smart notification scoring using the same diff history.
+The full intelligence layer — built on 6+ months of polling data collected silently since v0.5. Three capabilities, one statistical infrastructure: predictive availability ("when will it open?"), anomaly-based deal alerts ("this almost never happens"), and watch post-mortems ("why did I miss it?"). Data collection starts at v0.5; this milestone is where that investment pays off. All three features use the same `availability_history` table and the same cancellation pattern detection model.
 
 ### Features
 
 | Feature | PRD Ref | Effort | Description |
 |---------|---------|--------|-------------|
 | Availability prediction display | P1-3 | L | For booked-out campgrounds: "Sites typically free up X–Y days before the date" with confidence band. Cold start fallback: "we're still learning." |
-| Statistical prediction model | AI-2 | L | Time-series analysis: median days-before-date that cancellations appear, standard deviation, confidence interval. Per-campground. Pure statistical — not an LLM. |
+| Statistical prediction model | AI-2 | L | Time-series analysis: median days-before-date that cancellations appear, standard deviation, confidence interval. Per-campground. Pure statistical — not an LLM. Also infers booking window open dates from NYR→Available→Reserved transitions in polling data. |
 | Smart notification scoring | P2-2 | M | When a watch fires, attach urgency context: "Usually books within 30 minutes" vs "Typically stays open for hours." Rule-based initially. |
 | Prediction confidence display | P1-3 | S | Visual confidence indicator (low/medium/high) based on sample size. Transparent about data limitations. |
+| Anomaly-based deal alerts | AI-2 | M | Detect statistically unusual availability against a per-campground seasonal baseline. When a campground that is historically always booked suddenly shows availability, proactively alert: "Unusual: 3 sites just opened at Sol Duc Hot Springs for July 4th weekend — this campground has been fully booked for that window every year we've tracked." System-initiated, not user-initiated — these are insights, not watch responses. |
+| "Why did I miss it?" post-mortem | AI-2 | S | When a watched site opens and re-books before the user acts, show a brief analysis: "This site was available for 4 minutes at 11:23am Wednesday. Cancellations at this campground for July weekends average 7-minute windows. To catch this: enable 5-minute polling or add a mobile push channel." Turns a frustrating miss into actionable system tuning. |
+
+### Anomaly Detection Design
+- Build a per-campground seasonal baseline from `availability_history`: what does "normal" look like for this campground in this calendar window?
+- Flag when current availability deviates by >2σ from the baseline for that period
+- Context matters: an anomaly at a popular campground on a holiday weekend is noteworthy; the same pattern at an obscure forest road campground is not. Weight by campground popularity (search frequency, watch count).
+- Deliver anomaly alerts through the existing notification channels (web push, ntfy, email). Users opt into anomaly alerts separately from watches.
+
+### Post-Mortem Design
+- Track availability window duration: time between "site opened" and "site re-booked" in `availability_history`
+- On a missed window, compare the user's poll interval and notification latency against the window duration
+- Generate a specific, natural-language recommendation (single Haiku call) that combines the timing data with actionable tuning steps
+- Show in the watch detail view, not as a push notification — this is reflective, not urgent
 
 ### Technical Work
 - Statistical analysis module: `predictions/model.py` with cancellation pattern detection
-- Pre-computation job: nightly predictions cached per campground
+- Seasonal baseline model: per-campground expected availability by calendar week
+- Anomaly detection: z-score against seasonal baseline, weighted by popularity
+- Pre-computation job: nightly predictions and baselines cached per campground
 - Notification scoring: analyze diff history for time-to-rebook patterns
+- Window duration tracking: timestamp pairs in `availability_history` for open→rebook transitions
+- Post-mortem generation: Haiku call with window duration + user config context
 - API response extension: predictions field on campground results when available
+- Anomaly alert subscription: user preference for receiving proactive alerts
 
 ### Quality Baseline
 - Prediction confidence is always displayed — never show a prediction without showing its certainty level
 - "We're still learning" cold start state is a designed state, not an empty one
 - Prediction display passes contrast on both light and dark themes
+- Anomaly alerts must have a minimum confidence threshold — never alert on thin data (require ≥4 weeks of baseline)
+- Post-mortem tone must be constructive, not critical — "here's how to catch it next time," never "you missed it because..."
 
 ### Dependencies
 - v0.5 (background polling running for 6+ months — data collection started there)
+- v0.7 (contextual notifications infrastructure reused for anomaly alerts)
 
 ### Key Risk
-Data quality and sample size. Campgrounds polled infrequently will have unreliable predictions. Transparency is the mitigation — show confidence levels, never overstate certainty.
+Data quality and sample size. Campgrounds polled infrequently will have unreliable predictions and noisy anomaly detection. Transparency is the mitigation — show confidence levels, never overstate certainty. Anomaly alert volume is the second risk: if too many alerts fire, users will ignore them. Start with a high threshold (>3σ, popular campgrounds only) and relax based on user engagement.
 
 ---
 
@@ -427,7 +463,7 @@ Scope management. Map view alone is a significant UI effort. Hard rule: any P2 f
 | v0.3 | Heat map uses colorblind-safe single-hue scale + text labels + `role="grid"` from day one. |
 | v0.4 | Auth forms pass Level AA contrast. Error states for auth flows designed before coding. |
 | v0.5 | Push permission UX follows best practices (no on-load prompts). |
-| v0.6 | `aria-live` for NL extraction. |
+| v0.6 | `aria-live` for date-shifting suggestions and zero-result diagnostics. Action chips keyboard-accessible. |
 | v0.8 | `role="log"` on transcript. Focus management on new messages. |
 | v1.0 | Full WCAG 2.1 AA audit. CI expanded to block Level AA failures. |
 
@@ -439,8 +475,8 @@ The principle: fix accessibility at build time, not in a batch audit. Color cont
 |-----------|-------------|
 | v0.2.1 | Cookie `Secure` flag, CORS env config, `/api/track` validation + rate limit, `limit` param cap. |
 | v0.4 | Watch schema privacy fix, `from_location` log redaction, auth provider decision, session migration plan. |
-| v0.6 | Prompt injection hardening, Anthropic spend limit configured. |
-| v0.8 | Hallucination guardrail (tool-call-only recommendations), session cost monitoring. |
+| v0.5 | Anthropic spend limit configured (registry enrichment introduces SDK). |
+| v0.8 | Prompt injection hardening, hallucination guardrail (tool-call-only recommendations), session cost monitoring. |
 
 ### Performance Baseline (per milestone)
 
@@ -461,17 +497,17 @@ The campground registry is a living dataset. Automated monthly re-seeding from R
 | Component | v0.2–v0.4 | v0.5+ | v1.0 |
 |-----------|-----------|-------|------|
 | Fly.io | ~$0/mo (auto-sleep) | ~$5–7/mo (always-on for polling) | ~$7–15/mo |
-| Anthropic API | $0 | $0 | ~$10–30/mo (NL search + trip planner) |
+| Anthropic API | $0 | ~$1/mo (enrichment, notifications) | ~$10–30/mo (trip planner) |
 | Auth provider | $0 | $0 (free tier) | $0–25/mo (depends on MAU) |
 | Total | ~$0/mo | ~$5–7/mo | ~$17–70/mo |
 
-Rate limiting on AI features is non-negotiable. Spend limits in the Anthropic account are a pre-ship requirement for v0.6.
+Rate limiting on AI features is non-negotiable. Spend limits in the Anthropic account are a pre-ship requirement for v0.5 (when the SDK is first introduced).
 
 ### Testing Strategy
 - Unit tests for providers and search engine (existing, extend as needed)
 - Integration tests for API endpoints (add starting v0.2)
 - E2E tests for critical flows: search, watch creation, booking link click (add at v0.5)
-- AI feature testing: golden-set evaluation for NL parsing accuracy (v0.6)
+- AI feature testing: golden-set evaluation for trip planner prompt accuracy (v0.8)
 - axe-core in CI from v0.2.1 onward (Level A); expanded to Level AA at v1.0
 
 ### Deployment
@@ -494,6 +530,33 @@ Current GitHub Actions CI/CD deploys to Fly.io on push to main. Key additions:
 
 ---
 
+## AI Feature Backlog (Evaluated, Not Scheduled)
+
+Features brainstormed and scored during the March 2026 AI feature review. Each was evaluated on novelty/delight, impact, innovation, feasibility, and data readiness. These were not added to the roadmap — rationale for each below.
+
+### Deferred (might revisit post-v1.0)
+
+| Feature | Description | Why Not Now |
+|---------|-------------|-------------|
+| **NL search (text → form)** | Natural language input auto-fills structured search form via Claude Haiku. "Somewhere near Rainier, 2 nights in July, lakeside" → pre-filled form fields. | Scored low innovation/low impact. The structured form already works well, and NL-to-form is the most commoditized LLM use case. The integration cost (prompt engineering, injection defense, accuracy tracking, spend limits) is high relative to the marginal UX improvement. Most users will try it once then revert to the form because it's faster and more predictable. Could revisit if the form becomes more complex post-v1.0. |
+| **Shoulder season finder** | Identify "best value" booking windows per campground from multi-season availability data. "Best value at Lake Quinault: May 16–June 6 — nearly identical to peak experience at 30% the booking competition." | Needs 12+ months of polling data to compare across seasons. Revisit after v0.9 ships and the prediction model reveals what the data can actually support. Medium impact — useful but not a workflow-changer. |
+| **Trip compatibility scorer** | Score campgrounds on fit for a specific trip (kids + late June + 4 nights → "87/100, strong kid-friendly, but pit toilets only"). | Largely redundant with the trip planner (v0.8), which provides this reasoning conversationally. As a standalone score on search results, it's moderate effort for moderate value. Could become a lightweight ranking signal in search results post-v1.0. |
+| **Availability narrative digest** | Weekly "campsite weather report" email — what's opening up across PNW in the next 3-6 weeks, synthesized from polling data. | Charming concept, but the engagement pattern doesn't match how people use an episodic tool. Would require email infrastructure for a feature most users would unsubscribe from within two weeks. The same data insights surface better through anomaly alerts (v0.9) which fire at the right moment, not on a schedule. |
+| **Watch drift detection** | Detect when a user's search behavior has drifted from their watch parameters and nudge: "You've been searching July but this watch is for June." | Needs meaningful search history volume to detect behavioral patterns. At personal/friends scale, the signal is too weak — could easily produce false positives. Revisit if user base grows significantly. |
+
+### Skipped (not worth building)
+
+| Feature | Description | Why Skip |
+|---------|-------------|----------|
+| **Entity resolution across providers** | LLM-assisted fuzzy matching to deduplicate campgrounds across rec.gov and GoingToCamp (e.g., "Ohanapecosh Campground" vs "Ohanapecosh"). | Not a real problem at 685 campgrounds. The registry is manually curated — duplicates are caught during seeding. The complexity of maintaining an ongoing dedup system isn't justified until the registry is 2,000+ campgrounds across 4+ providers. |
+| **Schema change detection** | Store API response shape snapshots, LLM diffs when provider API structure changes, alerts developer. | Valid engineering concern for a solo operator, but a simple health-check test in CI (assert expected fields present in a sample response) accomplishes 80% of this without LLM complexity. Over-engineered for the actual failure mode. |
+| **Drive time access correction** | Extract "unpaved road," "ferry required," "high clearance" from descriptions to apply multipliers to drive time estimates. | Low innovation, marginal impact. The current haversine-based drive times are directionally correct. Free-text extraction of road conditions would be noisy — "unpaved" could mean a smooth gravel road or a 4WD-only track. Better solved by manual curation of the top 50 campgrounds during v0.7 enrichment. |
+| **Smart poll scheduling** | Dynamically allocate polling budget based on predicted cancellation probability windows — poll more when history says cancellations are likely. | Invisible to users, moderate implementation complexity, and the polling budget is not a real constraint at personal-tool scale with the existing 15-minute cycle. Engineering effort that doesn't move any user-facing metric. Could matter if polling costs become significant, but they won't at this scale. |
+| **Packing weather brief** | Post-booking ephemeral card: "Olympic Hot Springs in late June: highs upper 50s, wool layer recommended." | Low impact. Most campers already have their own packing system. Weather apps do this better. The ephemeral-card interaction pattern is deceptively complex to build well (timing, dismissal, mobile responsiveness) for a feature that provides minor convenience. |
+| **Smoke/wildfire risk scorer** | Integrate historical fire data and prevailing wind patterns to score campground-level smoke risk by month. | Interesting idea but the data pipeline is complex (USFS fire perimeters, AirNow, NASA FIRMS, wind modeling) and the problem is inherently unpredictable — smoke risk varies dramatically year to year. Real-time AQI at trip time is more useful than historical averages, and that's just a link to AirNow, not an AI feature. |
+
+---
+
 ## Decision Log
 
 | Decision | Rationale | Alternatives Considered |
@@ -501,8 +564,10 @@ Current GitHub Actions CI/CD deploys to Fly.io on push to main. Key additions:
 | Ship watches on web before accounts | Highest-value gap to close. Anonymous watches with session tokens avoid forcing account creation for core functionality. | Wait for accounts first — rejected because it delays the most requested feature. |
 | Calendar heat map in v0.3, not v0.2 | Heat map needs backend API work (availability density endpoint). Watches are simpler and higher immediate value. | Ship together — rejected because it makes v0.2 too large. |
 | Accounts in v0.4, not earlier | Accounts alone deliver no user value. v0.4 pairs them with features that require accounts (saved prefs, persistent watches, search history). | v0.2 — rejected because anonymous watches handle the immediate need. |
-| NL as entry point, not a toggle (v0.6) | UX agent finding: a form/NL toggle splits the interaction model and trains users to ignore the NL input. Auto-filling the form from NL parse gives the best of both — fast entry and user review before execution. | Toggle mode — rejected based on UX recommendation. Separate NL-only mode — rejected because form editing should remain the confirmation step. |
-| NL search before trip planner | NL search is simpler (single API call, Haiku pricing), reduces friction on the core action, and proves out Anthropic SDK integration. | Trip planner first — rejected because higher complexity and cost per session. |
+| v0.6 restructured: AI Search → Smart Search | AI feature review scored NL search as low innovation/low impact — the structured form already works well, and NL-to-form is the most commoditized LLM use case. Zero-result recovery (smart date shifting, diagnostics) solves a higher-friction problem without requiring LLM integration. SDK integration moves to v0.5 (registry enrichment) and v0.8 (trip planner) where it's load-bearing. | Keep NL search as v0.6 — rejected because it occupies a full milestone for marginal UX improvement. Fold NL into v0.8 — considered but trip planner scope is already XL. |
+| Registry auto-enrichment added to v0.5 | LLM tag extraction from RIDB/GoingToCamp descriptions feeds every downstream feature (search filtering, site vibe, trip planner recommendations). ~$0.10 for the full registry, no user-facing complexity. Natural pairing with v0.5's background engine since it introduces the Anthropic SDK. | Wait for v0.7 enrichment pass — rejected because earlier enrichment improves search quality sooner. |
+| Contextual notifications + site vibe added to v0.7 | Both are low-effort, high-delight features that leverage Haiku (already integrated at v0.5). Contextual notifications transform raw watch alerts into actionable intelligence. Site vibe adds texture to result cards at zero query-time cost. Natural pairing with v0.7's registry enrichment. | Separate milestone — rejected because neither justifies its own release. Earlier — rejected because contextual notifications benefit from polling history accumulation. |
+| v0.9 expanded to Predictions+ | Anomaly deal alerts and watch post-mortems use the same statistical infrastructure and polling data as predictions. All three are outputs of one system: cancellation pattern detection, seasonal baselines, and window duration tracking. Shipping them together avoids duplicating the data pipeline work. | Anomaly alerts as separate milestone — rejected because it's the same model with a different output direction. Post-mortems earlier — rejected because they need sufficient watch history. |
 | Registry enrichment moved to v0.7 | Trip planner in v0.8 needs good campground detail data. Doing enrichment the milestone before ensures the data quality bar is met when it matters. | v1.0 enrichment pass — rejected because the trip planner would recommend campgrounds with thin detail data. |
 | Single-hue heat map color scale | Red-to-green fails for ~8% of users with color vision deficiency. A single-hue scale (e.g., light to dark blue) with text density labels is both accessible and visually clear. | Red-to-green — rejected on accessibility grounds. Multi-color categorical scale — rejected as unnecessarily complex for a density visualization. |
 | axe-core in CI from v0.2.1 | Catching accessibility regressions at merge time costs near zero. Catching them in a late audit means rework. Level A failures in the current build confirm this risk is real. | Annual accessibility audit — rejected because it batches preventable regressions. |

@@ -2,6 +2,7 @@ import React from 'react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+import { AuthProvider } from './hooks/useAuth'
 
 // axe-core accessibility checks in development only
 if (import.meta.env.DEV) {
@@ -14,6 +15,8 @@ if (import.meta.env.DEV) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </StrictMode>,
 )

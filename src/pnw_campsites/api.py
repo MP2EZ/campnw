@@ -15,10 +15,18 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.responses import Response
 
-from pnw_campsites.monitor.db import Watch, WatchDB
+from pnw_campsites.auth import (
+    TOKEN_COOKIE,
+    TOKEN_MAX_AGE,
+    create_jwt,
+    decode_jwt,
+    hash_password,
+    verify_password,
+)
+from pnw_campsites.monitor.db import User, Watch, WatchDB
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.registry.db import CampgroundRegistry
@@ -324,10 +332,16 @@ async def search(
         booking_system=booking_system,
     )
 
+    # Redact custom addresses in logs — only log known base names
+    _known_bases = {"seattle", "bellevue", "portland", "spokane", "bellingham", "moscow"}
+    logged_from = (
+        from_location if from_location in _known_bases
+        else "[custom]" if from_location else None
+    )
     _search_logger.info(
         "API search: mode=%s state=%s source=%s from=%s max_drive=%s "
         "days=%s tags=%s nights=%s name=%s limit=%s",
-        mode, state, source, from_location, max_drive,
+        mode, state, source, logged_from, max_drive,
         days_of_week, tags, nights, name, limit,
     )
 
@@ -465,7 +479,7 @@ async def list_campgrounds(
 
 
 # ---------------------------------------------------------------------------
-# Watch CRUD
+# Auth helpers
 # ---------------------------------------------------------------------------
 
 SESSION_COOKIE = "campnw_session"
@@ -487,6 +501,183 @@ def _get_session_token(request: Request, response: Response) -> str:
             samesite="lax",
         )
     return token
+
+
+def _get_current_user(request: Request) -> int | None:
+    """Extract user_id from JWT cookie, or None if anonymous."""
+    token = request.cookies.get(TOKEN_COOKIE)
+    if not token:
+        return None
+    return decode_jwt(token)
+
+
+def _set_auth_cookie(response: Response, user_id: int) -> None:
+    token = create_jwt(user_id)
+    response.set_cookie(
+        TOKEN_COOKIE, token,
+        max_age=TOKEN_MAX_AGE,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
+
+
+def _user_to_dict(user: User) -> dict:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "display_name": user.display_name,
+        "home_base": user.home_base,
+        "default_state": user.default_state,
+        "default_nights": user.default_nights,
+        "default_from": user.default_from,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Auth endpoints
+# ---------------------------------------------------------------------------
+
+
+class SignupRequest(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+    display_name: str = Field(default="", max_length=100)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Invalid email")
+        return v.strip().lower()
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=128)
+
+
+class UpdateProfileRequest(BaseModel):
+    display_name: str | None = Field(default=None, max_length=100)
+    home_base: str | None = Field(default=None, max_length=200)
+    default_state: str | None = Field(default=None, max_length=2)
+    default_nights: int | None = Field(default=None, ge=1, le=14)
+    default_from: str | None = Field(default=None, max_length=200)
+
+
+@app.post("/api/auth/signup")
+async def signup(body: SignupRequest, request: Request, response: Response):
+    existing = _watch_db.get_user_by_email(body.email)
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    user = _watch_db.create_user(User(
+        email=body.email,
+        password_hash=hash_password(body.password),
+        display_name=body.display_name,
+    ))
+
+    # Migrate anonymous watches to this new account
+    session_token = request.cookies.get(SESSION_COOKIE)
+    if session_token:
+        _watch_db.migrate_watches_to_user(session_token, user.id)
+
+    _set_auth_cookie(response, user.id)
+    return {"user": _user_to_dict(user)}
+
+
+@app.post("/api/auth/login")
+async def login(body: LoginRequest, request: Request, response: Response):
+    from datetime import datetime
+
+    user = _watch_db.get_user_by_email(body.email)
+    if not user or not verify_password(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    _watch_db.update_user(user.id, last_login_at=datetime.now().isoformat())
+
+    # Migrate any anonymous watches from current session
+    session_token = request.cookies.get(SESSION_COOKIE)
+    if session_token:
+        _watch_db.migrate_watches_to_user(session_token, user.id)
+
+    _set_auth_cookie(response, user.id)
+    return {"user": _user_to_dict(user)}
+
+
+@app.post("/api/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie(TOKEN_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+async def get_me(request: Request):
+    user_id = _get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = _watch_db.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return {"user": _user_to_dict(user)}
+
+
+@app.patch("/api/auth/me")
+async def update_me(body: UpdateProfileRequest, request: Request):
+    user_id = _get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    user = _watch_db.update_user(user_id, **updates)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"user": _user_to_dict(user)}
+
+
+@app.delete("/api/auth/me")
+async def delete_me(request: Request, response: Response):
+    user_id = _get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    _watch_db.delete_user(user_id)
+    response.delete_cookie(TOKEN_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/auth/export")
+async def export_data(request: Request):
+    user_id = _get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    data = _watch_db.get_user_export(user_id)
+    return data
+
+
+@app.get("/api/search-history")
+async def search_history(request: Request):
+    user_id = _get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return _watch_db.get_search_history(user_id)
+
+
+class SaveSearchRequest(BaseModel):
+    params: dict
+    result_count: int = Field(default=0, ge=0)
+
+
+@app.post("/api/search-history")
+async def save_search(body: SaveSearchRequest, request: Request):
+    user_id = _get_current_user(request)
+    if not user_id:
+        return {"ok": False}
+    _watch_db.save_search(user_id, json.dumps(body.params), body.result_count)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Watch CRUD
+# ---------------------------------------------------------------------------
 
 
 class WatchRequest(BaseModel):
@@ -512,9 +703,18 @@ class WatchResponse(BaseModel):
     created_at: str
 
 
+def _owns_watch(watch: Watch, user_id: int | None, session_token: str) -> bool:
+    """Check if the current user/session owns a watch."""
+    return (
+        (bool(user_id) and watch.user_id == user_id)
+        or (bool(session_token) and watch.session_token == session_token)
+    )
+
+
 @app.post("/api/watches", response_model=WatchResponse)
 async def create_watch(body: WatchRequest, request: Request, response: Response):
-    token = _get_session_token(request, response)
+    user_id = _get_current_user(request)
+    token = _get_session_token(request, response) if not user_id else ""
 
     # Look up name from registry if not provided
     name = body.name
@@ -531,7 +731,12 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         days_of_week=body.days_of_week,
         notify_topic=body.notify_topic,
         session_token=token,
+        user_id=user_id,
     )
+    if _watch_db.has_duplicate_watch(watch):
+        raise HTTPException(
+            status_code=409, detail="Watch already exists",
+        )
     saved = _watch_db.add_watch(watch)
     return WatchResponse(
         id=saved.id,
@@ -549,8 +754,12 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
 
 @app.get("/api/watches", response_model=list[WatchResponse])
 async def list_watches(request: Request, response: Response):
-    token = _get_session_token(request, response)
-    watches = _watch_db.list_watches_by_session(token)
+    user_id = _get_current_user(request)
+    if user_id:
+        watches = _watch_db.list_watches_by_user(user_id)
+    else:
+        token = _get_session_token(request, response)
+        watches = _watch_db.list_watches_by_session(token)
     return [
         WatchResponse(
             id=w.id,
@@ -570,10 +779,10 @@ async def list_watches(request: Request, response: Response):
 
 @app.delete("/api/watches/{watch_id}")
 async def delete_watch(watch_id: int, request: Request, response: Response):
-    token = _get_session_token(request, response)
-    # Verify ownership
+    user_id = _get_current_user(request)
+    token = request.cookies.get(SESSION_COOKIE, "")
     watch = _watch_db.get_watch(watch_id)
-    if not watch or watch.session_token != token:
+    if not watch or not _owns_watch(watch, user_id, token):
         return {"ok": False, "error": "Not found"}
     _watch_db.remove_watch(watch_id)
     return {"ok": True}
@@ -581,7 +790,11 @@ async def delete_watch(watch_id: int, request: Request, response: Response):
 
 @app.patch("/api/watches/{watch_id}/toggle")
 async def toggle_watch(watch_id: int, request: Request, response: Response):
-    token = _get_session_token(request, response)
+    user_id = _get_current_user(request)
+    token = request.cookies.get(SESSION_COOKIE, "")
+    watch = _watch_db.get_watch(watch_id)
+    if not watch or not _owns_watch(watch, user_id, token):
+        return {"ok": False, "error": "Not found"}
     new_state = _watch_db.toggle_enabled(watch_id, token)
     return {"ok": True, "enabled": new_state}
 

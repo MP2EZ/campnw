@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { searchCampsitesStream } from "./api";
-import type { CampgroundResult, SearchParams, SearchResponse, Window } from "./api";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { searchCampsitesStream, saveSearchHistory, getSearchHistory } from "./api";
+import type {
+  CampgroundResult, SearchParams, SearchResponse, Window, SearchHistoryEntry,
+} from "./api";
 import { WatchPanel, WatchButton } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
+import { AuthModal } from "./components/AuthModal";
+import { UserMenu } from "./components/UserMenu";
+import { useAuth } from "./hooks/useAuth";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
@@ -76,23 +81,59 @@ function DayPicker({
 function SearchForm({
   onSearch,
   loading,
+  userDefaults,
+  isLoggedIn,
 }: {
   onSearch: (params: SearchParams, mode: SearchMode) => void;
   loading: boolean;
+  userDefaults?: { state: string; nights: number; from: string };
+  isLoggedIn: boolean;
 }) {
   const [mode, setMode] = useState<SearchMode>("find");
   const [startDate, setStartDate] = useState(formatDate(14));
   const [endDate, setEndDate] = useState(formatDate(44));
-  const [state, setState] = useState("WA");
-  const [nights, setNights] = useState(2);
+  const [state, setState] = useState(userDefaults?.state || "WA");
+  const [nights, setNights] = useState(userDefaults?.nights || 2);
   const [dayPreset, setDayPreset] = useState("");
   const [customDays, setCustomDays] = useState<Set<number>>(new Set());
   const [name, setName] = useState("");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [fromLocation, setFromLocation] = useState("seattle");
+  const [fromLocation, setFromLocation] = useState(userDefaults?.from || "seattle");
   const [maxDrive, setMaxDrive] = useState("");
   const [limit, setLimit] = useState(20);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Apply user defaults when they arrive async (after auth check)
+  const defaultsApplied = useRef(false);
+  useEffect(() => {
+    if (userDefaults && !defaultsApplied.current) {
+      defaultsApplied.current = true;
+      if (userDefaults.state) setState(userDefaults.state);
+      if (userDefaults.nights) setNights(userDefaults.nights);
+      if (userDefaults.from) setFromLocation(userDefaults.from);
+    }
+  }, [userDefaults]);
+
+  // Recent searches (logged-in users only)
+  const [recentSearches, setRecentSearches] = useState<SearchHistoryEntry[]>([]);
+  useEffect(() => {
+    if (isLoggedIn) {
+      getSearchHistory().then(setRecentSearches).catch(() => {});
+    } else {
+      setRecentSearches([]);
+    }
+  }, [isLoggedIn]);
+
+  const applyRecent = useCallback((params: SearchParams) => {
+    if (params.start_date) setStartDate(params.start_date);
+    if (params.end_date) setEndDate(params.end_date);
+    if (params.state) setState(params.state);
+    if (params.nights) setNights(params.nights);
+    if (params.from_location) setFromLocation(params.from_location);
+    if (params.name) setName(params.name);
+    if (params.max_drive) setMaxDrive(String(params.max_drive));
+    if (params.mode) setMode(params.mode as SearchMode);
+  }, []);
 
   const getDaysOfWeek = (): string | undefined => {
     if (mode === "exact") return undefined;
@@ -312,6 +353,36 @@ function SearchForm({
           </button>
         ))}
       </div>
+
+      {recentSearches.length > 0 && (
+        <div className="recent-searches">
+          <span className="recent-label">Recent</span>
+          {recentSearches.slice(0, 5).map((entry, i) => {
+            const p = entry.params;
+            const label = [
+              p.name,
+              p.state,
+              p.start_date?.slice(5),
+            ].filter(Boolean).join(" · ") || "Search";
+            return (
+              <button
+                key={i}
+                type="button"
+                className="recent-chip"
+                onClick={() => applyRecent(p)}
+                title={`${p.start_date} → ${p.end_date}`}
+              >
+                {label}
+                {entry.result_count > 0 && (
+                  <span className="recent-count">
+                    {entry.result_count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <button type="submit" className="search-btn" disabled={loading}>
         {loading ? "Searching..." : "Search"}
@@ -623,6 +694,7 @@ function ResultCard({
 // ─── App ─────────────────────────────────────────────────────────────
 
 export default function App() {
+  const { user } = useAuth();
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -630,6 +702,7 @@ export default function App() {
   const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(["recgov", "wa_state"]));
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("campnw-dark");
     if (saved !== null) return saved === "true";
@@ -680,6 +753,11 @@ export default function App() {
       },
       () => {
         setLoading(false);
+        // Save search to history (fire-and-forget, only for logged-in users)
+        if (user) {
+          const withAvail = streamedResults.filter((r) => r.total_available_sites > 0).length;
+          saveSearchHistory(params, withAvail);
+        }
       },
       (err) => {
         setError(err.message);
@@ -711,6 +789,16 @@ export default function App() {
             >
               {darkMode ? "☀" : "☾"}
             </button>
+            {user ? (
+              <UserMenu />
+            ) : (
+              <button
+                className="header-btn"
+                onClick={() => setAuthModalOpen(true)}
+              >
+                Sign in
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -719,9 +807,22 @@ export default function App() {
         open={watchPanelOpen}
         onClose={() => setWatchPanelOpen(false)}
       />
+      <AuthModal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+      />
 
       <main>
-      <SearchForm onSearch={handleSearch} loading={loading} />
+      <SearchForm
+        onSearch={handleSearch}
+        loading={loading}
+        isLoggedIn={!!user}
+        userDefaults={user ? {
+          state: user.default_state,
+          nights: user.default_nights,
+          from: user.default_from,
+        } : undefined}
+      />
 
       {error && <div className="error-banner">{error}</div>}
 

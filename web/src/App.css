@@ -1308,3 +1308,217 @@ header p {
   color: var(--accent);
   font-weight: 500;
 }
+
+/* ─── Auth Modal ──────────────────────────────────────────────────── */
+
+.auth-modal {
+  max-width: 360px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.auth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.auth-form input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+.auth-form input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.auth-error {
+  color: var(--error-text);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.auth-switch {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.auth-switch-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: inherit;
+  text-decoration: underline;
+  padding: 0;
+}
+
+[data-theme="dark"] .auth-switch-btn {
+  color: var(--accent-text);
+}
+
+/* ─── User Menu ───────────────────────────────────────────────────── */
+
+.user-menu {
+  position: relative;
+}
+
+.user-menu-trigger {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.user-menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.user-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.user-menu-item.danger {
+  color: var(--error-text);
+}
+
+.user-menu-divider {
+  border: none;
+  border-top: 1px solid var(--border-light);
+  margin: 0;
+}
+
+.user-menu-confirm {
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.user-menu-confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* ─── Preferences Form (in dropdown) ─────────────────────────────── */
+
+.prefs-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.prefs-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.prefs-form input,
+.prefs-form select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+.prefs-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.prefs-actions .search-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+/* ─── Recent Searches ─────────────────────────────────────────────── */
+
+.recent-searches {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.recent-label {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.recent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.recent-chip:hover {
+  background: var(--chip-bg);
+  border-color: var(--chip-border);
+  color: var(--text);
+}
+
+.recent-count {
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.65rem;
+  padding: 0 0.3rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
