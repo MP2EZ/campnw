@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -236,12 +236,28 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
 # ---------------------------------------------------------------------------
 
 
+_track_logger = logging.getLogger("pnw_campsites.track")
+_search_logger = logging.getLogger("pnw_campsites.api")
+
+
+@app.post("/api/track")
+async def track(request: Request):
+    """Lightweight event tracking — logs to stdout, no external service."""
+    try:
+        body = await request.json()
+        _track_logger.info("event: %s", body)
+    except Exception:
+        pass
+    return {"ok": True}
+
+
 @app.get("/api/search", response_model=SearchResponse)
 async def search(
     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: date = Query(..., description="End date (YYYY-MM-DD)"),
     state: str | None = Query(None, description="Filter by state: WA, OR, ID"),
     nights: int = Query(2, description="Minimum consecutive nights"),
+    mode: str | None = Query(None, description="Search mode: find or exact"),
     days_of_week: str | None = Query(
         None, description="Comma-separated day numbers (0=Mon..6=Sun)"
     ),
@@ -278,6 +294,13 @@ async def search(
         include_fcfs=include_fcfs,
         max_campgrounds=limit,
         booking_system=booking_system,
+    )
+
+    _search_logger.info(
+        "API search: mode=%s state=%s source=%s from=%s max_drive=%s "
+        "days=%s tags=%s nights=%s name=%s limit=%s",
+        mode, state, source, from_location, max_drive,
+        days_of_week, tags, nights, name, limit,
     )
 
     results = await _engine.search(query)

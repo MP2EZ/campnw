@@ -54,6 +54,7 @@ export interface SearchParams {
   source?: string;
   from_location?: string;
   max_drive?: number;
+  mode?: string;
   no_groups?: boolean;
   include_fcfs?: boolean;
   limit?: number;
@@ -73,6 +74,7 @@ export async function searchCampsites(
   if (params.source) query.set("source", params.source);
   if (params.from_location) query.set("from", params.from_location);
   if (params.max_drive) query.set("max_drive", String(params.max_drive));
+  if (params.mode) query.set("mode", params.mode);
   if (params.no_groups) query.set("no_groups", "true");
   if (params.include_fcfs) query.set("include_fcfs", "true");
   if (params.limit) query.set("limit", String(params.limit));

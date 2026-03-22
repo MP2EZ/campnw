@@ -1,6 +1,19 @@
 import { useRef, useState } from "react";
 import { searchCampsites } from "./api";
 import type { SearchParams, SearchResponse, Window } from "./api";
+
+const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
+
+function track(event: string, data: Record<string, string | number>) {
+  try {
+    navigator.sendBeacon(
+      `${API_BASE}/api/track`,
+      JSON.stringify({ event, ...data })
+    );
+  } catch {
+    // ignore
+  }
+}
 import { Wordmark } from "./Wordmark";
 import "./App.css";
 
@@ -96,6 +109,7 @@ function SearchForm({
       {
         start_date: startDate,
         end_date: endDate,
+        mode,
         state: state || undefined,
         nights: mode === "exact" ? 1 : nights,
         days_of_week: getDaysOfWeek(),
@@ -367,6 +381,13 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                   target="_blank"
                   rel="noopener"
                   className="site-chip"
+                  onClick={() => track("book_click", {
+                    facility_id: result.facility_id,
+                    name: result.name,
+                    source: result.booking_system,
+                    type: "site",
+                    site: w.site_name,
+                  })}
                 >
                   {w.site_name}
                   <span className="site-chip-meta">
@@ -468,6 +489,13 @@ function ResultCard({
   const handleToggle = () => {
     const next = !expanded;
     setExpanded(next);
+    if (next) {
+      track("card_expand", {
+        facility_id: result.facility_id,
+        name: result.name,
+        source: result.booking_system,
+      });
+    }
     if (next && cardRef.current) {
       setTimeout(() => {
         cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -534,6 +562,12 @@ function ResultCard({
                 target="_blank"
                 rel="noopener"
                 className="book-link"
+                onClick={() => track("book_click", {
+                  facility_id: result.facility_id,
+                  name: result.name,
+                  source: result.booking_system,
+                  type: "view_page",
+                })}
               >
                 View on{" "}
                 {result.booking_system === "wa_state"
