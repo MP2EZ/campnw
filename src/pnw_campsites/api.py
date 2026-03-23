@@ -1170,6 +1170,29 @@ async def plan_chat(body: PlanChatRequest, request: Request, response: Response)
     return PlanChatResponse(**result)
 
 
+@app.post("/api/plan/chat/stream")
+async def plan_chat_stream(body: PlanChatRequest, request: Request):
+    from pnw_campsites.planner.agent import chat_stream
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Trip planner not configured")
+
+    session_key = request.cookies.get(SESSION_COOKIE) or request.client.host or "anon"
+    if not _check_plan_rate_limit(session_key):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
+        )
+
+    async def event_generator():
+        async for event_json in chat_stream(body.messages, _engine, _registry, api_key):
+            yield f"data: {event_json}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 # ---------------------------------------------------------------------------
 # Static file serving (production — serves React build from /static)
 # ---------------------------------------------------------------------------

@@ -1878,16 +1878,28 @@ a.header-btn {
 .trip-planner {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  min-height: calc(100vh - 160px);
+  height: calc(100vh - 120px);
   padding-top: 0.5rem;
 }
 
-.chat-welcome {
-  background: var(--bg-card);
+.chat-new-btn {
+  align-self: flex-end;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  background: none;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.5rem;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chat-new-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.chat-welcome {
+  padding: 0.5rem 0 1rem;
 }
 
 .chat-welcome h2 {
@@ -1904,9 +1916,7 @@ a.header-btn {
 }
 
 .chat-examples {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-light);
+  margin-top: 0.75rem;
 }
 
 .chat-examples-label {
@@ -1916,38 +1926,51 @@ a.header-btn {
   margin-bottom: 0.5rem;
 }
 
-.chat-examples ul {
-  list-style: none;
+.chat-examples-list {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 0.4rem;
 }
 
-.chat-examples li {
-  font-size: 0.85rem;
+.chat-example-btn {
+  font-size: 0.82rem;
   color: var(--text-muted);
-  padding: 0.35rem 0.75rem;
-  background: var(--bg);
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  cursor: default;
-  font-style: italic;
+  padding: 0.3rem 0.65rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.4;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  text-align: left;
+}
+
+.chat-example-btn:hover {
+  background: var(--chip-hover);
+  border-color: var(--chip-border);
+  color: var(--text);
+}
+
+.chat-example-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .chat-messages {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0.25rem 0;
+  padding: 0.25rem 0 0.5rem;
 }
 
 .chat-message {
-  max-width: 80%;
-  border-radius: 12px;
-  padding: 0.75rem 1rem;
+  max-width: 78%;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
   font-size: 0.9rem;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -1957,15 +1980,16 @@ a.header-btn {
   align-self: flex-end;
   background: var(--accent);
   color: #fff;
-  border-bottom-right-radius: 4px;
+  border-bottom-right-radius: 3px;
 }
 
 .chat-message.assistant {
   align-self: flex-start;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--bg-hover);
+  border: none;
   color: var(--text);
-  border-bottom-left-radius: 4px;
+  border-bottom-left-radius: 3px;
+  max-width: 90%;
 }
 
 .chat-message.error {
@@ -2025,21 +2049,21 @@ a.header-btn {
 
 .tool-calls {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
 }
 
 .tool-call-badge {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
+  gap: 0.35rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
-  background: var(--bg);
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  padding: 0.25rem 0.6rem;
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-border);
+  border-radius: 20px;
+  padding: 0.15rem 0.5rem;
 }
 
 .tool-call-name {
@@ -2063,7 +2087,7 @@ a.header-btn {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.65rem 1rem;
+  padding: 0.5rem 0.8rem;
 }
 
 .thinking-label {
@@ -2104,12 +2128,13 @@ a.header-btn {
   display: flex;
   gap: 0.5rem;
   align-items: flex-end;
-  padding-top: 0.5rem;
+  padding: 0.75rem 0 0.5rem;
   border-top: 1px solid var(--border-light);
   position: sticky;
   bottom: 0;
   background: var(--bg);
-  padding-bottom: 0.5rem;
+  /* Prevent content from rendering behind the sticky bar on scroll */
+  box-shadow: 0 -4px 12px var(--bg);
 }
 
 .chat-input {
@@ -2188,19 +2213,18 @@ a.header-btn {
   background: var(--bg);
 }
 
-[data-theme="dark"] .chat-welcome {
+[data-theme="dark"] .chat-example-btn {
   background: var(--bg-card);
   border-color: var(--border);
 }
 
-[data-theme="dark"] .chat-examples li {
-  background: var(--bg-hover);
-  border-color: var(--border-light);
+[data-theme="dark"] .chat-example-btn:hover {
+  background: var(--chip-hover);
+  border-color: var(--chip-border);
 }
 
 [data-theme="dark"] .chat-message.assistant {
   background: var(--bg-card);
-  border-color: var(--border);
 }
 
 [data-theme="dark"] .header-btn.active {

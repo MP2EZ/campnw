@@ -443,6 +443,71 @@ export async function planChat(
   return resp.json() as Promise<ChatResponse>;
 }
 
+export async function planChatStream(
+  messages: ChatMessage[],
+  onText: (chunk: string) => void,
+  onToolStart: (name: string) => void,
+  onToolResult: (name: string, summary: string) => void,
+  onDone: (fullContent: string, toolCalls: ToolCall[]) => void,
+  onError: (err: Error) => void,
+): Promise<void> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/plan/chat/stream`, {
+      ...fetchOpts,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(
+        (data as { detail?: string }).detail || `Chat failed: ${resp.status}`,
+      );
+    }
+
+    const reader = resp.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") return;
+
+        try {
+          const event = JSON.parse(data);
+          if (event.type === "text") {
+            onText(event.content);
+          } else if (event.type === "tool_start") {
+            onToolStart(event.name);
+          } else if (event.type === "tool_result") {
+            onToolResult(event.name, event.summary);
+          } else if (event.type === "done") {
+            onDone(event.content, event.tool_calls || []);
+            return;
+          }
+        } catch {
+          // skip malformed events
+        }
+      }
+    }
+    // Stream ended without done event
+    onDone("", []);
+  } catch (e) {
+    onError(e instanceof Error ? e : new Error("Stream failed"));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Poll status
 // ---------------------------------------------------------------------------
