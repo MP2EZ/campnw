@@ -42,5 +42,9 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Node (Phase 3 dashboard)
+# Node
 node_modules/
+web/dist/
+
+# Vite scaffold assets (unused)
+web/src/assets/
