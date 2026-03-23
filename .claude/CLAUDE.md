@@ -264,14 +264,20 @@ Performance:
 - [ ] Booking link validation — deferred
 - [ ] Registry gap detector — deferred
 
-### v0.8 "Trip Planner"
-- [ ] Trip planner on dedicated route (/plan), not embedded in search
-- [ ] Conversational UI (Claude Sonnet + function calling)
-- [ ] Tool-calling integration (search, check, drive time, detail)
-- [ ] Itinerary card view (day-by-day with booking links, ol semantics)
+### v0.8a "Trip Planner MVP" — DONE
+- [x] Trip planner on `/plan` route (React Router)
+- [x] Conversational UI (Claude Sonnet + function calling)
+- [x] 5 tools: search, check, drive time, campground detail, geocode
+- [x] Hallucination guardrail (only recommend tool-returned campgrounds)
+- [x] Rate limiting (5 sessions/day per user)
+- [x] role="log" on transcript, aria-live for loading states
+
+### v0.8b "Trip Planner Polish"
+- [ ] Streaming chat responses (SSE from backend)
+- [ ] Itinerary card view (structured day-by-day cards)
 - [ ] Shareable itineraries (UUID link, 30-day expiry)
-- [ ] role="log" on transcript, aria-live for tool-call states
-- [ ] Rate limit communication UX (5/day free tier)
+- [ ] Persistent conversation history
+- [ ] Cost monitoring dashboard
 
 ### v0.9 "Predictions+"
 - [ ] Predictive availability display ("typically frees up X days before")

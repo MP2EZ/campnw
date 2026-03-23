@@ -407,6 +407,43 @@ export async function unsubscribePush(endpoint: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Trip Planner / Chat
+// ---------------------------------------------------------------------------
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ToolCall {
+  name: string;
+  input: Record<string, unknown>;
+  result_summary?: string;
+}
+
+export interface ChatResponse {
+  role: string;
+  content: string;
+  tool_calls: ToolCall[];
+}
+
+export async function planChat(
+  messages: ChatMessage[]
+): Promise<ChatResponse> {
+  const resp = await fetch(`${API_BASE}/api/plan/chat`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail || `Chat failed: ${resp.status}`);
+  }
+  return resp.json() as Promise<ChatResponse>;
+}
+
+// ---------------------------------------------------------------------------
 // Poll status
 // ---------------------------------------------------------------------------
 

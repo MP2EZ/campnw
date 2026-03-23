@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { Routes, Route, Link, useLocation } from "react-router-dom";
 import { searchCampsitesStream, saveSearchHistory, getSearchHistory } from "./api";
 import type {
   CampgroundResult, SearchParams, SearchResponse, Window, SearchHistoryEntry,
@@ -10,6 +11,7 @@ import { AuthModal } from "./components/AuthModal";
 import { UserMenu } from "./components/UserMenu";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { useAuth } from "./hooks/useAuth";
+import TripPlanner from "./pages/TripPlanner";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
@@ -814,6 +816,7 @@ function ResultCard({
 
 export default function App() {
   const { user } = useAuth();
+  const location = useLocation();
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -827,6 +830,9 @@ export default function App() {
     if (saved !== null) return saved === "true";
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
+
+  const isSearch = location.pathname === "/";
+  const isPlan = location.pathname === "/plan";
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
@@ -906,6 +912,22 @@ export default function App() {
             <p>Find available campsites across the Pacific Northwest</p>
           </div>
           <div className="header-actions">
+            <nav className="header-nav" aria-label="Main navigation">
+              <Link
+                to="/"
+                className={`header-btn${isSearch ? " active" : ""}`}
+                aria-current={isSearch ? "page" : undefined}
+              >
+                Search
+              </Link>
+              <Link
+                to="/plan"
+                className={`header-btn${isPlan ? " active" : ""}`}
+                aria-current={isPlan ? "page" : undefined}
+              >
+                Plan
+              </Link>
+            </nav>
             <button
               className="header-btn"
               onClick={() => setWatchPanelOpen(true)}
@@ -943,17 +965,20 @@ export default function App() {
         onClose={() => setAuthModalOpen(false)}
       />
 
-      <main>
-      <SearchForm
-        onSearch={handleSearch}
-        loading={loading}
-        isLoggedIn={!!user}
-        userDefaults={user ? {
-          state: user.default_state,
-          nights: user.default_nights,
-          from: user.default_from,
-        } : undefined}
-      />
+      <Routes>
+        <Route path="/plan" element={<TripPlanner />} />
+        <Route path="/" element={
+          <main>
+          <SearchForm
+            onSearch={handleSearch}
+            loading={loading}
+            isLoggedIn={!!user}
+            userDefaults={user ? {
+              state: user.default_state,
+              nights: user.default_nights,
+              from: user.default_from,
+            } : undefined}
+          />
 
       {error && <div className="error-banner">{error}</div>}
 
@@ -1078,6 +1103,8 @@ export default function App() {
         );
       })()}
       </main>
+        } />
+      </Routes>
     </div>
   );
 }

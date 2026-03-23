@@ -17,7 +17,8 @@ v0.45   [SHIPPED]  Testing             — 346 tests, CI gating, 82% coverage
 v0.5    [SHIPPED]  Background Engine   — Server-side polling, web push, registry auto-enrichment
 v0.6    [SHIPPED]  Smart Search        — Zero-result recovery, date shifting, search diagnostics
 v0.7    [SHIPPED]  Oregon + Delight    — Vibe descriptions, contextual notifications (OR provider deferred)
-v0.8    ------->   Trip Planner        — AI-powered multi-stop itinerary builder
+v0.8a   [SHIPPED]  Trip Planner MVP    — Conversational AI planner with tool calling
+v0.8b   ------->   Trip Planner Polish — Streaming, itinerary cards, shareable links
 v0.9    ------->   Predictions+        — Availability predictions, anomaly alerts, watch post-mortems
 v1.0    ------->   campnw 1.0          — Map view, power user features, final polish
 ```
