@@ -999,14 +999,16 @@ export default function App() {
       {error && <div className="error-banner">{error}</div>}
 
       {results && (() => {
-        // Client-side source filtering — instant toggle
+        // Client-side source filtering — instant toggle, capped at user's limit
+        const maxResults = lastSearchParams.current?.limit || 20;
+        const sourceFiltered = results.results.filter(
+          (r) => sourceFilter.has(r.booking_system),
+        ).slice(0, maxResults);
         const filteredResults = {
           ...results,
-          results: results.results.filter(
-            (r) => sourceFilter.has(r.booking_system),
-          ),
-          campgrounds_with_availability: results.results.filter(
-            (r) => sourceFilter.has(r.booking_system) && r.total_available_sites > 0,
+          results: sourceFiltered,
+          campgrounds_with_availability: sourceFiltered.filter(
+            (r) => r.total_available_sites > 0,
           ).length,
         };
         return (
