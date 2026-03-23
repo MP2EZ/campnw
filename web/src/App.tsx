@@ -841,21 +841,20 @@ export default function App() {
     localStorage.setItem("campnw-dark", String(darkMode));
   }, [darkMode]);
 
-  const handleSearch = async (params: SearchParams, mode: SearchMode) => {
-    // Derive source filter for the API query
-    const searchParams = { ...params };
-    if (!searchParams.source) {
-      // Form submit — derive from current toggle state
-      if (sourceFilter.size === 1) {
-        searchParams.source = Array.from(sourceFilter)[0];
-      }
-    }
-    // source="" means "all" (from toggle re-enabling both)
-    if (searchParams.source === "") {
-      delete searchParams.source;
-    }
+  const handleSearch = async (
+    params: SearchParams,
+    mode: SearchMode,
+    sourceOverride?: string,
+  ) => {
+    // Source: explicit override from toggle, or derive from state
+    const source = sourceOverride !== undefined
+      ? (sourceOverride || undefined)  // "" → undefined (all sources)
+      : (sourceFilter.size === 1 ? Array.from(sourceFilter)[0] : undefined);
+    const searchParams = { ...params, source };
 
-    lastSearchParams.current = params;
+    // Store base params WITHOUT source for re-use by toggle
+    const { source: _s, ...baseParams } = params;
+    lastSearchParams.current = baseParams as SearchParams;
     lastSearchMode.current = mode;
 
     setLoading(true);
@@ -1014,8 +1013,9 @@ export default function App() {
             const sourceParam =
               next.size === 1 ? Array.from(next)[0] : "";
             handleSearch(
-              { ...lastSearchParams.current, source: sourceParam },
+              lastSearchParams.current,
               lastSearchMode.current,
+              sourceParam,
             );
           }
         };
