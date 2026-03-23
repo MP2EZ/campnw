@@ -24,6 +24,17 @@ jobs:
       - name: Run tests
         run: pytest --cov --cov-report=term -q
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Frontend type check
+        working-directory: web
+        run: |
+          npm ci
+          npx tsc -b
+
   deploy:
     needs: [test]
     runs-on: ubuntu-latest

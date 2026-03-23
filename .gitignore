@@ -26,6 +26,8 @@ env/
 
 # Data (keep structure, ignore DBs except registry seed data)
 data/*.db
+data/*.db-shm
+data/*.db-wal
 !data/registry.db
 data/*.sqlite
 data/*.json
