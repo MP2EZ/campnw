@@ -7,6 +7,7 @@ import { WatchPanel, WatchButton } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
 import { AuthModal } from "./components/AuthModal";
 import { UserMenu } from "./components/UserMenu";
+import { SmartZeroState } from "./components/SmartZeroState";
 import { useAuth } from "./hooks/useAuth";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
@@ -921,13 +922,13 @@ export default function App() {
               />
             ))}
           {filteredResults.campgrounds_with_availability === 0 && (
-            <div className="no-results">
-              <p>No availability found for these dates.</p>
-              <p className="no-results-hint">
-                Try different dates, a wider date range, or fewer nights.
-                {searchDates && " You can also watch specific campgrounds to get notified when sites open up."}
-              </p>
-            </div>
+            <SmartZeroState
+              diagnosis={results?.diagnosis}
+              dateSuggestions={results?.date_suggestions}
+              actionChips={results?.action_chips}
+              searchDates={searchDates || undefined}
+              onSearch={handleSearch}
+            />
           )}
         </div>
         );

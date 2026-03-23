@@ -7,6 +7,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from pnw_campsites.geo import haversine_miles
 from pnw_campsites.registry.models import BookingSystem, Campground
 
 # Check Docker path first, then relative path for local dev
@@ -247,3 +248,64 @@ class CampgroundRegistry:
     def delete(self, campground_id: int) -> None:
         self._conn.execute("DELETE FROM campgrounds WHERE id=?", (campground_id,))
         self._conn.commit()
+
+    # -------------------------------------------------------------------
+    # Similarity search
+    # -------------------------------------------------------------------
+
+    def find_similar(
+        self,
+        campground: Campground,
+        state: str | None = None,
+        limit: int = 2,
+    ) -> list[Campground]:
+        """Find campgrounds with similar tags and nearby location.
+
+        Scores candidates by Jaccard(tags) * 0.6 + proximity * 0.4.
+        Proximity = max(0, 1.0 - haversine_miles / 100).
+        """
+        candidates = self.search(state=state, enabled_only=True)
+        # Exclude the original campground
+        candidates = [
+            cg for cg in candidates
+            if cg.facility_id != campground.facility_id
+            or cg.booking_system != campground.booking_system
+        ]
+
+        source_tags = set(campground.tags)
+
+        scored: list[tuple[float, Campground]] = []
+        for cg in candidates:
+            # Jaccard similarity on tags
+            cg_tags = set(cg.tags)
+            if source_tags or cg_tags:
+                union = source_tags | cg_tags
+                intersection = source_tags & cg_tags
+                jaccard = len(intersection) / len(union)
+            else:
+                jaccard = 0.0
+
+            # Proximity score
+            if (
+                campground.latitude
+                and campground.longitude
+                and cg.latitude
+                and cg.longitude
+            ):
+                dist = haversine_miles(
+                    campground.latitude, campground.longitude,
+                    cg.latitude, cg.longitude,
+                )
+                proximity = max(0.0, 1.0 - dist / 100.0)
+            else:
+                proximity = 0.0
+
+            # Require at least some tag overlap to be a suggestion
+            if jaccard == 0.0 and source_tags:
+                continue
+            score = jaccard * 0.6 + proximity * 0.4
+            if score > 0:
+                scored.append((score, cg))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [cg for _, cg in scored[:limit]]

@@ -250,12 +250,12 @@ Performance:
 - [x] Fly.io always-on (min_machines_running=1, ~$2/mo)
 - [ ] Automated registry refresh (monthly RIDB, quarterly GoingToCamp) — deferred
 
-### v0.6 "Smart Search"
-- [ ] Smart date shifting (suggest nearby dates on zero/low results, one-tap re-search)
-- [ ] "Why nothing?" diagnostic (specific explanation + action chips)
-- [ ] Lightweight alternative suggestions (tag-similar campgrounds when target is full)
-- [ ] Search history (last 20, quick re-run)
-- [ ] aria-live on suggestions, keyboard-accessible action chips
+### v0.6 "Smart Search" — DONE
+- [x] Smart date shifting (±7/14 day probes, inline suggestions with result counts)
+- [x] "Why nothing?" diagnostic (binding constraint analysis + action chips)
+- [x] Lightweight alternative suggestions (Jaccard tag similarity + proximity)
+- [x] Search history — shipped in v0.4 (recent chips in SearchForm)
+- [x] SmartZeroState component (replaces generic no-results message)
 
 ### v0.7 "Oregon + Delight"
 - [ ] Oregon State Parks provider (ReserveAmerica via Playwright)

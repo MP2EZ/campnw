@@ -88,6 +88,37 @@ class SearchWarning:
 
 
 @dataclass
+class SearchDiagnosis:
+    """Analysis of why a search returned zero results."""
+
+    registry_matches: int
+    distance_filtered: int
+    checked_for_availability: int
+    all_unavailable: int
+    binding_constraint: str  # "tags", "state", "distance", "dates", "days", "name"
+    explanation: str
+
+
+@dataclass
+class DateSuggestion:
+    """An alternative date window with availability."""
+
+    start_date: str
+    end_date: str
+    campgrounds_with_availability: int
+    reason: str
+
+
+@dataclass
+class ActionChip:
+    """A one-tap action to modify search constraints."""
+
+    action: str  # "shift_dates", "drop_days", "expand_radius", "watch", etc.
+    label: str
+    params: dict
+
+
+@dataclass
 class SearchResults:
     """Complete results from a discovery search."""
 
@@ -96,6 +127,9 @@ class SearchResults:
     campgrounds_checked: int = 0
     campgrounds_with_availability: int = 0
     warnings: list[SearchWarning] = field(default_factory=list)
+    diagnosis: SearchDiagnosis | None = None
+    date_suggestions: list[DateSuggestion] = field(default_factory=list)
+    action_chips: list[ActionChip] = field(default_factory=list)
 
     @property
     def has_availability(self) -> bool:
@@ -264,15 +298,18 @@ class SearchEngine:
         self._recgov = recgov_client
         self._goingtocamp = goingtocamp_client
 
-    async def search(self, query: SearchQuery) -> SearchResults:
+    async def search(
+        self, query: SearchQuery, *, _skip_diagnosis: bool = False,
+    ) -> SearchResults:
         """Run a discovery search: filter registry, then check availability."""
-        # Step 1: Filter registry — search all providers if no specific system requested
+        # Step 1: Filter registry — search all providers if no specific system
         campgrounds = self._registry.search(
             state=query.state,
             tags=query.tags,
             booking_system=query.booking_system,
             name_like=query.name_like,
         )
+        registry_count = len(campgrounds)
 
         # Step 1b: Resolve origin and filter/sort by distance
         from_coords = query.from_coords
@@ -293,22 +330,37 @@ class SearchEngine:
                     )
 
             # Filter by max drive time
+            pre_distance_count = len(campgrounds)
             if query.max_drive_minutes:
                 campgrounds = [
                     cg for cg in campgrounds
-                    if drive_times.get(cg.facility_id, 9999) <= query.max_drive_minutes
+                    if drive_times.get(cg.facility_id, 9999)
+                    <= query.max_drive_minutes
                 ]
+            distance_filtered = pre_distance_count - len(campgrounds)
 
             # Sort by distance (closest first)
             campgrounds.sort(
                 key=lambda cg: drive_times.get(cg.facility_id, 9999)
             )
+        else:
+            distance_filtered = 0
 
         # Limit to avoid hammering the API
         campgrounds = campgrounds[: query.max_campgrounds]
 
         if not campgrounds:
-            return SearchResults(query=query)
+            empty_results = SearchResults(query=query)
+            if not _skip_diagnosis:
+                diagnosis, chips = self._diagnose_zero_results(
+                    query, registry_count, distance_filtered, 0, 0,
+                )
+                empty_results.diagnosis = diagnosis
+                empty_results.action_chips = chips
+                empty_results.date_suggestions = (
+                    await self._suggest_alternative_dates(query)
+                )
+            return empty_results
 
         # Step 2: Determine month range from dates
         if query.start_date and query.end_date:
@@ -378,6 +430,10 @@ class SearchEngine:
             for src, _ in sources.items()
         ]
 
+        campgrounds_with_availability = sum(
+            1 for r in all_results if r.total_available_sites > 0
+        )
+
         results = SearchResults(
             query=query,
             results=[
@@ -385,11 +441,29 @@ class SearchEngine:
                 if r.total_available_sites > 0 or r.fcfs_sites > 0
             ],
             campgrounds_checked=len(all_results),
-            campgrounds_with_availability=sum(
-                1 for r in all_results if r.total_available_sites > 0
-            ),
+            campgrounds_with_availability=campgrounds_with_availability,
             warnings=warnings,
         )
+
+        # Diagnose zero-result searches
+        if campgrounds_with_availability == 0 and not _skip_diagnosis:
+            all_unavailable = sum(
+                1 for r in all_results
+                if r.total_available_sites == 0 and not r.error
+            )
+            diagnosis, chips = self._diagnose_zero_results(
+                query, registry_count, distance_filtered,
+                len(all_results), all_unavailable,
+            )
+            results.diagnosis = diagnosis
+            results.action_chips = chips
+            # Wire in "Try nearby" chips for name searches
+            if query.name_like:
+                similar_chips = self._suggest_similar_campgrounds(query)
+                results.action_chips.extend(similar_chips)
+            results.date_suggestions = (
+                await self._suggest_alternative_dates(query)
+            )
 
         # Sort by distance if filtering by location, otherwise by availability
         if from_coords:
@@ -402,6 +476,196 @@ class SearchEngine:
             )
 
         return results
+
+    def _diagnose_zero_results(
+        self,
+        query: SearchQuery,
+        registry_matches: int,
+        distance_filtered: int,
+        checked: int,
+        all_unavailable: int,
+    ) -> tuple[SearchDiagnosis, list[ActionChip]]:
+        """Analyze why a search returned zero results and suggest actions."""
+        chips: list[ActionChip] = []
+
+        if registry_matches == 0 and query.name_like:
+            binding = "name"
+            explanation = (
+                f'No campgrounds matching "{query.name_like}" in the registry'
+            )
+        elif registry_matches == 0 and query.tags:
+            binding = "tags"
+            tag_str = ", ".join(query.tags)
+            explanation = f"No campgrounds with tags: {tag_str}"
+            chips.append(ActionChip(
+                action="drop_tags", label="Search without tags",
+                params={},
+            ))
+        elif registry_matches == 0 and query.state:
+            binding = "state"
+            explanation = (
+                f"No campgrounds found in {query.state}"
+            )
+        elif (
+            distance_filtered > 0
+            and registry_matches > 0
+            and distance_filtered > registry_matches * 0.5
+        ):
+            binding = "distance"
+            explanation = (
+                f"{distance_filtered} of {registry_matches} campgrounds "
+                f"exceeded {query.max_drive_minutes} min drive limit"
+            )
+            new_limit = (query.max_drive_minutes or 0) + 60
+            chips.append(ActionChip(
+                action="expand_radius",
+                label=f"Expand to {new_limit} min",
+                params={"max_drive_minutes": new_limit},
+            ))
+            chips.append(ActionChip(
+                action="expand_radius",
+                label="Remove drive limit",
+                params={"max_drive_minutes": None},
+            ))
+        elif all_unavailable == checked and checked > 0:
+            if query.days_of_week:
+                binding = "days"
+                explanation = (
+                    f"Checked {checked} campgrounds — all fully booked "
+                    f"on selected days"
+                )
+                chips.append(ActionChip(
+                    action="drop_days", label="Try any day",
+                    params={"days_of_week": None},
+                ))
+            else:
+                binding = "dates"
+                explanation = (
+                    f"Checked {checked} campgrounds — all fully booked "
+                    f"for these dates"
+                )
+            if query.start_date and query.end_date:
+                span = (query.end_date - query.start_date).days
+                new_start = query.start_date - timedelta(days=7)
+                new_end = query.end_date + timedelta(days=7)
+                chips.append(ActionChip(
+                    action="shift_dates",
+                    label=f"Expand to {span + 14} days",
+                    params={
+                        "start_date": new_start.isoformat(),
+                        "end_date": new_end.isoformat(),
+                    },
+                ))
+        else:
+            binding = "unknown"
+            explanation = "No results found"
+
+        # Always include a watch chip when dates are specified
+        if query.start_date and query.end_date:
+            chips.append(ActionChip(
+                action="watch", label="Set a watch",
+                params={
+                    "start_date": query.start_date.isoformat(),
+                    "end_date": query.end_date.isoformat(),
+                },
+            ))
+
+        diagnosis = SearchDiagnosis(
+            registry_matches=registry_matches,
+            distance_filtered=distance_filtered,
+            checked_for_availability=checked,
+            all_unavailable=all_unavailable,
+            binding_constraint=binding,
+            explanation=explanation,
+        )
+        return diagnosis, chips
+
+    async def _suggest_alternative_dates(
+        self, query: SearchQuery, max_suggestions: int = 3,
+    ) -> list[DateSuggestion]:
+        """Probe nearby date windows for availability."""
+        if not query.start_date or not query.end_date:
+            return []
+
+        span = (query.end_date - query.start_date).days
+        shifts = [
+            (7, "1 week later"),
+            (14, "2 weeks later"),
+            (-7, "1 week earlier"),
+        ]
+
+        suggestions: list[DateSuggestion] = []
+        for delta_days, reason in shifts:
+            shifted_start = query.start_date + timedelta(days=delta_days)
+            shifted_end = shifted_start + timedelta(days=span)
+            # Don't suggest dates in the past
+            if shifted_start < date.today():
+                continue
+
+            shifted_query = SearchQuery(
+                start_date=shifted_start,
+                end_date=shifted_end,
+                state=query.state,
+                tags=query.tags,
+                max_drive_minutes=query.max_drive_minutes,
+                from_location=query.from_location,
+                from_coords=query.from_coords,
+                name_like=query.name_like,
+                booking_system=query.booking_system,
+                min_consecutive_nights=query.min_consecutive_nights,
+                include_group_sites=query.include_group_sites,
+                max_people=query.max_people,
+                days_of_week=query.days_of_week,
+                max_campgrounds=5,
+            )
+            shifted_results = await self.search(
+                shifted_query, _skip_diagnosis=True,
+            )
+            if shifted_results.campgrounds_with_availability > 0:
+                suggestions.append(DateSuggestion(
+                    start_date=shifted_start.isoformat(),
+                    end_date=shifted_end.isoformat(),
+                    campgrounds_with_availability=(
+                        shifted_results.campgrounds_with_availability
+                    ),
+                    reason=reason,
+                ))
+            if len(suggestions) >= max_suggestions:
+                break
+
+        # Sort by proximity to original dates
+        suggestions.sort(
+            key=lambda s: abs(
+                (date.fromisoformat(s.start_date) - query.start_date).days
+            ),
+        )
+        return suggestions
+
+    def _suggest_similar_campgrounds(
+        self, query: SearchQuery,
+    ) -> list[ActionChip]:
+        """Find similar campgrounds for name-based searches with no results."""
+        if not query.name_like:
+            return []
+
+        # Get the first matching campground from registry (even if unavailable)
+        matches = self._registry.search(name_like=query.name_like)
+        if not matches:
+            return []
+
+        similar = self._registry.find_similar(
+            matches[0], state=query.state, limit=2,
+        )
+        if not similar:
+            return []
+
+        names = [cg.name for cg in similar]
+        facility_ids = [cg.facility_id for cg in similar]
+        return [ActionChip(
+            action="try_nearby",
+            label=f"Try {', '.join(names)}",
+            params={"facility_ids": facility_ids, "names": names},
+        )]
 
     async def search_stream(
         self, query: SearchQuery

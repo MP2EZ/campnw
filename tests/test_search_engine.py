@@ -672,3 +672,251 @@ def make_campground_availability(**overrides):
     from tests.conftest import make_campground_availability as _make
 
     return _make(**overrides)
+
+
+# ============================================================================
+# v0.6 Smart Search: Diagnosis & Recommendations
+# ============================================================================
+
+
+class TestDiagnoseZeroResults:
+    """Test _diagnose_zero_results() method."""
+
+    def test_no_registry_matches_name_filter(self) -> None:
+        """No registry matches + name filter → binding='name'."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        engine = SearchEngine(
+            registry=MagicMock(),
+            recgov_client=None,
+            goingtocamp_client=None,
+        )
+        query = SearchQuery(
+            start_date=None,
+            end_date=None,
+            name_like="nonexistent",
+        )
+
+        diagnosis, chips = engine._diagnose_zero_results(
+            query, registry_matches=0, distance_filtered=0,
+            checked=0, all_unavailable=0,
+        )
+
+        assert diagnosis.binding_constraint == "name"
+        assert "nonexistent" in diagnosis.explanation
+
+    def test_no_registry_matches_tag_filter(self) -> None:
+        """No registry matches + tag filter → binding='tags'."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        engine = SearchEngine(
+            registry=MagicMock(),
+            recgov_client=None,
+            goingtocamp_client=None,
+        )
+        query = SearchQuery(
+            start_date=None,
+            end_date=None,
+            tags=["obscure-tag"],
+        )
+
+        diagnosis, chips = engine._diagnose_zero_results(
+            query, registry_matches=0, distance_filtered=0,
+            checked=0, all_unavailable=0,
+        )
+
+        assert diagnosis.binding_constraint == "tags"
+        assert "obscure-tag" in diagnosis.explanation
+        # Should include drop_tags chip
+        assert any(c.action == "drop_tags" for c in chips)
+
+    def test_no_registry_matches_state_filter(self) -> None:
+        """No registry matches + state filter → binding='state'."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        engine = SearchEngine(
+            registry=MagicMock(),
+            recgov_client=None,
+            goingtocamp_client=None,
+        )
+        query = SearchQuery(
+            start_date=None,
+            end_date=None,
+            state="XX",  # invalid state
+        )
+
+        diagnosis, chips = engine._diagnose_zero_results(
+            query, registry_matches=0, distance_filtered=0,
+            checked=0, all_unavailable=0,
+        )
+
+        assert diagnosis.binding_constraint == "state"
+        assert "XX" in diagnosis.explanation
+
+    def test_distance_filtered_high_percentage(self) -> None:
+        """Distance filtered > 50% → binding='distance'."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        engine = SearchEngine(
+            registry=MagicMock(),
+            recgov_client=None,
+            goingtocamp_client=None,
+        )
+        query = SearchQuery(
+            start_date=None,
+            end_date=None,
+            max_drive_minutes=60,
+        )
+
+        # 10 registry matches, 6 filtered by distance (60% > 50%)
+        diagnosis, chips = engine._diagnose_zero_results(
+            query, registry_matches=10, distance_filtered=6,
+            checked=0, all_unavailable=0,
+        )
+
+        assert diagnosis.binding_constraint == "distance"
+        assert "60" in diagnosis.explanation  # filtered count
+        # Should include expand_radius chips
+        assert any(c.action == "expand_radius" for c in chips)
+
+    def test_all_checked_unavailable_with_days_filter(self) -> None:
+        """All checked unavailable + days filter → binding='days'."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        engine = SearchEngine(
+            registry=MagicMock(),
+            recgov_client=None,
+            goingtocamp_client=None,
+        )
+        query = SearchQuery(
+            start_date=None,
+            end_date=None,
+            days_of_week={4, 5, 6},  # Fri-Sun only
+        )
+
+        diagnosis, chips = engine._diagnose_zero_results(
+            query, registry_matches=5, distance_filtered=0,
+            checked=5, all_unavailable=5,
+        )
+
+        assert diagnosis.binding_constraint == "days"
+        assert "days" in diagnosis.explanation
+        # Should include drop_days chip
+        assert any(c.action == "drop_days" for c in chips)
+
+    def test_all_checked_unavailable_without_days_filter(self) -> None:
+        """All checked unavailable + no days → binding='dates'."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        engine = SearchEngine(
+            registry=MagicMock(),
+            recgov_client=None,
+            goingtocamp_client=None,
+        )
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            days_of_week=None,
+        )
+
+        diagnosis, chips = engine._diagnose_zero_results(
+            query, registry_matches=5, distance_filtered=0,
+            checked=5, all_unavailable=5,
+        )
+
+        assert diagnosis.binding_constraint == "dates"
+        assert "dates" in diagnosis.explanation
+        # Should include shift_dates chip
+        assert any(c.action == "shift_dates" for c in chips)
+
+    def test_dates_binding_produces_watch_chip(self) -> None:
+        """Dates binding generates watch + shift chips."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        engine = SearchEngine(
+            registry=MagicMock(),
+            recgov_client=None,
+            goingtocamp_client=None,
+        )
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+        )
+
+        diagnosis, chips = engine._diagnose_zero_results(
+            query, registry_matches=5, distance_filtered=0,
+            checked=5, all_unavailable=5,
+        )
+
+        # Should have watch chip
+        watch_chips = [c for c in chips if c.action == "watch"]
+        assert len(watch_chips) > 0
+        assert watch_chips[0].params["start_date"] == "2026-06-01"
+        assert watch_chips[0].params["end_date"] == "2026-06-30"
+
+    def test_distance_binding_produces_expand_radius_chip(self) -> None:
+        """Distance binding generates expand_radius chips."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        engine = SearchEngine(
+            registry=MagicMock(),
+            recgov_client=None,
+            goingtocamp_client=None,
+        )
+        query = SearchQuery(
+            max_drive_minutes=60,
+        )
+
+        diagnosis, chips = engine._diagnose_zero_results(
+            query, registry_matches=10, distance_filtered=6,
+            checked=0, all_unavailable=0,
+        )
+
+        expand_chips = [c for c in chips if c.action == "expand_radius"]
+        assert len(expand_chips) >= 2
+        # One should expand by 60 min, one should remove limit
+        assert any(
+            c.params.get("max_drive_minutes") == 120 for c in expand_chips
+        )
+        assert any(
+            c.params.get("max_drive_minutes") is None for c in expand_chips
+        )
+
+    def test_diagnosis_counts_match_input(self) -> None:
+        """Diagnosis object contains correct counts."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        engine = SearchEngine(
+            registry=MagicMock(),
+            recgov_client=None,
+            goingtocamp_client=None,
+        )
+        query = SearchQuery()
+
+        diagnosis, _ = engine._diagnose_zero_results(
+            query, registry_matches=20, distance_filtered=5,
+            checked=15, all_unavailable=10,
+        )
+
+        assert diagnosis.registry_matches == 20
+        assert diagnosis.distance_filtered == 5
+        assert diagnosis.checked_for_availability == 15
+        assert diagnosis.all_unavailable == 10
