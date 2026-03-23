@@ -841,20 +841,9 @@ export default function App() {
     localStorage.setItem("campnw-dark", String(darkMode));
   }, [darkMode]);
 
-  const handleSearch = async (
-    params: SearchParams,
-    mode: SearchMode,
-    sourceOverride?: string,
-  ) => {
-    // Source: explicit override from toggle, or derive from state
-    const source = sourceOverride !== undefined
-      ? (sourceOverride || undefined)  // "" → undefined (all sources)
-      : (sourceFilter.size === 1 ? Array.from(sourceFilter)[0] : undefined);
-    const searchParams = { ...params, source };
-
-    // Store base params WITHOUT source for re-use by toggle
-    const { source: _s, ...baseParams } = params;
-    lastSearchParams.current = baseParams as SearchParams;
+  const handleSearch = async (params: SearchParams, mode: SearchMode) => {
+    const searchParams = { ...params };
+    lastSearchParams.current = params;
     lastSearchMode.current = mode;
 
     setLoading(true);
@@ -928,10 +917,6 @@ export default function App() {
       next.add(src);
     }
     setSourceFilter(next);
-    if (lastSearchParams.current) {
-      const sourceParam = next.size === 1 ? Array.from(next)[0] : "";
-      handleSearch(lastSearchParams.current, lastSearchMode.current, sourceParam);
-    }
   };
 
   return (
@@ -1014,12 +999,22 @@ export default function App() {
       {error && <div className="error-banner">{error}</div>}
 
       {results && (() => {
+        // Client-side source filtering — instant toggle
+        const filteredResults = {
+          ...results,
+          results: results.results.filter(
+            (r) => sourceFilter.has(r.booking_system),
+          ),
+          campgrounds_with_availability: results.results.filter(
+            (r) => sourceFilter.has(r.booking_system) && r.total_available_sites > 0,
+          ).length,
+        };
         return (
         <div className="results">
           <div className="results-header">
             <p className="results-summary">
               Checked {results.campgrounds_checked} campgrounds —{" "}
-              {results.campgrounds_with_availability} with availability
+              {filteredResults.campgrounds_with_availability} with availability
             </p>
             <div className="view-toggle">
               <button
@@ -1057,9 +1052,9 @@ export default function App() {
               WA Parks
             </button>
           </div>
-          {searchDates && results.campgrounds_with_availability > 0 && (
+          {searchDates && filteredResults.campgrounds_with_availability > 0 && (
             <CalendarHeatMap
-              results={results}
+              results={filteredResults}
               startDate={searchDates.start}
               endDate={searchDates.end}
             />
@@ -1071,14 +1066,14 @@ export default function App() {
               ))}
             </div>
           )}
-          {results.results.some((r) => r.booking_system === "wa_state") && (
+          {filteredResults.results.some((r) => r.booking_system === "wa_state") && (
             <p className="wa-data-note">
               <span className="source-badge source-wa_state">WA Parks</span>{" "}
               site data is limited — names, types, and capacity aren't available
               from their booking system. Check GoingToCamp for full details.
             </p>
           )}
-          {results.results
+          {filteredResults.results
             .filter((r) => r.total_available_sites > 0)
             .map((r) => (
               <ResultCard
@@ -1088,9 +1083,21 @@ export default function App() {
                 searchDates={searchDates || undefined}
               />
             ))}
-          {results.campgrounds_with_availability === 0 && (
+          {filteredResults.campgrounds_with_availability === 0 && (
             <SmartZeroState
-              diagnosis={results?.diagnosis}
+              diagnosis={
+                results.campgrounds_with_availability > 0
+                  ? {
+                      registry_matches: results.campgrounds_checked,
+                      distance_filtered: 0,
+                      checked_for_availability: results.campgrounds_checked,
+                      binding_constraint: "source_filter",
+                      explanation:
+                        "Results were found but hidden by the source filter. "
+                        + "Try enabling all sources.",
+                    }
+                  : results?.diagnosis
+              }
               dateSuggestions={results?.date_suggestions}
               actionChips={results?.action_chips}
               searchDates={searchDates || undefined}

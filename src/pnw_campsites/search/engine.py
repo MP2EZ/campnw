@@ -346,8 +346,26 @@ class SearchEngine:
         else:
             distance_filtered = 0
 
-        # Limit to avoid hammering the API
-        campgrounds = campgrounds[: query.max_campgrounds]
+        # Limit per source to avoid one provider dominating
+        if not query.booking_system:
+            by_source: dict[str, list] = {}
+            for cg in campgrounds:
+                by_source.setdefault(cg.booking_system.value, []).append(cg)
+            n_sources = len(by_source)
+            per_source = (
+                max(1, query.max_campgrounds // n_sources)
+                if n_sources else query.max_campgrounds
+            )
+            campgrounds = []
+            for source_cgs in by_source.values():
+                campgrounds.extend(source_cgs[:per_source])
+            # Re-sort by distance after merging
+            if from_coords:
+                campgrounds.sort(
+                    key=lambda cg: drive_times.get(cg.facility_id, 9999)
+                )
+        else:
+            campgrounds = campgrounds[: query.max_campgrounds]
 
         if not campgrounds:
             empty_results = SearchResults(query=query)
