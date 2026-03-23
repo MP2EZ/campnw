@@ -31,6 +31,8 @@ class AvailabilityChange:
     campsite_type: str
     new_dates: list[str]  # ISO date strings that just became available
     max_people: int
+    context_message: str = ""  # LLM-enriched message
+    urgency: int = 2  # 1=low, 2=medium, 3=high
 
 
 @dataclass

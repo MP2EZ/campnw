@@ -490,3 +490,185 @@ class TestFormatChangeEdgeCases:
 
         assert "+1 more" in formatted
         assert "Jun 06" not in formatted
+
+
+class TestContextualFormatting:
+    """Tests for context_message and urgency in format_poll_result."""
+
+    def test_format_poll_result_with_context_message(self):
+        """When context_message is set, it's used instead of standard header."""
+        watch = Watch(
+            id=1,
+            facility_id="232465",
+            name="Ohanapecosh Campground",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        change = AvailabilityChange(
+            watch=watch,
+            site_id="123456",
+            site_name="A001",
+            loop="Loop A",
+            campsite_type="STANDARD NONELECTRIC",
+            new_dates=["2026-06-01"],
+            max_people=6,
+            context_message="Popular weekend spot just opened!",
+            urgency=3,
+        )
+        result = PollResult(watch=watch, changes=[change])
+
+        formatted = format_poll_result(result)
+
+        assert "Popular weekend spot just opened!" in formatted
+        assert "New availability at Ohanapecosh Campground!" not in formatted
+
+    def test_format_poll_result_without_context_message(self):
+        """When context_message is empty, uses standard formatting."""
+        watch = Watch(
+            id=1,
+            facility_id="232465",
+            name="Ohanapecosh Campground",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        change = AvailabilityChange(
+            watch=watch,
+            site_id="123456",
+            site_name="A001",
+            loop="Loop A",
+            campsite_type="STANDARD NONELECTRIC",
+            new_dates=["2026-06-01"],
+            max_people=6,
+            context_message="",  # Empty context_message
+            urgency=2,
+        )
+        result = PollResult(watch=watch, changes=[change])
+
+        formatted = format_poll_result(result)
+
+        assert "New availability at Ohanapecosh Campground!" in formatted
+
+    def test_format_poll_result_urgency_3_includes_fire_emoji(self):
+        """Urgency 3 includes fire emoji prefix when context_message is set."""
+        watch = Watch(
+            id=1,
+            facility_id="232465",
+            name="Popular Camp",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        change = AvailabilityChange(
+            watch=watch,
+            site_id="123456",
+            site_name="A001",
+            loop="Loop A",
+            campsite_type="STANDARD",
+            new_dates=["2026-06-01"],
+            max_people=6,
+            context_message="Peak weekend availability opened!",
+            urgency=3,  # High urgency
+        )
+        result = PollResult(watch=watch, changes=[change])
+
+        formatted = format_poll_result(result)
+
+        # Should include fire emoji (U+1F525)
+        assert "\U0001f525" in formatted
+        assert "Peak weekend availability opened!" in formatted
+
+    def test_format_poll_result_urgency_1_no_prefix(self):
+        """Urgency 1 has no emoji prefix when context_message is set."""
+        watch = Watch(
+            id=1,
+            facility_id="232465",
+            name="Quiet Camp",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        change = AvailabilityChange(
+            watch=watch,
+            site_id="123456",
+            site_name="A001",
+            loop="Loop A",
+            campsite_type="STANDARD",
+            new_dates=["2026-06-01"],
+            max_people=6,
+            context_message="Midweek campground opening.",
+            urgency=1,  # Low urgency
+        )
+        result = PollResult(watch=watch, changes=[change])
+
+        formatted = format_poll_result(result)
+
+        # Should NOT include fire emoji
+        assert "\U0001f525" not in formatted
+        assert "Midweek campground opening." in formatted
+
+    def test_format_poll_result_urgency_2_no_prefix(self):
+        """Urgency 2 has no emoji prefix when context_message is set."""
+        watch = Watch(
+            id=1,
+            facility_id="232465",
+            name="Standard Camp",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        change = AvailabilityChange(
+            watch=watch,
+            site_id="123456",
+            site_name="A001",
+            loop="Loop A",
+            campsite_type="STANDARD",
+            new_dates=["2026-06-01"],
+            max_people=6,
+            context_message="Sites now available.",
+            urgency=2,  # Standard urgency
+        )
+        result = PollResult(watch=watch, changes=[change])
+
+        formatted = format_poll_result(result)
+
+        # Should NOT include fire emoji
+        assert "\U0001f525" not in formatted
+        assert "Sites now available." in formatted
+
+    def test_format_poll_result_context_message_uses_first_change(self):
+        """When multiple changes, uses context_message from first change."""
+        watch = Watch(
+            id=1,
+            facility_id="232465",
+            name="Test Camp",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        changes = [
+            AvailabilityChange(
+                watch=watch,
+                site_id="123456",
+                site_name="A001",
+                loop="Loop A",
+                campsite_type="STANDARD",
+                new_dates=["2026-06-01"],
+                max_people=6,
+                context_message="First change context",
+                urgency=3,
+            ),
+            AvailabilityChange(
+                watch=watch,
+                site_id="789012",
+                site_name="A002",
+                loop="Loop B",
+                campsite_type="ELECTRIC",
+                new_dates=["2026-06-02"],
+                max_people=8,
+                context_message="Second change context",
+                urgency=2,
+            ),
+        ]
+        result = PollResult(watch=watch, changes=changes)
+
+        formatted = format_poll_result(result)
+
+        assert "First change context" in formatted
+        assert "Second change context" not in formatted
+        assert "\U0001f525" in formatted  # Uses first change urgency (3)

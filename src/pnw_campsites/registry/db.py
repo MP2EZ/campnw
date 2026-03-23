@@ -52,6 +52,17 @@ class CampgroundRegistry:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(SCHEMA)
 
+        # Migrations — add columns that didn't exist in the original schema
+        cols = {
+            row[1]
+            for row in self._conn.execute("PRAGMA table_info(campgrounds)").fetchall()
+        }
+        if "vibe" not in cols:
+            self._conn.execute(
+                "ALTER TABLE campgrounds ADD COLUMN vibe TEXT DEFAULT ''"
+            )
+            self._conn.commit()
+
     def close(self) -> None:
         self._conn.close()
 
@@ -222,6 +233,13 @@ class CampgroundRegistry:
         self._conn.execute(
             "UPDATE campgrounds SET tags=?, updated_at=? WHERE id=?",
             (json.dumps(tags), datetime.now().isoformat(), campground_id),
+        )
+        self._conn.commit()
+
+    def update_vibe(self, campground_id: int, vibe: str) -> None:
+        self._conn.execute(
+            "UPDATE campgrounds SET vibe=?, updated_at=? WHERE id=?",
+            (vibe, datetime.now().isoformat(), campground_id),
         )
         self._conn.commit()
 
