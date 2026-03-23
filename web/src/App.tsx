@@ -920,6 +920,20 @@ export default function App() {
     );
   };
 
+  const toggleSource = (src: string) => {
+    const next = new Set(sourceFilter);
+    if (next.has(src) && next.size > 1) {
+      next.delete(src);
+    } else if (!next.has(src)) {
+      next.add(src);
+    }
+    setSourceFilter(next);
+    if (lastSearchParams.current) {
+      const sourceParam = next.size === 1 ? Array.from(next)[0] : "";
+      handleSearch(lastSearchParams.current, lastSearchMode.current, sourceParam);
+    }
+  };
+
   return (
     <div className="app">
       <header>
@@ -1000,25 +1014,6 @@ export default function App() {
       {error && <div className="error-banner">{error}</div>}
 
       {results && (() => {
-        const toggleSource = (src: string) => {
-          const next = new Set(sourceFilter);
-          if (next.has(src) && next.size > 1) {
-            next.delete(src);
-          } else if (!next.has(src)) {
-            next.add(src);
-          }
-          setSourceFilter(next);
-          // Re-search with updated source filter
-          if (lastSearchParams.current) {
-            const sourceParam =
-              next.size === 1 ? Array.from(next)[0] : "";
-            handleSearch(
-              lastSearchParams.current,
-              lastSearchMode.current,
-              sourceParam,
-            );
-          }
-        };
         return (
         <div className="results">
           <div className="results-header">
