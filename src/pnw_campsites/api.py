@@ -258,11 +258,35 @@ WARNING_MESSAGES = {
 }
 
 
+class DiagnosisResponse(BaseModel):
+    registry_matches: int
+    distance_filtered: int
+    checked_for_availability: int
+    binding_constraint: str
+    explanation: str
+
+
+class DateSuggestionResponse(BaseModel):
+    start_date: str
+    end_date: str
+    campgrounds_with_availability: int
+    reason: str
+
+
+class ActionChipResponse(BaseModel):
+    action: str
+    label: str
+    params: dict
+
+
 class SearchResponse(BaseModel):
     campgrounds_checked: int
     campgrounds_with_availability: int
     results: list[CampgroundResultResponse]
     warnings: list[SearchWarningResponse] = []
+    diagnosis: DiagnosisResponse | None = None
+    date_suggestions: list[DateSuggestionResponse] = []
+    action_chips: list[ActionChipResponse] = []
 
 
 class CampgroundResponse(BaseModel):
@@ -473,9 +497,40 @@ async def search(
                 kind=w.kind,
                 count=w.count,
                 source=w.source,
-                message=WARNING_MESSAGES.get(w.kind, "Some campgrounds couldn't be checked."),
+                message=WARNING_MESSAGES.get(
+                    w.kind,
+                    "Some campgrounds couldn't be checked.",
+                ),
             )
             for w in results.warnings
+        ],
+        diagnosis=DiagnosisResponse(
+            registry_matches=results.diagnosis.registry_matches,
+            distance_filtered=results.diagnosis.distance_filtered,
+            checked_for_availability=(
+                results.diagnosis.checked_for_availability
+            ),
+            binding_constraint=results.diagnosis.binding_constraint,
+            explanation=results.diagnosis.explanation,
+        ) if results.diagnosis else None,
+        date_suggestions=[
+            DateSuggestionResponse(
+                start_date=s.start_date,
+                end_date=s.end_date,
+                campgrounds_with_availability=(
+                    s.campgrounds_with_availability
+                ),
+                reason=s.reason,
+            )
+            for s in results.date_suggestions
+        ],
+        action_chips=[
+            ActionChipResponse(
+                action=c.action,
+                label=c.label,
+                params=c.params,
+            )
+            for c in results.action_chips
         ],
     )
 
@@ -520,11 +575,58 @@ async def search_stream(
     )
 
     async def event_generator():
+        available_count = 0
         async for result in _engine.search_stream(query):
             data = _format_result(
                 result, booking_system or BookingSystem.RECGOV
             )
             yield f"data: {json.dumps(data.model_dump())}\n\n"
+            if result.total_available_sites > 0:
+                available_count += 1
+
+        # Diagnosis when no reservable availability found
+        if available_count == 0:
+            full = await _engine.search(query)
+            if full.diagnosis or full.date_suggestions:
+                meta = {
+                    "type": "diagnosis",
+                    "diagnosis": (
+                        {
+                            "registry_matches": full.diagnosis.registry_matches,
+                            "distance_filtered": full.diagnosis.distance_filtered,
+                            "checked_for_availability": (
+                                full.diagnosis.checked_for_availability
+                            ),
+                            "binding_constraint": (
+                                full.diagnosis.binding_constraint
+                            ),
+                            "explanation": full.diagnosis.explanation,
+                        }
+                        if full.diagnosis
+                        else None
+                    ),
+                    "date_suggestions": [
+                        {
+                            "start_date": s.start_date,
+                            "end_date": s.end_date,
+                            "campgrounds_with_availability": (
+                                s.campgrounds_with_availability
+                            ),
+                            "reason": s.reason,
+                        }
+                        for s in full.date_suggestions
+                    ],
+                    "action_chips": [
+                        {
+                            "action": c.action,
+                            "label": c.label,
+                            "params": c.params,
+                        }
+                        for c in full.action_chips
+                    ],
+                }
+                yield f"data: {json.dumps(meta)}\n\n"
+
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(

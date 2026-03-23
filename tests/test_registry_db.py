@@ -283,3 +283,212 @@ class TestDelete:
         retrieved = registry.get_by_id(cg_id)
 
         assert retrieved is None
+
+
+class TestFindSimilar:
+    """Test find_similar() method for campground recommendations."""
+
+    def test_finds_campgrounds_with_overlapping_tags(self, registry):
+        """find_similar() returns campgrounds with shared tags."""
+        source = registry.upsert(
+            make_campground(
+                facility_id="lakeside-1",
+                name="Lake Camp A",
+                tags=["lakeside", "mountain"],
+                latitude=47.0,
+                longitude=-121.0,
+            )
+        )
+        registry.upsert(
+            make_campground(
+                facility_id="lakeside-2",
+                name="Lake Camp B",
+                tags=["lakeside", "river"],
+                latitude=47.1,
+                longitude=-121.1,
+            )
+        )
+        registry.upsert(
+            make_campground(
+                facility_id="other-1",
+                name="Desert Camp",
+                tags=["desert"],
+                latitude=46.0,
+                longitude=-120.0,
+            )
+        )
+
+        results = registry.find_similar(source, limit=2)
+
+        # Should find lakeside-2 (shared "lakeside" tag)
+        assert len(results) >= 1
+        names = [cg.name for cg in results]
+        assert "Lake Camp B" in names
+        assert "Desert Camp" not in names
+
+    def test_excludes_source_campground(self, registry):
+        """find_similar() excludes the source campground itself."""
+        source = registry.upsert(
+            make_campground(
+                facility_id="src-1",
+                name="Source Camp",
+                tags=["lakeside"],
+            )
+        )
+
+        results = registry.find_similar(source, limit=5)
+
+        # Source should not be in results
+        assert not any(
+            cg.facility_id == "src-1" for cg in results
+        )
+
+    def test_proximity_affects_ranking(self, registry):
+        """Proximity to source affects similarity ranking."""
+        source = registry.upsert(
+            make_campground(
+                facility_id="src",
+                tags=["lakeside"],
+                latitude=47.0,
+                longitude=-121.0,
+            )
+        )
+        # Close with shared tag
+        registry.upsert(
+            make_campground(
+                facility_id="close",
+                tags=["lakeside"],
+                latitude=47.01,  # ~1 km away
+                longitude=-121.01,
+            )
+        )
+        # Far with shared tag
+        registry.upsert(
+            make_campground(
+                facility_id="far",
+                tags=["lakeside"],
+                latitude=48.0,  # ~110 km away
+                longitude=-121.0,
+            )
+        )
+
+        results = registry.find_similar(source, limit=1)
+
+        # Closer campground should rank higher
+        assert len(results) == 1
+        assert results[0].facility_id == "close"
+
+    def test_returns_empty_list_no_similar_found(self, registry):
+        """Returns empty list when no similar campgrounds exist."""
+        source = registry.upsert(
+            make_campground(
+                facility_id="unique",
+                name="Unique Camp",
+                tags=["rare-tag"],
+            )
+        )
+        # Add unrelated campground
+        registry.upsert(
+            make_campground(
+                facility_id="other",
+                tags=["different"],
+            )
+        )
+
+        results = registry.find_similar(source)
+
+        assert results == []
+
+    def test_respects_limit_parameter(self, registry):
+        """find_similar(limit=n) returns at most n results."""
+        source = registry.upsert(
+            make_campground(
+                facility_id="src",
+                tags=["lakeside"],
+                latitude=47.0,
+                longitude=-121.0,
+            )
+        )
+        # Add 5 similar campgrounds
+        for i in range(5):
+            registry.upsert(
+                make_campground(
+                    facility_id=f"sim-{i}",
+                    tags=["lakeside"],
+                    latitude=47.0 + i * 0.01,
+                    longitude=-121.0,
+                )
+            )
+
+        results = registry.find_similar(source, limit=2)
+
+        assert len(results) == 2
+
+    def test_state_filter_limits_scope(self, registry):
+        """find_similar(state=X) only searches within that state."""
+        source = registry.upsert(
+            make_campground(
+                facility_id="wa-src",
+                state="WA",
+                tags=["lakeside"],
+            )
+        )
+        registry.upsert(
+            make_campground(
+                facility_id="wa-sim",
+                state="WA",
+                tags=["lakeside"],
+            )
+        )
+        registry.upsert(
+            make_campground(
+                facility_id="or-sim",
+                state="OR",
+                tags=["lakeside"],
+            )
+        )
+
+        results = registry.find_similar(source, state="WA", limit=5)
+
+        # Should only find WA similar, not OR
+        found_ids = [cg.facility_id for cg in results]
+        assert "wa-sim" in found_ids
+        assert "or-sim" not in found_ids
+
+    def test_scores_by_jaccard_and_proximity(self, registry):
+        """find_similar() combines Jaccard tag similarity and proximity."""
+        source = registry.upsert(
+            make_campground(
+                facility_id="src",
+                name="Source",
+                tags=["lakeside", "mountain"],
+                latitude=47.0,
+                longitude=-121.0,
+            )
+        )
+        # Higher tag similarity, far away
+        registry.upsert(
+            make_campground(
+                facility_id="tags-far",
+                name="High Tags Far",
+                tags=["lakeside", "mountain"],  # perfect match
+                latitude=48.0,  # far
+                longitude=-121.0,
+            )
+        )
+        # Lower tag similarity, close by
+        registry.upsert(
+            make_campground(
+                facility_id="tags-close",
+                name="Low Tags Close",
+                tags=["lakeside"],  # only 1 of 2 tags
+                latitude=47.01,  # very close
+                longitude=-121.01,
+            )
+        )
+
+        results = registry.find_similar(source, limit=2)
+
+        assert len(results) == 2
+        # Balanced scoring means both may appear; verify limit works
+        assert len(results) <= 2

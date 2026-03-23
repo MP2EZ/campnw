@@ -2,11 +2,13 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { searchCampsitesStream, saveSearchHistory, getSearchHistory } from "./api";
 import type {
   CampgroundResult, SearchParams, SearchResponse, Window, SearchHistoryEntry,
+  DiagnosisEvent,
 } from "./api";
 import { WatchPanel, WatchButton } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
 import { AuthModal } from "./components/AuthModal";
 import { UserMenu } from "./components/UserMenu";
+import { SmartZeroState } from "./components/SmartZeroState";
 import { useAuth } from "./hooks/useAuth";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
@@ -763,6 +765,18 @@ export default function App() {
         setError(err.message);
         setLoading(false);
       },
+      (diagEvent: DiagnosisEvent) => {
+        setResults((prev) =>
+          prev
+            ? {
+                ...prev,
+                diagnosis: diagEvent.diagnosis ?? undefined,
+                date_suggestions: diagEvent.date_suggestions,
+                action_chips: diagEvent.action_chips,
+              }
+            : prev
+        );
+      },
     );
   };
 
@@ -921,13 +935,27 @@ export default function App() {
               />
             ))}
           {filteredResults.campgrounds_with_availability === 0 && (
-            <div className="no-results">
-              <p>No availability found for these dates.</p>
-              <p className="no-results-hint">
-                Try different dates, a wider date range, or fewer nights.
-                {searchDates && " You can also watch specific campgrounds to get notified when sites open up."}
-              </p>
-            </div>
+            <SmartZeroState
+              diagnosis={
+                // If unfiltered has results but filtered doesn't,
+                // the source filter is hiding them
+                results.campgrounds_with_availability > 0
+                  ? {
+                      registry_matches: results.campgrounds_checked,
+                      distance_filtered: 0,
+                      checked_for_availability: results.campgrounds_checked,
+                      binding_constraint: "source_filter",
+                      explanation:
+                        "Results were found but are hidden by the source filter above. "
+                        + "Try enabling all sources.",
+                    }
+                  : results?.diagnosis
+              }
+              dateSuggestions={results?.date_suggestions}
+              actionChips={results?.action_chips}
+              searchDates={searchDates || undefined}
+              onSearch={handleSearch}
+            />
           )}
         </div>
         );

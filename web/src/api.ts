@@ -36,11 +36,35 @@ export interface SearchWarning {
   message: string;
 }
 
+export interface Diagnosis {
+  registry_matches: number;
+  distance_filtered: number;
+  checked_for_availability: number;
+  binding_constraint: string;
+  explanation: string;
+}
+
+export interface DateSuggestion {
+  start_date: string;
+  end_date: string;
+  campgrounds_with_availability: number;
+  reason: string;
+}
+
+export interface ActionChip {
+  action: string;
+  label: string;
+  params: Record<string, unknown>;
+}
+
 export interface SearchResponse {
   campgrounds_checked: number;
   campgrounds_with_availability: number;
   results: CampgroundResult[];
   warnings: SearchWarning[];
+  diagnosis?: Diagnosis;
+  date_suggestions?: DateSuggestion[];
+  action_chips?: ActionChip[];
 }
 
 export interface SearchParams {
@@ -88,11 +112,19 @@ export async function searchCampsites(
 // Streaming search (SSE)
 // ---------------------------------------------------------------------------
 
+export interface DiagnosisEvent {
+  type: "diagnosis";
+  diagnosis: Diagnosis | null;
+  date_suggestions: DateSuggestion[];
+  action_chips: ActionChip[];
+}
+
 export async function searchCampsitesStream(
   params: SearchParams,
   onResult: (result: CampgroundResult) => void,
   onDone: () => void,
   onError: (err: Error) => void,
+  onDiagnosis?: (event: DiagnosisEvent) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   query.set("start_date", params.start_date);
@@ -136,8 +168,12 @@ export async function searchCampsitesStream(
             return;
           }
           try {
-            const result = JSON.parse(data) as CampgroundResult;
-            onResult(result);
+            const parsed = JSON.parse(data);
+            if (parsed.type === "diagnosis" && onDiagnosis) {
+              onDiagnosis(parsed as DiagnosisEvent);
+            } else {
+              onResult(parsed as CampgroundResult);
+            }
           } catch {
             // skip malformed lines
           }
