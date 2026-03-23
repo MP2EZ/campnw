@@ -575,16 +575,17 @@ async def search_stream(
     )
 
     async def event_generator():
-        result_count = 0
+        available_count = 0
         async for result in _engine.search_stream(query):
             data = _format_result(
                 result, booking_system or BookingSystem.RECGOV
             )
             yield f"data: {json.dumps(data.model_dump())}\n\n"
-            result_count += 1
+            if result.total_available_sites > 0:
+                available_count += 1
 
-        # On zero results, run full search for diagnosis
-        if result_count == 0:
+        # Diagnosis when no reservable availability found
+        if available_count == 0:
             full = await _engine.search(query)
             if full.diagnosis or full.date_suggestions:
                 meta = {

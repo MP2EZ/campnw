@@ -936,7 +936,21 @@ export default function App() {
             ))}
           {filteredResults.campgrounds_with_availability === 0 && (
             <SmartZeroState
-              diagnosis={results?.diagnosis}
+              diagnosis={
+                // If unfiltered has results but filtered doesn't,
+                // the source filter is hiding them
+                results.campgrounds_with_availability > 0
+                  ? {
+                      registry_matches: results.campgrounds_checked,
+                      distance_filtered: 0,
+                      checked_for_availability: results.campgrounds_checked,
+                      binding_constraint: "source_filter",
+                      explanation:
+                        "Results were found but are hidden by the source filter above. "
+                        + "Try enabling all sources.",
+                    }
+                  : results?.diagnosis
+              }
               dateSuggestions={results?.date_suggestions}
               actionChips={results?.action_chips}
               searchDates={searchDates || undefined}
