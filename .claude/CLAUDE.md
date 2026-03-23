@@ -257,16 +257,12 @@ Performance:
 - [x] Search history — shipped in v0.4 (recent chips in SearchForm)
 - [x] SmartZeroState component (replaces generic no-results message)
 
-### v0.7 "Oregon + Delight"
-- [ ] Oregon State Parks provider (ReserveAmerica via Playwright)
-- [ ] Seed 200+ OR state parks into registry
-- [ ] OR State Parks source filter + color-coded badge (amber)
-- [ ] Campground detail enrichment (amenities, photos, site counts)
-- [ ] Registry enrichment pass (manual curation top 50)
-- [ ] Booking link validation
-- [ ] Contextual watch notifications (LLM-enriched alerts with urgency scoring)
-- [ ] Site character / "vibe" descriptions (pre-generated, rendered on result cards)
-- [ ] Registry gap detector (internal tool — cluster search misses by region)
+### v0.7 "Oregon + Delight" — DONE
+- [x] Site character / "vibe" descriptions (Haiku-generated, rendered in expanded cards)
+- [x] Contextual watch notifications (LLM-enriched alerts with urgency 1-3 scoring)
+- [ ] Oregon State Parks provider — deferred (ReserveAmerica has no availability API; Playwright required)
+- [ ] Booking link validation — deferred
+- [ ] Registry gap detector — deferred
 
 ### v0.8 "Trip Planner"
 - [ ] Trip planner on dedicated route (/plan), not embedded in search

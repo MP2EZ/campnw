@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -68,6 +69,33 @@ async def _poll_all_watches() -> None:
     results = await poll_all(
         _recgov, _goingtocamp, _watch_db, _registry,
     )
+
+    # Enrich notifications with LLM context (fire-and-forget, 3s timeout)
+    from pnw_campsites.enrichment.notifications import enrich_notification
+
+    for result in results:
+        if result.has_changes:
+            all_dates: list[str] = []
+            for change in result.changes:
+                all_dates.extend(change.new_dates)
+            try:
+                msg, urgency = await asyncio.wait_for(
+                    enrich_notification(
+                        result.watch.name,
+                        len(result.changes),
+                        sorted(set(all_dates)),
+                    ),
+                    timeout=3.0,
+                )
+            except (TimeoutError, Exception):
+                msg = (
+                    f"{result.watch.name}: "
+                    f"{len(result.changes)} site(s) available"
+                )
+                urgency = 2
+            for change in result.changes:
+                change.context_message = msg
+                change.urgency = urgency
 
     total_changes = 0
     total_errors = 0
@@ -235,6 +263,7 @@ class CampgroundResultResponse(BaseModel):
     total_available_sites: int
     fcfs_sites: int
     tags: list[str] = []
+    vibe: str = ""
     estimated_drive_minutes: int | None = None
     availability_url: str | None = None
     windows: list[WindowResponse]
@@ -299,6 +328,7 @@ class CampgroundResponse(BaseModel):
     latitude: float
     longitude: float
     tags: list[str]
+    vibe: str = ""
     drive_minutes_from_base: int | None
     notes: str
     rating: int | None
@@ -381,6 +411,7 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
         total_available_sites=r.total_available_sites,
         fcfs_sites=r.fcfs_sites,
         tags=cg.tags,
+        vibe=cg.vibe,
         estimated_drive_minutes=r.estimated_drive_minutes,
         availability_url=_build_availability_url(
             cg.facility_id, cg.booking_system, start, end
@@ -684,6 +715,7 @@ async def list_campgrounds(
             latitude=cg.latitude,
             longitude=cg.longitude,
             tags=cg.tags,
+            vibe=cg.vibe,
             drive_minutes_from_base=cg.drive_minutes_from_base,
             notes=cg.notes,
             rating=cg.rating,

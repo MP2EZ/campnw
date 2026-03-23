@@ -102,6 +102,46 @@ Return ONLY the JSON object, nothing else."""
         return []
 
 
+async def generate_vibe(
+    name: str,
+    tags: list[str],
+    site_count: int | None,
+    description: str,
+    api_key: str,
+) -> str:
+    """Generate a one-sentence campground character description."""
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+
+    size_hint = f" It has {site_count} sites." if site_count else ""
+    tag_hint = f" Tags: {', '.join(tags)}." if tags else ""
+
+    prompt = (
+        f"Write a single sentence (max 80 characters) capturing the feel, character,"
+        f" or who this campground is best for.\n\n"
+        f"Campground: {name}\n"
+        f"Description: {description[:2000]}\n"
+        f"{tag_hint}{size_hint}\n\n"
+        f"Return ONLY the sentence, no quotes, no explanation."
+    )
+
+    try:
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=100,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text.strip().strip('"').strip("'")
+        # Enforce 80-char limit
+        if len(text) > 80:
+            text = text[:77] + "..."
+        return text
+    except Exception as e:
+        _logger.warning("Vibe generation failed for %s: %s", name, e)
+        return ""
+
+
 async def enrich_registry(
     registry_path: str | None = None,
     api_key: str | None = None,
@@ -151,6 +191,30 @@ async def enrich_registry(
             registry.update_tags(cg.id, merged)
             _logger.info("Enriched: %s -> %s", cg.name, merged)
             enriched += 1
+
+    # Generate vibes for campgrounds that lack them
+    all_cgs = registry.search(enabled_only=True)
+    vibe_candidates = [cg for cg in all_cgs if not cg.vibe][:limit]
+
+    _logger.info(
+        "Found %d campgrounds needing vibes (limit %d)",
+        len(vibe_candidates),
+        limit,
+    )
+
+    for cg in vibe_candidates:
+        description = cg.notes or cg.name
+        vibe = await generate_vibe(
+            cg.name, cg.tags, cg.total_sites, description, api_key,
+        )
+
+        if dry_run:
+            _logger.info("DRY RUN vibe: %s -> %s", cg.name, vibe)
+            continue
+
+        if vibe:
+            registry.update_vibe(cg.id, vibe)
+            _logger.info("Vibe: %s -> %s", cg.name, vibe)
 
     registry.close()
     return enriched

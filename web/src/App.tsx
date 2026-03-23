@@ -427,6 +427,15 @@ function groupByDateBlock(windows: Window[]): DateBlock[] {
   );
 }
 
+function meaningfulLoop(loop: string, campgroundName: string): string | null {
+  const normalize = (s: string) =>
+    s.toUpperCase().replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim();
+  const nl = normalize(loop);
+  const nc = normalize(campgroundName);
+  if (!nl || nl === nc || nc.includes(nl) || nl.includes(nc)) return null;
+  return loop;
+}
+
 function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
   const blocks = groupByDateBlock(result.windows);
   const fcfsSites = result.windows.filter((w) => w.is_fcfs);
@@ -479,9 +488,12 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                     site: w.site_name,
                   })}
                 >
-                  {w.site_name}
+                  Site {w.site_name}
                   <span className="site-chip-meta">
-                    {w.loop} · max {w.max_people}p
+                    {(() => {
+                      const loop = meaningfulLoop(w.loop, result.name);
+                      return loop ? `${loop} · ${w.max_people}p` : `${w.max_people}p`;
+                    })()}
                   </span>
                 </a>
               ))}
@@ -531,7 +543,10 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
             <h4>
               Site {siteName}
               <span className="site-meta">
-                {w0.loop} · {w0.campsite_type} · max {w0.max_people}p
+                {(() => {
+                  const loop = meaningfulLoop(w0.loop, result.name);
+                  return loop ? `${loop} · ` : "";
+                })()}{w0.campsite_type} · max {w0.max_people}p
               </span>
             </h4>
             {w0.is_fcfs ? (
@@ -652,6 +667,9 @@ function ResultCard({
 
       {expanded && (
         <>
+          {result.vibe && (
+            <p className="result-vibe">{result.vibe}</p>
+          )}
           {result.availability_url && (
             <div className="card-toolbar">
               <a

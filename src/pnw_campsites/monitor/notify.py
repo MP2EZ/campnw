@@ -25,6 +25,15 @@ def format_change(change: AvailabilityChange) -> str:
     )
 
 
+def _urgency_prefix(urgency: int) -> str:
+    """Return an emoji prefix based on urgency level."""
+    if urgency >= 3:
+        return "\U0001f525 "  # fire
+    if urgency <= 1:
+        return ""
+    return ""
+
+
 def format_poll_result(result: PollResult) -> str:
     """Format a poll result with changes into a notification message."""
     watch = result.watch
@@ -33,11 +42,28 @@ def format_poll_result(result: PollResult) -> str:
         date.fromisoformat(watch.start_date),
     )
 
-    lines = [
-        f"New availability at {watch.name}!",
-        f"{len(result.changes)} site(s) with new dates:",
-        "",
-    ]
+    # Use LLM-enriched context message if available
+    context_msg = ""
+    urgency = 2
+    if result.changes and result.changes[0].context_message:
+        context_msg = result.changes[0].context_message
+        urgency = result.changes[0].urgency
+
+    if context_msg:
+        prefix = _urgency_prefix(urgency)
+        lines = [
+            f"{prefix}{context_msg}",
+            "",
+            f"{len(result.changes)} site(s) with new dates:",
+            "",
+        ]
+    else:
+        lines = [
+            f"New availability at {watch.name}!",
+            f"{len(result.changes)} site(s) with new dates:",
+            "",
+        ]
+
     for change in result.changes[:10]:
         lines.append(f"  {format_change(change)}")
     if len(result.changes) > 10:
