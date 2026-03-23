@@ -823,6 +823,8 @@ export default function App() {
   const [resultsView, setResultsView] = useState<ResultsView>("dates");
   const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(["recgov", "wa_state"]));
+  const lastSearchParams = useRef<SearchParams | null>(null);
+  const lastSearchMode = useRef<SearchMode>("find");
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
@@ -840,6 +842,14 @@ export default function App() {
   }, [darkMode]);
 
   const handleSearch = async (params: SearchParams, mode: SearchMode) => {
+    // Derive source from sourceFilter — only send if one is deselected
+    const sourceParam =
+      sourceFilter.size === 1 ? Array.from(sourceFilter)[0] : undefined;
+    const searchParams = { ...params, source: sourceParam };
+
+    lastSearchParams.current = params;
+    lastSearchMode.current = mode;
+
     setLoading(true);
     setError(null);
     setResultsView(mode === "find" ? "dates" : "sites");
@@ -848,7 +858,7 @@ export default function App() {
     // Sync search params to URL for shareable links
     const url = new URL(window.location.href);
     url.search = "";
-    for (const [k, v] of Object.entries(params)) {
+    for (const [k, v] of Object.entries(searchParams)) {
       if (v !== undefined && v !== "" && v !== false) {
         url.searchParams.set(k, String(v));
       }
@@ -864,7 +874,7 @@ export default function App() {
     });
 
     await searchCampsitesStream(
-      params,
+      searchParams,
       (result) => {
         streamedResults.push(result);
         setResults({
@@ -983,16 +993,6 @@ export default function App() {
       {error && <div className="error-banner">{error}</div>}
 
       {results && (() => {
-        // Client-side source filtering — instant, no re-fetch
-        const filteredResults = {
-          ...results,
-          results: results.results.filter(
-            (r) => sourceFilter.has(r.booking_system)
-          ),
-          campgrounds_with_availability: results.results.filter(
-            (r) => sourceFilter.has(r.booking_system) && r.total_available_sites > 0
-          ).length,
-        };
         const toggleSource = (src: string) => {
           const next = new Set(sourceFilter);
           if (next.has(src) && next.size > 1) {
@@ -1001,13 +1001,22 @@ export default function App() {
             next.add(src);
           }
           setSourceFilter(next);
+          // Re-search with updated source filter
+          if (lastSearchParams.current) {
+            const sourceParam =
+              next.size === 1 ? Array.from(next)[0] : undefined;
+            handleSearch(
+              { ...lastSearchParams.current, source: sourceParam },
+              lastSearchMode.current,
+            );
+          }
         };
         return (
         <div className="results">
           <div className="results-header">
             <p className="results-summary">
               Checked {results.campgrounds_checked} campgrounds —{" "}
-              {filteredResults.campgrounds_with_availability} with availability
+              {results.campgrounds_with_availability} with availability
             </p>
             <div className="view-toggle">
               <button
@@ -1045,9 +1054,9 @@ export default function App() {
               WA Parks
             </button>
           </div>
-          {searchDates && filteredResults.campgrounds_with_availability > 0 && (
+          {searchDates && results.campgrounds_with_availability > 0 && (
             <CalendarHeatMap
-              results={filteredResults}
+              results={results}
               startDate={searchDates.start}
               endDate={searchDates.end}
             />
@@ -1059,14 +1068,14 @@ export default function App() {
               ))}
             </div>
           )}
-          {filteredResults.results.some((r) => r.booking_system === "wa_state") && (
+          {results.results.some((r) => r.booking_system === "wa_state") && (
             <p className="wa-data-note">
               <span className="source-badge source-wa_state">WA Parks</span>{" "}
               site data is limited — names, types, and capacity aren't available
               from their booking system. Check GoingToCamp for full details.
             </p>
           )}
-          {filteredResults.results
+          {results.results
             .filter((r) => r.total_available_sites > 0)
             .map((r) => (
               <ResultCard
@@ -1076,23 +1085,9 @@ export default function App() {
                 searchDates={searchDates || undefined}
               />
             ))}
-          {filteredResults.campgrounds_with_availability === 0 && (
+          {results.campgrounds_with_availability === 0 && (
             <SmartZeroState
-              diagnosis={
-                // If unfiltered has results but filtered doesn't,
-                // the source filter is hiding them
-                results.campgrounds_with_availability > 0
-                  ? {
-                      registry_matches: results.campgrounds_checked,
-                      distance_filtered: 0,
-                      checked_for_availability: results.campgrounds_checked,
-                      binding_constraint: "source_filter",
-                      explanation:
-                        "Results were found but are hidden by the source filter above. "
-                        + "Try enabling all sources.",
-                    }
-                  : results?.diagnosis
-              }
+              diagnosis={results?.diagnosis}
               dateSuggestions={results?.date_suggestions}
               actionChips={results?.action_chips}
               searchDates={searchDates || undefined}
