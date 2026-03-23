@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
-import { planChat } from "../api";
+import { planChatStream } from "../api";
 import type { ChatMessage, ToolCall } from "../api";
 
 interface DisplayMessage {
@@ -60,14 +60,41 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
   );
 }
 
+const EXAMPLE_PROMPTS = [
+  "Lakeside campsite in WA this weekend",
+  "2 nights near Rainier in July",
+  "Family camping within 2 hours of Seattle, August long weekend",
+];
+
+function loadSaved<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function TripPlanner() {
-  const [messages, setMessages] = useState<DisplayMessage[]>([]);
-  const [apiMessages, setApiMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<DisplayMessage[]>(
+    () => loadSaved("campnw-plan-messages", []),
+  );
+  const [apiMessages, setApiMessages] = useState<ChatMessage[]>(
+    () => loadSaved("campnw-plan-api-messages", []),
+  );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Persist conversation to localStorage
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem("campnw-plan-messages", JSON.stringify(messages));
+      localStorage.setItem("campnw-plan-api-messages", JSON.stringify(apiMessages));
+    }
+  }, [messages, apiMessages]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -94,37 +121,97 @@ export default function TripPlanner() {
     setLoading(true);
     setError(null);
 
-    try {
-      const response = await planChat(nextApiMessages);
-      const assistantMessage: ChatMessage = {
-        role: "assistant",
-        content: response.content,
-      };
-      setApiMessages((prev) => [...prev, assistantMessage]);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: response.content,
-          tool_calls: response.tool_calls,
-        },
-      ]);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong";
-      setError(message);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: message,
-          isError: true,
-        },
-      ]);
-    } finally {
-      setLoading(false);
-      // Return focus to input after response
-      inputRef.current?.focus();
-    }
+    // Add a placeholder assistant message that updates as text streams in
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: "", tool_calls: [] },
+    ]);
+
+    const toolCalls: ToolCall[] = [];
+    let fullText = "";
+
+    await planChatStream(
+      nextApiMessages,
+      (chunk) => {
+        fullText += chunk;
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === "assistant") {
+            updated[updated.length - 1] = { ...last, content: fullText };
+          }
+          return updated;
+        });
+      },
+      (name) => {
+        toolCalls.push({ name, input: {} });
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === "assistant") {
+            updated[updated.length - 1] = {
+              ...last,
+              tool_calls: [...toolCalls],
+            };
+          }
+          return updated;
+        });
+      },
+      (name, summary) => {
+        const tc = toolCalls.find((t) => t.name === name && !t.result_summary);
+        if (tc) tc.result_summary = summary;
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === "assistant") {
+            updated[updated.length - 1] = {
+              ...last,
+              tool_calls: [...toolCalls],
+            };
+          }
+          return updated;
+        });
+      },
+      (finalContent, finalToolCalls) => {
+        const content = finalContent || fullText;
+        setApiMessages((prev) => [
+          ...prev,
+          { role: "assistant", content },
+        ]);
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === "assistant") {
+            updated[updated.length - 1] = {
+              ...last,
+              content,
+              tool_calls: finalToolCalls.length > 0 ? finalToolCalls : toolCalls,
+            };
+          }
+          return updated;
+        });
+        setLoading(false);
+        inputRef.current?.focus();
+      },
+      (err) => {
+        const message = err.message || "Something went wrong";
+        setError(message);
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === "assistant") {
+            updated[updated.length - 1] = {
+              ...last,
+              content: message,
+              isError: true,
+            };
+          }
+          return updated;
+        });
+        setLoading(false);
+        inputRef.current?.focus();
+      },
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -136,19 +223,44 @@ export default function TripPlanner() {
 
   const isEmpty = messages.length === 0;
 
+  const handleNewConversation = () => {
+    setMessages([]);
+    setApiMessages([]);
+    localStorage.removeItem("campnw-plan-messages");
+    localStorage.removeItem("campnw-plan-api-messages");
+  };
+
   return (
     <div className="trip-planner">
+      {!isEmpty && (
+        <button
+          className="chat-new-btn"
+          onClick={handleNewConversation}
+          disabled={loading}
+        >
+          New conversation
+        </button>
+      )}
       {isEmpty && (
         <div className="chat-welcome">
           <h2>Plan a camping trip</h2>
           <p>Describe where and when you want to go — I'll search for available campsites and put together a trip plan.</p>
           <div className="chat-examples">
             <p className="chat-examples-label">Try asking:</p>
-            <ul>
-              <li>"Find me a lakeside campsite in WA this weekend"</li>
-              <li>"I want 2 nights near Rainier in July, what's available?"</li>
-              <li>"Family camping within 2 hours of Seattle, long weekend in August"</li>
-            </ul>
+            <div className="chat-examples-list">
+              {EXAMPLE_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  className="chat-example-btn"
+                  onClick={() => {
+                    setInput(prompt);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
