@@ -1,7 +1,15 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import App from '../App'
-import * as api from '../api'
+
+function renderApp() {
+  return render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  )
+}
 
 // Mock the useAuth hook
 vi.mock('../hooks/useAuth', () => ({
@@ -29,19 +37,19 @@ beforeEach(() => {
 describe('App Component', () => {
   test('renders without crashing', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    const { container } = render(<App />)
+    const { container } = renderApp()
     expect(container).toBeTruthy()
   })
 
   test('renders the campnw heading', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
     expect(screen.getByText('campnw')).toBeInTheDocument()
   })
 
   test('renders tagline', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
     expect(
       screen.getByText('Find available campsites across the Pacific Northwest')
     ).toBeInTheDocument()
@@ -49,7 +57,7 @@ describe('App Component', () => {
 
   test('renders search form with date inputs', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     const dateInputs = screen.getAllByRole('textbox', { hidden: true })
     expect(dateInputs.length).toBeGreaterThan(0)
@@ -57,7 +65,7 @@ describe('App Component', () => {
 
   test('renders "Find a date" and "Exact dates" mode buttons', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     expect(screen.getByText('Find a date')).toBeInTheDocument()
     expect(screen.getByText('Exact dates')).toBeInTheDocument()
@@ -65,7 +73,7 @@ describe('App Component', () => {
 
   test('renders search button and is enabled initially', async () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     const searchButton = screen.getByRole('button', { name: /Search/ })
     expect(searchButton).toBeInTheDocument()
@@ -74,14 +82,14 @@ describe('App Component', () => {
 
   test('renders Watchlist button in header', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     expect(screen.getByRole('button', { name: 'Watchlist' })).toBeInTheDocument()
   })
 
   test('renders theme toggle button', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     // Theme toggle uses aria-label
     const themeToggle = screen.getByRole('button', {
@@ -92,7 +100,7 @@ describe('App Component', () => {
 
   test('renders Sign in button when not logged in', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     expect(
       screen.getByRole('button', { name: 'Sign in' })
@@ -101,7 +109,7 @@ describe('App Component', () => {
 
   test('renders main landmark', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    const { container } = render(<App />)
+    const { container } = renderApp()
 
     const main = container.querySelector('main')
     expect(main).toBeInTheDocument()
@@ -109,7 +117,7 @@ describe('App Component', () => {
 
   test('renders day picker buttons in Find a date mode', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     // By default "Find a date" is active, so day presets should be visible
     expect(screen.getByText('Any')).toBeInTheDocument()
@@ -121,7 +129,7 @@ describe('App Component', () => {
 
   test('renders tag picker with correct tags', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     const tagsToFind = [
       'lakeside',
@@ -143,7 +151,7 @@ describe('App Component', () => {
 
   test('renders More filters button with advanced options hidden initially', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     const advancedToggle = screen.getByRole('button', {
       name: /More filters/,
@@ -153,7 +161,7 @@ describe('App Component', () => {
 
   test('renders Drive from select dropdown', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     const driveSelectorElements = screen.getAllByText('Drive from')
     expect(driveSelectorElements.length).toBeGreaterThan(0)
@@ -161,7 +169,7 @@ describe('App Component', () => {
 
   test('renders campground name filter with aria-label', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    render(<App />)
+    renderApp()
 
     const nameFilter = screen.getByLabelText('Campground name filter')
     expect(nameFilter).toBeInTheDocument()
