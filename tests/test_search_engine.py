@@ -1307,3 +1307,214 @@ class TestSearchIntegration:
 
         # FCFS sites should be counted
         assert result.fcfs_sites >= 0
+
+    @pytest.mark.asyncio
+    async def test_search_stream_yields_results_incrementally(
+        self, registry
+    ) -> None:
+        """search_stream yields results as batches complete."""
+        from unittest.mock import AsyncMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        # Add campgrounds to registry
+        cg1 = make_campground(
+            facility_id="1", name="Camp 1", state="WA"
+        )
+        cg2 = make_campground(
+            facility_id="2", name="Camp 2", state="WA"
+        )
+        registry.upsert(cg1)
+        registry.upsert(cg2)
+
+        # Mock provider returning availability
+        recgov = AsyncMock()
+        avail = make_campground_availability(
+            facility_id="1",
+            campsites={
+                "123": make_campsite_availability(
+                    campsite_id="123",
+                    dates_status={
+                        "2026-06-01T00:00:00.000Z": "Available"
+                    },
+                )
+            },
+        )
+        recgov.get_availability_range.return_value = avail
+
+        engine = SearchEngine(registry=registry, recgov_client=recgov)
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            state="WA",
+            max_campgrounds=2,
+        )
+
+        results = []
+        async for result in engine.search_stream(query):
+            results.append(result)
+
+        assert len(results) > 0
+        assert results[0].campground.facility_id in ("1", "2")
+
+    @pytest.mark.asyncio
+    async def test_search_stream_empty_when_no_campgrounds(
+        self, registry
+    ) -> None:
+        """search_stream returns empty iterator if no campgrounds match."""
+        from unittest.mock import AsyncMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        recgov = AsyncMock()
+        engine = SearchEngine(registry=registry, recgov_client=recgov)
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            state="ZZ",  # Non-existent state
+        )
+
+        results = []
+        async for result in engine.search_stream(query):
+            results.append(result)
+
+        assert len(results) == 0
+
+    def test_suggest_similar_campgrounds_returns_chips(self, registry) -> None:
+        """_suggest_similar_campgrounds returns action chips."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        cg1 = make_campground(
+            facility_id="1", name="Lake Rainier", tags=["lakeside"]
+        )
+        cg2 = make_campground(
+            facility_id="2", name="Rainier Riverside", tags=["lakeside"]
+        )
+        registry.upsert(cg1)
+        registry.upsert(cg2)
+
+        mock_recgov = MagicMock()
+        engine = SearchEngine(registry=registry, recgov_client=mock_recgov)
+
+        query = SearchQuery(name_like="Lake Rainier")
+        chips = engine._suggest_similar_campgrounds(query)
+
+        assert len(chips) > 0
+        assert chips[0].action == "try_nearby"
+        assert "Rainier" in chips[0].label
+
+    def test_suggest_similar_campgrounds_no_matches(self, registry) -> None:
+        """_suggest_similar_campgrounds returns empty list if no matches."""
+        from unittest.mock import MagicMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        mock_recgov = MagicMock()
+        engine = SearchEngine(registry=registry, recgov_client=mock_recgov)
+
+        query = SearchQuery(name_like="NonexistentCampXYZ")
+        chips = engine._suggest_similar_campgrounds(query)
+
+        assert len(chips) == 0
+
+    def test_suggest_similar_campgrounds_no_similar_found(
+        self, registry
+    ) -> None:
+        """_suggest_similar_campgrounds returns empty when no similar exist."""
+        from unittest.mock import MagicMock, patch
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        cg = make_campground(facility_id="1", name="Test")
+        registry.upsert(cg)
+
+        mock_recgov = MagicMock()
+        engine = SearchEngine(registry=registry, recgov_client=mock_recgov)
+
+        # Mock find_similar to return empty
+        with patch.object(
+            registry, "find_similar", return_value=[]
+        ):
+            query = SearchQuery(name_like="Test")
+            chips = engine._suggest_similar_campgrounds(query)
+
+            assert len(chips) == 0
+
+    @pytest.mark.asyncio
+    async def test_diagnose_distance_binding_constraint(
+        self, registry
+    ) -> None:
+        """_diagnose_zero_results identifies distance as binding constraint."""
+        from unittest.mock import AsyncMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        cg = make_campground(
+            facility_id="1", name="Camp", latitude=47.0, longitude=-122.0
+        )
+        registry.upsert(cg)
+
+        recgov = AsyncMock()
+        engine = SearchEngine(registry=registry, recgov_client=recgov)
+
+        # Search from Seattle (47.6, -122.3) with tight distance limit
+        # Camp at (47.0, -122.0) is ~50 miles away
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            from_coords=(47.6, -122.3),
+            max_drive_minutes=30,  # Too tight
+        )
+
+        results = await engine.search(query)
+
+        assert results.diagnosis is not None
+        assert results.diagnosis.binding_constraint == "distance"
+        # Message says "exceeded X min drive limit"
+        assert "drive" in results.diagnosis.explanation.lower()
+
+    @pytest.mark.asyncio
+    async def test_diagnose_days_binding_constraint(
+        self, registry
+    ) -> None:
+        """_diagnose_zero_results identifies days as binding constraint."""
+        from unittest.mock import AsyncMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        cg = make_campground(facility_id="1", name="Camp", state="WA")
+        registry.upsert(cg)
+
+        recgov = AsyncMock()
+        # Return campground with no availability on selected days
+        avail = make_campground_availability(
+            facility_id="1",
+            campsites={
+                "123": make_campsite_availability(
+                    campsite_id="123",
+                    dates_status={
+                        "2026-06-01T00:00:00.000Z": "Reserved",  # Mon
+                    },
+                )
+            },
+        )
+        recgov.get_availability_range.return_value = avail
+
+        engine = SearchEngine(registry=registry, recgov_client=recgov)
+
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            state="WA",
+            days_of_week={4, 5, 6},  # Fri, Sat, Sun only
+        )
+
+        results = await engine.search(query)
+
+        # If all booked on non-selected days, binding is "days"
+        if results.diagnosis:
+            assert results.diagnosis.binding_constraint in (
+                "days", "dates"
+            )

@@ -492,3 +492,91 @@ class TestFindSimilar:
         assert len(results) == 2
         # Balanced scoring means both may appear; verify limit works
         assert len(results) <= 2
+
+    def test_bulk_upsert_multiple_campgrounds(self, registry) -> None:
+        """bulk_upsert inserts multiple campgrounds and returns count."""
+        cgs = [
+            make_campground(facility_id="1", name="Camp 1"),
+            make_campground(facility_id="2", name="Camp 2"),
+            make_campground(facility_id="3", name="Camp 3"),
+        ]
+
+        count = registry.bulk_upsert(cgs)
+
+        assert count == 3
+        assert registry.get_by_facility_id("1") is not None
+        assert registry.get_by_facility_id("2") is not None
+        assert registry.get_by_facility_id("3") is not None
+
+    def test_bulk_upsert_updates_existing(self, registry) -> None:
+        """bulk_upsert updates existing campgrounds."""
+        cg1_v1 = make_campground(facility_id="1", name="Camp 1 Old")
+        registry.upsert(cg1_v1)
+
+        cg1_v2 = make_campground(facility_id="1", name="Camp 1 New")
+        cg2 = make_campground(facility_id="2", name="Camp 2")
+
+        count = registry.bulk_upsert([cg1_v2, cg2])
+
+        assert count == 2
+        # Verify the update took effect
+        retrieved = registry.get_by_facility_id("1")
+        assert retrieved is not None
+        assert retrieved.name == "Camp 1 New"
+
+    def test_update_vibe_persists(self, registry) -> None:
+        """update_vibe saves vibe and persists on retrieval."""
+        cg = make_campground(facility_id="1", name="Test")
+        inserted = registry.upsert(cg)
+
+        registry.update_vibe(inserted.id, "cozy-forest")
+
+        retrieved = registry.get_by_id(inserted.id)
+        assert retrieved is not None
+        assert retrieved.vibe == "cozy-forest"
+
+    def test_update_vibe_empty_campground_id(self, registry) -> None:
+        """update_vibe with non-existent id silently succeeds."""
+        # Should not raise an exception
+        registry.update_vibe(9999, "some-vibe")
+
+    def test_search_with_no_filters_returns_all_enabled(self, registry) -> None:
+        """search with no filters returns all enabled campgrounds."""
+        cg1 = make_campground(facility_id="1", name="Camp 1", enabled=True)
+        cg2 = make_campground(facility_id="2", name="Camp 2", enabled=True)
+        cg3 = make_campground(
+            facility_id="3", name="Camp 3", enabled=False
+        )
+
+        registry.upsert(cg1)
+        registry.upsert(cg2)
+        registry.upsert(cg3)
+
+        results = registry.search()
+
+        assert len(results) == 2
+        facility_ids = {r.facility_id for r in results}
+        assert facility_ids == {"1", "2"}
+
+    def test_search_disabled_campgrounds(self, registry) -> None:
+        """search with enabled_only=False includes disabled campgrounds."""
+        cg1 = make_campground(facility_id="1", name="Camp 1", enabled=False)
+        cg2 = make_campground(facility_id="2", name="Camp 2", enabled=True)
+
+        registry.upsert(cg1)
+        registry.upsert(cg2)
+
+        results = registry.search(enabled_only=False)
+
+        assert len(results) == 2
+        disabled = [r for r in results if not r.enabled]
+        assert len(disabled) == 1
+
+    def test_search_no_matches_returns_empty(self, registry) -> None:
+        """search with non-matching criteria returns empty list."""
+        cg = make_campground(facility_id="1", state="WA")
+        registry.upsert(cg)
+
+        results = registry.search(state="OR")
+
+        assert len(results) == 0

@@ -672,3 +672,47 @@ class TestGeocodeAddressTool:
         # Bellevue is roughly at 47.6°N, 122.2°W
         assert abs(data["lat"] - 47.6) < 0.5
         assert abs(data["lon"] + 122.2) < 0.5
+
+
+class TestExecuteTool:
+    """Tests for execute_tool dispatcher."""
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_handles_exception(self):
+        """execute_tool catches exceptions and returns error JSON."""
+        # Create mocks that will raise
+        mock_engine = AsyncMock()
+        mock_engine.search.side_effect = ValueError("Intentional error")
+        mock_registry = MagicMock()
+
+        result = await execute_tool(
+            name="search_campgrounds",
+            tool_input={
+                "state": "WA",
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-30",
+            },
+            engine=mock_engine,
+            registry=mock_registry,
+        )
+
+        data = json.loads(result)
+        assert "error" in data
+        assert "Intentional error" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_unknown_tool(self):
+        """execute_tool returns error for unknown tool name."""
+        mock_engine = MagicMock()
+        mock_registry = MagicMock()
+
+        result = await execute_tool(
+            name="unknown_tool_xyz",
+            tool_input={},
+            engine=mock_engine,
+            registry=mock_registry,
+        )
+
+        data = json.loads(result)
+        assert "error" in data
+        assert "Unknown tool" in data["error"]

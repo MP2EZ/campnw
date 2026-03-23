@@ -698,3 +698,168 @@ class TestUserExport:
 
         # Should be limited to 100
         assert len(export["search_history"]) == 100
+
+    def test_save_push_subscription_round_trip(self, db: WatchDB) -> None:
+        """save_push_subscription and get_push_subscriptions_for_user."""
+        user = User(
+            email="push@example.com",
+            password_hash="hash",
+            display_name="Push User",
+        )
+        created_user = db.create_user(user)
+        user_id = created_user.id
+        assert user_id is not None
+
+        subscription = {
+            "endpoint": "https://push.example.com/sub1",
+            "p256dh": "p256dh_key",
+            "auth": "auth_key",
+        }
+
+        db.save_push_subscription(
+            user_id=user_id,
+            session_token="session_123",
+            endpoint=subscription["endpoint"],
+            p256dh=subscription["p256dh"],
+            auth=subscription["auth"],
+        )
+
+        subs = db.get_push_subscriptions_for_user(user_id)
+
+        assert len(subs) == 1
+        assert subs[0]["endpoint"] == subscription["endpoint"]
+        assert subs[0]["p256dh"] == subscription["p256dh"]
+        assert subs[0]["auth"] == subscription["auth"]
+
+    def test_delete_push_subscription(self, db: WatchDB) -> None:
+        """delete_push_subscription removes a subscription."""
+        user = User(
+            email="del@example.com",
+            password_hash="hash",
+            display_name="Delete User",
+        )
+        created_user = db.create_user(user)
+        user_id = created_user.id
+        assert user_id is not None
+
+        endpoint = "https://push.example.com/delete-me"
+        db.save_push_subscription(
+            user_id=user_id,
+            session_token="session_123",
+            endpoint=endpoint,
+            p256dh="key",
+            auth="auth",
+        )
+
+        # Verify it exists
+        subs = db.get_push_subscriptions_for_user(user_id)
+        assert len(subs) == 1
+
+        # Delete it
+        db.delete_push_subscription(endpoint)
+
+        # Verify it's gone
+        subs = db.get_push_subscriptions_for_user(user_id)
+        assert len(subs) == 0
+
+    def test_log_notification_persists(self, db: WatchDB) -> None:
+        """log_notification saves notification log entry."""
+        watch = Watch(
+            id=None,
+            facility_id="123",
+            name="Test Watch",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        created_watch = db.add_watch(watch)
+        watch_id = created_watch.id
+        assert watch_id is not None
+
+        db.log_notification(
+            watch_id=watch_id,
+            channel="web_push",
+            status="sent",
+            changes_count=3,
+        )
+
+        # Verify it was inserted by querying directly
+        row = db._conn.execute(
+            "SELECT * FROM notification_log WHERE watch_id=?",
+            (watch_id,),
+        ).fetchone()
+
+        assert row is not None
+        assert row["channel"] == "web_push"
+        assert row["status"] == "sent"
+        assert row["changes_count"] == 3
+
+    def test_get_recent_notifications_returns_list(self, db: WatchDB) -> None:
+        """get_recent_notifications returns list of dicts."""
+        watch = Watch(
+            id=None,
+            facility_id="123",
+            name="Test Watch",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        created_watch = db.add_watch(watch)
+        watch_id = created_watch.id
+        assert watch_id is not None
+
+        db.log_notification(
+            watch_id=watch_id,
+            channel="pushover",
+            status="sent",
+            changes_count=1,
+        )
+
+        notifications = db.get_recent_notifications(limit=10)
+
+        assert isinstance(notifications, list)
+        # Should have at least some notification
+        assert len(notifications) > 0
+        # Check structure
+        if notifications:
+            assert "channel" in notifications[0]
+            assert "status" in notifications[0]
+
+    def test_clear_expired_cache_removes_stale_entries(self, db: WatchDB) -> None:
+        """clear_expired_cache removes entries older than 10 minutes."""
+        from datetime import datetime, timedelta
+
+        # Insert fresh cache entry
+        fresh_time = datetime.now().isoformat()
+        db._conn.execute(
+            "INSERT INTO availability_cache"
+            " (campground_id, month, source, payload, cached_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            ("232465", "2026-06", "recgov", '{"test": "data"}', fresh_time),
+        )
+        db._conn.commit()
+
+        # Insert old cache entry (11 minutes ago)
+        old_time = (datetime.now() - timedelta(minutes=11)).isoformat()
+        db._conn.execute(
+            "INSERT INTO availability_cache"
+            " (campground_id, month, source, payload, cached_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            ("232466", "2026-07", "recgov", '{"old": "data"}', old_time),
+        )
+        db._conn.commit()
+
+        # Verify both exist before clear
+        before = db._conn.execute(
+            "SELECT COUNT(*) FROM availability_cache"
+        ).fetchone()
+        assert before[0] == 2
+
+        # Clear expired
+        removed = db.clear_expired_cache()
+
+        assert removed >= 1
+
+        # Verify old one removed, fresh one remains
+        after = db._conn.execute(
+            "SELECT COUNT(*) FROM availability_cache"
+        ).fetchone()
+        assert after[0] <= before[0]

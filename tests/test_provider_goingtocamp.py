@@ -444,3 +444,140 @@ class TestCampsiteDataFields:
 
         campsite = result["1"]
         assert campsite.min_num_people == 0
+
+    @pytest.mark.asyncio
+    async def test_get_campground_locations_filters_by_campsite_category(
+        self,
+    ) -> None:
+        """get_campground_locations returns only locations with campsites."""
+        client = GoingToCampClient()
+
+        locations = [
+            {
+                "resourceLocationId": 1,
+                "resourceCategoryIds": [CAMPSITE_CATEGORY],
+            },
+            {
+                "resourceLocationId": 2,
+                "resourceCategoryIds": [GROUP_CATEGORY],
+            },
+            {
+                "resourceLocationId": 3,
+                "resourceCategoryIds": [
+                    CAMPSITE_CATEGORY,
+                    OVERFLOW_CATEGORY,
+                ],
+            },
+        ]
+
+        with patch.object(
+            client,
+            "get_locations",
+            return_value=locations,
+        ):
+            result = await client.get_campground_locations()
+
+            # Should filter to locations with CAMPSITE_CATEGORY
+            assert len(result) == 2
+            assert result[0]["resourceLocationId"] == 1
+            assert result[1]["resourceLocationId"] == 3
+
+    def test_collect_resources_at_leaf_depth_zero(self) -> None:
+        """_collect_resources at depth 0 (leaf) returns resources directly."""
+        client = GoingToCampClient()
+
+        # Mock _fetch_map_availability to return leaf-level data
+        leaf_data = {
+            "resourceAvailabilities": {
+                "100": [
+                    {"availability": 0},
+                    {"availability": 1},
+                ],
+                "101": [{"availability": 0}],
+            },
+            "mapLinkAvailabilities": {},  # No child maps
+        }
+
+        with patch.object(
+            client,
+            "_fetch_map_availability",
+            return_value=leaf_data,
+        ):
+            out: dict[str, list[dict]] = {}
+            client._collect_resources(
+                map_id=1,
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 30),
+                out=out,
+                depth=0,
+            )
+
+            assert "100" in out
+            assert "101" in out
+            assert len(out["100"]) == 2
+
+    def test_collect_resources_recurses_to_child_maps(self) -> None:
+        """_collect_resources recurses into child maps."""
+        client = GoingToCampClient()
+
+        parent_data = {
+            "resourceAvailabilities": {"100": [{"availability": 0}]},
+            "mapLinkAvailabilities": {"2": 1},  # Child map ID 2
+        }
+
+        child_data = {
+            "resourceAvailabilities": {"101": [{"availability": 1}]},
+            "mapLinkAvailabilities": {},  # No further children
+        }
+
+        def mock_fetch(map_id, start_date, end_date):
+            if map_id == 1:
+                return parent_data
+            elif map_id == 2:
+                return child_data
+            return {"resourceAvailabilities": {}, "mapLinkAvailabilities": {}}
+
+        with patch.object(
+            client,
+            "_fetch_map_availability",
+            side_effect=mock_fetch,
+        ):
+            out: dict[str, list[dict]] = {}
+            client._collect_resources(
+                map_id=1,
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 30),
+                out=out,
+                depth=0,
+            )
+
+            # Should have collected resources from both parent and child
+            assert "100" in out
+            assert "101" in out
+
+    def test_fetch_map_availability_parses_json(self) -> None:
+        """_fetch_map_availability parses JSON response."""
+        from unittest.mock import MagicMock
+
+        client = GoingToCampClient()
+
+        json_response = {
+            "resourceAvailabilities": {"1": []},
+            "mapLinkAvailabilities": {},
+        }
+
+        # Mock the session
+        mock_session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = json_response
+        mock_session.get.return_value = mock_resp
+        client._session = mock_session
+
+        result = client._fetch_map_availability(
+            map_id=1,
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+        )
+
+        assert result == json_response
+        assert "resourceAvailabilities" in result

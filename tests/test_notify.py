@@ -672,3 +672,104 @@ class TestContextualFormatting:
         assert "First change context" in formatted
         assert "Second change context" not in formatted
         assert "\U0001f525" in formatted  # Uses first change urgency (3)
+
+
+class TestNotifyPushover:
+    """Tests for Pushover notification dispatch."""
+
+    @pytest.mark.asyncio
+    async def test_notify_pushover_posts_to_api(self) -> None:
+        """notify_pushover sends POST to Pushover API with correct data."""
+        from pnw_campsites.monitor.notify import notify_pushover
+
+        watch = Watch(
+            id=1,
+            facility_id="232465",
+            name="Ohanapecosh",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        change = AvailabilityChange(
+            watch=watch,
+            site_id="123456",
+            site_name="A001",
+            loop="Loop A",
+            campsite_type="STANDARD",
+            new_dates=["2026-06-01"],
+            max_people=6,
+        )
+        result = PollResult(watch=watch, changes=[change])
+
+        with respx.mock:
+            route = respx.post(
+                "https://api.pushover.net/1/messages.json"
+            ).mock(return_value=httpx.Response(200, json={"status": 1}))
+
+            await notify_pushover(
+                user_key="user123",
+                api_token="token123",
+                result=result,
+            )
+
+            assert route.called
+            request = route.calls[0].request
+            assert b"token=token123" in request.content
+            assert b"user=user123" in request.content
+            assert b"Ohanapecosh" in request.content
+
+    @pytest.mark.asyncio
+    async def test_notify_pushover_includes_booking_url(self) -> None:
+        """notify_pushover includes the recreation.gov booking URL."""
+        from pnw_campsites.monitor.notify import notify_pushover
+
+        watch = Watch(
+            id=1,
+            facility_id="232465",
+            name="Test",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        result = PollResult(watch=watch, changes=[])
+
+        with respx.mock:
+            route = respx.post(
+                "https://api.pushover.net/1/messages.json"
+            ).mock(return_value=httpx.Response(200))
+
+            await notify_pushover(
+                user_key="user123",
+                api_token="token123",
+                result=result,
+            )
+
+            request = route.calls[0].request
+            # Should include recreation.gov booking URL
+            assert b"recreation.gov" in request.content
+
+
+class TestNotifyWebPush:
+    """Tests for web push notification dispatch."""
+
+    @pytest.mark.asyncio
+    async def test_notify_web_push_returns_early_without_key(
+        self, monkeypatch
+    ) -> None:
+        """notify_web_push returns early if VAPID_PRIVATE_KEY not set."""
+        from pnw_campsites.monitor.notify import notify_web_push
+
+        watch = Watch(
+            id=1,
+            facility_id="232465",
+            name="Test",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+        )
+        result = PollResult(watch=watch, changes=[])
+
+        subscription = {"endpoint": "https://example.com"}
+
+        # Ensure VAPID_PRIVATE_KEY is not set (defaults to empty string)
+        monkeypatch.delenv("VAPID_PRIVATE_KEY", raising=False)
+
+        # Should return without raising an exception
+        await notify_web_push(subscription, result)
