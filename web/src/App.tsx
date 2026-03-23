@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { searchCampsitesStream, saveSearchHistory, getSearchHistory } from "./api";
 import type {
   CampgroundResult, SearchParams, SearchResponse, Window, SearchHistoryEntry,
+  DiagnosisEvent,
 } from "./api";
 import { WatchPanel, WatchButton } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
@@ -763,6 +764,18 @@ export default function App() {
       (err) => {
         setError(err.message);
         setLoading(false);
+      },
+      (diagEvent: DiagnosisEvent) => {
+        setResults((prev) =>
+          prev
+            ? {
+                ...prev,
+                diagnosis: diagEvent.diagnosis ?? undefined,
+                date_suggestions: diagEvent.date_suggestions,
+                action_chips: diagEvent.action_chips,
+              }
+            : prev
+        );
       },
     );
   };

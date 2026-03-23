@@ -575,11 +575,57 @@ async def search_stream(
     )
 
     async def event_generator():
+        result_count = 0
         async for result in _engine.search_stream(query):
             data = _format_result(
                 result, booking_system or BookingSystem.RECGOV
             )
             yield f"data: {json.dumps(data.model_dump())}\n\n"
+            result_count += 1
+
+        # On zero results, run full search for diagnosis
+        if result_count == 0:
+            full = await _engine.search(query)
+            if full.diagnosis or full.date_suggestions:
+                meta = {
+                    "type": "diagnosis",
+                    "diagnosis": (
+                        {
+                            "registry_matches": full.diagnosis.registry_matches,
+                            "distance_filtered": full.diagnosis.distance_filtered,
+                            "checked_for_availability": (
+                                full.diagnosis.checked_for_availability
+                            ),
+                            "binding_constraint": (
+                                full.diagnosis.binding_constraint
+                            ),
+                            "explanation": full.diagnosis.explanation,
+                        }
+                        if full.diagnosis
+                        else None
+                    ),
+                    "date_suggestions": [
+                        {
+                            "start_date": s.start_date,
+                            "end_date": s.end_date,
+                            "campgrounds_with_availability": (
+                                s.campgrounds_with_availability
+                            ),
+                            "reason": s.reason,
+                        }
+                        for s in full.date_suggestions
+                    ],
+                    "action_chips": [
+                        {
+                            "action": c.action,
+                            "label": c.label,
+                            "params": c.params,
+                        }
+                        for c in full.action_chips
+                    ],
+                }
+                yield f"data: {json.dumps(meta)}\n\n"
+
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(
