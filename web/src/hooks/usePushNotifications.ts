@@ -42,8 +42,12 @@ export function usePushNotifications() {
     const auth = subscription.getKey("auth");
     if (!key || !auth) return false;
 
-    const p256dh = btoa(String.fromCharCode(...new Uint8Array(key)));
-    const authStr = btoa(String.fromCharCode(...new Uint8Array(auth)));
+    const p256dh = btoa(
+      String.fromCharCode(...new Uint8Array(key as ArrayBuffer)),
+    );
+    const authStr = btoa(
+      String.fromCharCode(...new Uint8Array(auth as ArrayBuffer)),
+    );
 
     await subscribePush(subscription.endpoint, p256dh, authStr);
     setSubscribed(true);
