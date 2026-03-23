@@ -10,8 +10,10 @@ import pnw_campsites.api as api_module
 from pnw_campsites.api import SESSION_COOKIE
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.search.engine import (
+    ActionChip,
     AvailableWindow,
     CampgroundResult,
+    SearchDiagnosis,
     SearchResults,
 )
 from tests.conftest import make_campground
@@ -627,3 +629,121 @@ class TestWatchCRUDEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["days_of_week"] == [4, 5, 6]
+
+
+class TestSearchDiagnosisResponse:
+    """Tests for v0.6 zero-result diagnosis in search response."""
+
+    def test_search_with_diagnosis_returns_diagnosis_object(
+        self, api_client: TestClient
+    ):
+        """GET /api/search returning zero results includes diagnosis."""
+        diagnosis = SearchDiagnosis(
+            registry_matches=0,
+            distance_filtered=0,
+            checked_for_availability=0,
+            all_unavailable=0,
+            binding_constraint="name",
+            explanation="No campgrounds matching the search.",
+        )
+        search_results = SearchResults(
+            query=None,
+            results=[],
+            campgrounds_checked=0,
+            campgrounds_with_availability=0,
+            diagnosis=diagnosis,
+        )
+        api_module._engine.search = AsyncMock(return_value=search_results)
+
+        response = api_client.get(
+            "/api/search?start_date=2026-06-01&end_date=2026-06-30"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "diagnosis" in data
+        assert data["diagnosis"] is not None
+        assert data["diagnosis"]["binding_constraint"] == "name"
+        assert data["diagnosis"]["registry_matches"] == 0
+
+    def test_search_with_availability_has_no_diagnosis(
+        self, api_client: TestClient
+    ):
+        """GET /api/search with results should have diagnosis=null."""
+        cg = make_campground()
+        window = AvailableWindow(
+            campsite_id="123",
+            site_name="A001",
+            loop="Loop A",
+            campsite_type="STANDARD",
+            start_date="2026-06-01",
+            end_date="2026-06-02",
+            nights=1,
+            max_people=6,
+        )
+        result = CampgroundResult(
+            campground=cg,
+            available_windows=[window],
+            total_available_sites=1,
+        )
+        search_results = SearchResults(
+            query=None,
+            results=[result],
+            campgrounds_checked=1,
+            campgrounds_with_availability=1,
+            diagnosis=None,
+        )
+        api_module._engine.search = AsyncMock(return_value=search_results)
+
+        response = api_client.get(
+            "/api/search?start_date=2026-06-01&end_date=2026-06-30"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["diagnosis"] is None
+
+    def test_search_diagnosis_includes_action_chips(
+        self, api_client: TestClient
+    ):
+        """GET /api/search includes action_chips for zero-result diagnosis."""
+        diagnosis = SearchDiagnosis(
+            registry_matches=10,
+            distance_filtered=6,
+            checked_for_availability=4,
+            all_unavailable=0,
+            binding_constraint="distance",
+            explanation="Most campgrounds exceeded drive limit.",
+        )
+        chips = [
+            ActionChip(
+                action="expand_radius",
+                label="Expand to 120 min",
+                params={"max_drive_minutes": 120},
+            ),
+            ActionChip(
+                action="expand_radius",
+                label="Remove drive limit",
+                params={"max_drive_minutes": None},
+            ),
+        ]
+        search_results = SearchResults(
+            query=None,
+            results=[],
+            campgrounds_checked=4,
+            campgrounds_with_availability=0,
+            diagnosis=diagnosis,
+            action_chips=chips,
+        )
+        api_module._engine.search = AsyncMock(return_value=search_results)
+
+        response = api_client.get(
+            "/api/search?start_date=2026-06-01&end_date=2026-06-30"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "action_chips" in data
+        assert len(data["action_chips"]) == 2
+        assert data["action_chips"][0]["action"] == "expand_radius"
+        assert data["action_chips"][0]["label"] == "Expand to 120 min"

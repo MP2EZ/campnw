@@ -272,12 +272,15 @@ Performance:
 - [x] Rate limiting (5 sessions/day per user)
 - [x] role="log" on transcript, aria-live for loading states
 
-### v0.8b "Trip Planner Polish"
-- [ ] Streaming chat responses (SSE from backend)
-- [ ] Itinerary card view (structured day-by-day cards)
-- [ ] Shareable itineraries (UUID link, 30-day expiry)
-- [ ] Persistent conversation history
-- [ ] Cost monitoring dashboard
+### v0.8b "Trip Planner Polish" — DONE
+- [x] Streaming chat responses (SSE — progressive text + tool events)
+- [x] Chat UI design pass (tighter bubbles, pill badges, sticky input)
+- [x] Prompt engineering (act-don't-ask, date inference, dense output)
+- [x] Conversation persistence (localStorage, survives nav + refresh)
+- [x] Clickable example prompts + "New conversation" button
+- [ ] Itinerary card view (structured day-by-day cards) — deferred
+- [ ] Shareable itineraries (UUID link, 30-day expiry) — deferred
+- [ ] Cost monitoring dashboard — deferred
 
 ### v0.9 "Predictions+"
 - [ ] Predictive availability display ("typically frees up X days before")
@@ -286,6 +289,16 @@ Performance:
 - [ ] Prediction confidence display with "still learning" cold start
 - [ ] Anomaly-based deal alerts (proactive alerts for statistically unusual availability)
 - [ ] "Why did I miss it?" post-mortem (explains missed cancellations, suggests tuning)
+
+### v0.95 "Monetization"
+- [ ] Free/Pro tier ($5/mo): 3 free watches @ 15-min, unlimited Pro @ 5-min
+- [ ] Payment provider integration (hosted checkout + customer portal + webhooks)
+- [ ] Subscription schema (status on users table, webhook-driven, never in JWT)
+- [ ] Watch limit enforcement (server-side, HTTP 402) + poll interval tiering
+- [ ] Trip planner gating (3 sessions/month free, 20 Pro, soft gate on 4th)
+- [ ] Pricing page, upgrade modal, billing settings, pro indicator
+- [ ] 30-day grandfather period for existing users with >3 watches
+- [ ] Webhook security (HMAC signature verification, idempotency, audit trail)
 
 ### v1.0 "campnw 1.0"
 - [ ] Map view (Leaflet, lazy-loaded, with list alternative for a11y)

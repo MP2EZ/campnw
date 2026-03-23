@@ -20,6 +20,7 @@ v0.7    [SHIPPED]  Oregon + Delight    — Vibe descriptions, contextual notific
 v0.8a   [SHIPPED]  Trip Planner MVP    — Conversational AI planner with tool calling
 v0.8b   ------->   Trip Planner Polish — Streaming, itinerary cards, shareable links
 v0.9    ------->   Predictions+        — Availability predictions, anomaly alerts, watch post-mortems
+v0.95   ------->   Monetization        — Free/Pro tiers, subscription billing, upgrade flows
 v1.0    ------->   campnw 1.0          — Map view, power user features, final polish
 ```
 
@@ -417,6 +418,107 @@ Data quality and sample size. Campgrounds polled infrequently will have unreliab
 
 ---
 
+## v0.95 "Monetization"
+
+### Theme
+campnw has real users, real infrastructure costs, and a feature set that justifies a paid tier. This milestone introduces a Free/Pro split, subscription billing, and upgrade surfaces that make the paid tier discoverable without being coercive. The goal is sustainability, not growth. Break-even requires 2-4 Pro subscribers at $5/month. Everything here is scoped to that reality.
+
+### Free vs Pro Tier
+
+| Feature | Free | Pro ($5/mo) |
+|---------|------|-------------|
+| Search (all providers, all filters) | Unlimited | Unlimited |
+| Calendar heat map, vibes, smart search | Yes | Yes |
+| Booking links, shareable search links | Yes | Yes |
+| Watches (simultaneous active) | 3 | Unlimited |
+| Watch polling interval | 15 min | 5 min |
+| Contextual AI notifications | Yes | Yes |
+| Trip planner sessions | 3/month | 20/month |
+| Availability predictions | Preview | Full (confidence bands, per-date) |
+| Anomaly-based deal alerts | No | Yes |
+| Data export + account deletion | Yes | Yes |
+
+**Core principle:** Search and basic monitoring are always free. Watches are the natural gate — they drive server cost (polling, notifications, AI enrichment). The free tier must be genuinely useful.
+
+### Features
+
+| Feature | Effort | Description |
+|---------|--------|-------------|
+| Payment provider integration | M | Hosted checkout + customer portal + webhook handler. No custom payment forms (SAQ A). Stripe or Lemon Squeezy (MoR — handles sales tax). |
+| Subscription schema + entitlements | S | `subscription_status` on users table, `subscription_events` audit table, webhook event dedup. Status written only by webhook handler. |
+| Watch limit enforcement | S | Server-side check on `POST /api/watches`. HTTP 402 with upgrade URL. 5-min polling for Pro via per-watch scheduler config. |
+| Trip planner gating | S | 3 sessions/month free, 20 Pro. Soft gate on 4th session (prompt, not block). |
+| Pricing page (`/pricing`) | M | Two-column Free vs Pro. Minimal — not a marketing page. "Built by one person. Pro keeps the servers running." |
+| Upgrade modal component | M | Reused across all trigger surfaces: watch limit, trip planner, anomaly alerts, settings. |
+| Billing settings section | S | Current plan, usage summary, manage/upgrade CTA. Cancel flow via hosted customer portal. |
+| Pro indicator | S | Subtle accent dot next to Account in header. No badge, no ribbon. |
+| Downgrade + grandfather logic | M | Watches paused (never deleted) on downgrade. 30-day grandfather for existing users with >3 watches. |
+| Webhook security + audit trail | S | Signature verification (HMAC-SHA256, raw bytes). Idempotency via event ID. `subscription_events` table with 12-month retention. |
+
+### Upgrade Trigger Points
+
+Four surfaces, no more:
+1. **Watch creation** (4th watch) — hard gate, inline upgrade prompt showing existing watches
+2. **Trip planner** (4th session/month) — soft gate, counter visible, prompt on attempt
+3. **Anomaly alerts** (v0.9 Pro-only) — soft prompt with upgrade CTA
+4. **Settings > Plan** — always visible, user-initiated
+
+**Never a trigger:** page load, search results, notification delivery, account creation, data export.
+
+### UX Design Decisions
+- Hosted checkout redirect (not embedded) — simplest, no PCI surface
+- Post-upgrade: return to product with brief success banner (4s auto-dismiss), not a celebration page
+- Paywall moments use warning-banner styling (amber, not red) — helpful, not punishing
+- Cancel confirmation: two-step inline confirm, "watches paused not deleted" language
+- Pro dot uses existing `--accent` color, spring entrance animation (400ms)
+- No new CSS tokens needed — reuses `--chip-bg`, `--warning-bg`, `--bg-card`
+
+### Security Requirements (P0)
+- Webhook signature verification with raw bytes — no exceptions
+- Persistent `JWT_SECRET` in Fly secrets (not auto-generated on restart)
+- Subscription status never in JWT — database is source of truth
+- Server-side entitlement check on every gated endpoint
+- Never log/store card data (hosted checkout eliminates PCI scope)
+- Rate limit login endpoint before launching billing
+- `past_due` retains Pro access during Stripe retry window (grace period)
+
+### Communication Strategy
+- 30-day grandfather period for existing users with >3 watches
+- One honest email: "I'm adding Pro at $5/mo. Free tier stays fully featured for search and 3 watches."
+- In-product banner during grandfather period showing watch count vs limit
+- No countdown urgency, no repeated emails, no dark patterns
+
+### Technical Work
+- Payment provider account setup + product/price creation
+- `billing.py` module: tier logic, API client (~100 lines)
+- DB migration: subscription columns on users, `subscription_events` table, webhook dedup
+- API endpoints: `POST /api/billing/checkout`, `POST /api/billing/portal`, `GET /api/billing/subscription`, `POST /api/billing/webhook`, `GET /api/entitlements`
+- Frontend: pricing page, upgrade modal, billing settings, entitlements context, pro indicator
+- Webhook handler: `checkout.session.completed`, `subscription.updated`, `subscription.deleted`, `invoice.payment_failed`
+- Watch enforcement: limit check in `POST /api/watches`, poll interval tiering in APScheduler
+- Tests: webhook handler, tier logic, gate enforcement, downgrade flow
+
+### Quality Baseline
+- Webhook endpoint validates signature on every request — never skip
+- All billing state transitions covered by tests
+- Upgrade modal keyboard-accessible (tab, enter/space, escape)
+- Cancel flow accessible and honest — no dark patterns
+- `subscription_events` audit table for dispute resolution
+
+### Dependencies
+- v0.8 Trip Planner (gated by Pro) — must be shipped
+- v0.9 Predictions+ (anomaly alerts are Pro-only) — ideally shipped; billing can launch before v0.9 if needed
+- v0.4 Accounts (billing is per-user) — shipped
+
+### Key Risk
+**R1: Nobody upgrades.** The free tier may be "good enough." Mitigation: start at $5/mo, monitor for 3 months. If MRR stays $0, revisit gate placement (lower free watch limit to 2, harder trip planner gate) or accept campnw as a free tool.
+
+**R2: Stripe/billing complexity delays launch.** Mitigation: use hosted checkout + customer portal aggressively. Zero custom billing UI. Entire payment surface hosted by the provider.
+
+**R3: Grandfather period churn.** Users with >3 watches who don't upgrade may disengage. Mitigation: transparent communication, 30-day window, watches paused not deleted.
+
+---
+
 ## v1.0 "campnw 1.0"
 
 ### Theme
@@ -467,6 +569,7 @@ Scope management. Map view alone is a significant UI effort. Hard rule: any P2 f
 | v0.5 | Push permission UX follows best practices (no on-load prompts). |
 | v0.6 | `aria-live` for date-shifting suggestions and zero-result diagnostics. Action chips keyboard-accessible. |
 | v0.8 | `role="log"` on transcript. Focus management on new messages. |
+| v0.95 | Upgrade modal keyboard-accessible. Pricing page passes Level AA contrast on both themes. Cancel flow accessible. |
 | v1.0 | Full WCAG 2.1 AA audit. CI expanded to block Level AA failures. |
 
 The principle: fix accessibility at build time, not in a batch audit. Color contrast and semantic HTML are cheapest when designed from the start.
@@ -479,6 +582,7 @@ The principle: fix accessibility at build time, not in a batch audit. Color cont
 | v0.4 | Watch schema privacy fix, `from_location` log redaction, auth provider decision, session migration plan. |
 | v0.5 | Anthropic spend limit configured (registry enrichment introduces SDK). |
 | v0.8 | Prompt injection hardening, hallucination guardrail (tool-call-only recommendations), session cost monitoring. |
+| v0.95 | Webhook HMAC signature verification (raw bytes). Persistent `JWT_SECRET` in Fly secrets. Subscription status server-side only (never in JWT). Rate limit login endpoint. Never log/store card data. Idempotent webhook processing. |
 
 ### Performance Baseline (per milestone)
 
@@ -496,12 +600,17 @@ The `availability_history` table ships silently in v0.5 alongside background pol
 The campground registry is a living dataset. Automated monthly re-seeding from RIDB and quarterly refresh from GoingToCamp should be set up in v0.5. Drift detection (campgrounds that consistently 404) should flag entries for manual review.
 
 ### Cost Model
-| Component | v0.2–v0.4 | v0.5+ | v1.0 |
-|-----------|-----------|-------|------|
+| Component | v0.2–v0.4 | v0.5–v0.9 | v0.95+ (with Pro revenue) |
+|-----------|-----------|-----------|--------------------------|
 | Fly.io | ~$0/mo (auto-sleep) | ~$5–7/mo (always-on for polling) | ~$7–15/mo |
-| Anthropic API | $0 | ~$1/mo (enrichment, notifications) | ~$10–30/mo (trip planner) |
-| Auth provider | $0 | $0 (free tier) | $0–25/mo (depends on MAU) |
-| Total | ~$0/mo | ~$5–7/mo | ~$17–70/mo |
+| Anthropic API | $0 | ~$1/mo (enrichment, notifications) | ~$10–30/mo (trip planner at scale) |
+| Payment provider fees | $0 | $0 | ~2.9–5% per txn ($0.45–0.75 per $5 sub) |
+| Auth provider | $0 (self-rolled PyJWT) | $0 | $0 |
+| Total cost | ~$0/mo | ~$6–8/mo | ~$17–50/mo |
+| Pro revenue (target) | $0 | $0 | $75–750/mo (15–150 subscribers) |
+| **Net** | ~$0/mo | -$6–8/mo | **+$25–700/mo** |
+
+Break-even requires 2-4 Pro subscribers at $5/mo. At 150 Pro subscribers, net ~$500-700/mo.
 
 Rate limiting on AI features is non-negotiable. Spend limits in the Anthropic account are a pre-ship requirement for v0.5 (when the SDK is first introduced).
 
@@ -577,3 +686,7 @@ Features brainstormed and scored during the March 2026 AI feature review. Each w
 | Predictions in v0.9 | Requires 6+ months of polling data. Starting data collection at v0.5 means 4+ months of history by v0.9. | v0.7 — rejected because insufficient data. v1.0 — acceptable fallback if data is thin. |
 | SQLite over PostgreSQL | Single-instance Fly.io deployment. SQLite is simpler, faster for read-heavy workloads, and sufficient at personal-project scale. | PostgreSQL — overkill for current scale. Turso/libsql — good option if multi-instance needed later. |
 | v0.2.1 hardening milestone | Security review found 3 HIGH issues and 8 Level A a11y failures in shipped code. Fixing these before adding more features prevents compounding the debt and is low-effort relative to impact. | Fold fixes into v0.3 — rejected because security issues (especially the cookie flag and CORS config) should not stay open while new users onboard. |
+| Monetization at v0.95, not v1.0 | Billing infrastructure needs trip planner (v0.8) and ideally predictions (v0.9) to exist before gating them. Shipping billing before v1.0 polish avoids coupling monetization with map view and keyboard shortcuts, which are independent. | v0.8 — rejected because trip planner should ship and stabilize before gating it. v1.0 — rejected because it delays revenue and couples with unrelated work. |
+| Watches as the primary gate | Watches drive the only meaningful per-user server cost (polling, notifications, AI enrichment). Search is free to serve. Gating watches at 3 free creates natural upgrade pressure at the exact moment a user is most engaged. | Gate search — rejected because it destroys the free tier's value and word-of-mouth growth. Gate trip planner only — rejected because it's a soft limit (3/month free is sufficient for most users). |
+| Hosted checkout + customer portal | Zero custom billing UI. Eliminates PCI scope (SAQ A), avoids building cancel flow, billing history, payment method management. At lifestyle-business scale, the ~2-5% fee premium is worth the engineering time saved. | Custom checkout form — rejected on PCI and complexity grounds. Custom cancel/billing UI — rejected because Stripe/LS customer portal is better than anything campnw would build. |
+| 30-day grandfather period | Existing users with >3 watches must not be surprised or punished. Trust is the product's most valuable asset at small scale. Pausing (not deleting) watches preserves data and makes reactivation seamless on upgrade. | No grandfather — rejected as trust violation. Grandfather indefinitely — rejected because it eliminates upgrade pressure for the most engaged users. |

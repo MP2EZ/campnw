@@ -2,7 +2,33 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Draft
+**Status:** Active — v0.8 in progress, v0.95 Monetization planned
+
+---
+
+## 0. Current State (as of March 2026)
+
+campnw is live at campnw.palouselabs.com. Versions 0.1 through 0.7 have shipped. The core product — multi-provider discovery, monitoring, accounts, background polling, and AI-powered delight features — is fully operational.
+
+**What's live:**
+- Search across Recreation.gov + WA State Parks with tag, drive time, and date filtering
+- Calendar heat map with keyboard accessibility
+- SSE streaming for progressive search results
+- Smart Search: zero-result diagnostics, ±7/14 day date shifting, alternative suggestions (v0.6)
+- Watch/alert system with server-side APScheduler polling (15-min cycles), web push (VAPID + service worker), ntfy, Pushover
+- PWA manifest for iOS web push support
+- User accounts (PyJWT + bcrypt, httpOnly cookies), saved home base, search history, privacy controls
+- Registry auto-enrichment via Claude Haiku (structured tag extraction from RIDB/GoingToCamp descriptions)
+- Site vibe descriptions — Haiku-generated character summaries on expanded campground cards (v0.7)
+- Contextual watch notifications — LLM-enriched alerts with urgency scoring 1-3 (v0.7)
+- Availability cache (10-min TTL) and availability history collection (feeds future predictions)
+- 346 tests (82% backend coverage), CI gating on deployment
+
+**Deferred from original plan:**
+- Oregon State Parks (ReserveAmerica has no availability API; Playwright required — tracked as stretch goal)
+- AI natural language search (assessed as low-impact relative to effort; indefinitely deferred in favor of Smart Search)
+
+**Next milestones:** v0.8 Trip Planner (conversational AI on `/plan`), v0.9 Predictions+, v0.95 Monetization (Free/Pro tiers, subscription billing).
 
 ---
 
@@ -128,17 +154,23 @@ campnw v1.0 is the answer to: "I want to go camping this summer — where should
 - Pre-filled links to GoingToCamp reservation pages
 - Link validation: verify links resolve before surfacing (avoid dead links from stale data)
 
-#### P0-5: Watch/Alert System
+#### P0-5: Watch/Alert System — SHIPPED (v0.2–v0.5)
 - Watch a campground + date range + criteria (nights, day pattern)
-- Polling every 15 minutes
-- Notification channels: push (web push), email, ntfy, Pushover
+- Server-side polling via APScheduler AsyncIOScheduler, 15-min cycles, embedded in FastAPI
+- Notification channels: web push (VAPID + service worker), ntfy, Pushover — per-watch channel preferences
+- PWA manifest for iOS web push support
 - Diff detection: alert only on newly-available sites (cancellations), not baseline
+- Contextual notification enrichment: LLM-generated alert copy with urgency scoring 1-3 (v0.7)
 - Watch management: list, pause, delete, edit criteria
-- Account-gated for persistent watches; anonymous watches with email verification acceptable
+- Watch CRUD API (POST/GET/DELETE/PATCH); web management UI with creation animation
+- Availability cache (10-min TTL, shared across all watches on the same campground)
+- Account-gated; anonymous watch → account migration on signup
+- Email channel: not yet implemented (tracked for post-v1.0)
 
-#### P0-6: Calendar Heat Map
+#### P0-6: Calendar Heat Map — SHIPPED (v0.3)
 - Availability density visualization across months
-- Color scale: red (none available) → yellow (some) → green (many sites open)
+- Single-hue scale (GitHub contribution graph layout)
+- Keyboard accessible; aria-labels per cell
 - Applies to both the search results aggregate view and individual campground view
 - Clickable: selecting a date block filters to that window
 
@@ -150,50 +182,109 @@ campnw v1.0 is the answer to: "I want to go camping this summer — where should
 
 ### P1 — High Priority (target v1.0, can slip to v1.1)
 
-#### P1-1: User Accounts
-- Auth: email/password + Google OAuth
-- Saved home base and preferences
-- Persistent watch history
-- Search history and saved searches
-- Privacy-first: minimal data collection, clear data export/deletion
+#### P1-1: User Accounts — SHIPPED (v0.4)
+- Auth: email/password with PyJWT + bcrypt, httpOnly cookie sessions (no external auth provider)
+- Google OAuth: not implemented (deferred; PyJWT is sufficient for current scale)
+- Saved home base and default preferences
+- Persistent watch ownership; anonymous watch migration on signup/login
+- Search history as quick-fill chips in the search form
+- Privacy controls: data export (JSON), account deletion
+- Watch UNIQUE constraint scoped per-user (app-level duplicate check)
 
-#### P1-2: AI Natural Language Search
-**How it works:** User types a free-text query instead of filling form fields. Claude (Anthropic API) parses intent and extracts structured search parameters. Extracted parameters are shown to user for confirmation before search executes.
+#### P1-2: Smart Search — SHIPPED (v0.6)
+**What it is:** Intelligent zero-result handling and proactive date flexibility, replacing the form-friction problem that AI NL search was originally scoped to solve.
 
-**Examples:**
-- "Lakeside camping near Bellingham for 3 nights in July, dog-friendly" → state:WA, tags:[lakeside, pet-friendly], nights:3, date_range:July, base:Bellingham
-- "Something not too far from Seattle this weekend with a beach" → state:WA, tags:[beach], dates:this-weekend, base:Seattle
+**Components shipped:**
+- Smart date shifting: ±7/14 day probes when no results found; inline suggestions with result counts
+- Zero-result diagnostics: binding constraint analysis identifies why nothing matched (source filter, date window, tag combination, distance)
+- SmartZeroState component: replaces generic no-results with actionable refinement chips
+- Lightweight alternative suggestions: Jaccard tag similarity + proximity scoring to surface nearby matches
 
-**Data used:** Query text, registry metadata, user's home base preference.
-**Value delivered:** Reduces search form friction to near-zero. Especially useful for first-time users who don't know the tag taxonomy.
-**Guardrails:** Always show extracted parameters before search. User can correct misinterpretations. Never book on behalf of user.
+**Value delivered:** Users who get zero results now understand why and have a one-tap path to refine. Reduces dead-end search sessions without requiring an LLM round-trip.
 
-#### P1-3: Predictive Availability ("When will it open?")
+---
+
+#### P2-backlog: AI Natural Language Search (DEFERRED)
+*Originally P1-2. Demoted after roadmap assessment: low marginal impact relative to Smart Search, which solves the same form-friction problem more reliably and without LLM latency. The structured search form with tag chips and date presets (including "This wknd", "Next wknd", "Next 30 days", multi-select month buttons) covers the vast majority of query patterns. Revisit if user research surfaces strong demand for freeform input.*
+
+#### P1-3: Registry Auto-Enrichment — SHIPPED (v0.5)
+- Claude Haiku extracts structured tags from RIDB and GoingToCamp campground descriptions
+- CLI command (`enrich`) for manual runs; ~$0.10 for a full registry pass
+- Tags validated against defined taxonomy before writing to SQLite
+- 453 of 685 campgrounds currently have enriched tags
+- Automated scheduled refresh: not yet implemented (deferred to post-v1.0)
+
+#### P1-4: Site Vibe Descriptions — SHIPPED (v0.7)
+- Haiku-generated character summaries surfaced in expanded campground cards
+- Describes the feel of a site (old-growth quiet, exposed ridge, family-busy, etc.)
+- Generated at enrichment time, stored in registry; not a real-time API call
+
+#### P1-5: Predictive Availability ("When will it open?") — IN PROGRESS (data collection)
 
 **How it works:** For fully-booked campgrounds, campnw analyzes historical availability patterns from its own polling data. The model identifies: typical cancellation windows (e.g., "sites at Sol Duc tend to open up 14-21 days before the date"), release patterns (6-month advance booking window for rec.gov), and high-demand periods.
 
-**Data used:** campnw's own availability polling history (SQLite snapshots), booking window metadata from RIDB, known rec.gov release schedules.
+**Data used:** campnw's own availability polling history (SQLite snapshots, collecting since v0.5), booking window metadata from RIDB, known rec.gov release schedules.
 **Value delivered:** Tells users whether to watch now or come back later. Reduces false hope on sold-out dates.
 **Display:** Inline with unavailable results: "Sites here typically release 6 months in advance. Your target dates (Aug 12-14) should become bookable around Feb 12. We'll remind you."
+**Data collection status:** Availability history has been collecting since v0.5 (launched ~late 2025). Sufficient data for early predictions expected by mid-2026. Cold start mitigation: fall back to rec.gov's published booking window until campground-specific history is sufficient.
 **Limitation (be honest):** Pattern data is campnw's own. Early on, limited history means lower confidence. Show confidence level.
 
-#### P1-4: Trip Planner (AI)
+#### P1-6: Trip Planner (AI) — IN DEVELOPMENT (v0.8)
 **How it works:** Conversational interface powered by Claude. User describes a trip in natural language. Assistant asks clarifying questions (group size, experience level, amenities needed), then generates a multi-stop itinerary with campground recommendations, drive times between stops, and availability checks for each stop.
 
 **Data used:** Registry metadata, real-time availability, drive time matrix, user preferences (if logged in).
 **Value delivered:** Replaces 2 hours of research with a 5-minute conversation. Especially useful for first-time campers or trips to unfamiliar regions.
 **Scope constraint:** Itinerary only, not activity planning or gear lists (that's scope creep). Clear handoff to booking links.
 
-#### P1-5: Shareable Trip Links
-- Shareable URL for a search result set or a saved itinerary
-- Link encodes search parameters and snapshot of results at share time
+#### P1-7: Shareable Trip Links — PARTIAL (search links shipped v0.3)
+- Shareable search links via URL query string encoding: SHIPPED (v0.3)
+- Shareable saved itineraries (trip planner output): planned for v0.8
 - No account required to view a shared link
 - Expiry: 30 days
 
-#### P1-6: Oregon State Parks Integration
-- ReserveAmerica platform via Playwright headless scraping
-- 200+ OR state parks campgrounds added to registry
-- Blocks with WA State Parks to complete the PNW picture
+#### P1-8: Oregon State Parks Integration — DEFERRED
+- ReserveAmerica has no public availability API; Playwright headless scraping is the only path
+- Deferred indefinitely due to fragility of scraping-based approaches and maintenance burden
+- Will be revisited if ReserveAmerica exposes an API or a reliable community solution emerges
+- OR federal campgrounds (rec.gov) are covered; the gap is OR State Parks specifically
+
+#### P1-9: Subscription Billing & Pro Tier — PLANNED (v0.95)
+
+**Goal:** Make campnw self-sustaining. Break-even requires 2-4 Pro subscribers at $5/month. This is a sustainability milestone, not a growth milestone.
+
+**Tier structure:**
+
+| Feature | Free | Pro ($5/mo) |
+|---|---|---|
+| Search, heat map, vibe descriptions, Smart Search | Unlimited | Unlimited |
+| Shareable links, booking link passthrough | Yes | Yes |
+| Simultaneous active watches | 3 | Unlimited |
+| Watch polling interval | 15 min | 5 min |
+| Contextual AI notifications (urgency scoring) | Yes | Yes |
+| Anomaly alerts (v0.9) | No | Yes |
+| Availability predictions (v0.9) | Preview only | Full |
+| Trip planner sessions (v0.8) | 3/month | 20/month |
+| Search history | 10 searches | 30 searches |
+| Data export, account deletion | Yes | Yes |
+
+**Core design constraints:**
+- Search and availability checking are always free — core discovery is never gated
+- Watches are the natural billing gate: background polling and AI enrichment are where the server cost lives
+- Watches beyond the free limit are paused on downgrade, never deleted
+- Existing users get a 30-day grandfather period at launch before the limit kicks in
+
+**Billing infrastructure:**
+- Stripe Checkout for payments (hosted — no PCI scope on campnw)
+- Stripe Customer Portal for subscription management (cancel, update card, billing history)
+- Four webhook events cover all state transitions: `customer.subscription.updated`, `.deleted`, `invoice.payment_failed`, `invoice.payment_succeeded`
+- `subscription_status` is always set by server-side webhook, never by client redirect
+- Webhook endpoint validates `Stripe-Signature` header; rejects unverified requests with 400
+
+**Upgrade trigger surfaces:** 4th watch creation attempt (hard gate, inline upgrade modal), 4th trip planner session of the month (soft gate), anomaly alerts panel (soft prompt), Settings > Plan (passive, always visible). Never on page load or during search.
+
+**Pricing page:** `/pricing` — static, linked from footer and settings. No separate marketing site required.
+
+**Completion criteria:** Stripe Checkout + webhooks integrated and tested; watch limit enforced server-side (HTTP 402 with `watch_limit_reached` body); 5-min polling active for Pro; upgrade modal reused across all trigger surfaces; Settings > Plan page; grandfather period banner; all billing state transitions covered by tests.
 
 ### P2 — Nice to Have (post-v1.0)
 
@@ -237,25 +328,44 @@ campnw v1.0 is the answer to: "I want to go camping this summer — where should
 
 ## 5. AI Feature Specifications (Detailed)
 
-### AI-1: Natural Language Search Parser
-**Model:** Claude (claude-3-5-haiku for latency, claude-opus for complex queries)
-**Input:** Free-text query string
-**Output:** Structured JSON matching search form schema: `{state, tags[], nights, date_range, base_city, nights_min, source, name_contains}`
-**Prompt strategy:** System prompt defines the registry's tag taxonomy, available states, base cities, and date preset vocabulary. Few-shot examples cover common patterns.
-**Fallback:** If confidence is low (missing required fields), ask one clarifying question rather than guessing.
-**Latency budget:** 800ms P95. Show a loading state. Do not block search form — user can edit parsed params before submitting.
-**Cost estimate:** ~$0.001 per query at haiku pricing. Acceptable at scale.
+### AI-1: Shipped AI Features
 
-### AI-2: Predictive Availability Model
+#### AI-1a: Registry Auto-Enrichment — SHIPPED (v0.5)
+**Model:** Claude Haiku (claude-haiku — fast, cheap, sufficient for structured extraction)
+**Input:** Campground name + description text from RIDB or GoingToCamp
+**Output:** Structured tag array validated against the registry taxonomy (lakeside, riverside, beach, old-growth, pet-friendly, etc.)
+**Usage pattern:** CLI-triggered (`enrich` command), not real-time. Operator runs as needed (~$0.10/full registry pass). Results written to SQLite.
+**Cost:** ~$0.10 per full registry run. Not on the hot path; cost is not a concern.
+
+#### AI-1b: Site Vibe Descriptions — SHIPPED (v0.7)
+**Model:** Claude Haiku
+**Input:** Registry metadata (tags, name, description, park context)
+**Output:** 1-2 sentence character summary surfaced in expanded campground cards ("Exposed ridge site with panoramic Cascades views — stunning but windswept; bring extra stakes")
+**Usage pattern:** Generated at enrichment time, stored in registry. Not a real-time call.
+**Guardrail:** Descriptions are clearly AI-generated impressions, not authoritative campground facts.
+
+#### AI-1c: Contextual Watch Notifications — SHIPPED (v0.7)
+**Model:** Claude Haiku
+**Input:** Watch criteria (campground, dates, nights), availability diff (what just opened), campground vibe/tags
+**Output:** LLM-enriched notification copy with urgency score (1=low, 2=medium, 3=high)
+**Usage pattern:** Called during watch poll diff when new availability is detected. Enriches the notification before dispatch.
+**Urgency scoring drives:** notification priority, "act fast" vs. "take your time" framing in push body
+
+---
+
+### AI-1-deferred: Natural Language Search Parser — DEFERRED
+*Originally the primary AI feature. Assessed as low-impact after v0.6 Smart Search shipped. The structured form with tag chips, date presets (including "This wknd", "Next wknd", "Next 30 days"), and Smart Zero State covers the form-friction problem more reliably without LLM latency. Revisit if user research resurfaces clear demand.*
+
+### AI-2: Predictive Availability Model — PLANNED (v0.9)
 **Model:** Statistical (not LLM). Time-series analysis over campnw's availability polling data.
-**Data schema:** `{campground_id, site_id, date, status, observed_at}` — every poll result stored.
+**Data schema:** `{campground_id, site_id, date, status, observed_at}` — collected since v0.5.
 **Analysis:** For each campground + date combination, compute: median days before date that at least one cancellation appears, standard deviation, confidence interval based on sample size.
 **Output:** "Sites here typically free up X-Y days before the date" with a confidence band.
-**Cold start problem:** New campgrounds have no history. Fallback to rec.gov's published booking window (6 months in advance) plus a "we're still learning this campground" notice.
+**Cold start problem:** New campgrounds have no history. Fallback to rec.gov's published booking window (6 months in advance) plus a "we're still learning this campground" notice. Data has been collecting since v0.5 — early predictions feasible by mid-2026.
 **Improvement trajectory:** Every 90 days of polling data meaningfully improves prediction quality. After 1 year, predictions are genuinely useful.
 
-### AI-3: Trip Planner Assistant
-**Model:** Claude (claude-sonnet for quality, with function calling)
+### AI-3: Trip Planner Assistant — IN DEVELOPMENT (v0.8)
+**Model:** Claude Sonnet (claude-sonnet-4-5 or later, with function calling)
 **Tools available to the model:**
 - `search_campgrounds(params)` — calls campnw's own search engine
 - `check_availability(campground_id, dates)` — real-time check
@@ -274,12 +384,13 @@ campnw v1.0 is the answer to: "I want to go camping this summer — where should
 - Always show the "as of [timestamp]" caveat on availability data
 - Do not recommend sites outside the registry (no hallucinated campgrounds)
 
-### AI-4: Smart Notification Scoring
-**Model:** Logistic regression over campnw's diff history (not LLM).
+### AI-4: Smart Notification Scoring — PARTIAL (lightweight version shipped v0.7)
+**Current state (v0.7):** Contextual notifications use Claude Haiku to generate urgency scores (1-3) and enriched copy per alert. This is the LLM-based precursor to a statistical model.
+**Future state (v0.9):** Logistic regression over campnw's diff history.
 **Features:** Time-to-date (how far out is the booking), day of week site opened, campground popularity score, prior availability duration for this site.
 **Output:** P(site still available in 30 min), P(still available in 2 hours)
 **Display in notification:** "Usually books within [timeframe]" or "Typically stays open for hours"
-**Training:** Requires 6+ months of diff data. Ship as manual rule-based approximation first, transition to model when data exists.
+**Training:** Requires 6+ months of diff data. Currently using LLM heuristics; transition to statistical model when data volume supports it.
 
 ---
 
@@ -307,26 +418,55 @@ Each result card presents (in order): campground name + park system icon, drive 
 
 The product should never overstate confidence. "Usually books within 30 minutes" is better than "BOOK NOW!" Availability data has a timestamp. Drive times are approximate and labeled as such. AI predictions show confidence levels. FCFS sites are clearly marked as non-bookable online.
 
+### 6.4 Honest Monetization
+
+Upgrade prompts appear at the moment of genuine value, not on page load, not during search, and not on notification receipt. The free tier is a complete product — it should be presented as such, not framed as "limited." Watches beyond the free limit are paused on downgrade, never silently deleted. No countdown timers, no dark-pattern cancellation flows, no repeated upsell emails. The pricing page says what the product costs and why.
+
 ---
 
 ## 7. Technical Architecture Considerations
 
-### Current State (working)
+### Current State (deployed at campnw.palouselabs.com)
 - FastAPI backend + SQLite + React/Vite/TypeScript
-- Deployed on Fly.io (Docker), Cloudflare DNS
-- GitHub Actions CI/CD
+- Deployed on Fly.io (Docker, min_machines_running=1, ~$2/mo always-on)
+- GitHub Actions CI/CD with test gating (346 tests, 82% backend coverage, 70% CI threshold)
+- Cloudflare DNS, HTTPS everywhere
 
-### v1.0 Architecture Additions
+**Auth:** PyJWT + bcrypt, httpOnly cookie sessions. Self-rolled — no external auth provider. Sufficient for current scale and avoids vendor dependency. Google OAuth not implemented; deferred.
 
-**Accounts + Auth:** Add PostgreSQL (or keep SQLite with libsql/Turso for multi-instance compatibility) for user data. Use a managed auth provider (Clerk or Auth.js) to avoid rolling auth from scratch.
+**Database:** SQLite for everything — registry, availability cache (10-min TTL), watch state, user accounts, availability history. No PostgreSQL. SQLite handles current single-instance Fly.io deployment cleanly. Revisit if multi-instance scaling becomes necessary.
 
-**Background Job Queue:** The polling system currently relies on external cron. v1.0 needs a proper job queue — APScheduler embedded in FastAPI, or a lightweight queue like Dramatiq + Redis. Required for: watch polling, AI pre-computation jobs, registry refresh.
+**Background Jobs:** APScheduler AsyncIOScheduler embedded in FastAPI. Handles watch polling (15-min cycles) and AI enrichment jobs. Running in production since v0.5. No external queue dependency (no Redis, no Dramatiq).
 
-**AI API Integration:** Anthropic Python SDK. Natural language search and trip planner call the API synchronously (acceptable latency). Predictive model is pre-computed and cached, not real-time.
+**Push Notifications:** Web Push API (VAPID) + service worker. Deployed and working on desktop Chrome/Firefox, Android. PWA manifest enables iOS Safari web push. VAPID keys stored in environment. Subscription objects stored in user record in SQLite.
 
-**Push Notifications:** Web Push API via a service worker. Requires HTTPS (already satisfied via Cloudflare). User subscribes in-browser; subscription stored in user record.
+**Availability History:** Silent data collection since v0.5. Schema: `{campground_id, site_id, date, status, observed_at}`. Powers future predictive availability (v0.9).
 
-**Registry Refresh:** Automated monthly re-seed from RIDB for rec.gov campgrounds. GoingToCamp parks refresh quarterly. Drift detection: if a campground 404s consistently, flag for manual review.
+**AI Integration:** Anthropic Python SDK. Haiku for enrichment, vibe generation, and contextual notifications. Sonnet planned for Trip Planner (v0.8) with function calling.
+
+**SSE Streaming:** Progressive search results via Server-Sent Events (v0.3). Campgrounds stream in as providers respond; first results appear quickly, slow providers fill in after.
+
+### v0.95 Billing Infrastructure
+
+**Payment provider:** Stripe (Checkout + Billing Webhooks + Customer Portal). Lemon Squeezy is an acceptable alternative if Stripe's MoR model creates tax complexity — decision deferred to implementation.
+
+**Schema additions:**
+- `users` table: `stripe_customer_id` (nullable text), `subscription_status` (enum: free | pro | pro_grace | pro_cancelled), `subscription_expires_at` (nullable datetime), `pro_since` (nullable datetime)
+- New `subscription_events` table: append-only audit log of all webhook-driven state transitions (event type, stripe event id, timestamp, resulting status). Provides a complete audit trail without storing payment data.
+
+**Webhook endpoint:** `POST /api/billing/webhook` — validates `Stripe-Signature` HMAC before processing. Handles `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`, `invoice.payment_succeeded`. Idempotent: safe to replay. All subscription state changes flow through this endpoint only; client-side redirects do not set subscription status.
+
+**Entitlement checking:** Always server-side. The `subscription_status` from the database is the source of truth. Never encoded in JWT or derived from client-supplied parameters. Watch creation (`POST /api/watches`) checks entitlement and returns `HTTP 402 Payment Required` with a machine-readable body when the limit is reached.
+
+**No financial data in SQLite:** campnw stores only `stripe_customer_id` and subscription status enum. All payment details, card data, and billing history live in Stripe.
+
+### v1.0 Remaining Architecture Work
+
+**Trip Planner (v0.8):** Conversational interface on `/plan` route. Claude Sonnet + function calling tools: `search_campgrounds`, `check_availability`, `get_drive_time`, `get_campground_detail`. Shareable itinerary links (UUID, 30-day expiry). Rate limiting on free tier (3 planner sessions/month, enforced server-side).
+
+**Predictive Availability (v0.9):** Statistical model over collected availability history. Pre-computed, cached, not real-time. Cold start handled by rec.gov booking window fallback.
+
+**Registry Refresh:** Automated monthly RIDB re-seed and quarterly GoingToCamp refresh not yet implemented. Currently manual. Drift detection (404 on campground) is handled gracefully in providers.
 
 **Performance Targets:**
 - Search P95: under 4 seconds (parallel provider queries, registry filter first)
@@ -334,10 +474,12 @@ The product should never overstate confidence. "Usually books within 30 minutes"
 - Watch poll cycle: complete all active watches within 10 minutes per cycle
 - API P95: under 200ms for non-availability endpoints (registry queries, user data)
 
-### What to Defer
-- Oregon ReserveAmerica (Playwright scraping is fragile — phase it in carefully)
-- Native mobile apps
-- Own payments or booking intermediation (legal and operational complexity not worth it)
+### Confirmed Deferrals
+- Oregon ReserveAmerica: no API, Playwright scraping too fragile
+- Native mobile apps: PWA covers mobile use case adequately
+- PostgreSQL: SQLite is the confirmed long-term choice at current scale
+- External auth providers (Clerk, Auth.js): self-rolled JWT is sufficient
+- Own payments or booking intermediation: legal and operational complexity not worth it
 
 ---
 
@@ -363,10 +505,19 @@ The product should never overstate confidence. "Usually books within 30 minutes"
 - Watch-to-rewatch rate (users who successfully book and come back for the next trip)
 
 ### AI Features
-- NL search adoption rate (% of searches using NL input vs. form)
-- NL parse accuracy (user edits extracted params < 20% of the time)
-- Trip planner session completion rate
-- Predictive availability feature engagement (impressions → hovers on prediction tooltip)
+- Smart Search refinement rate (% of zero-result sessions that use a suggested chip to find results)
+- Trip planner session completion rate (target: v0.8)
+- Predictive availability feature engagement (impressions → hovers on prediction tooltip) (target: v0.9)
+- Watch notification urgency score distribution (% high/medium/low urgency alerts)
+- Notification-to-booking click rate segmented by urgency score (validates LLM scoring quality)
+
+### Monetization (v0.95)
+- **MRR target:** $10/month (2 Pro subscribers) = break-even; $20/month = comfortable. These are low bars — sustainable, not ambitious.
+- **Pro conversion rate:** 2–5% of monthly active users. Low bar given free-tier friction is intentionally minimal.
+- **Churn rate:** Track monthly. Sustained >20% monthly churn indicates Pro value is not landing.
+- **Watch limit hit rate:** % of active free users who reach 3 watches. Validates that the gate is placed correctly — too high means the limit is too loose, too low means it never creates upgrade pressure.
+- **Upgrade-trigger-to-conversion rate:** Target >15% of users who see the upgrade modal and subscribe.
+- **Grandfather-period behavior:** % of affected users (>3 watches) who upgrade vs. trim to 3 vs. disengage. Informs whether the limit is calibrated correctly.
 
 ### Quality
 - Provider uptime (rec.gov availability endpoint, GoingToCamp endpoint) — alert if either drops below 95%
@@ -410,9 +561,21 @@ The product should never overstate confidence. "Usually books within 30 minutes"
 **Mitigation:** campnw is a discovery and monitoring tool, not a booking intermediary. All transactions happen on official platforms. Respect rate limits. Not materially different from what camply, Campnab, and Campflare do.
 
 ### R5: AI Accuracy and Trust (MEDIUM)
-**Risk:** NL search parser misinterprets queries and surfaces wrong results.
-**Mitigation:** Always show extracted parameters before search executes. Make it easy to correct. Log misparse rate; improve prompts. Never execute AI-suggested actions autonomously.
+**Risk:** AI-powered features (trip planner, contextual notifications, vibe descriptions) generate inaccurate or misleading output that damages user trust.
+**Mitigation:** Trip planner never commits to availability that isn't real-time verified; always shows "as of [timestamp]" caveat. Vibe descriptions are labeled as AI-generated impressions. Notification enrichment affects copy only — the underlying availability diff is always ground truth. Never execute AI-suggested actions autonomously. Log cases where users click "watch" after a notification to detect false urgency patterns.
 
-### R6: Cold Start — Thin Availability History (MEDIUM)
+### R6: Cold Start — Thin Availability History (LOW-MEDIUM, actively mitigated)
 **Risk:** Predictive availability features need months of polling data to be meaningful.
-**Mitigation:** Don't ship predictive availability in v1.0. Ship the data collection infrastructure now. Launch predictions in v1.1 when 90+ days of data exists.
+**Mitigation:** Availability history collection has been running since v0.5 (late 2025). By mid-2026, sufficient data exists for early predictions on high-watch campgrounds. Cold start fallback: rec.gov's published 6-month booking window + "we're still learning this campground" notice. Predictions ship in v0.9, not v1.0, giving additional runway for data accumulation.
+
+### R7: Free Tier Is Too Good — Nobody Upgrades (MEDIUM)
+**Risk:** The free tier covers most users' real needs well enough that Pro offers insufficient pull. MRR stays at $0.
+**Mitigation:** Watch the watch-limit hit rate. If free users rarely reach 3 watches, the gate is too loose — lower to 2, or move the trip planner gate earlier. If MRR is $0 after 3 months, revisit the tier definition before investing further in billing infrastructure. Accepting that campnw remains a free personal tool is a valid outcome.
+
+### R8: Grandfather Period Causes Churn (LOW)
+**Risk:** Users with more than 3 active watches who don't want to pay may disengage entirely rather than trim or upgrade.
+**Mitigation:** 30-day grandfather period is non-negotiable — breaking existing setups without notice is a trust violation. Honest, plain-text communication. Don't over-index on retaining users who won't pay $5/month for a tool they're actively using.
+
+### R9: Stripe Integration Complexity Delays Launch (LOW-MEDIUM)
+**Risk:** Webhooks + Customer Portal + idempotency + SQLite state sync is real backend work that can slip.
+**Mitigation:** Use Stripe Checkout and Customer Portal aggressively — build no custom billing UI. The entire payment surface is hosted by Stripe. The campnw backend only handles webhook state sync and entitlement checking. Scope is bounded.
