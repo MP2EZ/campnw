@@ -842,9 +842,11 @@ export default function App() {
   }, [darkMode]);
 
   const handleSearch = async (params: SearchParams, mode: SearchMode) => {
-    // Derive source from sourceFilter — only send if one is deselected
-    const sourceParam =
-      sourceFilter.size === 1 ? Array.from(sourceFilter)[0] : undefined;
+    // Use source from params if explicitly set (e.g., from source toggle),
+    // otherwise derive from current sourceFilter state
+    const sourceParam = params.source !== undefined
+      ? params.source
+      : (sourceFilter.size === 1 ? Array.from(sourceFilter)[0] : undefined);
     const searchParams = { ...params, source: sourceParam };
 
     lastSearchParams.current = params;
