@@ -1015,7 +1015,7 @@ export default function App() {
         <div className="results">
           <div className="results-header">
             <p className="results-summary">
-              Checked {results.campgrounds_checked} campgrounds —{" "}
+              Checked {Math.min(results.campgrounds_checked, maxResults)} campgrounds —{" "}
               {filteredResults.campgrounds_with_availability} with availability
             </p>
             <div className="view-toggle">

@@ -346,23 +346,22 @@ class SearchEngine:
         else:
             distance_filtered = 0
 
-        # Limit per source to avoid one provider dominating
+        # Limit per source — each source gets max_campgrounds slots so
+        # the client-side source filter always has a full set to show.
+        # When a specific booking_system is requested, just cap globally.
         if not query.booking_system:
             by_source: dict[str, list] = {}
             for cg in campgrounds:
                 by_source.setdefault(cg.booking_system.value, []).append(cg)
-            n_sources = len(by_source)
-            per_source = (
-                max(1, query.max_campgrounds // n_sources)
-                if n_sources else query.max_campgrounds
-            )
             campgrounds = []
             for source_cgs in by_source.values():
-                campgrounds.extend(source_cgs[:per_source])
+                campgrounds.extend(source_cgs[: query.max_campgrounds])
             # Re-sort by distance after merging
             if from_coords:
                 campgrounds.sort(
-                    key=lambda cg: drive_times.get(cg.facility_id, 9999)
+                    key=lambda cg: drive_times.get(
+                        cg.facility_id, 9999,
+                    )
                 )
         else:
             campgrounds = campgrounds[: query.max_campgrounds]
@@ -723,7 +722,27 @@ class SearchEngine:
                 key=lambda cg: drive_times.get(cg.facility_id, 9999)
             )
 
-        campgrounds = campgrounds[: query.max_campgrounds]
+        # Limit per source (same logic as search())
+        if not query.booking_system:
+            by_src: dict[str, list] = {}
+            for cg in campgrounds:
+                by_src.setdefault(
+                    cg.booking_system.value, [],
+                ).append(cg)
+            campgrounds = []
+            for src_cgs in by_src.values():
+                campgrounds.extend(
+                    src_cgs[: query.max_campgrounds]
+                )
+            if from_coords:
+                campgrounds.sort(
+                    key=lambda cg: drive_times.get(
+                        cg.facility_id, 9999,
+                    )
+                )
+        else:
+            campgrounds = campgrounds[: query.max_campgrounds]
+
         if not campgrounds:
             return
 
