@@ -1,7 +1,7 @@
 # campnw Roadmap: v0.2.1 to v1.0
 
 **Last updated:** March 2026
-**Current version:** v0.45 (deployed at campnw.palouselabs.com)
+**Current version:** v0.5 (deployed at campnw.palouselabs.com)
 
 ---
 
@@ -14,7 +14,7 @@ v0.2.1  [SHIPPED]  Hardening           — Security fixes, Level A a11y failures
 v0.3    [SHIPPED]  Calendar & Polish   — Calendar heat map, SSE streaming, shareable links
 v0.4    [SHIPPED]  Accounts            — User accounts, saved preferences, persistent watches
 v0.45   [SHIPPED]  Testing             — 346 tests, CI gating, 82% coverage
-v0.5    ------->   Background Engine   — Server-side polling, web push, registry auto-enrichment
+v0.5    [SHIPPED]  Background Engine   — Server-side polling, web push, registry auto-enrichment
 v0.6    ------->   Smart Search        — Zero-result recovery, date shifting, search diagnostics
 v0.7    ------->   Oregon + Delight    — Oregon State Parks, contextual notifications, site vibe
 v0.8    ------->   Trip Planner        — AI-powered multi-stop itinerary builder

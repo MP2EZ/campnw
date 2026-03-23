@@ -10,7 +10,14 @@ import pytest
 from pnw_campsites.enrichment.llm_tags import enrich_registry
 from pnw_campsites.registry.models import BookingSystem, Campground
 
+try:
+    import anthropic  # noqa: F401
+    HAS_ANTHROPIC = True
+except ImportError:
+    HAS_ANTHROPIC = False
 
+
+@pytest.mark.skipif(not HAS_ANTHROPIC, reason="anthropic not installed")
 class TestEnrichRegistryIntegration:
     """Test enrich_registry function with real registry."""
 

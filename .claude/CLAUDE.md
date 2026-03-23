@@ -145,6 +145,19 @@ Search results include recreation.gov availability links. The `check` command in
 
 The poll command diffs current availability against the last snapshot. First poll baselines; subsequent polls report only newly-available sites (cancellations, newly-released dates).
 
+Note: In production (v0.5+), watch polling runs automatically via APScheduler every 15 minutes — the CLI `watch poll` command is for local/manual use only.
+
+### Enrich registry tags (LLM — manual one-off)
+```bash
+# Preview what tags would be extracted (no changes saved)
+ANTHROPIC_API_KEY=sk-... .venv/bin/python3 -m pnw_campsites enrich --dry-run --limit 10
+
+# Enrich campgrounds lacking tags (calls Claude Haiku, ~$0.10 for full registry)
+ANTHROPIC_API_KEY=sk-... .venv/bin/python3 -m pnw_campsites enrich --limit 50
+```
+
+This is a standalone CLI tool, not part of the server. It reads campground descriptions from the registry, sends them to Claude Haiku to extract structured tags (lakeside, pet-friendly, old-growth, etc.), and writes validated tags back. The `anthropic` package is in the optional `enrichment` dep group — not installed on the deployed server.
+
 ## Roadmap & Progress (v0.1 → v1.0)
 
 Full roadmap details: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs/PRFAQ-v1.0.md`
@@ -224,17 +237,18 @@ Performance:
 - [x] CI test job gates deployment in deploy.yml
 - [x] Vitest + React Testing Library configured
 
-### v0.5 "Background Engine"
-- [ ] Server-side watch polling (APScheduler, 15-min cycles)
-- [ ] Web push notifications (service worker + Web Push API)
-- [ ] PWA manifest + service worker (required for iOS Web Push)
-- [ ] In-product soft-ask for notification permission (not raw browser prompt)
-- [ ] Notification channel preferences (web push, ntfy, Pushover, email)
-- [ ] Availability cache in SQLite (10-15 min TTL)
-- [ ] Availability history data collection (silent — feeds v0.9 predictions)
-- [ ] Automated registry refresh (monthly RIDB, quarterly GoingToCamp)
-- [ ] Registry auto-enrichment (LLM tag extraction from RIDB/GoingToCamp descriptions via Haiku)
-- [ ] Anthropic API spend limits in console (SDK introduced here)
+### v0.5 "Background Engine" — DONE
+- [x] Server-side watch polling (APScheduler AsyncIOScheduler, 15-min cycles)
+- [x] Web push notifications (service worker + Web Push API + VAPID)
+- [x] PWA manifest + service worker (required for iOS Web Push)
+- [x] In-product soft-ask for notification permission (after watch creation)
+- [x] Notification channel preferences (per-watch: web_push, ntfy, pushover)
+- [x] Availability cache in SQLite (10-min TTL, shared across watches)
+- [x] Availability history data collection (silent — feeds v0.9 predictions)
+- [x] Registry auto-enrichment (CLI: Claude Haiku tag extraction, ~$0.10/full run)
+- [x] Watch polling dashboard (last/next poll, active watches, notification log)
+- [x] Fly.io always-on (min_machines_running=1, ~$2/mo)
+- [ ] Automated registry refresh (monthly RIDB, quarterly GoingToCamp) — deferred
 
 ### v0.6 "Smart Search"
 - [ ] Smart date shifting (suggest nearby dates on zero/low results, one-tap re-search)

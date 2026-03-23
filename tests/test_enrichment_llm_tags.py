@@ -12,6 +12,16 @@ from pnw_campsites.enrichment.llm_tags import (
     extract_tags,
 )
 
+try:
+    import anthropic  # noqa: F401
+    HAS_ANTHROPIC = True
+except ImportError:
+    HAS_ANTHROPIC = False
+
+needs_anthropic = pytest.mark.skipif(
+    not HAS_ANTHROPIC, reason="anthropic package not installed",
+)
+
 
 class TestTagExtractionResult:
     """Test the TagExtractionResult Pydantic model."""
@@ -34,6 +44,7 @@ class TestTagExtractionResult:
         assert result.tags == []
 
 
+@needs_anthropic
 class TestExtractTags:
     """Test the extract_tags async function."""
 
