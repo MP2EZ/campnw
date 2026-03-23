@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { searchCampsitesStream, saveSearchHistory, getSearchHistory } from "./api";
 import type {
   CampgroundResult, SearchParams, SearchResponse, Window, SearchHistoryEntry,
@@ -44,6 +44,56 @@ const DAY_PRESETS: Record<string, [string, string]> = {
   "3,4,5,6": ["Long wknd", "Th–Su"],
   "0,1,2,3,4": ["Weekdays", ""],
 };
+
+// ─── Date Quick Presets ──────────────────────────────────────────────
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function getQuickPresets(): Array<{ label: string; start: string; end: string }> {
+  const today = new Date();
+  const day = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+  const add = (base: Date, days: number) => {
+    const d = new Date(base);
+    d.setDate(d.getDate() + days);
+    return d;
+  };
+
+  const daysToFri = ((5 - day) + 7) % 7 || 7;
+  const thisFri = add(today, daysToFri);
+  const thisSun = add(thisFri, 2);
+  const nextFri = add(thisFri, 7);
+  const nextSun = add(nextFri, 2);
+
+  return [
+    { label: "This wknd", start: fmt(thisFri), end: fmt(thisSun) },
+    { label: "Next wknd", start: fmt(nextFri), end: fmt(nextSun) },
+    { label: "Next 30 days", start: fmt(today), end: fmt(add(today, 30)) },
+  ];
+}
+
+/** Returns month options: {month, year, label} for the next 6 months starting from next month */
+function getMonthOptions(): Array<{ month: number; year: number; label: string }> {
+  const today = new Date();
+  const results: Array<{ month: number; year: number; label: string }> = [];
+  for (let i = 1; i <= 6; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    results.push({ month: d.getMonth(), year: d.getFullYear(), label: MONTH_NAMES[d.getMonth()] });
+  }
+  return results;
+}
+
+/** Given a set of "YYYY-MM" keys, compute the date range spanning all selected months */
+function monthSetToDateRange(keys: Set<string>): { start: string; end: string } | null {
+  if (keys.size === 0) return null;
+  const sorted = Array.from(keys).sort();
+  const [firstY, firstM] = sorted[0].split("-").map(Number);
+  const [lastY, lastM] = sorted[sorted.length - 1].split("-").map(Number);
+  const start = new Date(firstY, firstM, 1);
+  const end = new Date(lastY, lastM + 1, 0); // last day of month
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+  return { start: fmt(start), end: fmt(end) };
+}
 
 // ─── Day of Week Picker ──────────────────────────────────────────────
 
@@ -104,6 +154,10 @@ function SearchForm({
   const [maxDrive, setMaxDrive] = useState("");
   const [limit, setLimit] = useState(20);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
+  const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
+  const quickPresets = useMemo(() => getQuickPresets(), []);
+  const monthOptions = useMemo(() => getMonthOptions(), []);
 
   // Apply user defaults when they arrive async (after auth check)
   const defaultsApplied = useRef(false);
@@ -223,6 +277,51 @@ function SearchForm({
         </>
       )}
 
+      {/* Date quick presets + month picker */}
+      <div className="date-presets-wrap">
+        <div className="date-presets" role="group" aria-label="Quick date range">
+          {quickPresets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              className={`date-preset-btn ${activeDatePreset === p.label ? "active" : ""}`}
+              aria-pressed={activeDatePreset === p.label}
+              onClick={() => {
+                setStartDate(p.start);
+                setEndDate(p.end);
+                setActiveDatePreset(p.label);
+                setSelectedMonths(new Set());
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+          <span className="date-presets-sep" aria-hidden="true" />
+          {monthOptions.map((m) => {
+            const key = `${m.year}-${String(m.month).padStart(2, "0")}`;
+            const isActive = selectedMonths.has(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`date-preset-btn ${isActive ? "active" : ""}`}
+                aria-pressed={isActive}
+                onClick={() => {
+                  const next = new Set(selectedMonths);
+                  if (next.has(key)) next.delete(key); else next.add(key);
+                  setSelectedMonths(next);
+                  setActiveDatePreset(null);
+                  const range = monthSetToDateRange(next);
+                  if (range) { setStartDate(range.start); setEndDate(range.end); }
+                }}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Dates + nights */}
       <div className={mode === "find" ? "form-row form-row-3" : "form-row"}>
         <label>
@@ -230,7 +329,7 @@ function SearchForm({
           <input
             type="date"
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => { setStartDate(e.target.value); setActiveDatePreset(null); setSelectedMonths(new Set()); }}
             required
           />
         </label>
@@ -239,7 +338,7 @@ function SearchForm({
           <input
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => { setEndDate(e.target.value); setActiveDatePreset(null); setSelectedMonths(new Set()); }}
             required
           />
         </label>
