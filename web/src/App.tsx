@@ -842,12 +842,18 @@ export default function App() {
   }, [darkMode]);
 
   const handleSearch = async (params: SearchParams, mode: SearchMode) => {
-    // Use source from params if explicitly set (e.g., from source toggle),
-    // otherwise derive from current sourceFilter state
-    const sourceParam = params.source !== undefined
-      ? params.source
-      : (sourceFilter.size === 1 ? Array.from(sourceFilter)[0] : undefined);
-    const searchParams = { ...params, source: sourceParam };
+    // Derive source filter for the API query
+    const searchParams = { ...params };
+    if (!searchParams.source) {
+      // Form submit — derive from current toggle state
+      if (sourceFilter.size === 1) {
+        searchParams.source = Array.from(sourceFilter)[0];
+      }
+    }
+    // source="" means "all" (from toggle re-enabling both)
+    if (searchParams.source === "") {
+      delete searchParams.source;
+    }
 
     lastSearchParams.current = params;
     lastSearchMode.current = mode;
@@ -1006,7 +1012,7 @@ export default function App() {
           // Re-search with updated source filter
           if (lastSearchParams.current) {
             const sourceParam =
-              next.size === 1 ? Array.from(next)[0] : undefined;
+              next.size === 1 ? Array.from(next)[0] : "";
             handleSearch(
               { ...lastSearchParams.current, source: sourceParam },
               lastSearchMode.current,
