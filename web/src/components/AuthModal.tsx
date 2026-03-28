@@ -86,7 +86,7 @@ export function AuthModal({
           <h2 id="auth-modal-title">
             {mode === "login" ? "Sign in" : "Create account"}
           </h2>
-          <button className="watch-close" onClick={onClose} ref={closeRef}>
+          <button className="watch-close" onClick={onClose} ref={closeRef} aria-label="Close">
             &times;
           </button>
         </div>

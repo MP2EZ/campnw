@@ -130,8 +130,8 @@ function PreferencesForm({
   onSave,
   onCancel,
 }: {
-  user: { display_name: string; home_base: string; default_state: string; default_nights: number; default_from: string };
-  onSave: (updates: Record<string, string | number>) => Promise<void>;
+  user: { display_name: string; home_base: string; default_state: string; default_nights: number; default_from: string; recommendations_enabled?: boolean };
+  onSave: (updates: Record<string, string | number | boolean>) => Promise<void>;
   onCancel: () => void;
 }) {
   const [displayName, setDisplayName] = useState(user.display_name);
@@ -139,6 +139,7 @@ function PreferencesForm({
   const [defaultState, setDefaultState] = useState(user.default_state);
   const [defaultNights, setDefaultNights] = useState(user.default_nights);
   const [defaultFrom, setDefaultFrom] = useState(user.default_from);
+  const [recsEnabled, setRecsEnabled] = useState(user.recommendations_enabled ?? false);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,6 +151,7 @@ function PreferencesForm({
       default_state: defaultState,
       default_nights: defaultNights,
       default_from: defaultFrom,
+      recommendations_enabled: recsEnabled,
     });
     setSaving(false);
   };
@@ -211,6 +213,14 @@ function PreferencesForm({
           <option value="bellingham">Bellingham</option>
           <option value="moscow">Moscow, ID</option>
         </select>
+      </label>
+      <label className="prefs-toggle">
+        <input
+          type="checkbox"
+          checked={recsEnabled}
+          onChange={(e) => setRecsEnabled(e.target.checked)}
+        />
+        Show personalized recommendations
       </label>
       <div className="prefs-actions">
         <button type="submit" className="search-btn" disabled={saving}>

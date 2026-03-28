@@ -86,9 +86,9 @@ describe('CalendarHeatMap Component', () => {
     // Check for title
     expect(screen.getByText('Site Availability')).toBeInTheDocument()
 
-    // Check for legend text
-    expect(screen.getByText('Fewer')).toBeInTheDocument()
-    expect(screen.getByText('More')).toBeInTheDocument()
+    // Check for legend text — numeric anchors for colorblind users
+    expect(screen.getByText('0 sites')).toBeInTheDocument()
+    expect(screen.getByText(/\d+\+ sites/)).toBeInTheDocument()
   })
 
   test('renders with correct aria-labels on cells', () => {

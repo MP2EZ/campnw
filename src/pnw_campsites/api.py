@@ -245,7 +245,7 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="PNW Campsites", lifespan=lifespan)
 
 _cors_origins = os.getenv(
-    "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
+    "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5177,http://localhost:3000"
 ).split(",")
 app.add_middleware(
     CORSMiddleware,
@@ -847,6 +847,7 @@ def _user_to_dict(user: User) -> dict:
         "default_state": user.default_state,
         "default_nights": user.default_nights,
         "default_from": user.default_from,
+        "recommendations_enabled": user.recommendations_enabled,
     }
 
 
@@ -1011,6 +1012,90 @@ async def save_search(body: SaveSearchRequest, request: Request):
         return {"ok": False}
     _watch_db.save_search(user_id, json.dumps(body.params), body.result_count)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Recommendations
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/recommendations")
+async def recommendations(request: Request):
+    """Personalized campground recommendations based on search history."""
+    user_id = _get_current_user(request)
+    if not user_id:
+        return []
+
+    user = _watch_db.get_user_by_id(user_id)
+    if not user or not user.recommendations_enabled:
+        return []
+
+    affinities = _watch_db.get_recommendation_affinities(user_id)
+    if not affinities["tags"] and not affinities["states"]:
+        return []
+
+    # Score registry campgrounds against user affinities
+    top_states = sorted(
+        affinities["states"].items(), key=lambda x: x[1], reverse=True,
+    )
+    target_states = [s for s, _ in top_states[:2]] if top_states else None
+
+    candidates = _registry.search(
+        state=target_states[0] if target_states and len(target_states) == 1 else None,
+    )
+
+    watched = affinities["watched_facility_ids"]
+    tag_scores = affinities["tags"]
+    state_scores = affinities["states"]
+
+    scored = []
+    for cg in candidates:
+        if cg.facility_id in watched:
+            continue
+
+        # Tag overlap score
+        tag_overlap = sum(
+            tag_scores.get(t, 0) for t in (cg.tags or [])
+        )
+        # State match score
+        state_match = state_scores.get(cg.state, 0)
+
+        score = tag_overlap * 2 + state_match
+        if score <= 0:
+            continue
+
+        # Build reason string from strongest signal
+        top_tag = max(
+            ((t, tag_scores.get(t, 0)) for t in (cg.tags or []) if t in tag_scores),
+            key=lambda x: x[1],
+            default=None,
+        )
+        if top_tag:
+            reason = f"Based on your {top_tag[0]} searches"
+            if cg.state in state_scores:
+                reason += f" in {cg.state}"
+        elif cg.state in state_scores:
+            reason = f"Popular in {cg.state}, near your usual searches"
+        else:
+            reason = "You might like this"
+
+        scored.append({
+            "facility_id": cg.facility_id,
+            "name": cg.name,
+            "booking_system": cg.booking_system.value if hasattr(cg.booking_system, "value") else str(cg.booking_system),
+            "state": cg.state,
+            "tags": cg.tags or [],
+            "vibe": cg.vibe or "",
+            "reason": reason,
+            "score": score,
+        })
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    results = scored[:5]
+    # Strip internal score from response
+    for r in results:
+        del r["score"]
+    return results
 
 
 # ---------------------------------------------------------------------------

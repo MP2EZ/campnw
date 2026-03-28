@@ -650,14 +650,22 @@ Audit scope creep — this is a review milestone, not a rewrite. Fix issues foun
 ## v1.0 "campnw 1.0"
 
 ### Theme
-The capstone. Personalized recommendations turn accumulated search history and registry data into proactive suggestions. With v0.98 and v0.99 handling quality hardening, v1.0 is purely about the final feature and polish.
+The capstone. Personalized recommendations turn accumulated search history and registry data into proactive suggestions. The v0.99 UX audit identified specific polish items that replace the generic "final polish pass" — these are the concrete improvements that elevate the product from functional tool to polished product.
 
 ### Features
 
 | Feature | Effort | Description |
 |---------|--------|-------------|
 | Personalized recommendations | L | Based on search history (tags, regions, date patterns) and watched campgrounds, surface "You might like" suggestions. Opt-in toggle in settings. Privacy-first: all computation server-side against user's own history. Renders as recommendation row above search results. |
-| Final polish pass | S | Any remaining spacing, transition, or dark mode gaps identified in v0.99 audit. |
+| Collapsible search form + scroll-to-results | M | After search, auto-scroll to results area. Collapse form to compact summary bar ("WA parks, Apr 11-May 11, 2 nights" + Edit button). Biggest single usability win — the form fills the entire viewport on both desktop and mobile today. |
+| Mobile hamburger menu | M | Consolidate Watchlist, theme toggle, and Sign in behind a compact menu icon on mobile (≤640px). Keep Search/Map/Plan as visible primary tabs. Frees ~30% of header horizontal space. |
+| Card expand/collapse animation | S | 200ms CSS height transition on result card expand/collapse. Cards currently snap open/closed. |
+| Jargon cleanup | S | "windows" → "openings" or "date ranges". Expand "FCFS" to "First-come, first-served" on first use with tooltip. Add result counts to source filter tabs: "Rec.gov (2) / WA Parks (14)". |
+| Loading skeleton | S | Shimmer/skeleton placeholder in results area while SSE results stream in. Currently blank. |
+| First-visit empty state | S | Illustration or prompt with suggested searches ("Start by searching for a weekend getaway"). Currently shows only the form with no guidance. |
+| Dark mode polish | S | Heat map levels 0-1 nearly indistinguishable — widen low-end color scale. Warning banner border (#4a3e20 on #21211e) barely visible. |
+| A11y completions | S | Add `<meta name="description">` for SEO. Sign-in modal close button `aria-label="Close"`. Heat map legend: add numeric context for colorblind users. |
+| Mobile result polish | S | Heat map: simplified view or larger cells at 375px. Expanded card availability rows: wrap date range + site count to separate lines at narrow widths. |
 
 ### Dependencies
 - v0.99 (quality audit complete, all critical/high issues resolved)
@@ -666,6 +674,8 @@ The capstone. Personalized recommendations turn accumulated search history and r
 - All v0.99 quality bar metrics maintained (no regressions)
 - Recommendations respect opt-in toggle
 - Recommendation queries add <200ms to page load
+- Lighthouse accessibility ≥0.95 maintained across all routes
+- Bundle size ≤350KB main chunk
 
 ### Key Risk
 Personalized recommendations scope. At personal/friends scale, a simple query over search history with tag/region affinity scoring is sufficient. Do not build a recommendation engine. If backend work exceeds one week, it is over-scoped.

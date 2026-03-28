@@ -71,6 +71,7 @@ class User:
     default_state: str = ""
     default_nights: int = 2
     default_from: str = ""
+    recommendations_enabled: bool = False
     created_at: str = ""
     last_login_at: str | None = None
 
@@ -226,6 +227,15 @@ class WatchDB:
                 created_at TEXT NOT NULL
             );
         """)
+        # v1.0: recommendations opt-in flag
+        user_cols = [
+            r[1] for r in self._conn.execute("PRAGMA table_info(users)")
+        ]
+        if "recommendations_enabled" not in user_cols:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " recommendations_enabled INTEGER DEFAULT 0"
+            )
         self._conn.commit()
 
     # -------------------------------------------------------------------
@@ -416,6 +426,7 @@ class WatchDB:
         allowed = {
             "display_name", "home_base", "default_state",
             "default_nights", "default_from", "last_login_at",
+            "recommendations_enabled",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -437,7 +448,9 @@ class WatchDB:
         return cursor.rowcount > 0
 
     def _row_to_user(self, row: sqlite3.Row) -> User:
-        return User(**dict(row))
+        d = dict(row)
+        d["recommendations_enabled"] = bool(d.get("recommendations_enabled", 0))
+        return User(**d)
 
     # -------------------------------------------------------------------
     # Search history
@@ -467,6 +480,50 @@ class WatchDB:
             }
             for r in rows
         ]
+
+    def get_recommendation_affinities(
+        self, user_id: int, history_limit: int = 20,
+    ) -> dict:
+        """Extract tag/state affinity from recent search history.
+
+        Returns {"tags": {"lakeside": 3.2, ...}, "states": {"WA": 5.0, ...},
+                 "watched_facility_ids": set[str]}.
+        """
+        import math
+
+        history = self.get_search_history(user_id, limit=history_limit)
+        tag_scores: dict[str, float] = {}
+        state_scores: dict[str, float] = {}
+
+        for i, entry in enumerate(history):
+            # Exponential decay: most recent = 1.0, oldest ≈ 0.37
+            weight = math.exp(-i * 0.05)
+            params = entry["params"]
+
+            # Tags
+            if params.get("tags"):
+                for tag in str(params["tags"]).split(","):
+                    tag = tag.strip()
+                    if tag:
+                        tag_scores[tag] = tag_scores.get(tag, 0) + weight
+
+            # State
+            if params.get("state"):
+                st = params["state"]
+                state_scores[st] = state_scores.get(st, 0) + weight
+
+        # Watched facility IDs — exclude from recommendations
+        watched_rows = self._conn.execute(
+            "SELECT DISTINCT facility_id FROM watches WHERE user_id=?",
+            (user_id,),
+        ).fetchall()
+        watched = {r["facility_id"] for r in watched_rows}
+
+        return {
+            "tags": tag_scores,
+            "states": state_scores,
+            "watched_facility_ids": watched,
+        }
 
     def get_user_export(self, user_id: int) -> dict:
         """Export all user data as a dict."""

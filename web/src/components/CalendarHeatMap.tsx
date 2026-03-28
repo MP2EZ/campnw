@@ -153,11 +153,11 @@ export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDat
       <div className="heatmap-header-row">
         <span className="heatmap-title">Site Availability</span>
         <div className="heatmap-legend">
-          <span className="heatmap-legend-label">Fewer</span>
+          <span className="heatmap-legend-label">0 sites</span>
           {[0, 1, 2, 3, 4].map((level) => (
             <span key={level} className={`heatmap-swatch density-${level}`} />
           ))}
-          <span className="heatmap-legend-label">More</span>
+          <span className="heatmap-legend-label">{maxCount}+ sites</span>
         </div>
       </div>
 
