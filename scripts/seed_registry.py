@@ -38,8 +38,8 @@ EXCLUDE_PATTERNS = re.compile(
     day\s*use|trailhead|boat\s*ramp|parking|dock|marina|
     office|headquarters|warehouse|storage|
     scenic\s*byway|highway|parkway|greenway|
-    ohv\s*area|recreation\s*site|grassland|
-    \barea\b|\bsr\s*\d|\bus\s*highway)\b
+    ohv\s*area|grassland|
+    \bsr\s*\d|\bus\s*highway)\b
     """,
     re.IGNORECASE | re.VERBOSE,
 )
@@ -58,9 +58,11 @@ def is_campground(facility: RIDBFacility) -> bool:
     """Filter RIDB results to actual campgrounds."""
     name = facility.facility_name
 
-    # Exclude non-campground facilities by name
-    if EXCLUDE_PATTERNS.search(name):
-        return False
+    # Positive signal: names containing "campground" or "camp" are almost
+    # always valid — RIDB activity=CAMPING already pre-selects these.
+    if not re.search(r"\b(campground|camp)\b", name, re.IGNORECASE):
+        if EXCLUDE_PATTERNS.search(name):
+            return False
 
     # Must have valid coordinates
     if facility.latitude == 0.0 and facility.longitude == 0.0:

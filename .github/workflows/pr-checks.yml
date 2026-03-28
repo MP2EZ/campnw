@@ -1,0 +1,85 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,api]"
+
+      - name: Lint
+        run: ruff check src/
+
+      - name: Run tests
+        run: pytest --cov --cov-report=term -q
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Frontend type check
+        working-directory: web
+        run: |
+          npm ci
+          npx tsc -b
+
+      - name: Frontend tests
+        working-directory: web
+        run: npx vitest run
+
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install and build
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: .lighthouserc.js
+          uploadArtifacts: true
+
+  bundle-size:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install and build
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Check bundle size
+        run: |
+          MAIN_SIZE=$(stat -c%s web/dist/assets/index-*.js 2>/dev/null || stat -f%z web/dist/assets/index-*.js)
+          echo "Main chunk: $((MAIN_SIZE / 1024))KB"
+          if [ "$MAIN_SIZE" -gt 358400 ]; then
+            echo "::error::Main JS chunk exceeds 350KB limit ($((MAIN_SIZE / 1024))KB)"
+            exit 1
+          fi

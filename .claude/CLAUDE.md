@@ -282,35 +282,45 @@ Performance:
 - [ ] Shareable itineraries (UUID link, 30-day expiry) — deferred
 - [ ] Cost monitoring dashboard — deferred
 
-### v0.9 "Predictions+"
-- [ ] Predictive availability display ("typically frees up X days before")
-- [ ] Statistical prediction model (time-series on polling history + booking window detection)
-- [ ] Smart notification scoring ("usually books within 30 min")
-- [ ] Prediction confidence display with "still learning" cold start
-- [ ] Anomaly-based deal alerts (proactive alerts for statistically unusual availability)
-- [ ] "Why did I miss it?" post-mortem (explains missed cancellations, suggests tuning)
+### v0.95 "Monetization" — DONE (feature/monetization branch)
+- [x] Free/Pro tier ($5/mo): 3 free watches @ 15-min, unlimited Pro @ 5-min
+- [x] Payment provider integration (Stripe hosted checkout + customer portal + webhooks)
+- [x] Subscription schema (status on users table, webhook-driven, never in JWT)
+- [x] Watch limit enforcement (server-side, HTTP 402) + poll interval tiering (5-min pro scheduler)
+- [x] Trip planner gating (3 sessions/month free, 20 Pro, DB-backed monthly counter)
+- [x] Pricing page (`/pricing`), upgrade modal (focus trap, ARIA), billing settings, ProBadge
+- [x] 30-day grandfather migration for existing users with >3 watches
+- [x] Webhook security (HMAC signature verification, idempotency via stripe_events table)
 
-### v0.95 "Monetization"
-- [ ] Free/Pro tier ($5/mo): 3 free watches @ 15-min, unlimited Pro @ 5-min
-- [ ] Payment provider integration (hosted checkout + customer portal + webhooks)
-- [ ] Subscription schema (status on users table, webhook-driven, never in JWT)
-- [ ] Watch limit enforcement (server-side, HTTP 402) + poll interval tiering
-- [ ] Trip planner gating (3 sessions/month free, 20 Pro, soft gate on 4th)
-- [ ] Pricing page, upgrade modal, billing settings, pro indicator
-- [ ] 30-day grandfather period for existing users with >3 watches
-- [ ] Webhook security (HMAC signature verification, idempotency, audit trail)
+### v0.96 "Registry + Infra"
+- [ ] Registry expansion: re-seed RIDB for complete ID + OR federal coverage (target 1,000+)
+- [ ] Lighthouse CI in GitHub Actions PR pipeline
+- [ ] Bundle audit + route-level lazy loading (React.lazy + Suspense for /plan)
+- [ ] P95 search latency baseline (server-side timing, 4s target)
+
+### v0.97 "Map + Power User"
+- [ ] Map view (Leaflet on /map route, availability-density pins, clustering, click-to-preview)
+- [ ] Map lazy loading (Leaflet not in initial bundle, verified by Lighthouse CI)
+- [ ] Keyboard shortcuts (j/k nav, b bookmark, w watch, m map/list toggle, ? help overlay)
+- [ ] Map accessibility (list alternative, keyboard-reachable pins, colorblind-safe palette)
 
 ### v1.0 "campnw 1.0"
-- [ ] Map view (Leaflet, lazy-loaded, with list alternative for a11y)
-- [ ] Keyboard shortcuts (j/k nav, b bookmark, w watch, ? help)
-- [ ] Registry expansion to 1,000+ campgrounds
-- [ ] Personalized recommendations (opt-in, based on search history)
-- [ ] Performance audit (P95 search < 4s, Lighthouse CI)
-- [ ] Accessibility audit (WCAG 2.1 AA final sweep, axe-core in CI)
+- [ ] Personalized recommendations (search history affinity, opt-in, renders above search results)
+- [ ] WCAG 2.1 AA audit (expand axe-core CI from Level A to AA, all components)
+- [ ] Error state review (every provider-down, empty-state, offline path designed)
+- [ ] Final polish pass (spacing, transitions, dark mode, mobile responsive on all routes)
+
+### v1.1 "Predictions+"
+- [ ] Statistical prediction model (time-series on polling history + booking window detection)
+- [ ] Predictive availability display ("typically frees up X days before" with confidence bands)
+- [ ] Prediction confidence display with "still learning" cold start
+- [ ] Smart notification scoring ("usually books within 30 min")
+- [ ] Anomaly-based deal alerts (Pro-only, proactive alerts for unusual availability)
+- [ ] "Why did I miss it?" post-mortem (explains missed cancellations, suggests tuning)
 
 ## Key Design Decisions
 
-- **Registry is the differentiator.** Enriched with drive time from Bellevue, user tags (lakeside, river, old-growth, kid-friendly), personal notes/ratings. Discovery queries filter the registry first, then check availability only for matching campgrounds.
+- **Registry is the differentiator.** Enriched with drive time from Seattle, user tags (lakeside, river, old-growth, kid-friendly), personal notes/ratings. Discovery queries filter the registry first, then check availability only for matching campgrounds.
 - **Thin provider clients.** Each provider is just a clean async wrapper around the booking system's API. No business logic in providers.
 - **Extract patterns from camply, don't depend on it.** The value is in ~200 lines of endpoint logic. Reference: https://github.com/juftin/camply
 - **SQLite for everything local.** Registry, availability cache, watch state. No external DB.

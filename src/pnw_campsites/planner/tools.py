@@ -128,7 +128,7 @@ TOOLS: list[dict] = [
         "name": "get_campground_detail",
         "description": (
             "Get detailed info about a campground from the local registry: "
-            "location, tags, vibe, notes, total sites, drive time from Bellevue."
+            "location, tags, vibe, notes, total sites, drive time from Seattle."
         ),
         "input_schema": {
             "type": "object",
@@ -366,7 +366,7 @@ def _get_campground_detail(tool_input: dict, registry: CampgroundRegistry) -> st
         "notes": cg.notes,
         "rating": cg.rating,
         "total_sites": cg.total_sites,
-        "drive_minutes_from_bellevue": cg.drive_minutes_from_base,
+        "drive_minutes_from_seattle": cg.drive_minutes_from_base,
     })
 
 

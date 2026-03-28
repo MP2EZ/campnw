@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import { searchCampsitesStream, saveSearchHistory, getSearchHistory } from "./api";
 import type {
@@ -11,7 +11,7 @@ import { AuthModal } from "./components/AuthModal";
 import { UserMenu } from "./components/UserMenu";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { useAuth } from "./hooks/useAuth";
-import TripPlanner from "./pages/TripPlanner";
+const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
@@ -982,6 +982,7 @@ export default function App() {
         onClose={() => setAuthModalOpen(false)}
       />
 
+      <Suspense fallback={<div className="loading-page">Loading...</div>}>
       <Routes>
         <Route path="/plan" element={<TripPlanner />} />
         <Route path="/" element={
@@ -1113,6 +1114,7 @@ export default function App() {
       </main>
         } />
       </Routes>
+      </Suspense>
     </div>
   );
 }
