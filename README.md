@@ -9,21 +9,27 @@ campnw searches real-time availability across Recreation.gov (federal campground
 ## Features
 
 - **Multi-provider search** — Recreation.gov + WA State Parks (GoingToCamp) in one search
-- **740+ campgrounds** across WA, OR, and ID with auto-generated tags
-- **Distance filtering** — approximate drive time from Seattle, Bellevue, Portland, Spokane, Bellingham, or Moscow ID
-- **Trip type presets** — Weekend (F–Su), Long weekend (Th–Su), Weekdays, or custom day picker
-- **Two search modes** — "Find a date" (flexible range) and "Exact dates"
+- **740+ campgrounds** across WA, OR, and ID with auto-generated tags and vibe descriptions
+- **Distance filtering** — drive time from Seattle, Bellevue, Portland, Spokane, Bellingham, or Moscow ID
+- **Trip type presets** — Weekend, Long weekend, Weekdays, or custom day picker
 - **Availability heat map** — GitHub-style contribution graph showing site density across your date range
-- **Progressive results** — SSE streaming shows results as they arrive (~1-2s for first results)
-- **Watchlist** — monitor campgrounds for cancellations, get notified when sites open up
-- **Dark mode** — system-aware with manual toggle
+- **Progressive results** — SSE streaming shows results as they arrive
+- **Watchlist** — monitor campgrounds for cancellations with web push notifications
+- **Background polling** — server-side 15-min poll cycles with split tranches and availability history
+- **Map view** — Leaflet map with source-colored pins, clustering, and popups
+- **AI trip planner** — conversational planner (Claude Sonnet) with search, drive time, and geocode tools
+- **Personalized recommendations** — search history affinity scoring, opt-in
+- **User accounts** — saved preferences, search history, data export, account deletion
+- **Smart search** — zero-result diagnostics, date shifting suggestions, alternative campgrounds
+- **Dark mode** — system-aware with manual toggle, warm forest palette
+- **Mobile responsive** — hamburger menu, collapsible search form, touch-optimized
 - **Direct booking links** — pre-filled links to recreation.gov and GoingToCamp
 
 ## Tech Stack
 
 - **Backend**: Python 3.12, FastAPI, SQLite, httpx, curl_cffi (GoingToCamp WAF bypass)
 - **Frontend**: React, Vite, TypeScript
-- **Deployment**: Fly.io (Docker), GitHub Actions CI/CD, Cloudflare DNS
+- **Deployment**: Fly.io (Docker, persistent volume), GitHub Actions CI/CD, Cloudflare DNS
 
 ## Development
 
@@ -59,9 +65,7 @@ Open `http://localhost:5173`
 
 ## Project Status
 
-See [ROADMAP.md](docs/ROADMAP.md) for the full v0.1 → v1.0 plan.
-
-Currently at **v0.3** — search, monitoring, dashboard, dark mode, calendar heat map, streaming results, and distance/tag filtering are all working and deployed.
+**v1.0** — shipped. See [ROADMAP.md](docs/ROADMAP.md) for the full history from v0.1 through v1.0. Next up: v1.1 "Predictions+" (statistical availability predictions from polling history).
 
 ## License
 
