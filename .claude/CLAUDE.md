@@ -165,7 +165,7 @@ Full roadmap details: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs
 ### v0.1 "Foundation" — DONE
 - [x] Rec.gov provider (RIDB metadata + availability)
 - [x] GoingToCamp provider (WA State Parks, curl_cffi WAF bypass)
-- [x] SQLite campground registry (685 campgrounds, 453 with tags)
+- [x] SQLite campground registry (741 campgrounds, enriched with tags)
 - [x] Search engine with day-of-week, distance, tag filtering
 - [x] CLI: search, check, list, watch add/remove/list/poll
 - [x] FastAPI backend with multi-provider search/check/list endpoints
@@ -231,7 +231,7 @@ Performance:
 - [x] Redact from_location from search logs
 
 ### v0.45 "Testing" — DONE
-- [x] 346 tests (295 backend + 51 frontend)
+- [x] 436 backend + 60 frontend tests
 - [x] 82% backend coverage, 70% CI threshold
 - [x] Shared conftest.py with fixtures and factories
 - [x] CI test job gates deployment in deploy.yml
@@ -292,11 +292,11 @@ Performance:
 - [x] 30-day grandfather migration for existing users with >3 watches
 - [x] Webhook security (HMAC signature verification, idempotency via stripe_events table)
 
-### v0.96 "Registry + Infra"
-- [ ] Registry expansion: re-seed RIDB for complete ID + OR federal coverage (target 1,000+)
-- [ ] Lighthouse CI in GitHub Actions PR pipeline
-- [ ] Bundle audit + route-level lazy loading (React.lazy + Suspense for /plan)
-- [ ] P95 search latency baseline (server-side timing, 4s target)
+### v0.96 "Registry + Infra" — DONE
+- [x] Registry expansion: re-seeded RIDB (741 total: 697 recgov + 75 WA State Parks, all with coords + drive times)
+- [x] Lighthouse CI in GitHub Actions PR pipeline (a11y ≥0.9 error gate, bundle size gate 350KB)
+- [x] Bundle audit + route-level lazy loading (React.lazy + Suspense for /plan, main chunk 266KB)
+- [x] P95 search latency baseline (Server-Timing header, /api/perf endpoint, 4s target)
 
 ### v0.97 "Map + Power User"
 - [ ] Map view (Leaflet on /map route, availability-density pins, clustering, click-to-preview)
@@ -366,4 +366,4 @@ All frontend styling uses design tokens defined in `web/src/tokens.css`. **Never
 - Some RIDB facilities return 404 on the availability endpoint (scenic byways, areas, corridors) — these aren't reservable campgrounds. Errors are caught and reported gracefully.
 - GoingToCamp resource/site details endpoint returns 404 — site names not available via API. Sites identified by resource ID (e.g., `WA--2147482394`).
 - GoingToCamp map hierarchy must be traversed park-by-park via the `resourceLocationId → childMapId` mapping from `/api/maps` links. Starting from region maps returns ALL parks' sites.
-- Registry has 685 campgrounds: 610 rec.gov (WA 146, OR 226, ID 238) + 75 WA State Parks. Re-seed with `scripts/seed_registry.py` and `scripts/seed_wa_state.py`
+- Registry has 741 campgrounds: 697 rec.gov (WA 161, OR 268, ID 268) + 75 WA State Parks. Re-seed with `scripts/seed_registry.py` and `scripts/seed_wa_state.py`

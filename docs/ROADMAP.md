@@ -212,7 +212,7 @@ Web push on iOS requires a PWA manifest (`manifest.json`) with `display: standal
 - v0.2 (web watch management)
 
 ### Key Risk
-Fly.io always-on cost and polling volume. Background polling requires `min_machines_running = 1`. With 685+ campgrounds, batching watches aggressively is essential — aim for one availability check per campground per cycle regardless of how many watches target it. Cap free-tier watches at 3 per user. The availability cache at this milestone significantly reduces call volume.
+Fly.io always-on cost and polling volume. Background polling requires `min_machines_running = 1`. With 740+ campgrounds, batching watches aggressively is essential — aim for one availability check per campground per cycle regardless of how many watches target it. Cap free-tier watches at 3 per user. The availability cache at this milestone significantly reduces call volume.
 
 ---
 
@@ -744,7 +744,7 @@ Features brainstormed and scored during the March 2026 AI feature review. Each w
 
 | Feature | Description | Why Skip |
 |---------|-------------|----------|
-| **Entity resolution across providers** | LLM-assisted fuzzy matching to deduplicate campgrounds across rec.gov and GoingToCamp (e.g., "Ohanapecosh Campground" vs "Ohanapecosh"). | Not a real problem at 685 campgrounds. The registry is manually curated — duplicates are caught during seeding. The complexity of maintaining an ongoing dedup system isn't justified until the registry is 2,000+ campgrounds across 4+ providers. |
+| **Entity resolution across providers** | LLM-assisted fuzzy matching to deduplicate campgrounds across rec.gov and GoingToCamp (e.g., "Ohanapecosh Campground" vs "Ohanapecosh"). | Not a real problem at 741 campgrounds. The registry is manually curated — duplicates are caught during seeding. The complexity of maintaining an ongoing dedup system isn't justified until the registry is 2,000+ campgrounds across 4+ providers. |
 | **Schema change detection** | Store API response shape snapshots, LLM diffs when provider API structure changes, alerts developer. | Valid engineering concern for a solo operator, but a simple health-check test in CI (assert expected fields present in a sample response) accomplishes 80% of this without LLM complexity. Over-engineered for the actual failure mode. |
 | **Drive time access correction** | Extract "unpaved road," "ferry required," "high clearance" from descriptions to apply multipliers to drive time estimates. | Low innovation, marginal impact. The current haversine-based drive times are directionally correct. Free-text extraction of road conditions would be noisy — "unpaved" could mean a smooth gravel road or a 4WD-only track. Better solved by manual curation of the top 50 campgrounds during v0.7 enrichment. |
 | **Smart poll scheduling** | Dynamically allocate polling budget based on predicted cancellation probability windows — poll more when history says cancellations are likely. | Invisible to users, moderate implementation complexity, and the polling budget is not a real constraint at personal-tool scale with the existing 15-minute cycle. Engineering effort that doesn't move any user-facing metric. Could matter if polling costs become significant, but they won't at this scale. |
