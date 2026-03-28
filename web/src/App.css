@@ -122,6 +122,7 @@ header {
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 .header-btn:hover {
@@ -170,6 +171,7 @@ header p {
   color: var(--text-muted);
   background: none;
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .mode-toggle button.active {
@@ -238,6 +240,7 @@ header p {
   color: var(--text-muted);
   cursor: pointer;
   white-space: nowrap;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .trip-type-btn.active {
@@ -281,7 +284,7 @@ header p {
   color: var(--text-muted);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base);
 }
 
 .date-preset-btn.active {
@@ -348,6 +351,7 @@ header p {
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .tag-btn.active {
@@ -383,6 +387,7 @@ header p {
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
+  transition: background var(--transition-base);
   min-height: 48px;
 }
 
@@ -416,6 +421,7 @@ header p {
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .day-btn.active {
@@ -461,6 +467,7 @@ header p {
   color: var(--text-muted);
   cursor: pointer;
   min-height: 32px;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .view-toggle button:last-child {
@@ -722,7 +729,7 @@ header p {
   font-size: 0.8rem;
   color: var(--text);
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 .date-suggestion-chip:hover {
@@ -761,7 +768,7 @@ header p {
   font-weight: 500;
   color: #fff;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 .action-chip:hover {
@@ -1064,7 +1071,7 @@ header p {
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity var(--transition-base);
   border: none;
   color: #fff;
 }
@@ -1897,7 +1904,7 @@ a.header-btn {
   cursor: pointer;
   font-family: inherit;
   line-height: 1.4;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base);
   text-align: left;
 }
 

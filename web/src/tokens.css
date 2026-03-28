@@ -29,6 +29,10 @@
   --src-id-badge-bg: #eee5f5;
   --src-id-badge-text: #5b2d7a;
   --src-id-border: #7d3cb5;
+
+  /* ── Transitions ──────────────────────────────────────────────── */
+  --transition-fast: 0.12s;
+  --transition-base: 0.15s;
 }
 
 [data-theme="dark"] {
