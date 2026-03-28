@@ -1219,6 +1219,75 @@ async def billing_status(request: Request, response: Response):
     }
 
 
+@app.post("/api/billing/checkout")
+async def billing_checkout(request: Request):
+    """Create a Stripe Checkout Session and return the redirect URL."""
+    from pnw_campsites.billing import create_checkout_session
+
+    user_id = _get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = _watch_db.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    if user.subscription_status == "pro":
+        raise HTTPException(status_code=400, detail="Already subscribed")
+
+    try:
+        url, customer_id = create_checkout_session(
+            user_id, user.email,
+            customer_id=user.stripe_customer_id or None,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    # Save customer ID if newly created
+    if customer_id and customer_id != user.stripe_customer_id:
+        _watch_db.update_user(user_id, stripe_customer_id=customer_id)
+
+    return {"url": url}
+
+
+@app.post("/api/billing/portal")
+async def billing_portal(request: Request):
+    """Create a Stripe Customer Portal session and return the redirect URL."""
+    from pnw_campsites.billing import create_portal_session
+
+    user_id = _get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = _watch_db.get_user_by_id(user_id)
+    if not user or not user.stripe_customer_id:
+        raise HTTPException(
+            status_code=400, detail="No billing account found",
+        )
+
+    try:
+        url = create_portal_session(user.stripe_customer_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    return {"url": url}
+
+
+@app.post("/api/billing/webhook")
+async def billing_webhook(request: Request):
+    """Stripe webhook receiver — verifies HMAC signature, processes events."""
+    from pnw_campsites.billing import handle_webhook_event, verify_webhook
+
+    # Must read raw body for signature verification
+    body = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+
+    try:
+        event = verify_webhook(body, sig)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    handle_webhook_event(event, _watch_db)
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Trip planner
 # ---------------------------------------------------------------------------
