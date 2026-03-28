@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { getWatches, deleteWatch, toggleWatch, createWatch } from "../api";
 import type { WatchData, CreateWatchParams } from "../api";
 import { usePushNotifications } from "../hooks/usePushNotifications";
@@ -7,7 +7,7 @@ import { PollDashboard } from "./PollDashboard";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export function WatchPanel({
+export const WatchPanel = memo(function WatchPanel({
   open,
   onClose,
 }: {
@@ -167,7 +167,7 @@ export function WatchPanel({
       </div>
     </div>
   );
-}
+});
 
 export function WatchButton({
   facilityId,

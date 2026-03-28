@@ -311,7 +311,7 @@ header p {
   display: block;
   font-size: 0.55rem;
   font-weight: var(--weight-normal);
-  opacity: 0.7;
+  color: var(--text-light);
   margin-top: 0.1rem;
 }
 
@@ -1169,6 +1169,10 @@ header p {
     font-size: 1.25rem;
   }
 
+  .header-subtitle {
+    display: none;
+  }
+
   /* Scale wordmark down on mobile to match reduced h1 size */
   header .wordmark {
     font-size: 20px;
@@ -1893,6 +1897,7 @@ header p {
   background: var(--bg-toggle);
   color: var(--accent);
   border-color: var(--border);
+  border-bottom: 2px solid var(--accent);
   font-weight: var(--weight-semi);
 }
 

@@ -17,8 +17,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.responses import Response
 
@@ -252,7 +251,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "DELETE", "PATCH"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type"],
     allow_credentials=True,
 )
 
@@ -273,6 +272,18 @@ async def timing_middleware(request: Request, call_next):
     if request.url.path.startswith("/api/search"):
         _search_timings.append(elapsed_ms)
         _search_logger.info("search_timing path=%s elapsed_ms=%.0f", request.url.path, elapsed_ms)
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' https://*.tile.openstreetmap.org data:; "
+        "connect-src 'self' https://*.tile.openstreetmap.org; "
+        "frame-ancestors 'none'"
+    )
     return response
 
 
@@ -870,8 +881,29 @@ class UpdateProfileRequest(BaseModel):
     default_from: str | None = Field(default=None, max_length=200)
 
 
+# In-memory auth rate limiter: ip -> (window_start, count)
+_auth_rate_limit: dict[str, tuple[float, int]] = {}
+_AUTH_WINDOW_SECONDS = 900  # 15 minutes
+_AUTH_MAX_ATTEMPTS = 10
+
+
+def _check_auth_rate_limit(request: Request) -> None:
+    """Raise 429 if auth attempts from this IP exceed threshold."""
+    ip = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    existing = _auth_rate_limit.get(ip)
+    if existing is None or (now - existing[0]) > _AUTH_WINDOW_SECONDS:
+        _auth_rate_limit[ip] = (now, 1)
+        return
+    window_start, count = existing
+    if count >= _AUTH_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts, try again later")
+    _auth_rate_limit[ip] = (window_start, count + 1)
+
+
 @app.post("/api/auth/signup")
 async def signup(body: SignupRequest, request: Request, response: Response):
+    _check_auth_rate_limit(request)
     existing = _watch_db.get_user_by_email(body.email)
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
@@ -893,6 +925,7 @@ async def signup(body: SignupRequest, request: Request, response: Response):
 
 @app.post("/api/auth/login")
 async def login(body: LoginRequest, request: Request, response: Response):
+    _check_auth_rate_limit(request)
     from datetime import datetime
 
     user = _watch_db.get_user_by_email(body.email)
@@ -1261,7 +1294,26 @@ _static_candidates = [
     Path(__file__).resolve().parents[3] / "static",
     Path(__file__).resolve().parents[2] / "static",
 ]
-for _static_dir in _static_candidates:
-    if _static_dir.is_dir():
-        app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
+_static_dir: Path | None = None
+for _candidate in _static_candidates:
+    if _candidate.is_dir():
+        _static_dir = _candidate
         break
+
+if _static_dir is not None:
+
+    @app.get("/{path:path}")
+    async def spa_fallback(path: str) -> FileResponse:
+        """Serve index.html for SPA client-side routes (e.g. /map, /plan)."""
+        # Let API routes and actual static files pass through
+        if path.startswith("api/"):
+            raise HTTPException(404)
+        # Serve actual file if it exists (JS, CSS, images, etc.)
+        file_path = (_static_dir / path).resolve()
+        if path and file_path.is_file() and str(file_path).startswith(str(_static_dir.resolve())):
+            return FileResponse(file_path)
+        # Everything else gets index.html for React Router
+        index = _static_dir / "index.html"
+        if index.exists():
+            return FileResponse(index, media_type="text/html")
+        raise HTTPException(404)

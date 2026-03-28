@@ -7,8 +7,8 @@ import type {
 } from "./api";
 import { WatchPanel, WatchButton } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
-import { AuthModal } from "./components/AuthModal";
-import { ShortcutHelpModal } from "./components/ShortcutHelpModal";
+const AuthModal = lazy(() => import("./components/AuthModal").then(m => ({ default: m.AuthModal })));
+const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").then(m => ({ default: m.ShortcutHelpModal })));
 import { UserMenu } from "./components/UserMenu";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -534,6 +534,10 @@ function groupByDateBlock(windows: Window[]): DateBlock[] {
   );
 }
 
+function fmtDate(iso: string): string {
+  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function meaningfulLoop(loop: string, campgroundName: string): string | null {
   const normalize = (s: string) =>
     s.toUpperCase().replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim();
@@ -558,7 +562,7 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
         <div key={block.key} className="date-block">
           <div className="date-block-header">
             <span className="date-block-range">
-              {block.dayName} {block.start_date} → {new Date(block.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {block.end_date}
+              {block.dayName} {fmtDate(block.start_date)} → {new Date(block.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {fmtDate(block.end_date)}
             </span>
             <span className="date-block-meta">
               {block.nights}n · {block.sites.length} site
@@ -673,7 +677,7 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
                       rel="noopener"
                       className="window-chip"
                     >
-                      {dayName} {w.start_date} → {new Date(w.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {w.end_date} ({w.nights}n)
+                      {dayName} {fmtDate(w.start_date)} → {new Date(w.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {fmtDate(w.end_date)} ({w.nights}n)
                     </a>
                   );
                 })}
@@ -1002,7 +1006,7 @@ export default function App() {
         <div className="header-row">
           <div>
             <h1>campnw</h1>
-            <p>Find available campsites across the Pacific Northwest</p>
+            <p className="header-subtitle">Find available campsites across the Pacific Northwest</p>
           </div>
           <div className="header-actions">
             <nav className="header-nav" aria-label="Main navigation">
@@ -1060,14 +1064,20 @@ export default function App() {
         open={watchPanelOpen}
         onClose={() => setWatchPanelOpen(false)}
       />
-      <AuthModal
-        open={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-      />
-      <ShortcutHelpModal
-        open={helpModalOpen}
-        onClose={() => setHelpModalOpen(false)}
-      />
+      <Suspense fallback={null}>
+        {authModalOpen && (
+          <AuthModal
+            open={authModalOpen}
+            onClose={() => setAuthModalOpen(false)}
+          />
+        )}
+        {helpModalOpen && (
+          <ShortcutHelpModal
+            open={helpModalOpen}
+            onClose={() => setHelpModalOpen(false)}
+          />
+        )}
+      </Suspense>
 
       <ErrorBoundary>
       <Suspense fallback={<div className="loading-page">Loading...</div>}>

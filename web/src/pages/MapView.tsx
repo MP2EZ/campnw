@@ -2,8 +2,7 @@ import { useEffect, useRef, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSearchContext } from "../contexts/SearchContext";
 import type { CampgroundResult, SearchParams } from "../api";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import L from "../leaflet-setup";
 import "leaflet.markercluster";
 import "./MapView.css";
 
@@ -210,6 +209,9 @@ export default function MapView() {
 
   return (
     <main id="main-content" className="map-page">
+      <div aria-live="polite" className="sr-only">
+        {loading ? "Loading map results" : `Map showing ${withAvailability.length} campgrounds with availability`}
+      </div>
       {summaryParts && (
         <div className="map-summary-bar">
           <span className="map-summary-text">

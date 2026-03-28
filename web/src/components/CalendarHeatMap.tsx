@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import type { SearchResponse } from "../api";
 
 interface Props {
@@ -120,7 +120,7 @@ function densityLevel(count: number, max: number): number {
   return 4;
 }
 
-export function CalendarHeatMap({ results, startDate, endDate }: Props) {
+export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDate, endDate }: Props) {
   const density = useMemo(
     () => computeDensity(results, startDate, endDate),
     [results, startDate, endDate]
@@ -213,4 +213,4 @@ export function CalendarHeatMap({ results, startDate, endDate }: Props) {
       </div>
     </div>
   );
-}
+});

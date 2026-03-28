@@ -7,5 +7,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './vitest.setup.ts',
     globals: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary'],
+      thresholds: { lines: 40 },
+    },
   },
 })
