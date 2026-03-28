@@ -51,6 +51,14 @@
   --space-5: 1.5rem;
   --space-6: 2rem;
   --space-7: 3rem;
+
+  /* ── Border radius ────────────────────────────────────────────── */
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
 }
 
 [data-theme="dark"] {
