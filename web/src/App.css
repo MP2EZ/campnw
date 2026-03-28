@@ -8,7 +8,7 @@
   --bg-toggle: #e8e8e0;
   --text: #1a1a1a;
   --text-muted: #666;
-  --text-light: #888;
+  --text-light: #777;
   --border: #ddd;
   --border-light: #eee;
   --border-input: #ccc;
@@ -43,16 +43,16 @@
   /* Text — warm off-white, never pure white */
   --text: #deded8;
   --text-muted: #9a9a90;
-  --text-light: #7a7a70;
+  --text-light: #8a8a80;
 
   /* Borders — warm-tinted, low contrast */
   --border: #38382e;
   --border-light: #2e2e26;
   --border-input: #3e3e34;
 
-  /* Accent — forest green for filled buttons (white text on it) */
-  --accent: #4a7a38;
-  --accent-hover: #5a8a48;
+  /* Accent — forest green for filled buttons (white text on it, passes AA ~6.5:1) */
+  --accent: #3a6a28;
+  --accent-hover: #4a7a38;
   /* Accent text — lighter green for text/links on dark bg (passes AA ~4.8:1) */
   --accent-text: #7aad5a;
 
@@ -76,6 +76,27 @@
   --heatmap-2: #2a4020;
   --heatmap-3: #3a5a2a;
   --heatmap-4: #4a7a38;
+}
+
+/* ─── Skip link (WCAG 2.4.1) ──────────────────────────────────────── */
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-4);
+  z-index: var(--z-modal);
+  padding: var(--space-2) var(--space-4);
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semi);
+  text-decoration: none;
+  transition: top var(--transition-fast);
+}
+
+.skip-link:focus {
+  top: var(--space-2);
 }
 
 * {

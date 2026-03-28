@@ -995,6 +995,7 @@ export default function App() {
   return (
     <SearchContext.Provider value={searchContextValue}>
     <div className="app">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <div aria-live="polite" className="sr-only">{liveAnnouncement}</div>
       <header>
         <div className="header-row">
@@ -1072,7 +1073,7 @@ export default function App() {
         <Route path="/plan" element={<TripPlanner />} />
         <Route path="/map" element={<MapView />} />
         <Route path="/" element={
-          <main>
+          <main id="main-content">
           <SearchForm
             onSearch={handleSearch}
             loading={loading}

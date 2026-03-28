@@ -200,7 +200,7 @@ export default function MapView() {
 
   if (!filteredResults.length && !loading) {
     return (
-      <main className="map-empty">
+      <main id="main-content" className="map-empty">
         <h2>No search results yet</h2>
         <p>Run a search to see campgrounds on the map.</p>
         <Link to="/" className="header-btn active">Go to Search</Link>
@@ -209,7 +209,7 @@ export default function MapView() {
   }
 
   return (
-    <main className="map-page">
+    <main id="main-content" className="map-page">
       {summaryParts && (
         <div className="map-summary-bar">
           <span className="map-summary-text">
