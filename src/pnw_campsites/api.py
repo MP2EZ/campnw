@@ -1082,7 +1082,11 @@ async def recommendations(request: Request):
         scored.append({
             "facility_id": cg.facility_id,
             "name": cg.name,
-            "booking_system": cg.booking_system.value if hasattr(cg.booking_system, "value") else str(cg.booking_system),
+            "booking_system": (
+                cg.booking_system.value
+                if hasattr(cg.booking_system, "value")
+                else str(cg.booking_system)
+            ),
             "state": cg.state,
             "tags": cg.tags or [],
             "vibe": cg.vibe or "",
