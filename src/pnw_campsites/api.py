@@ -195,6 +195,21 @@ async def _poll_all_watches() -> None:
     )
 
 
+async def _poll_pro_watches() -> None:
+    """Background job: poll only Pro-tier watches at higher frequency."""
+    from pnw_campsites.monitor.watcher import poll_all
+
+    if not _watch_db:
+        return
+
+    pro_watches = _watch_db.list_pro_watches()
+    if not pro_watches:
+        return
+
+    _poll_logger.info("Pro poll: %d watches", len(pro_watches))
+    await poll_all(_recgov, _goingtocamp, _watch_db, _registry, watches=pro_watches)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _registry, _recgov, _goingtocamp, _engine, _watch_db
@@ -223,6 +238,15 @@ async def lifespan(app: FastAPI):
             "interval",
             minutes=15,
             id="watch_poller",
+            max_instances=1,
+            coalesce=True,
+        )
+        # Pro-tier watches get an additional 5-min poll cycle
+        scheduler.add_job(
+            _poll_pro_watches,
+            "interval",
+            minutes=5,
+            id="watch_poller_pro",
             max_instances=1,
             coalesce=True,
         )

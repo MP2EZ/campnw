@@ -206,9 +206,14 @@ async def poll_all(
     goingtocamp: GoingToCampClient | None,
     watch_db: WatchDB,
     registry: CampgroundRegistry | None = None,
+    watches: list[Watch] | None = None,
 ) -> list[PollResult]:
-    """Poll all enabled watches, grouping by facility to minimize API calls."""
-    watches = watch_db.list_watches(enabled_only=True)
+    """Poll watches, grouping by facility to minimize API calls.
+
+    If watches is None, polls all enabled watches.
+    """
+    if watches is None:
+        watches = watch_db.list_watches(enabled_only=True)
 
     # Group watches by facility_id to share availability data
     by_facility: dict[str, list[Watch]] = defaultdict(list)
