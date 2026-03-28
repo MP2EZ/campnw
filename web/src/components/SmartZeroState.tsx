@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Diagnosis, DateSuggestion, ActionChip, SearchParams } from "../api";
 
 type SearchMode = "find" | "exact";
@@ -22,7 +23,7 @@ function formatDateRange(start: string, end: string): string {
   return `${s} - ${e}`;
 }
 
-export function SmartZeroState({
+export const SmartZeroState = memo(function SmartZeroState({
   diagnosis,
   dateSuggestions,
   actionChips,
@@ -107,4 +108,4 @@ export function SmartZeroState({
       )}
     </div>
   );
-}
+});

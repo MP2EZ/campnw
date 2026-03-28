@@ -84,6 +84,9 @@
   --max-w-app: 960px;
   --max-w-modal: 400px;
 
+  /* ── Semantic colors ──────────────────────────────────────────── */
+  --text-on-accent: #fff;
+
   /* ── Map ──────────────────────────────────────────────────────── */
   --map-pin-recgov: var(--src-recgov-border);
   --map-pin-wa: var(--src-wa-border);
@@ -112,6 +115,9 @@
   --src-id-badge-bg: #221830;
   --src-id-badge-text: #a070d0;
   --src-id-border: #7a40a8;
+
+  /* ── Semantic colors ──────────────────────────────────────────── */
+  --text-on-accent: #fff;
 
   /* ── Shadows (darker for contrast on dark surfaces) ──────────── */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);

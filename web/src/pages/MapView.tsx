@@ -2,8 +2,7 @@ import { useEffect, useRef, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSearchContext } from "../contexts/SearchContext";
 import type { CampgroundResult, SearchParams } from "../api";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import L from "../leaflet-setup";
 import "leaflet.markercluster";
 import "./MapView.css";
 
@@ -200,7 +199,7 @@ export default function MapView() {
 
   if (!filteredResults.length && !loading) {
     return (
-      <main className="map-empty">
+      <main id="main-content" className="map-empty">
         <h2>No search results yet</h2>
         <p>Run a search to see campgrounds on the map.</p>
         <Link to="/" className="header-btn active">Go to Search</Link>
@@ -209,7 +208,10 @@ export default function MapView() {
   }
 
   return (
-    <main className="map-page">
+    <main id="main-content" className="map-page">
+      <div aria-live="polite" className="sr-only">
+        {loading ? "Loading map results" : `Map showing ${withAvailability.length} campgrounds with availability`}
+      </div>
       {summaryParts && (
         <div className="map-summary-bar">
           <span className="map-summary-text">

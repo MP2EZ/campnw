@@ -231,7 +231,7 @@ export default function TripPlanner() {
   };
 
   return (
-    <div className="trip-planner">
+    <main id="main-content" className="trip-planner">
       {!isEmpty && (
         <button
           className="chat-new-btn"
@@ -317,6 +317,6 @@ export default function TripPlanner() {
           Send
         </button>
       </form>
-    </div>
+    </main>
   );
 }

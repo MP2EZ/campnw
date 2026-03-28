@@ -63,6 +63,7 @@ def api_client(tmp_path: Path) -> TestClient:
         registry_mock.search.return_value = []
         api_module._registry = registry_mock
         api_module._engine = MagicMock()
+        api_module._auth_rate_limit.clear()
 
         client = TestClient(
             api_module.app,

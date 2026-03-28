@@ -37,7 +37,34 @@ jobs:
 
       - name: Frontend tests
         working-directory: web
-        run: npx vitest run
+        run: npx vitest run --coverage
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python CVE scan
+        run: |
+          pip install pip-audit
+          pip install -e ".[api]"
+          pip-audit
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: npm CVE scan
+        working-directory: web
+        run: |
+          npm ci
+          npm audit --audit-level=high
 
   lighthouse:
     runs-on: ubuntu-latest

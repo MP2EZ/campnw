@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { getWatches, deleteWatch, toggleWatch, createWatch } from "../api";
 import type { WatchData, CreateWatchParams } from "../api";
 import { usePushNotifications } from "../hooks/usePushNotifications";
@@ -7,7 +7,7 @@ import { PollDashboard } from "./PollDashboard";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export function WatchPanel({
+export const WatchPanel = memo(function WatchPanel({
   open,
   onClose,
 }: {
@@ -104,7 +104,13 @@ export function WatchPanel({
           </button>
         </div>
 
-        {loading && <p className="watch-loading">Loading...</p>}
+        {loading && (
+          <div className="watch-loading">
+            <div className="thinking-dots">
+              <span /><span /><span />
+            </div>
+          </div>
+        )}
         {error && <p className="watch-error">{error}</p>}
 
         {!loading && watches.length === 0 && (
@@ -161,7 +167,7 @@ export function WatchPanel({
       </div>
     </div>
   );
-}
+});
 
 export function WatchButton({
   facilityId,
