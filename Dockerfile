@@ -7,12 +7,16 @@ COPY pyproject.toml .
 COPY src/ src/
 RUN pip install --no-cache-dir ".[api]"
 
-# Copy seed data (read-only registry, ~140KB)
-COPY data/ data/
+# Copy seed data to staging dir (volume will mount over /app/data/)
+COPY data/ data-seed/
 
 # Frontend pre-built by GitHub Actions
 COPY web/dist/ static/
 
+# Startup script: copy seed data into volume if missing, then run server
+COPY start.sh .
+RUN chmod +x start.sh
+
 EXPOSE 8080
 
-CMD ["uvicorn", "pnw_campsites.api:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["./start.sh"]
