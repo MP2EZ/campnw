@@ -1,0 +1,57 @@
+.upgrade-modal {
+  max-width: var(--max-w-modal);
+}
+
+.upgrade-modal-body {
+  padding: var(--space-4);
+}
+
+.upgrade-description {
+  margin: 0 0 var(--space-4);
+  color: var(--text);
+  line-height: var(--leading-normal);
+}
+
+.upgrade-features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.upgrade-feature {
+  font-size: var(--text-body);
+  padding: var(--space-2) var(--space-3);
+  background: var(--chip-bg, #f0f0f0);
+  border-radius: var(--radius-sm);
+}
+
+.upgrade-feature::before {
+  content: "\2713 ";
+  color: var(--accent);
+  font-weight: var(--weight-bold);
+}
+
+.upgrade-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.upgrade-btn {
+  width: 100%;
+}
+
+.upgrade-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  font-size: var(--text-body);
+  padding: var(--space-2);
+  transition: color var(--transition-fast);
+}
+
+.upgrade-dismiss:hover {
+  color: var(--text);
+}

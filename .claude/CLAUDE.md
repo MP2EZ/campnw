@@ -290,15 +290,15 @@ Performance:
 - [ ] Anomaly-based deal alerts (proactive alerts for statistically unusual availability)
 - [ ] "Why did I miss it?" post-mortem (explains missed cancellations, suggests tuning)
 
-### v0.95 "Monetization"
-- [ ] Free/Pro tier ($5/mo): 3 free watches @ 15-min, unlimited Pro @ 5-min
-- [ ] Payment provider integration (hosted checkout + customer portal + webhooks)
-- [ ] Subscription schema (status on users table, webhook-driven, never in JWT)
-- [ ] Watch limit enforcement (server-side, HTTP 402) + poll interval tiering
-- [ ] Trip planner gating (3 sessions/month free, 20 Pro, soft gate on 4th)
-- [ ] Pricing page, upgrade modal, billing settings, pro indicator
-- [ ] 30-day grandfather period for existing users with >3 watches
-- [ ] Webhook security (HMAC signature verification, idempotency, audit trail)
+### v0.95 "Monetization" — DONE (feature/monetization branch)
+- [x] Free/Pro tier ($5/mo): 3 free watches @ 15-min, unlimited Pro @ 5-min
+- [x] Payment provider integration (Stripe hosted checkout + customer portal + webhooks)
+- [x] Subscription schema (status on users table, webhook-driven, never in JWT)
+- [x] Watch limit enforcement (server-side, HTTP 402) + poll interval tiering (5-min pro scheduler)
+- [x] Trip planner gating (3 sessions/month free, 20 Pro, DB-backed monthly counter)
+- [x] Pricing page (`/pricing`), upgrade modal (focus trap, ARIA), billing settings, ProBadge
+- [x] 30-day grandfather migration for existing users with >3 watches
+- [x] Webhook security (HMAC signature verification, idempotency via stripe_events table)
 
 ### v1.0 "campnw 1.0"
 - [ ] Map view (Leaflet, lazy-loaded, with list alternative for a11y)

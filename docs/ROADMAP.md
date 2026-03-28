@@ -418,7 +418,7 @@ Data quality and sample size. Campgrounds polled infrequently will have unreliab
 
 ---
 
-## v0.95 "Monetization"
+## v0.95 "Monetization" — IMPLEMENTED (feature/monetization branch, pending Stripe account setup)
 
 ### Theme
 campnw has real users, real infrastructure costs, and a feature set that justifies a paid tier. This milestone introduces a Free/Pro split, subscription billing, and upgrade surfaces that make the paid tier discoverable without being coercive. The goal is sustainability, not growth. Break-even requires 2-4 Pro subscribers at $5/month. Everything here is scoped to that reality.
@@ -497,6 +497,13 @@ Four surfaces, no more:
 - Webhook handler: `checkout.session.completed`, `subscription.updated`, `subscription.deleted`, `invoice.payment_failed`
 - Watch enforcement: limit check in `POST /api/watches`, poll interval tiering in APScheduler
 - Tests: webhook handler, tier logic, gate enforcement, downgrade flow
+
+### Implementation Status
+All code complete on `feature/monetization` branch. 415 backend + 60 frontend tests passing. Awaiting Stripe account creation to configure real keys (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRO_PRICE_ID`). Tier enforcement, UI, and grandfather migration work without Stripe — test by toggling `subscription_status` in SQLite.
+
+**Backend:** `billing.py` (Stripe client), schema migrations (5 user columns, `stripe_events`, `plan_sessions` tables), tier constants + enforcement in `api.py`, 5-min pro poll scheduler, billing/checkout/portal/webhook endpoints.
+
+**Frontend:** `useBilling` hook, `ProBadge`, `BillingSettings`, `UpgradeModal` (402/429 triggered), `Pricing` page at `/pricing`, watch counter in WatchPanel, sessions counter in TripPlanner, billing item in UserMenu.
 
 ### Quality Baseline
 - Webhook endpoint validates signature on every request — never skip

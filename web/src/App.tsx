@@ -12,6 +12,7 @@ import { UserMenu } from "./components/UserMenu";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { useAuth } from "./hooks/useAuth";
 import TripPlanner from "./pages/TripPlanner";
+import { Pricing } from "./pages/Pricing";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
@@ -836,6 +837,7 @@ export default function App() {
 
   const isSearch = location.pathname === "/";
   const isPlan = location.pathname === "/plan";
+  const isPricing = location.pathname === "/pricing";
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
@@ -944,6 +946,13 @@ export default function App() {
               >
                 Plan
               </Link>
+              <Link
+                to="/pricing"
+                className={`header-btn${isPricing ? " active" : ""}`}
+                aria-current={isPricing ? "page" : undefined}
+              >
+                Pricing
+              </Link>
             </nav>
             <button
               className="header-btn"
@@ -984,6 +993,7 @@ export default function App() {
 
       <Routes>
         <Route path="/plan" element={<TripPlanner />} />
+        <Route path="/pricing" element={<Pricing />} />
         <Route path="/" element={
           <main>
           <SearchForm

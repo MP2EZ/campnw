@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getWatches, deleteWatch, toggleWatch, createWatch } from "../api";
+import { getWatches, deleteWatch, toggleWatch, createWatch, WatchLimitError } from "../api";
 import type { WatchData, CreateWatchParams } from "../api";
 import { usePushNotifications } from "../hooks/usePushNotifications";
+import { useBilling } from "../hooks/useBilling";
 import { useAuth } from "../hooks/useAuth";
 import { PollDashboard } from "./PollDashboard";
+import { UpgradeModal } from "./UpgradeModal";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -15,9 +17,12 @@ export function WatchPanel({
   onClose: () => void;
 }) {
   const { user } = useAuth();
+  const { billing } = useBilling();
   const [watches, setWatches] = useState<WatchData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const maxWatches = billing?.max_watches ?? 3;
+  const isPro = billing?.tier === "pro";
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -98,7 +103,14 @@ export function WatchPanel({
         aria-labelledby="watch-panel-title"
       >
         <div className="watch-panel-header">
-          <h2 id="watch-panel-title">Watchlist</h2>
+          <h2 id="watch-panel-title">
+            Watchlist
+            {!isPro && (
+              <span className="watch-counter">
+                {watches.length}/{maxWatches}
+              </span>
+            )}
+          </h2>
           <button className="watch-close" onClick={onClose} ref={closeRef}>
             &times;
           </button>
@@ -183,6 +195,7 @@ export function WatchButton({
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const { subscribed, subscribe } = usePushNotifications();
 
   const handleWatch = async () => {
@@ -207,8 +220,10 @@ export function WatchButton({
         setCreated(false);
         setShowPushPrompt(false);
       }, 8000);
-    } catch {
-      // ignore
+    } catch (e) {
+      if (e instanceof WatchLimitError) {
+        setShowUpgrade(true);
+      }
     } finally {
       setCreating(false);
     }
@@ -237,12 +252,19 @@ export function WatchButton({
   }
 
   return (
-    <button
-      className="watch-cta-btn"
-      onClick={handleWatch}
-      disabled={creating}
-    >
-      {creating ? "..." : "Watch"}
-    </button>
+    <>
+      <button
+        className="watch-cta-btn"
+        onClick={handleWatch}
+        disabled={creating}
+      >
+        {creating ? "..." : "Watch"}
+      </button>
+      <UpgradeModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        reason="watch_limit"
+      />
+    </>
   );
 }

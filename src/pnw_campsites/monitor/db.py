@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 _docker_db = Path("/app/data/watches.db")
@@ -268,6 +268,24 @@ class WatchDB:
             CREATE INDEX IF NOT EXISTS idx_plan_sessions_session
                 ON plan_sessions(session_token, created_at);
         """)
+        # v0.95 grandfather migration: users with >3 watches get grandfathered
+        # Sentinel: only run if any user has >3 watches and status is still 'free'
+        rows = self._conn.execute(
+            "SELECT u.id FROM users u"
+            " JOIN watches w ON w.user_id = u.id"
+            " WHERE u.subscription_status = 'free'"
+            " GROUP BY u.id HAVING COUNT(w.id) > 3"
+        ).fetchall()
+        if rows:
+            grandfather_until = (
+                date.today() + timedelta(days=30)
+            ).isoformat()
+            for row in rows:
+                self._conn.execute(
+                    "UPDATE users SET subscription_status = 'grandfathered',"
+                    " grandfathered_until = ? WHERE id = ?",
+                    (grandfather_until, row["id"]),
+                )
         self._conn.commit()
 
     # -------------------------------------------------------------------

@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { deleteAccount, exportData } from "../api";
+import { ProBadge } from "./ProBadge";
+import { BillingSettings } from "./BillingSettings";
 
 export function UserMenu() {
   const { user, logout, updateProfile } = useAuth();
   const [open, setOpen] = useState(false);
   const [showPrefs, setShowPrefs] = useState(false);
+  const [showBilling, setShowBilling] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -16,6 +19,7 @@ export function UserMenu() {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
         setShowPrefs(false);
+        setShowBilling(false);
         setShowDeleteConfirm(false);
       }
     };
@@ -55,17 +59,24 @@ export function UserMenu() {
         aria-expanded={open}
       >
         {displayLabel}
+        {user.tier === "pro" && <> <ProBadge /></>}
       </button>
 
       {open && (
         <div className="user-menu-dropdown">
-          {!showPrefs && !showDeleteConfirm && (
+          {!showPrefs && !showBilling && !showDeleteConfirm && (
             <>
               <button
                 className="user-menu-item"
                 onClick={() => setShowPrefs(true)}
               >
                 Preferences
+              </button>
+              <button
+                className="user-menu-item"
+                onClick={() => setShowBilling(true)}
+              >
+                Billing
               </button>
               <button className="user-menu-item" onClick={handleExport}>
                 Export data
@@ -98,6 +109,19 @@ export function UserMenu() {
               }}
               onCancel={() => setShowPrefs(false)}
             />
+          )}
+
+          {showBilling && (
+            <div className="billing-panel">
+              <BillingSettings />
+              <button
+                className="auth-switch-btn"
+                onClick={() => setShowBilling(false)}
+                style={{ marginTop: "var(--space-3)", width: "100%" }}
+              >
+                Back
+              </button>
+            </div>
           )}
 
           {showDeleteConfirm && (

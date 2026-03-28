@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { planChatStream } from "../api";
 import type { ChatMessage, ToolCall } from "../api";
+import { useBilling } from "../hooks/useBilling";
+import { UpgradeModal } from "../components/UpgradeModal";
 
 interface DisplayMessage {
   role: "user" | "assistant";
@@ -76,6 +78,8 @@ function loadSaved<T>(key: string, fallback: T): T {
 }
 
 export default function TripPlanner() {
+  const { billing } = useBilling();
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [messages, setMessages] = useState<DisplayMessage[]>(
     () => loadSaved("campnw-plan-messages", []),
   );
@@ -195,6 +199,24 @@ export default function TripPlanner() {
       },
       (err) => {
         const message = err.message || "Something went wrong";
+        // Check if this is a plan_limit error (429)
+        if (message.includes("plan_limit") || message.includes("429")) {
+          setShowUpgrade(true);
+          // Remove the placeholder assistant message
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last && last.role === "assistant" && !last.content) {
+              return updated.slice(0, -1);
+            }
+            return updated;
+          });
+          // Also remove the user message we just added from API messages
+          setApiMessages((prev) => prev.slice(0, -1));
+          setLoading(false);
+          inputRef.current?.focus();
+          return;
+        }
         setError(message);
         setMessages((prev) => {
           const updated = [...prev];
@@ -230,17 +252,28 @@ export default function TripPlanner() {
     localStorage.removeItem("campnw-plan-api-messages");
   };
 
+  const sessionsRemaining = billing
+    ? billing.plan_sessions_limit - billing.plan_sessions_used
+    : null;
+
   return (
     <div className="trip-planner">
-      {!isEmpty && (
-        <button
-          className="chat-new-btn"
-          onClick={handleNewConversation}
-          disabled={loading}
-        >
-          New conversation
-        </button>
-      )}
+      <div className="trip-planner-toolbar">
+        {!isEmpty && (
+          <button
+            className="chat-new-btn"
+            onClick={handleNewConversation}
+            disabled={loading}
+          >
+            New conversation
+          </button>
+        )}
+        {sessionsRemaining !== null && (
+          <span className="plan-sessions-counter">
+            {billing!.plan_sessions_used}/{billing!.plan_sessions_limit} sessions this month
+          </span>
+        )}
+      </div>
       {isEmpty && (
         <div className="chat-welcome">
           <h2>Plan a camping trip</h2>
@@ -317,6 +350,12 @@ export default function TripPlanner() {
           Send
         </button>
       </form>
+
+      <UpgradeModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        reason="plan_limit"
+      />
     </div>
   );
 }
