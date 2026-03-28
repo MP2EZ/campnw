@@ -11,6 +11,7 @@ import { AuthModal } from "./components/AuthModal";
 import { ShortcutHelpModal } from "./components/ShortcutHelpModal";
 import { UserMenu } from "./components/UserMenu";
 import { SmartZeroState } from "./components/SmartZeroState";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useAuth } from "./hooks/useAuth";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { SearchContext } from "./contexts/SearchContext";
@@ -1068,6 +1069,7 @@ export default function App() {
         onClose={() => setHelpModalOpen(false)}
       />
 
+      <ErrorBoundary>
       <Suspense fallback={<div className="loading-page">Loading...</div>}>
       <Routes>
         <Route path="/plan" element={<TripPlanner />} />
@@ -1193,6 +1195,7 @@ export default function App() {
         } />
       </Routes>
       </Suspense>
+      </ErrorBoundary>
     </div>
     </SearchContext.Provider>
   );

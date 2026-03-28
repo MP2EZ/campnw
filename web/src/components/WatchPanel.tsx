@@ -104,7 +104,13 @@ export function WatchPanel({
           </button>
         </div>
 
-        {loading && <p className="watch-loading">Loading...</p>}
+        {loading && (
+          <div className="watch-loading">
+            <div className="thinking-dots">
+              <span /><span /><span />
+            </div>
+          </div>
+        )}
         {error && <p className="watch-error">{error}</p>}
 
         {!loading && watches.length === 0 && (
