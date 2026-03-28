@@ -282,7 +282,10 @@ Performance:
 - [ ] Shareable itineraries (UUID link, 30-day expiry) — deferred
 - [ ] Cost monitoring dashboard — deferred
 
-### v0.9 "Predictions+"
+### v0.9 "Predictions+" — BLOCKED (gathering data)
+Data collection started 2026-03-27: 18 watches (15 rec.gov + 3 WA State Parks) polling every 15 min in two tranches across WA/OR/ID. Need 4-8 weeks of history before predictions are meaningful. Revisit mid-May 2026.
+- [x] Two-tranche polling (odd/even watch IDs, 7.5-min offset to halve API burst)
+- [x] 18 prod watches covering high-demand, mid-tier, and multi-state campgrounds
 - [ ] Predictive availability display ("typically frees up X days before")
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)
 - [ ] Smart notification scoring ("usually books within 30 min")
