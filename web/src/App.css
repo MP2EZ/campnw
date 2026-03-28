@@ -612,8 +612,8 @@ header p {
 
 .card-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   border-top: 1px solid var(--border-light);
   border-bottom: 1px solid #eee;
@@ -623,14 +623,16 @@ header p {
   z-index: var(--z-sticky);
 }
 
-.book-link {
+.book-link,
+.map-link {
   font-size: var(--text-body);
   color: var(--accent);
   text-decoration: none;
   font-weight: var(--weight-medium);
 }
 
-.book-link:hover {
+.book-link:hover,
+.map-link:hover {
   text-decoration: underline;
 }
 
@@ -1290,6 +1292,7 @@ header p {
 /* ─── Watch CTA button ─────────────────────────────────────────────── */
 
 .watch-cta-btn {
+  margin-left: auto;
   padding: 0.3rem var(--space-3);
   background: none;
   border: 1px solid var(--accent);
@@ -2192,4 +2195,72 @@ a.header-btn {
 [data-theme="dark"] .header-btn.active {
   background: var(--bg-hover);
   color: var(--accent-text);
+}
+
+/* ─── Screen Reader Only ───────────────────────────────────────────── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── Shortcut Help Modal ──────────────────────────────────────────── */
+
+.shortcut-modal {
+  max-width: var(--max-w-modal);
+}
+
+.shortcut-list {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.shortcut-row:last-child {
+  border-bottom: none;
+}
+
+.shortcut-row dt {
+  flex-shrink: 0;
+}
+
+.shortcut-row dd {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.shortcut-row kbd {
+  display: inline-block;
+  min-width: 1.8em;
+  text-align: center;
+  padding: var(--space-1) var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semi);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 0 var(--border);
+}
+
+/* ─── Focused Card ─────────────────────────────────────────────────── */
+
+.result-card.card-focused {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

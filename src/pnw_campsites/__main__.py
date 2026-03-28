@@ -466,7 +466,7 @@ def main() -> None:
     p_list = sub.add_parser("list", help="List campgrounds in the registry")
     p_list.add_argument("--state", help="Filter by state")
     p_list.add_argument("--tags", help="Comma-separated tags to filter by")
-    p_list.add_argument("--max-drive", type=int, help="Max drive minutes from Bellevue")
+    p_list.add_argument("--max-drive", type=int, help="Max drive minutes from Seattle")
     p_list.add_argument("--name", help="Filter by name (substring match)")
     p_list.add_argument("--source", help="Booking system: recgov, wa-state (default: all)")
 

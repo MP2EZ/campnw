@@ -587,7 +587,7 @@ class TestGetCampgroundDetailTool:
         assert data["notes"] == "Popular"
         assert data["rating"] == 5
         assert data["total_sites"] == 205
-        assert data["drive_minutes_from_bellevue"] == 90
+        assert data["drive_minutes_from_seattle"] == 90
         assert data["booking_system"] == "recgov"
 
     def test_get_detail_not_found_returns_error(self):

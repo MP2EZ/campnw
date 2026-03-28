@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { Routes, Route, Link, useLocation } from "react-router-dom";
+import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
+import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { searchCampsitesStream, saveSearchHistory, getSearchHistory } from "./api";
 import type {
   CampgroundResult, SearchParams, SearchResponse, Window, SearchHistoryEntry,
@@ -8,10 +8,14 @@ import type {
 import { WatchPanel, WatchButton } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
 import { AuthModal } from "./components/AuthModal";
+import { ShortcutHelpModal } from "./components/ShortcutHelpModal";
 import { UserMenu } from "./components/UserMenu";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { useAuth } from "./hooks/useAuth";
-import TripPlanner from "./pages/TripPlanner";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { SearchContext } from "./contexts/SearchContext";
+const TripPlanner = lazy(() => import("./pages/TripPlanner"));
+const MapView = lazy(() => import("./pages/MapView"));
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
@@ -687,10 +691,14 @@ function ResultCard({
   result,
   view,
   searchDates,
+  focused,
+  headerRef,
 }: {
   result: SearchResponse["results"][0];
   view: ResultsView;
   searchDates?: { start: string; end: string };
+  focused?: boolean;
+  headerRef?: (el: HTMLButtonElement | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -735,12 +743,14 @@ function ResultCard({
       : `${result.total_available_sites} sites · ${result.windows.filter((w) => !w.is_fcfs).length} windows`;
 
   return (
-    <div className={`result-card card-${result.booking_system}`} ref={cardRef}>
+    <div className={`result-card card-${result.booking_system}${focused ? " card-focused" : ""}`} ref={cardRef}>
       <button
         className="result-header"
         onClick={handleToggle}
         aria-expanded={expanded}
         type="button"
+        ref={headerRef}
+        tabIndex={-1}
       >
         <div>
           <h3>
@@ -792,6 +802,11 @@ function ResultCard({
                   : "Recreation.gov"}{" "}
                 ↗
               </a>
+              {result.latitude && result.longitude && (
+                <Link to={`/map?focus=${result.facility_id}`} className="map-link">
+                  See on map
+                </Link>
+              )}
               {searchDates && (
                 <WatchButton
                   facilityId={result.facility_id}
@@ -818,6 +833,7 @@ function ResultCard({
 export default function App() {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -826,8 +842,13 @@ export default function App() {
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(["recgov", "wa_state"]));
   const lastSearchParams = useRef<SearchParams | null>(null);
   const lastSearchMode = useRef<SearchMode>("find");
+  const [activeSearchParams, setActiveSearchParams] = useState<SearchParams | null>(null);
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
+  const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
+  const [liveAnnouncement, setLiveAnnouncement] = useState("");
+  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("campnw-dark");
     if (saved !== null) return saved === "true";
@@ -836,6 +857,15 @@ export default function App() {
 
   const isSearch = location.pathname === "/";
   const isPlan = location.pathname === "/plan";
+  const isMap = location.pathname === "/map";
+
+  const maxResults = lastSearchParams.current?.limit || 20;
+  const filteredResults = useMemo(() => {
+    if (!results) return [];
+    return results.results
+      .filter((r) => sourceFilter.has(r.booking_system))
+      .slice(0, maxResults);
+  }, [results, sourceFilter, maxResults]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
@@ -846,6 +876,7 @@ export default function App() {
     const searchParams = { ...params };
     lastSearchParams.current = params;
     lastSearchMode.current = mode;
+    setActiveSearchParams(params);
 
     setLoading(true);
     setError(null);
@@ -920,8 +951,51 @@ export default function App() {
     setSourceFilter(next);
   };
 
+  const searchContextValue = useMemo(() => ({
+    results,
+    loading,
+    searchDates,
+    searchParams: activeSearchParams,
+    sourceFilter,
+    filteredResults,
+  }), [results, loading, searchDates, activeSearchParams, sourceFilter, filteredResults]);
+
+  // Reset focused card when results change
+  useEffect(() => {
+    setFocusedCardIndex(-1);
+  }, [filteredResults]);
+
+  const availableCards = useMemo(
+    () => filteredResults.filter((r) => r.total_available_sites > 0),
+    [filteredResults]
+  );
+
+  const navigateCard = useCallback((delta: number) => {
+    if (!availableCards.length) return;
+    setFocusedCardIndex((prev) => {
+      const next = Math.max(0, Math.min(availableCards.length - 1, prev + delta));
+      setTimeout(() => {
+        cardRefs.current[next]?.focus();
+        cardRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 0);
+      return next;
+    });
+  }, [availableCards.length]);
+
+  const shortcuts = useMemo(() => [
+    { key: "j", handler: () => navigateCard(1), description: "Next result" },
+    { key: "k", handler: () => navigateCard(-1), description: "Previous result" },
+    { key: "w", handler: () => setWatchPanelOpen(true), description: "Open watchlist" },
+    { key: "m", handler: () => { const target = isMap ? "/" : "/map"; navigate(target); setLiveAnnouncement(target === "/map" ? "Switched to map view" : "Switched to list view"); }, description: "Toggle map/list" },
+    { key: "?", handler: () => setHelpModalOpen(true), description: "Show shortcuts" },
+  ], [navigateCard, navigate, isMap]);
+
+  useKeyboardShortcuts(shortcuts);
+
   return (
+    <SearchContext.Provider value={searchContextValue}>
     <div className="app">
+      <div aria-live="polite" className="sr-only">{liveAnnouncement}</div>
       <header>
         <div className="header-row">
           <div>
@@ -936,6 +1010,13 @@ export default function App() {
                 aria-current={isSearch ? "page" : undefined}
               >
                 Search
+              </Link>
+              <Link
+                to="/map"
+                className={`header-btn${isMap ? " active" : ""}`}
+                aria-current={isMap ? "page" : undefined}
+              >
+                Map
               </Link>
               <Link
                 to="/plan"
@@ -981,9 +1062,15 @@ export default function App() {
         open={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
       />
+      <ShortcutHelpModal
+        open={helpModalOpen}
+        onClose={() => setHelpModalOpen(false)}
+      />
 
+      <Suspense fallback={<div className="loading-page">Loading...</div>}>
       <Routes>
         <Route path="/plan" element={<TripPlanner />} />
+        <Route path="/map" element={<MapView />} />
         <Route path="/" element={
           <main>
           <SearchForm
@@ -1000,24 +1087,13 @@ export default function App() {
       {error && <div className="error-banner">{error}</div>}
 
       {results && (() => {
-        // Client-side source filtering — instant toggle, capped at user's limit
-        const maxResults = lastSearchParams.current?.limit || 20;
-        const sourceFiltered = results.results
-          .filter((r) => sourceFilter.has(r.booking_system))
-          .slice(0, maxResults);
-        const filteredResults = {
-          ...results,
-          results: sourceFiltered,
-          campgrounds_with_availability: sourceFiltered.filter(
-            (r) => r.total_available_sites > 0,
-          ).length,
-        };
+        const withAvailability = filteredResults.filter((r) => r.total_available_sites > 0).length;
         return (
         <div className="results">
           <div className="results-header">
             <p className="results-summary">
               Checked {Math.min(results.campgrounds_checked, maxResults)} campgrounds —{" "}
-              {filteredResults.campgrounds_with_availability} with availability
+              {withAvailability} with availability
             </p>
             <div className="view-toggle">
               <button
@@ -1055,9 +1131,9 @@ export default function App() {
               WA Parks
             </button>
           </div>
-          {searchDates && filteredResults.campgrounds_with_availability > 0 && (
+          {searchDates && withAvailability > 0 && (
             <CalendarHeatMap
-              results={filteredResults}
+              results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}
               startDate={searchDates.start}
               endDate={searchDates.end}
             />
@@ -1069,24 +1145,26 @@ export default function App() {
               ))}
             </div>
           )}
-          {filteredResults.results.some((r) => r.booking_system === "wa_state") && (
+          {filteredResults.some((r) => r.booking_system === "wa_state") && (
             <p className="wa-data-note">
               <span className="source-badge source-wa_state">WA Parks</span>{" "}
               site data is limited — names, types, and capacity aren't available
               from their booking system. Check GoingToCamp for full details.
             </p>
           )}
-          {filteredResults.results
+          {filteredResults
             .filter((r) => r.total_available_sites > 0)
-            .map((r) => (
+            .map((r, i) => (
               <ResultCard
                 key={r.facility_id}
                 result={r}
                 view={resultsView}
                 searchDates={searchDates || undefined}
+                focused={i === focusedCardIndex}
+                headerRef={(el) => { cardRefs.current[i] = el; }}
               />
             ))}
-          {filteredResults.campgrounds_with_availability === 0 && (
+          {withAvailability === 0 && (
             <SmartZeroState
               diagnosis={
                 results.campgrounds_with_availability > 0
@@ -1113,6 +1191,8 @@ export default function App() {
       </main>
         } />
       </Routes>
+      </Suspense>
     </div>
+    </SearchContext.Provider>
   );
 }

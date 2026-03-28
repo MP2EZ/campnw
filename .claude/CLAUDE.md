@@ -165,7 +165,7 @@ Full roadmap details: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs
 ### v0.1 "Foundation" — DONE
 - [x] Rec.gov provider (RIDB metadata + availability)
 - [x] GoingToCamp provider (WA State Parks, curl_cffi WAF bypass)
-- [x] SQLite campground registry (685 campgrounds, 453 with tags)
+- [x] SQLite campground registry (741 campgrounds, enriched with tags)
 - [x] Search engine with day-of-week, distance, tag filtering
 - [x] CLI: search, check, list, watch add/remove/list/poll
 - [x] FastAPI backend with multi-provider search/check/list endpoints
@@ -231,7 +231,7 @@ Performance:
 - [x] Redact from_location from search logs
 
 ### v0.45 "Testing" — DONE
-- [x] 346 tests (295 backend + 51 frontend)
+- [x] 436 backend + 60 frontend tests
 - [x] 82% backend coverage, 70% CI threshold
 - [x] Shared conftest.py with fixtures and factories
 - [x] CI test job gates deployment in deploy.yml
@@ -282,38 +282,46 @@ Performance:
 - [ ] Shareable itineraries (UUID link, 30-day expiry) — deferred
 - [ ] Cost monitoring dashboard — deferred
 
-### v0.9 "Predictions+" — BLOCKED (gathering data)
-Data collection started 2026-03-27: 18 watches (15 rec.gov + 3 WA State Parks) polling every 15 min in two tranches across WA/OR/ID. Need 4-8 weeks of history before predictions are meaningful. Revisit mid-May 2026.
-- [x] Two-tranche polling (odd/even watch IDs, 7.5-min offset to halve API burst)
-- [x] 18 prod watches covering high-demand, mid-tier, and multi-state campgrounds
-- [ ] Predictive availability display ("typically frees up X days before")
-- [ ] Statistical prediction model (time-series on polling history + booking window detection)
-- [ ] Smart notification scoring ("usually books within 30 min")
-- [ ] Prediction confidence display with "still learning" cold start
-- [ ] Anomaly-based deal alerts (proactive alerts for statistically unusual availability)
-- [ ] "Why did I miss it?" post-mortem (explains missed cancellations, suggests tuning)
+### v0.95 "Monetization" — DONE (feature/monetization branch)
+- [x] Free/Pro tier ($5/mo): 3 free watches @ 15-min, unlimited Pro @ 5-min
+- [x] Payment provider integration (Stripe hosted checkout + customer portal + webhooks)
+- [x] Subscription schema (status on users table, webhook-driven, never in JWT)
+- [x] Watch limit enforcement (server-side, HTTP 402) + poll interval tiering (5-min pro scheduler)
+- [x] Trip planner gating (3 sessions/month free, 20 Pro, DB-backed monthly counter)
+- [x] Pricing page (`/pricing`), upgrade modal (focus trap, ARIA), billing settings, ProBadge
+- [x] 30-day grandfather migration for existing users with >3 watches
+- [x] Webhook security (HMAC signature verification, idempotency via stripe_events table)
 
-### v0.95 "Monetization"
-- [ ] Free/Pro tier ($5/mo): 3 free watches @ 15-min, unlimited Pro @ 5-min
-- [ ] Payment provider integration (hosted checkout + customer portal + webhooks)
-- [ ] Subscription schema (status on users table, webhook-driven, never in JWT)
-- [ ] Watch limit enforcement (server-side, HTTP 402) + poll interval tiering
-- [ ] Trip planner gating (3 sessions/month free, 20 Pro, soft gate on 4th)
-- [ ] Pricing page, upgrade modal, billing settings, pro indicator
-- [ ] 30-day grandfather period for existing users with >3 watches
-- [ ] Webhook security (HMAC signature verification, idempotency, audit trail)
+### v0.96 "Registry + Infra" — DONE
+- [x] Registry expansion: re-seeded RIDB (741 total: 697 recgov + 75 WA State Parks, all with coords + drive times)
+- [x] Lighthouse CI in GitHub Actions PR pipeline (a11y ≥0.9 error gate, bundle size gate 350KB)
+- [x] Bundle audit + route-level lazy loading (React.lazy + Suspense for /plan, main chunk 266KB)
+- [x] P95 search latency baseline (Server-Timing header, /api/perf endpoint, 4s target)
+
+### v0.97 "Map + Power User" — DONE
+- [x] Map view (Leaflet on /map route, source-colored pins, clustering, popups, dark mode tiles)
+- [x] Map lazy loading (Leaflet in isolated 183KB chunk, main bundle 270KB)
+- [x] Keyboard shortcuts (j/k nav, w watchlist, m map/list toggle, ? help overlay)
+- [x] Map accessibility (list alternative table, aria-live, sr-only, card focus ring)
+- [x] Search-map integration (SearchContext, summary bar, "See on map" with focus/popup)
 
 ### v1.0 "campnw 1.0"
-- [ ] Map view (Leaflet, lazy-loaded, with list alternative for a11y)
-- [ ] Keyboard shortcuts (j/k nav, b bookmark, w watch, ? help)
-- [ ] Registry expansion to 1,000+ campgrounds
-- [ ] Personalized recommendations (opt-in, based on search history)
-- [ ] Performance audit (P95 search < 4s, Lighthouse CI)
-- [ ] Accessibility audit (WCAG 2.1 AA final sweep, axe-core in CI)
+- [ ] Personalized recommendations (search history affinity, opt-in, renders above search results)
+- [ ] WCAG 2.1 AA audit (expand axe-core CI from Level A to AA, all components)
+- [ ] Error state review (every provider-down, empty-state, offline path designed)
+- [ ] Final polish pass (spacing, transitions, dark mode, mobile responsive on all routes)
+
+### v1.1 "Predictions+"
+- [ ] Statistical prediction model (time-series on polling history + booking window detection)
+- [ ] Predictive availability display ("typically frees up X days before" with confidence bands)
+- [ ] Prediction confidence display with "still learning" cold start
+- [ ] Smart notification scoring ("usually books within 30 min")
+- [ ] Anomaly-based deal alerts (Pro-only, proactive alerts for unusual availability)
+- [ ] "Why did I miss it?" post-mortem (explains missed cancellations, suggests tuning)
 
 ## Key Design Decisions
 
-- **Registry is the differentiator.** Enriched with drive time from Bellevue, user tags (lakeside, river, old-growth, kid-friendly), personal notes/ratings. Discovery queries filter the registry first, then check availability only for matching campgrounds.
+- **Registry is the differentiator.** Enriched with drive time from Seattle, user tags (lakeside, river, old-growth, kid-friendly), personal notes/ratings. Discovery queries filter the registry first, then check availability only for matching campgrounds.
 - **Thin provider clients.** Each provider is just a clean async wrapper around the booking system's API. No business logic in providers.
 - **Extract patterns from camply, don't depend on it.** The value is in ~200 lines of endpoint logic. Reference: https://github.com/juftin/camply
 - **SQLite for everything local.** Registry, availability cache, watch state. No external DB.
@@ -359,4 +367,4 @@ All frontend styling uses design tokens defined in `web/src/tokens.css`. **Never
 - Some RIDB facilities return 404 on the availability endpoint (scenic byways, areas, corridors) — these aren't reservable campgrounds. Errors are caught and reported gracefully.
 - GoingToCamp resource/site details endpoint returns 404 — site names not available via API. Sites identified by resource ID (e.g., `WA--2147482394`).
 - GoingToCamp map hierarchy must be traversed park-by-park via the `resourceLocationId → childMapId` mapping from `/api/maps` links. Starting from region maps returns ALL parks' sites.
-- Registry has 685 campgrounds: 610 rec.gov (WA 146, OR 226, ID 238) + 75 WA State Parks. Re-seed with `scripts/seed_registry.py` and `scripts/seed_wa_state.py`
+- Registry has 741 campgrounds: 697 rec.gov (WA 161, OR 268, ID 268) + 75 WA State Parks. Re-seed with `scripts/seed_registry.py` and `scripts/seed_wa_state.py`

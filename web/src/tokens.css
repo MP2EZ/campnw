@@ -83,6 +83,14 @@
   /* ── Layout ───────────────────────────────────────────────────── */
   --max-w-app: 960px;
   --max-w-modal: 400px;
+
+  /* ── Map ──────────────────────────────────────────────────────── */
+  --map-pin-recgov: var(--src-recgov-border);
+  --map-pin-wa: var(--src-wa-border);
+  --map-pin-or: var(--src-or-border);
+  --map-pin-id: var(--src-id-border);
+  --map-pin-opacity: 0.85;
+  --map-popup-max-w: 280px;
 }
 
 [data-theme="dark"] {

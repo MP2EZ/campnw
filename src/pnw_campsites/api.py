@@ -7,6 +7,9 @@ import json
 import logging
 import os
 import re
+import statistics
+import time
+from collections import deque
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -251,6 +254,42 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
+
+# ---------------------------------------------------------------------------
+# Search timing
+# ---------------------------------------------------------------------------
+
+_search_timings: deque[float] = deque(maxlen=200)
+_search_logger = logging.getLogger("pnw_campsites.timing")
+
+
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    start = time.monotonic()
+    response = await call_next(request)
+    elapsed_ms = (time.monotonic() - start) * 1000
+    response.headers["Server-Timing"] = f"total;dur={elapsed_ms:.0f}"
+    if request.url.path.startswith("/api/search"):
+        _search_timings.append(elapsed_ms)
+        _search_logger.info("search_timing path=%s elapsed_ms=%.0f", request.url.path, elapsed_ms)
+    return response
+
+
+@app.get("/api/perf")
+async def perf_stats():
+    if not _search_timings:
+        return {"message": "No data yet"}
+    timings = sorted(_search_timings)
+    n = len(timings)
+    return {
+        "count": n,
+        "p50_ms": round(statistics.median(timings)),
+        "p95_ms": round(timings[int(n * 0.95)] if n >= 20 else timings[-1]),
+        "p99_ms": round(timings[int(n * 0.99)] if n >= 100 else timings[-1]),
+        "mean_ms": round(statistics.mean(timings)),
+        "target_ms": 4000,
+    }
+
 
 # ---------------------------------------------------------------------------
 # Response models

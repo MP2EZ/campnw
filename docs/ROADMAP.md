@@ -18,13 +18,15 @@ v0.5    [SHIPPED]  Background Engine   — Server-side polling, web push, regist
 v0.6    [SHIPPED]  Smart Search        — Zero-result recovery, date shifting, search diagnostics
 v0.7    [SHIPPED]  Oregon + Delight    — Vibe descriptions, contextual notifications (OR provider deferred)
 v0.8a   [SHIPPED]  Trip Planner MVP    — Conversational AI planner with tool calling
-v0.8b   ------->   Trip Planner Polish — Streaming, itinerary cards, shareable links
-v0.9    ------->   Predictions+        — Availability predictions, anomaly alerts, watch post-mortems
-v0.95   ------->   Monetization        — Free/Pro tiers, subscription billing, upgrade flows
-v1.0    ------->   campnw 1.0          — Map view, power user features, final polish
+v0.8b   [SHIPPED]  Trip Planner Polish — Streaming, itinerary cards, shareable links
+v0.95   [SHIPPED]  Monetization        — Free/Pro tiers, subscription billing, upgrade flows
+v0.96   ------->   Registry + Infra    — Registry expansion, bundle audit, Lighthouse CI
+v0.97   ------->   Map + Power User    — Map view, keyboard shortcuts, lazy loading
+v1.0    ------->   campnw 1.0          — Personalized recs, WCAG AA audit, final polish
+v1.1    ------->   Predictions+        — Availability predictions, anomaly alerts, post-mortems
 ```
 
-Each milestone is a shippable increment with clear user value. P0 features complete by v0.5. P1 features complete by v0.8–v0.9. P2 features are stretch for v1.0 or deferred.
+Each milestone is a shippable increment with clear user value. Predictions+ deferred to v1.1 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -210,7 +212,7 @@ Web push on iOS requires a PWA manifest (`manifest.json`) with `display: standal
 - v0.2 (web watch management)
 
 ### Key Risk
-Fly.io always-on cost and polling volume. Background polling requires `min_machines_running = 1`. With 685+ campgrounds, batching watches aggressively is essential — aim for one availability check per campground per cycle regardless of how many watches target it. Cap free-tier watches at 3 per user. The availability cache at this milestone significantly reduces call volume.
+Fly.io always-on cost and polling volume. Background polling requires `min_machines_running = 1`. With 740+ campgrounds, batching watches aggressively is essential — aim for one availability check per campground per cycle regardless of how many watches target it. Cap free-tier watches at 3 per user. The availability cache at this milestone significantly reduces call volume.
 
 ---
 
@@ -363,10 +365,10 @@ Session cost at scale and conversation quality. A single session with 4 tool cal
 
 ---
 
-## v0.9 "Predictions+"
+## ~~v0.9~~ → v1.1 "Predictions+" (moved post-v1.0 — see v1.1 section below)
 
 ### Theme
-The full intelligence layer — built on 6+ months of polling data collected silently since v0.5. Three capabilities, one statistical infrastructure: predictive availability ("when will it open?"), anomaly-based deal alerts ("this almost never happens"), and watch post-mortems ("why did I miss it?"). Data collection starts at v0.5; this milestone is where that investment pays off. All three features use the same `availability_history` table and the same cancellation pattern detection model.
+The full intelligence layer — built on 9-12 months of polling data collected silently since v0.5 (originally scoped for 6 months, deferred to allow more data accumulation). Three capabilities, one statistical infrastructure: predictive availability ("when will it open?"), anomaly-based deal alerts ("this almost never happens"), and watch post-mortems ("why did I miss it?"). Data collection starts at v0.5; this milestone is where that investment pays off. All three features use the same `availability_history` table and the same cancellation pattern detection model.
 
 ### Features
 
@@ -519,41 +521,121 @@ Four surfaces, no more:
 
 ---
 
-## v1.0 "campnw 1.0"
+## v0.96 "Registry + Infra"
 
 ### Theme
-Polish, power features, and the map view. Every P0 and P1 feature is complete. Select P2 features ship based on time and appetite. The goal is a polished v1.0 over a feature-complete-but-rough one.
+Expand the campground registry to 1,000+ and establish performance infrastructure. Unglamorous prerequisite work that prevents rework: the map view needs complete lat/lng data, and Leaflet needs lazy-loading infrastructure already in place.
 
 ### Features
 
-| Feature | PRD Ref | Effort | Description |
-|---------|---------|--------|-------------|
-| Map view | P2-1 | L | Interactive Leaflet/Mapbox map with campground pins. Pin color encodes availability density. Click for quick preview, click through to detail. Clustering at low zoom. Lazy-loaded — not in the initial bundle. |
-| Keyboard shortcuts | P2-6 | M | `j/k` navigation, `b` bookmark, `w` watch, `?` help overlay. Discoverable via help modal. |
-| Registry expansion | P2-5 | M | Re-seed RIDB for complete ID and OR federal coverage. Target: 1,000+ campgrounds. |
-| Personalized recommendations | P2-3 | L | Based on search history and saved campgrounds, surface proactive suggestions. Opt-in, privacy-first. Requires accounts. |
-| Bundle audit and optimization | P0-1 | M | Lighthouse audit. Map view lazy-loaded (current 200KB bundle is healthy — keep it that way). Image optimization. P95 search under 4 seconds. |
-
-### Quality Baseline
-- WCAG 2.1 AA compliance audit across all components — not just new ones
-- Map view color encoding for availability density must use a colorblind-safe palette (consistent with heat map color strategy from v0.3)
-- Map view is lazy-loaded at the route level — not in the initial JS bundle
-- All error states across the app reviewed: every provider-down, empty-state, offline-handling path has a designed response
-- Final axe-core run with zero Level A or Level AA failures before tagging v1.0
-
-### Technical Work
-- Leaflet.js integration (react-leaflet or custom wrapper)
-- GeoJSON layer for campground pins with availability-density coloring
-- Keyboard event system with shortcut registry and help modal
-- Lighthouse CI in GitHub Actions PR pipeline
-- RIDB re-seed script updates for comprehensive coverage
-- Full axe-core audit in CI (currently blocking Level A; expand to Level AA for v1.0)
+| Feature | Effort | Description |
+|---------|--------|-------------|
+| Registry expansion (RIDB re-seed) | M | Re-seed RIDB for complete ID + OR federal campground coverage. Target: 1,000+ campgrounds with lat/lng, tags, drive times. Update `scripts/seed_registry.py`. Validate every entry has coordinates (required for v0.97 map). |
+| Lighthouse CI in PR pipeline | S | Add Lighthouse CI check to GitHub Actions. Establish baseline scores. Block PRs that regress performance budget by >5%. |
+| Bundle audit + code splitting prep | M | Run vite-bundle-visualizer. Identify split points for route-level lazy loading (`React.lazy` + `Suspense`). Implement lazy loading for `/plan` route as proof of pattern. |
+| P95 search latency baseline | S | Add server-side timing to search endpoint. Log P95. Establish 4-second target as a measured metric. |
 
 ### Dependencies
-- All previous milestones
+- v0.95 shipped
+
+### Quality Bar
+- Every campground in the registry has valid lat/lng (null coordinates = not imported)
+- Lighthouse CI passing in PR pipeline
+- Trip planner route lazy-loaded, verified bundle size reduction
+- No new axe-core failures
 
 ### Key Risk
-Scope management. Map view alone is a significant UI effort. Hard rule: any P2 feature that isn't 80% complete two weeks before the target ship date moves to v1.1.
+RIDB data quality for ID and OR federal campgrounds. Some facilities may lack coordinates or return 404 on availability endpoints. Budget time for data cleaning, not just import.
+
+---
+
+## v0.97 "Map + Power User" — DONE
+
+### Theme
+The map view is the most visually transformative change since the calendar heat map. Ship alongside keyboard shortcuts (which need to account for map interactions) and the lazy-loading pattern established in v0.96.
+
+### Features
+
+| Feature | Effort | Description |
+|---------|--------|-------------|
+| Map view | L | ✅ Leaflet map on `/map` route with source-colored circleMarker pins, markerClusterGroup clustering, popups with name/source/sites/drive/link, dark mode tile inversion. |
+| Map lazy loading | S | ✅ Leaflet loaded via `React.lazy` + manualChunks. Isolated 183KB chunk. Main bundle 270KB (under 350KB gate). |
+| Keyboard shortcuts | M | ✅ `j/k` result nav, `w` watchlist, `m` map/list toggle, `?` help overlay. useKeyboardShortcuts hook with input/modifier skip. ShortcutHelpModal with focus trap. |
+| Map accessibility | S | ✅ List alternative `<details>` table, `role="application"` + `aria-label`, `aria-live` view toggle announcements, `.sr-only` utility, `.card-focused` ring. |
+| Search-map integration | S | ✅ SearchContext for cross-route state. Summary bar on map with search params + "Edit search" link. "See on map" in expanded cards with `zoomToShowLayer` + popup open. |
+
+### Dependencies
+- v0.96 (registry with complete lat/lng, lazy-loading infrastructure, Lighthouse CI baseline)
+
+### Quality Bar
+- Map route lazy-loaded; initial bundle size does not increase
+- Lighthouse performance score does not regress from v0.96 baseline
+- All keyboard shortcuts documented in `?` overlay
+- Map has a non-map alternative (list view remains default)
+- axe-core passes on map view
+
+### Key Risk
+Map UI scope creep. Hard boundary: pins with density coloring, clustering, click-to-preview. Nothing else in this release.
+
+---
+
+## v1.0 "campnw 1.0"
+
+### Theme
+The capstone. Personalized recommendations turn accumulated search history and registry data into proactive suggestions. The WCAG AA audit ensures v1.0 is a quality bar, not just a feature checklist.
+
+### Features
+
+| Feature | Effort | Description |
+|---------|--------|-------------|
+| Personalized recommendations | L | Based on search history (tags, regions, date patterns) and watched campgrounds, surface "You might like" suggestions. Opt-in toggle in settings. Privacy-first: all computation server-side against user's own history. Renders as recommendation row above search results. |
+| WCAG 2.1 AA audit | M | Full audit across all components. Expand axe-core CI from Level A to Level AA blocking. Special attention to map view, trip planner, and billing flows. |
+| Error state review | S | Every provider-down, empty-state, and offline-handling path reviewed and given a designed response. No raw error messages in production. |
+| Final polish pass | S | Consistent spacing, transitions, loading states across all views. Dark mode audit. Mobile responsive check on all routes. |
+
+### Dependencies
+- v0.97 (map view, keyboard shortcuts)
+
+### Quality Bar
+- Zero Level A or Level AA axe-core failures
+- P95 search under 4 seconds (measured)
+- Lighthouse performance, accessibility, and best practices scores all green
+- Recommendations respect opt-in toggle
+- All error states designed and implemented
+
+### Key Risk
+Personalized recommendations scope. At personal/friends scale, a simple query over search history with tag/region affinity scoring is sufficient. Do not build a recommendation engine. If backend work exceeds one week, it is over-scoped.
+
+---
+
+## v1.1 "Predictions+"
+
+### Theme
+The intelligence layer, now with 9-12 months of polling data instead of 6. More data means better predictions, fewer cold-start states, and more meaningful anomaly detection. Deferred from pre-v1.0 because: (1) data quality improves with time, (2) nothing in v1.0 depends on predictions, (3) serial developer focus is faster than context-switching between statistical modeling and geographic visualization.
+
+### Features
+
+| Feature | Effort | Description |
+|---------|--------|-------------|
+| Statistical prediction model | L | Time-series analysis on `availability_history`: median days-before-date cancellations appear, confidence intervals, booking window detection. Per-campground. |
+| Availability prediction display | L | "Sites typically free up X-Y days before the date" with confidence band. Cold start: "still learning." Integrates into result cards and check view. |
+| Prediction confidence display | S | Visual confidence indicator (low/medium/high) based on sample size. Transparent about data limitations. |
+| Smart notification scoring | M | When a watch fires, attach urgency: "Usually books within 30 minutes" vs "Typically stays open for hours." |
+| Anomaly-based deal alerts | M | Detect statistically unusual availability against seasonal baseline. Proactive alerts for popular campgrounds with rare openings. Pro-only (ties into v0.95 billing). |
+| "Why did I miss it?" post-mortem | S | Timing analysis and actionable tuning suggestions when watched sites open and re-book before user acts. |
+
+### Dependencies
+- v1.0 shipped
+- Polling data accumulating since v0.5 (9-12 months by this point)
+
+### Quality Bar
+- Predictions never shown without confidence level
+- Anomaly alerts require minimum 4 weeks of baseline data
+- Post-mortem tone is constructive
+- All prediction displays pass contrast on both themes
+
+### Key Risk
+Data quality and sample size for less-popular campgrounds. The additional months of data accumulation from deferring to post-v1.0 directly mitigates this.
 
 ---
 
@@ -570,7 +652,9 @@ Scope management. Map view alone is a significant UI effort. Hard rule: any P2 f
 | v0.6 | `aria-live` for date-shifting suggestions and zero-result diagnostics. Action chips keyboard-accessible. |
 | v0.8 | `role="log"` on transcript. Focus management on new messages. |
 | v0.95 | Upgrade modal keyboard-accessible. Pricing page passes Level AA contrast on both themes. Cancel flow accessible. |
+| v0.97 | Map view has list-based alternative. Pin interactions keyboard-reachable. Colorblind-safe density palette. |
 | v1.0 | Full WCAG 2.1 AA audit. CI expanded to block Level AA failures. |
+| v1.1 | Prediction displays pass contrast on both themes. Confidence indicators accessible. |
 
 The principle: fix accessibility at build time, not in a batch audit. Color contrast and semantic HTML are cheapest when designed from the start.
 
@@ -591,10 +675,12 @@ The principle: fix accessibility at build time, not in a batch audit. Color cont
 | v0.2.1 | Search time reduced by ~3.5s via batch_size/delay fix. Bundle baseline captured with vite-bundle-visualizer. |
 | v0.3 | SSE streaming eliminates "nothing then everything" UX. |
 | v0.5 | Availability cache (10–15min TTL) prevents redundant API calls across watch polling. |
-| v1.0 | Map view lazy-loaded. P95 search under 4 seconds. Lighthouse audit passing. |
+| v0.96 | Lighthouse CI baseline established. P95 search latency measured. `/plan` route lazy-loaded. |
+| v0.97 | Map view lazy-loaded. Initial bundle size does not increase. Lighthouse does not regress. |
+| v1.0 | P95 search under 4 seconds. Lighthouse performance, accessibility, best practices all green. |
 
-### Data Collection (start at v0.5, use at v0.9)
-The `availability_history` table ships silently in v0.5 alongside background polling. Every poll cycle writes a row. By v0.9, there should be 4–6 months of data. Do not wait until v0.9 to start collecting.
+### Data Collection (start at v0.5, use at v1.1)
+The `availability_history` table ships silently in v0.5 alongside background polling. Every poll cycle writes a row. By v1.1, there should be 9–12 months of data — strictly better for prediction quality than the original v0.9 target of 4–6 months.
 
 ### Registry Maintenance
 The campground registry is a living dataset. Automated monthly re-seeding from RIDB and quarterly refresh from GoingToCamp should be set up in v0.5. Drift detection (campgrounds that consistently 404) should flag entries for manual review.
@@ -659,7 +745,7 @@ Features brainstormed and scored during the March 2026 AI feature review. Each w
 
 | Feature | Description | Why Skip |
 |---------|-------------|----------|
-| **Entity resolution across providers** | LLM-assisted fuzzy matching to deduplicate campgrounds across rec.gov and GoingToCamp (e.g., "Ohanapecosh Campground" vs "Ohanapecosh"). | Not a real problem at 685 campgrounds. The registry is manually curated — duplicates are caught during seeding. The complexity of maintaining an ongoing dedup system isn't justified until the registry is 2,000+ campgrounds across 4+ providers. |
+| **Entity resolution across providers** | LLM-assisted fuzzy matching to deduplicate campgrounds across rec.gov and GoingToCamp (e.g., "Ohanapecosh Campground" vs "Ohanapecosh"). | Not a real problem at 741 campgrounds. The registry is manually curated — duplicates are caught during seeding. The complexity of maintaining an ongoing dedup system isn't justified until the registry is 2,000+ campgrounds across 4+ providers. |
 | **Schema change detection** | Store API response shape snapshots, LLM diffs when provider API structure changes, alerts developer. | Valid engineering concern for a solo operator, but a simple health-check test in CI (assert expected fields present in a sample response) accomplishes 80% of this without LLM complexity. Over-engineered for the actual failure mode. |
 | **Drive time access correction** | Extract "unpaved road," "ferry required," "high clearance" from descriptions to apply multipliers to drive time estimates. | Low innovation, marginal impact. The current haversine-based drive times are directionally correct. Free-text extraction of road conditions would be noisy — "unpaved" could mean a smooth gravel road or a 4WD-only track. Better solved by manual curation of the top 50 campgrounds during v0.7 enrichment. |
 | **Smart poll scheduling** | Dynamically allocate polling budget based on predicted cancellation probability windows — poll more when history says cancellations are likely. | Invisible to users, moderate implementation complexity, and the polling budget is not a real constraint at personal-tool scale with the existing 15-minute cycle. Engineering effort that doesn't move any user-facing metric. Could matter if polling costs become significant, but they won't at this scale. |
@@ -690,3 +776,6 @@ Features brainstormed and scored during the March 2026 AI feature review. Each w
 | Watches as the primary gate | Watches drive the only meaningful per-user server cost (polling, notifications, AI enrichment). Search is free to serve. Gating watches at 3 free creates natural upgrade pressure at the exact moment a user is most engaged. | Gate search — rejected because it destroys the free tier's value and word-of-mouth growth. Gate trip planner only — rejected because it's a soft limit (3/month free is sufficient for most users). |
 | Hosted checkout + customer portal | Zero custom billing UI. Eliminates PCI scope (SAQ A), avoids building cancel flow, billing history, payment method management. At lifestyle-business scale, the ~2-5% fee premium is worth the engineering time saved. | Custom checkout form — rejected on PCI and complexity grounds. Custom cancel/billing UI — rejected because Stripe/LS customer portal is better than anything campnw would build. |
 | 30-day grandfather period | Existing users with >3 watches must not be surprised or punished. Trust is the product's most valuable asset at small scale. Pausing (not deleting) watches preserves data and makes reactivation seamless on upgrade. | No grandfather — rejected as trust violation. Grandfather indefinitely — rejected because it eliminates upgrade pressure for the most engaged users. |
+| Split v1.0 into v0.96/v0.97/v1.0 | Three focused releases of 2-4 weeks each beat one 10-week monolith. Each is independently shippable. Single developer context means serial focus is faster than context-switching. Registry first (map needs lat/lng), map+shortcuts together (shared keyboard model), recommendations last (capstone on top of both). | Ship as one v1.0 — rejected because 10+ weeks of mixed work with no intermediate ship points. |
+| Defer Predictions+ to v1.1 | Data collection running since v0.5. Every month of deferral improves prediction quality. No v1.0 feature depends on predictions. Avoids interleaving statistical modeling with geographic visualization. | Ship v0.9 before v1.0 — rejected because it delays v1.0 by 4-6 weeks and predictions improve with more data. Interleave between v0.96/v0.97 — rejected because it splits focus across unrelated domains. |
+| Personalized recommendations in v1.0, not deferred | Recommendations make v1.0 feel like a product milestone rather than "map + shortcuts." Without it, v1.0 is indistinguishable from v0.97. Scope must be tight: query over search history with tag/region affinity, not a recommendation engine. | Defer to v1.1 — considered but v1.0 needs a capstone beyond polish. |

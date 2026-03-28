@@ -9,7 +9,7 @@ campnw searches real-time availability across Recreation.gov (federal campground
 ## Features
 
 - **Multi-provider search** — Recreation.gov + WA State Parks (GoingToCamp) in one search
-- **685+ campgrounds** across WA, OR, and ID with auto-generated tags
+- **740+ campgrounds** across WA, OR, and ID with auto-generated tags
 - **Distance filtering** — approximate drive time from Seattle, Bellevue, Portland, Spokane, Bellingham, or Moscow ID
 - **Trip type presets** — Weekend (F–Su), Long weekend (Th–Su), Weekdays, or custom day picker
 - **Two search modes** — "Find a date" (flexible range) and "Exact dates"
