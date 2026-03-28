@@ -195,8 +195,9 @@ async def lifespan(app: FastAPI):
     # to halve the burst of rec.gov API calls per cycle
     scheduler = None
     if os.getenv("DISABLE_SCHEDULER") != "1":
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from functools import partial
+
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
         scheduler = AsyncIOScheduler()
         scheduler.add_job(
