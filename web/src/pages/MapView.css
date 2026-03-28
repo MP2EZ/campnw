@@ -1,0 +1,197 @@
+/* ─── Map Page ──────────────────────────────────────────────────────── */
+
+.map-page {
+  padding: 0;
+  max-width: none;
+}
+
+.map-container {
+  width: 100%;
+  height: calc(100vh - 64px);
+  min-height: 400px;
+}
+
+.map-summary-bar + .map-container {
+  height: calc(100vh - 64px - 40px);
+}
+
+/* ─── Summary Bar ──────────────────────────────────────────────────── */
+
+.map-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.map-summary-text {
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-summary-edit {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.map-summary-edit:hover {
+  text-decoration: underline;
+}
+
+/* ─── Dark Mode Tiles ───────────────────────────────────────────────── */
+
+[data-theme="dark"] .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95);
+}
+
+[data-theme="dark"] .leaflet-control-attribution {
+  background: rgba(30, 30, 28, 0.85);
+  color: var(--text);
+}
+
+[data-theme="dark"] .leaflet-control-attribution a {
+  color: var(--accent-text, var(--accent));
+}
+
+/* ─── Popups ────────────────────────────────────────────────────────── */
+
+.map-popup {
+  max-width: var(--map-popup-max-w);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.map-popup strong {
+  display: block;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semi);
+  margin-bottom: var(--space-1);
+}
+
+.map-popup .source-badge {
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-1);
+}
+
+.map-popup p {
+  margin: var(--space-1) 0;
+  color: var(--text-muted);
+}
+
+.map-popup a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: var(--weight-medium);
+}
+
+.map-popup a:hover {
+  text-decoration: underline;
+}
+
+[data-theme="dark"] .leaflet-popup-content-wrapper {
+  background: var(--bg-card, #21211e);
+  color: var(--text);
+}
+
+[data-theme="dark"] .leaflet-popup-tip {
+  background: var(--bg-card, #21211e);
+}
+
+/* ─── Cluster Icons ─────────────────────────────────────────────────── */
+
+.map-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-xs);
+  box-shadow: var(--shadow-sm);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+}
+
+.map-cluster.cluster-md {
+  font-size: var(--text-sm);
+}
+
+.map-cluster.cluster-lg {
+  font-size: var(--text-base);
+}
+
+/* ─── Empty State ───────────────────────────────────────────────────── */
+
+.map-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 64px);
+  gap: var(--space-3);
+  text-align: center;
+  color: var(--text);
+}
+
+.map-empty h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semi);
+}
+
+.map-empty p {
+  color: var(--text-muted);
+}
+
+/* ─── List Alternative ──────────────────────────────────────────────── */
+
+.map-list-alt {
+  max-width: var(--max-w-app);
+  margin: var(--space-4) auto;
+  padding: 0 var(--space-4);
+}
+
+.map-list-alt summary {
+  cursor: pointer;
+  font-weight: var(--weight-medium);
+  color: var(--accent);
+  padding: var(--space-2) 0;
+}
+
+.map-list-alt table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.map-list-alt th {
+  text-align: left;
+  font-weight: var(--weight-semi);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 2px solid var(--border);
+}
+
+.map-list-alt td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.map-list-alt a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.map-list-alt a:hover {
+  text-decoration: underline;
+}
