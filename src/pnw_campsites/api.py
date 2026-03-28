@@ -8,7 +8,7 @@ import logging
 import os
 import re
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -57,17 +57,22 @@ _poll_state: dict = {
 }
 
 
-async def _poll_all_watches() -> None:
-    """Background job: poll all watches and dispatch notifications."""
+async def _poll_tranche(tranche: int | None = None) -> None:
+    """Background job: poll a tranche of watches and dispatch notifications.
+
+    When tranche is 0 or 1, only polls watches where id % 2 == tranche.
+    This splits the API load into two cycles offset by ~7.5 minutes.
+    """
     from pnw_campsites.monitor.notify import notify_ntfy, notify_web_push
     from pnw_campsites.monitor.watcher import poll_all
 
     if not _watch_db:
         return
 
-    _poll_logger.info("Starting watch poll cycle")
+    label = f"tranche {tranche}" if tranche is not None else "all"
+    _poll_logger.info("Starting watch poll cycle (%s)", label)
     results = await poll_all(
-        _recgov, _goingtocamp, _watch_db, _registry,
+        _recgov, _goingtocamp, _watch_db, _registry, tranche=tranche,
     )
 
     # Enrich notifications with LLM context (fire-and-forget, 3s timeout)
@@ -183,26 +188,38 @@ async def lifespan(app: FastAPI):
     _engine = SearchEngine(_registry, _recgov, _goingtocamp)
     _watch_db = WatchDB()
 
-    # Start background watch poller (every 15 minutes)
+    # Start background watch poller — two tranches offset by 7.5 minutes
+    # to halve the burst of rec.gov API calls per cycle
     scheduler = None
     if os.getenv("DISABLE_SCHEDULER") != "1":
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from functools import partial
 
         scheduler = AsyncIOScheduler()
         scheduler.add_job(
-            _poll_all_watches,
+            partial(_poll_tranche, tranche=0),
             "interval",
             minutes=15,
-            id="watch_poller",
+            id="watch_poller_t0",
             max_instances=1,
             coalesce=True,
         )
-        scheduler.start()
-        next_run = scheduler.get_job("watch_poller").next_run_time
-        _poll_state["next_poll"] = (
-            next_run.isoformat() if next_run else None
+        scheduler.add_job(
+            partial(_poll_tranche, tranche=1),
+            "interval",
+            minutes=15,
+            id="watch_poller_t1",
+            max_instances=1,
+            coalesce=True,
+            # Offset by 7.5 minutes from tranche 0
+            next_run_time=datetime.now() + timedelta(minutes=7, seconds=30),
         )
-        _poll_logger.info("Watch poller started (15-min interval)")
+        scheduler.start()
+        next_t0 = scheduler.get_job("watch_poller_t0").next_run_time
+        _poll_state["next_poll"] = (
+            next_t0.isoformat() if next_t0 else None
+        )
+        _poll_logger.info("Watch poller started (2 tranches, 15-min interval, 7.5-min offset)")
 
     yield
 

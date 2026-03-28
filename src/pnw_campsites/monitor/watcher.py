@@ -206,9 +206,17 @@ async def poll_all(
     goingtocamp: GoingToCampClient | None,
     watch_db: WatchDB,
     registry: CampgroundRegistry | None = None,
+    tranche: int | None = None,
 ) -> list[PollResult]:
-    """Poll all enabled watches, grouping by facility to minimize API calls."""
+    """Poll all enabled watches, grouping by facility to minimize API calls.
+
+    Args:
+        tranche: If set (0 or 1), only poll watches where id % 2 == tranche.
+                 Used to split polling into two offset cycles.
+    """
     watches = watch_db.list_watches(enabled_only=True)
+    if tranche is not None:
+        watches = [w for w in watches if w.id % 2 == tranche]
 
     # Group watches by facility_id to share availability data
     by_facility: dict[str, list[Watch]] = defaultdict(list)
