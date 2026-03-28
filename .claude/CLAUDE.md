@@ -325,6 +325,28 @@ Performance:
 - Prefer `httpx` over `requests` for async support
 - Use `python-dotenv` for env loading
 
+### CSS / Design System
+All frontend styling uses design tokens defined in `web/src/tokens.css`. **Never use hardcoded values** for properties that have tokens — always use `var(--token-name)`.
+
+**Token reference** (see `web/src/tokens.css` for full list):
+- **Spacing:** `--space-1` (0.25rem) through `--space-7` (3rem). Use for padding, margin, gap.
+- **Type scale:** `--text-xs` (0.7rem) through `--text-xl` (1.5rem). Use for font-size.
+- **Font weight:** `--weight-normal` (400), `--weight-medium` (500), `--weight-semi` (600), `--weight-bold` (700).
+- **Border radius:** `--radius-xs` (3px) through `--radius-pill` (999px). `--radius-sm` (6px) is the default.
+- **Shadows:** `--shadow-sm`, `--shadow-card`, `--shadow-overlay`. Dark mode overrides `--shadow-sm` automatically.
+- **Transitions:** `--transition-fast` (0.12s), `--transition-base` (0.15s). All interactive elements must have transitions.
+- **Z-index:** `--z-sticky` (5), `--z-overlay` (100), `--z-modal` (101).
+- **Layout:** `--max-w-app` (960px), `--max-w-modal` (400px).
+- **Source colors:** `--src-{recgov,wa,or,id}-badge-bg`, `--src-{...}-badge-text`, `--src-{...}-border`. Dark mode variants defined in tokens.css.
+- **Theme colors:** Defined in `App.css` `:root` — `--bg`, `--text`, `--accent`, `--border`, `--chip-*`, `--warning-*`, `--error-*`, `--heatmap-*`.
+
+**Intentional exclusions** (stay hardcoded):
+- Spacing: 0.3rem, 0.35rem (tight interactive elements), sub-0.25rem (micro)
+- Font size: 0.5rem/0.55rem (heatmap), 0.95rem (edge cases)
+- Radius: 50% (circles), 20px (decorative)
+- Line-height: 1.4, 1.45 (between named tokens)
+- Breakpoint: 640px (CSS vars don't work in @media)
+
 ## Known Gotchas
 - Rec.gov availability endpoint needs browser-like User-Agent or you may get blocked
 - GoingToCamp has Azure WAF — bypassed with `curl_cffi` Chrome TLS impersonation. Plain `requests`/`httpx` get 403'd.
