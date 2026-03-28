@@ -118,7 +118,7 @@ header {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
@@ -135,7 +135,7 @@ header {
 }
 
 header h1 {
-  font-size: 1.5rem;
+  font-size: var(--text-xl);
   font-weight: 700;
   color: var(--accent);
 }
@@ -148,7 +148,7 @@ header .wordmark {
 
 header p {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--text-base);
 }
 
 /* ─── Mode toggle (pill style) ─────────────────────────────────────── */
@@ -166,7 +166,7 @@ header p {
   border: none;
   border-radius: 6px;
   padding: 0.5rem;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-muted);
   background: none;
@@ -201,7 +201,7 @@ header p {
 .form-row-full {
   display: flex;
   flex-direction: column;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -217,7 +217,7 @@ header p {
   padding: 0.5rem;
   border: 1px solid var(--border-input);
   border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   width: 100%;
 }
 
@@ -235,7 +235,7 @@ header p {
   border: 1px solid var(--border-input);
   border-radius: 6px;
   background: var(--bg-input);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
@@ -279,7 +279,7 @@ header p {
   border: 1px solid var(--border-input);
   border-radius: 999px;
   background: var(--bg-input);
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
@@ -316,7 +316,7 @@ header p {
 }
 
 .filter-pill {
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   background: var(--bg-hover);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -336,7 +336,7 @@ header p {
 }
 
 .tag-picker-label {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-muted);
   margin-right: 0.25rem;
@@ -347,7 +347,7 @@ header p {
   border: 1px solid var(--border-input);
   border-radius: 12px;
   background: var(--bg-card);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
@@ -369,7 +369,7 @@ header p {
   background: none;
   border: none;
   color: var(--accent);
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   font-weight: 500;
   padding: 0.25rem 0;
   cursor: pointer;
@@ -417,7 +417,7 @@ header p {
   border: 1px solid var(--border-input);
   border-radius: 6px;
   background: var(--bg-card);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
@@ -445,7 +445,7 @@ header p {
 }
 
 .results-summary {
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   color: var(--text-muted);
 }
 
@@ -462,7 +462,7 @@ header p {
   background: var(--bg-card);
   border: none;
   border-right: 1px solid #ccc;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
@@ -520,7 +520,7 @@ header p {
 }
 
 .source-badge {
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   padding: 0.1rem 0.4rem;
   border-radius: 3px;
@@ -576,7 +576,7 @@ header p {
 }
 
 .drive-badge {
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   background: #f0ebe0;
   color: #8a6d3b;
@@ -587,7 +587,7 @@ header p {
 }
 
 .result-summary {
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   color: var(--text-muted);
   margin-top: 0.15rem;
 }
@@ -603,7 +603,7 @@ header p {
 .result-vibe {
   font-style: italic;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   padding: 0.5rem 1rem 0;
   margin: 0;
 }
@@ -624,7 +624,7 @@ header p {
 }
 
 .book-link {
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   color: var(--accent);
   text-decoration: none;
   font-weight: 500;
@@ -638,7 +638,7 @@ header p {
 
 .error-text {
   color: #c33;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   padding: 0 1rem 0.75rem;
 }
 
@@ -648,7 +648,7 @@ header p {
   color: #8a6d3b;
   padding: 0.6rem 1rem;
   border-radius: 8px;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   margin-bottom: 0.75rem;
 }
 
@@ -662,7 +662,7 @@ header p {
   color: #933;
   padding: 0.75rem 1rem;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   margin-bottom: 1rem;
 }
 
@@ -670,7 +670,7 @@ header p {
   text-align: center;
   color: #999;
   padding: 2rem;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
 }
 
 /* ─── SmartZeroState ───────────────────────────────────────────────── */
@@ -726,7 +726,7 @@ header p {
   background: var(--chip-bg);
   border: 1px solid var(--chip-border);
   border-radius: 20px;
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   color: var(--text);
   cursor: pointer;
   transition: background var(--transition-fast), border-color var(--transition-fast);
@@ -749,7 +749,7 @@ header p {
 .date-suggestion-count {
   background: var(--accent);
   color: #fff;
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   padding: 0.05rem 0.35rem;
   border-radius: 8px;
@@ -764,7 +764,7 @@ header p {
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   font-weight: 500;
   color: #fff;
   cursor: pointer;
@@ -816,13 +816,13 @@ header p {
 }
 
 .date-block-range {
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text);
 }
 
 .date-block-meta {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   color: var(--text-light);
   flex-shrink: 0;
   margin-left: 0.5rem;
@@ -838,7 +838,7 @@ header p {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   padding: 0.35rem 0.6rem;
   min-height: 36px;
   background: var(--chip-bg);
@@ -872,7 +872,7 @@ header p {
   border: 1px dashed #ccc;
   border-radius: 6px;
   color: var(--accent);
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   font-weight: 500;
   cursor: pointer;
   margin-top: 0.5rem;
@@ -895,7 +895,7 @@ header p {
 }
 
 .site-group h4 {
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin-bottom: 0.35rem;
 }
@@ -903,7 +903,7 @@ header p {
 .site-meta {
   font-weight: 400;
   color: var(--text-light);
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   margin-left: 0.4rem;
 }
 
@@ -919,7 +919,7 @@ header p {
 }
 
 .fcfs-label {
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   color: #996600;
   font-style: italic;
 }
@@ -938,7 +938,7 @@ header p {
 .window-chip {
   display: inline-flex;
   align-items: center;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   padding: 0.35rem 0.6rem;
   min-height: 36px;
   background: var(--chip-bg);
@@ -972,7 +972,7 @@ header p {
 }
 
 .heatmap-title {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -1068,7 +1068,7 @@ header p {
   flex: 1;
   padding: 0.5rem 1rem;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
   transition: opacity var(--transition-base);
@@ -1131,7 +1131,7 @@ header p {
     text-align: center;
     flex-direction: column;
     gap: 0.1rem;
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
     padding: 0.3rem 0.4rem;
   }
 
@@ -1182,14 +1182,14 @@ header p {
 }
 
 .watch-panel-header h2 {
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
   font-weight: 700;
 }
 
 .watch-close {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: var(--text-xl);
   color: var(--text-light);
   cursor: pointer;
   padding: 0.25rem;
@@ -1198,7 +1198,7 @@ header p {
 .watch-loading,
 .watch-error {
   padding: 1rem 1.25rem;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   color: var(--text-muted);
 }
 
@@ -1212,12 +1212,12 @@ header p {
 }
 
 .watch-empty p {
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   color: var(--text-muted);
 }
 
 .watch-hint {
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   margin-top: 0.5rem;
 }
 
@@ -1238,23 +1238,23 @@ header p {
 }
 
 .watch-item-info h3 {
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
 .watch-dates {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   margin-top: 0.15rem;
 }
 
 .watch-days {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   color: var(--text-light);
 }
 
 .watch-paused-badge {
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   background: var(--warning-bg);
   color: var(--warning-text);
   padding: 0.1rem 0.3rem;
@@ -1273,7 +1273,7 @@ header p {
   border: 1px solid var(--border-input);
   border-radius: 4px;
   padding: 0.3rem 0.5rem;
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   cursor: pointer;
   color: var(--text-muted);
 }
@@ -1295,7 +1295,7 @@ header p {
   border: 1px solid var(--accent);
   border-radius: 4px;
   color: var(--accent);
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   font-weight: 500;
   cursor: pointer;
 }
@@ -1442,7 +1442,7 @@ header p {
 }
 
 .watch-created {
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   color: var(--accent);
   font-weight: 500;
 }
@@ -1455,7 +1455,7 @@ header p {
 }
 
 .push-opt-in-btn {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   padding: 0.2rem 0.5rem;
   border: 1px solid var(--accent);
   border-radius: 4px;
@@ -1487,7 +1487,7 @@ header p {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-muted);
 }
@@ -1496,7 +1496,7 @@ header p {
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--border-input);
   border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   background: var(--bg-input);
   color: var(--text);
 }
@@ -1512,12 +1512,12 @@ header p {
   border: 1px solid var(--error-border);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
 }
 
 .auth-switch {
   text-align: center;
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   color: var(--text-muted);
 }
 
@@ -1569,7 +1569,7 @@ header p {
   text-align: left;
   background: none;
   border: none;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   color: var(--text);
   cursor: pointer;
 }
@@ -1590,7 +1590,7 @@ header p {
 
 .user-menu-confirm {
   padding: 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   color: var(--text-muted);
 }
 
@@ -1613,7 +1613,7 @@ header p {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   font-weight: 500;
   color: var(--text-muted);
 }
@@ -1623,7 +1623,7 @@ header p {
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--border-input);
   border-radius: 4px;
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   background: var(--bg-input);
   color: var(--text);
 }
@@ -1637,7 +1637,7 @@ header p {
 
 .prefs-actions .search-btn {
   padding: 0.35rem 0.75rem;
-  font-size: 0.8rem;
+  font-size: var(--text-body);
 }
 
 /* ─── Recent Searches ─────────────────────────────────────────────── */
@@ -1651,7 +1651,7 @@ header p {
 }
 
 .recent-label {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   color: var(--text-light);
   font-weight: 500;
 }
@@ -1664,7 +1664,7 @@ header p {
   background: var(--bg-hover);
   border: 1px solid var(--border-light);
   border-radius: 12px;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   cursor: pointer;
 }
@@ -1678,7 +1678,7 @@ header p {
 .recent-count {
   background: var(--accent);
   color: #fff;
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   padding: 0 0.3rem;
   border-radius: 8px;
   font-weight: 600;
@@ -1702,7 +1702,7 @@ header p {
 }
 
 .poll-dashboard-heading {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1724,7 +1724,7 @@ header p {
 }
 
 .poll-stat-label {
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   color: var(--text-light);
   font-weight: 500;
 }
@@ -1740,7 +1740,7 @@ header p {
 }
 
 .poll-notifications-heading {
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1771,7 +1771,7 @@ header p {
 }
 
 .poll-notification-name {
-  font-size: 0.8rem;
+  font-size: var(--text-body);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -1780,7 +1780,7 @@ header p {
 }
 
 .poll-notification-status {
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   padding: 0.1rem 0.35rem;
   border-radius: 3px;
@@ -1847,7 +1847,7 @@ a.header-btn {
 .chat-new-btn {
   align-self: flex-end;
   padding: 0.25rem 0.6rem;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   background: none;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -1865,14 +1865,14 @@ a.header-btn {
 }
 
 .chat-welcome h2 {
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text);
   margin-bottom: 0.4rem;
 }
 
 .chat-welcome p {
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -1933,7 +1933,7 @@ a.header-btn {
   max-width: 78%;
   border-radius: 8px;
   padding: 0.6rem 0.8rem;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   line-height: 1.5;
   white-space: pre-wrap;
 }
@@ -2020,7 +2020,7 @@ a.header-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   background: var(--chip-bg);
   border: 1px solid var(--chip-border);
@@ -2105,7 +2105,7 @@ a.header-btn {
   border: 1px solid var(--border-input);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   font-family: inherit;
   background: var(--bg-input);
   color: var(--text);
@@ -2136,7 +2136,7 @@ a.header-btn {
   color: #fff;
   border: none;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
