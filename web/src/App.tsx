@@ -1001,9 +1001,9 @@ export default function App() {
       {results && (() => {
         // Client-side source filtering — instant toggle, capped at user's limit
         const maxResults = lastSearchParams.current?.limit || 20;
-        const sourceFiltered = results.results.filter(
-          (r) => sourceFilter.has(r.booking_system),
-        ).slice(0, maxResults);
+        const sourceFiltered = results.results
+          .filter((r) => sourceFilter.has(r.booking_system))
+          .slice(0, maxResults);
         const filteredResults = {
           ...results,
           results: sourceFiltered,
