@@ -10,5 +10,9 @@ primary_region = "sjc"
   auto_start_machines = true
   min_machines_running = 1
 
+[mounts]
+  source = "campnw_data"
+  destination = "/app/data"
+
 [env]
   # RIDB_API_KEY set via `fly secrets set`
