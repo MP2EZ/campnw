@@ -316,16 +316,40 @@ Performance:
 - [x] jest-axe a11y tests for all routes (/, /map, /plan)
 - [x] Lighthouse CI expanded to /map, threshold bumped to 0.95
 
-### v0.99 "Pre-launch Audit"
-- [ ] Performance audit (bundle size regression check, P95 search latency, Lighthouse perf scores, unnecessary re-renders, lazy-load coverage)
-- [ ] Security audit (auth flow review, cookie/session hardening, input validation sweep, OWASP top 10 check, dependency CVE scan)
-- [ ] Cross-browser/device QA (Safari, Firefox, Chrome; iOS Safari, Android Chrome; PWA install flow)
-- [ ] Accessibility completeness (screen reader testing on all routes, keyboard nav end-to-end, ARIA pattern review beyond axe-core)
-- [ ] Mobile responsive audit (all routes at 320–768px, touch targets, viewport-specific layout bugs)
+### v0.99 "Pre-launch Audit" — DONE
+- [x] Fix /map crash (Leaflet global L not defined — leaflet-setup.ts + manualChunks fix)
+- [x] Fix SPA routing (FastAPI catch-all serves index.html for client-side routes)
+- [x] Security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options)
+- [x] CORS narrowing (allow_headers=["*"] → ["Content-Type"])
+- [x] Login rate limiting (10 attempts/15-min per IP on signup+login)
+- [x] Dependency pinning + CVE scanning CI (pip-audit + npm audit)
+- [x] React.memo on CalendarHeatMap, WatchPanel, SmartZeroState
+- [x] Lazy-load AuthModal + ShortcutHelpModal (main bundle 271→263KB)
+- [x] Frontend coverage gate (@vitest/coverage-v8, 40% threshold)
+- [x] Lighthouse CI tightened (perf 0.85 warn, best-practices 0.9 error)
+- [x] Contrast fix (.trip-type-hint opacity → var(--text-light), WCAG AA)
+- [x] Mobile header subtitle hidden below 640px
+- [x] Active nav indicator (bottom border accent)
+- [x] Human-readable dates in result cards (Jun 1 vs 2026-06-01)
+- [x] Map aria-live region for marker updates
+- [x] Expanded a11y test (search results interaction state)
+- [ ] Cross-browser/device QA (Safari, Firefox, Chrome; iOS Safari, Android Chrome; PWA install flow) — manual, deferred
 
 ### v1.0 "campnw 1.0"
 - [ ] Personalized recommendations (search history affinity, opt-in, renders above search results)
-- [ ] Final polish pass (spacing, transitions, remaining dark mode gaps)
+- [ ] Collapsible search form + scroll-to-results (auto-scroll after search, compact summary bar)
+- [ ] Mobile hamburger menu (consolidate Watchlist, theme, Sign in behind menu icon on mobile)
+- [ ] Card expand/collapse animation (200ms height transition)
+- [ ] Jargon cleanup ("windows" → "openings", expand "FCFS" on first use, source filter counts)
+- [ ] Loading skeleton/shimmer while SSE results stream in
+- [ ] First-visit empty state (illustration or suggested searches for new users)
+- [ ] Dark mode heat map differentiation (levels 0-1 nearly indistinguishable)
+- [ ] Dark mode warning banner border visibility
+- [ ] Meta description tag for SEO
+- [ ] Sign-in modal close button aria-label
+- [ ] Heat map legend — add numeric context for colorblind users
+- [ ] Mobile heat map — simplified view or larger cells at 375px
+- [ ] Mobile expanded card date row wrapping
 
 ### v1.1 "Predictions+"
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)

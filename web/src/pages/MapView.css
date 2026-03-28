@@ -116,7 +116,7 @@
   justify-content: center;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   font-weight: var(--weight-bold);
   font-size: var(--text-xs);
   box-shadow: var(--shadow-sm);

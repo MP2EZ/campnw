@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
-import { searchCampsitesStream, saveSearchHistory, getSearchHistory } from "./api";
+import { searchCampsitesStream, saveSearchHistory, getSearchHistory, getRecommendations } from "./api";
 import type {
-  CampgroundResult, SearchParams, SearchResponse, Window, SearchHistoryEntry,
-  DiagnosisEvent,
+  Recommendation, CampgroundResult, SearchParams, SearchResponse, Window,
+  SearchHistoryEntry, DiagnosisEvent,
 } from "./api";
 import { WatchPanel, WatchButton } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
@@ -143,24 +143,28 @@ function SearchForm({
   loading,
   userDefaults,
   isLoggedIn,
+  initialValues,
 }: {
   onSearch: (params: SearchParams, mode: SearchMode) => void;
   loading: boolean;
   userDefaults?: { state: string; nights: number; from: string };
   isLoggedIn: boolean;
+  initialValues?: SearchParams | null;
 }) {
-  const [mode, setMode] = useState<SearchMode>("find");
-  const [startDate, setStartDate] = useState(formatDate(14));
-  const [endDate, setEndDate] = useState(formatDate(44));
-  const [state, setState] = useState(userDefaults?.state || "WA");
-  const [nights, setNights] = useState(userDefaults?.nights || 2);
-  const [dayPreset, setDayPreset] = useState("");
+  const [mode, setMode] = useState<SearchMode>(initialValues?.mode as SearchMode || "find");
+  const [startDate, setStartDate] = useState(initialValues?.start_date || formatDate(14));
+  const [endDate, setEndDate] = useState(initialValues?.end_date || formatDate(44));
+  const [state, setState] = useState(initialValues?.state || userDefaults?.state || "WA");
+  const [nights, setNights] = useState(initialValues?.nights || userDefaults?.nights || 2);
+  const [dayPreset, setDayPreset] = useState(initialValues?.days_of_week || "");
   const [customDays, setCustomDays] = useState<Set<number>>(new Set());
-  const [name, setName] = useState("");
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [fromLocation, setFromLocation] = useState(userDefaults?.from || "seattle");
-  const [maxDrive, setMaxDrive] = useState("");
-  const [limit, setLimit] = useState(20);
+  const [name, setName] = useState(initialValues?.name || "");
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(
+    initialValues?.tags ? new Set(initialValues.tags.split(",")) : new Set()
+  );
+  const [fromLocation, setFromLocation] = useState(initialValues?.from_location || userDefaults?.from || "seattle");
+  const [maxDrive, setMaxDrive] = useState(initialValues?.max_drive ? String(initialValues.max_drive) : "");
+  const [limit, setLimit] = useState(initialValues?.limit || 20);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
@@ -502,6 +506,138 @@ function SearchForm({
 
 // ─── Results: Date Block View (Option B) ─────────────────────────────
 
+function formatDateRange(start: string, end: string): string {
+  const s = new Date(start + "T12:00:00");
+  const e = new Date(end + "T12:00:00");
+  const sMonth = s.toLocaleDateString("en-US", { month: "short" });
+  const eMonth = e.toLocaleDateString("en-US", { month: "short" });
+  if (sMonth === eMonth) {
+    return `${sMonth} ${s.getDate()}–${e.getDate()}`;
+  }
+  return `${sMonth} ${s.getDate()} – ${eMonth} ${e.getDate()}`;
+}
+
+const STATE_LABELS: Record<string, string> = { WA: "WA", OR: "OR", ID: "ID" };
+
+function SearchSummaryBar({
+  params,
+  dates,
+  onEdit,
+}: {
+  params: SearchParams;
+  dates: { start: string; end: string };
+  onEdit: () => void;
+}) {
+  const parts: string[] = [];
+  if (params.state) parts.push(`${STATE_LABELS[params.state] || params.state} parks`);
+  parts.push(formatDateRange(dates.start, dates.end));
+  if (params.nights) parts.push(`${params.nights} night${params.nights !== 1 ? "s" : ""}`);
+  if (params.tags) parts.push(params.tags);
+  if (params.name) parts.push(`"${params.name}"`);
+
+  return (
+    <div className="search-summary-bar">
+      <p className="search-summary-text">{parts.join(" · ")}</p>
+      <button className="search-summary-edit" onClick={onEdit} type="button">
+        Edit
+      </button>
+    </div>
+  );
+}
+
+function FirstVisitState({ onSearch }: { onSearch: (params: SearchParams, mode: SearchMode) => void }) {
+  const presets = getQuickPresets();
+  const suggestions = [
+    { label: "Weekend getaway in WA", params: { start_date: presets[0].start, end_date: presets[0].end, state: "WA", nights: 2 } },
+    { label: "Lakeside in the next 30 days", params: { start_date: presets[2].start, end_date: presets[2].end, tags: "lakeside", nights: 2 } },
+    { label: "Next weekend in WA Parks", params: { start_date: presets[1].start, end_date: presets[1].end, source: "wa-state", nights: 1 } },
+  ];
+  return (
+    <div className="first-visit">
+      <p className="first-visit-title">Find your next campsite</p>
+      <p className="first-visit-subtitle">Search for available sites across Washington, Oregon, and Idaho parks</p>
+      <div className="first-visit-suggestions">
+        {suggestions.map((s) => (
+          <button
+            key={s.label}
+            className="suggestion-chip"
+            onClick={() => onSearch({ ...s.params, start_date: s.params.start_date, end_date: s.params.end_date } as SearchParams, "find")}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecommendationRow({
+  onSearch,
+}: {
+  onSearch: (params: SearchParams, mode: SearchMode) => void;
+}) {
+  const [recs, setRecs] = useState<Recommendation[]>([]);
+  const loaded = useRef(false);
+
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+    getRecommendations().then(setRecs).catch(() => {});
+  }, []);
+
+  if (recs.length === 0) return null;
+
+  return (
+    <div className="recommendation-row">
+      <p className="recommendation-title">You might like</p>
+      <div className="recommendation-cards">
+        {recs.map((rec) => (
+          <button
+            key={rec.facility_id}
+            className="recommendation-card"
+            onClick={() =>
+              onSearch(
+                {
+                  start_date: formatDate(14),
+                  end_date: formatDate(44),
+                  name: rec.name,
+                } as SearchParams,
+                "find"
+              )
+            }
+          >
+            <span className="recommendation-name">{rec.name}</span>
+            {rec.tags.length > 0 && (
+              <span className="recommendation-tags">
+                {rec.tags.slice(0, 3).join(" · ")}
+              </span>
+            )}
+            {rec.vibe && (
+              <span className="recommendation-vibe">
+                {rec.vibe.length > 80 ? rec.vibe.slice(0, 80) + "…" : rec.vibe}
+              </span>
+            )}
+            <span className="recommendation-reason">{rec.reason}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ResultsSkeleton() {
+  return (
+    <div className="results-skeleton" aria-busy="true" aria-label="Loading results">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="skeleton-card">
+          <div className="skeleton-line skeleton-title" />
+          <div className="skeleton-line skeleton-summary" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface DateBlock {
   key: string;
   start_date: string;
@@ -617,13 +753,13 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
           className="show-more-btn"
           onClick={() => setShowAll(true)}
         >
-          Show {hiddenCount} more window{hiddenCount !== 1 && "s"}
+          Show {hiddenCount} more date range{hiddenCount !== 1 && "s"}
         </button>
       )}
       {fcfsSites.length > 0 && (
         <div className="fcfs-section">
           <p className="fcfs-label">
-            {fcfsSites.length} FCFS site{fcfsSites.length !== 1 && "s"} — not
+            {fcfsSites.length} First-come, first-served (FCFS) site{fcfsSites.length !== 1 && "s"} — not
             bookable online
           </p>
         </div>
@@ -661,7 +797,7 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
               </span>
             </h4>
             {w0.is_fcfs ? (
-              <p className="fcfs-label">FCFS — not bookable online</p>
+              <p className="fcfs-label"><span title="First-come, first-served">FCFS</span> — not bookable online</p>
             ) : (
               <div className="windows-grid">
                 {windows.map((w, i) => {
@@ -744,8 +880,8 @@ function ResultCard({
   const dateBlocks = groupByDateBlock(result.windows);
   const summaryText =
     view === "dates"
-      ? `${result.total_available_sites} sites · ${dateBlocks.length} window${dateBlocks.length !== 1 ? "s" : ""}`
-      : `${result.total_available_sites} sites · ${result.windows.filter((w) => !w.is_fcfs).length} windows`;
+      ? `${result.total_available_sites} sites · ${dateBlocks.length} opening${dateBlocks.length !== 1 ? "s" : ""}`
+      : `${result.total_available_sites} sites · ${result.windows.filter((w) => !w.is_fcfs).length} openings`;
 
   return (
     <div className={`result-card card-${result.booking_system}${focused ? " card-focused" : ""}`} ref={cardRef}>
@@ -776,14 +912,14 @@ function ResultCard({
           </h3>
           <p className="result-summary">
             {summaryText}
-            {result.fcfs_sites > 0 && ` + ${result.fcfs_sites} FCFS`}
+            {result.fcfs_sites > 0 && <>{" "}+ {result.fcfs_sites} <span title="First-come, first-served">FCFS</span></>}
           </p>
         </div>
         <span className="expand-icon" aria-hidden="true">{expanded ? "−" : "+"}</span>
       </button>
 
-      {expanded && (
-        <>
+      <div className={`card-body${expanded ? " card-body-open" : ""}`}>
+        <div className="card-body-inner">
           {result.vibe && (
             <p className="result-vibe">{result.vibe}</p>
           )}
@@ -827,8 +963,8 @@ function ResultCard({
           ) : (
             <SiteView result={result} />
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -851,6 +987,9 @@ export default function App() {
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [formCollapsed, setFormCollapsed] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -887,6 +1026,12 @@ export default function App() {
     setError(null);
     setResultsView(mode === "find" ? "dates" : "sites");
     setSearchDates({ start: params.start_date, end: params.end_date });
+    setFormCollapsed(true);
+
+    // Scroll to results area after DOM updates
+    setTimeout(() => {
+      document.querySelector(".results-skeleton, .results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
 
     // Sync search params to URL for shareable links
     const url = new URL(window.location.href);
@@ -970,6 +1115,25 @@ export default function App() {
     setFocusedCardIndex(-1);
   }, [filteredResults]);
 
+  // Close mobile menu on click outside or Escape
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [mobileMenuOpen]);
+
   const availableCards = useMemo(
     () => filteredResults.filter((r) => r.total_available_sites > 0),
     [filteredResults]
@@ -1032,30 +1196,69 @@ export default function App() {
                 Plan
               </Link>
             </nav>
-            <button
-              className="header-btn"
-              onClick={() => setWatchPanelOpen(true)}
-              title="Watchlist"
-            >
-              Watchlist
-            </button>
-            <button
-              className="header-btn theme-toggle"
-              onClick={() => setDarkMode(!darkMode)}
-              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {darkMode ? "☀" : "☾"}
-            </button>
-            {user ? (
-              <UserMenu />
-            ) : (
+            <div className="header-secondary">
               <button
                 className="header-btn"
-                onClick={() => setAuthModalOpen(true)}
+                onClick={() => setWatchPanelOpen(true)}
+                title="Watchlist"
               >
-                Sign in
+                Watchlist
               </button>
-            )}
+              <button
+                className="header-btn theme-toggle"
+                onClick={() => setDarkMode(!darkMode)}
+                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {darkMode ? "☀" : "☾"}
+              </button>
+              {user ? (
+                <UserMenu />
+              ) : (
+                <button
+                  className="header-btn"
+                  onClick={() => setAuthModalOpen(true)}
+                >
+                  Sign in
+                </button>
+              )}
+            </div>
+            <div className="mobile-menu-wrapper" ref={mobileMenuRef}>
+              <button
+                className="header-btn mobile-menu-btn"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                aria-expanded={mobileMenuOpen}
+                aria-label="Menu"
+              >
+                ☰
+              </button>
+              {mobileMenuOpen && (
+                <div className="mobile-menu">
+                  {user ? (
+                    <UserMenu />
+                  ) : (
+                    <button
+                      className="header-btn"
+                      onClick={() => { setAuthModalOpen(true); setMobileMenuOpen(false); }}
+                    >
+                      Sign in
+                    </button>
+                  )}
+                  <button
+                    className="header-btn"
+                    onClick={() => { setWatchPanelOpen(true); setMobileMenuOpen(false); }}
+                  >
+                    Watchlist
+                  </button>
+                  <button
+                    className="header-btn theme-toggle"
+                    onClick={() => { setDarkMode(!darkMode); setMobileMenuOpen(false); }}
+                    aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                  >
+                    {darkMode ? "☀ Light" : "☾ Dark"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -1086,18 +1289,33 @@ export default function App() {
         <Route path="/map" element={<MapView />} />
         <Route path="/" element={
           <main id="main-content">
-          <SearchForm
-            onSearch={handleSearch}
-            loading={loading}
-            isLoggedIn={!!user}
-            userDefaults={user ? {
-              state: user.default_state,
-              nights: user.default_nights,
-              from: user.default_from,
-            } : undefined}
-          />
+          {formCollapsed && activeSearchParams && searchDates ? (
+            <SearchSummaryBar
+              params={activeSearchParams}
+              dates={searchDates}
+              onEdit={() => setFormCollapsed(false)}
+            />
+          ) : (
+            <SearchForm
+              onSearch={handleSearch}
+              loading={loading}
+              isLoggedIn={!!user}
+              userDefaults={user ? {
+                state: user.default_state,
+                nights: user.default_nights,
+                from: user.default_from,
+              } : undefined}
+              initialValues={activeSearchParams}
+            />
+          )}
+
+      {user?.recommendations_enabled && <RecommendationRow onSearch={handleSearch} />}
+
+      {!results && !loading && !error && <FirstVisitState onSearch={handleSearch} />}
 
       {error && <div className="error-banner">{error}</div>}
+
+      {loading && (!results || results.results.length === 0) && <ResultsSkeleton />}
 
       {results && (() => {
         const withAvailability = filteredResults.filter((r) => r.total_available_sites > 0).length;
@@ -1126,6 +1344,10 @@ export default function App() {
             </div>
           </div>
           {/* Source filter — client-side, instant toggle */}
+          {(() => {
+            const recgovCount = results.results.filter((r) => r.booking_system === "recgov" && r.total_available_sites > 0).length;
+            const waCount = results.results.filter((r) => r.booking_system === "wa_state" && r.total_available_sites > 0).length;
+            return (
           <div className="source-toggle" role="group" aria-label="Filter by source">
             <button
               type="button"
@@ -1133,7 +1355,7 @@ export default function App() {
               onClick={() => toggleSource("recgov")}
               aria-pressed={sourceFilter.has("recgov")}
             >
-              Rec.gov
+              Rec.gov{recgovCount > 0 && ` (${recgovCount})`}
             </button>
             <button
               type="button"
@@ -1141,9 +1363,11 @@ export default function App() {
               onClick={() => toggleSource("wa_state")}
               aria-pressed={sourceFilter.has("wa_state")}
             >
-              WA Parks
+              WA Parks{waCount > 0 && ` (${waCount})`}
             </button>
           </div>
+            );
+          })()}
           {searchDates && withAvailability > 0 && (
             <CalendarHeatMap
               results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}

@@ -4,9 +4,14 @@
    Exclusions (intentionally hardcoded in App.css):
    - Spacing: 0.3rem, 0.35rem (tight interactive elements)
    - Spacing: sub-0.25rem (micro-spacing)
+   - Spacing: 0.6rem, 0.65rem, 1.25rem (between token steps)
    - Font size: 0.5rem, 0.55rem (heatmap decoration)
+   - Font size: 0.6rem (micro-badges: tag-badge, site-chip-meta, heatmap-legend)
    - Font size: 0.95rem (4 edge-case uses)
-   - Radius: 50% (circle), 20px (decorative pill)
+   - Font size: 1rem (emoji icon), 1.2rem (chevron icon), 1.25rem (mobile header)
+   - Font weight: 300 (expand icon light weight — no token)
+   - Radius: 50% (circle), 20px (decorative pill), 2px (heatmap swatch)
+   - Line-height: 1.4, 1.45 (between named tokens)
    - Breakpoint: 640px (CSS vars don't work in @media)
    ─────────────────────────────────────────────────────────────────── */
 

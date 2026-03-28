@@ -229,6 +229,17 @@ export interface UserData {
   default_state: string;
   default_nights: number;
   default_from: string;
+  recommendations_enabled: boolean;
+}
+
+export interface Recommendation {
+  facility_id: string;
+  name: string;
+  booking_system: string;
+  state: string;
+  tags: string[];
+  vibe: string;
+  reason: string;
 }
 
 export interface SearchHistoryEntry {
@@ -334,6 +345,16 @@ export async function saveSearchHistory(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ params, result_count: resultCount }),
   }).catch(() => {});
+}
+
+export async function getRecommendations(): Promise<Recommendation[]> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/recommendations`, fetchOpts);
+    if (!resp.ok) return [];
+    return resp.json();
+  } catch {
+    return [];
+  }
 }
 
 export async function getWatches(): Promise<WatchData[]> {

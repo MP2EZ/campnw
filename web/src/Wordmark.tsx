@@ -42,7 +42,7 @@ export function Wordmark({ size = "md", className }: WordmarkProps) {
           fontFamily:
             "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           fontWeight: 400,
-          color: "#2d5016",
+          color: "currentColor",
           letterSpacing: "0.02em",
         }}
       >
@@ -53,7 +53,7 @@ export function Wordmark({ size = "md", className }: WordmarkProps) {
           fontFamily:
             "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           fontWeight: 800,
-          color: "#2d5016",
+          color: "currentColor",
           letterSpacing: "0.06em",
         }}
       >
