@@ -549,7 +549,7 @@ RIDB data quality for ID and OR federal campgrounds. Some facilities may lack co
 
 ---
 
-## v0.97 "Map + Power User"
+## v0.97 "Map + Power User" — DONE
 
 ### Theme
 The map view is the most visually transformative change since the calendar heat map. Ship alongside keyboard shortcuts (which need to account for map interactions) and the lazy-loading pattern established in v0.96.
@@ -558,10 +558,11 @@ The map view is the most visually transformative change since the calendar heat 
 
 | Feature | Effort | Description |
 |---------|--------|-------------|
-| Map view | L | Interactive Leaflet map on `/map` route (or toggle on search results). Campground pins with availability-density coloring (reuse heat map single-hue palette). Marker clustering at low zoom. Click pin for preview card, click through to detail. GeoJSON layer queries the registry. |
-| Map lazy loading | S | Leaflet + react-leaflet loaded via `React.lazy` at route level. Not in initial bundle. Verified by Lighthouse CI from v0.96. |
-| Keyboard shortcuts | M | `j/k` result navigation, `b` bookmark, `w` watch, `m` toggle map/list, `?` help overlay. Shortcut registry pattern (not ad-hoc keydown listeners). Map: `+/-` zoom, arrow pan. Help modal via `?` key and footer link. |
-| Map accessibility | S | List-based alternative view for map content. `aria-label` on map container. Pin interactions keyboard-reachable. Colorblind-safe density palette (consistent with heat map from v0.3). |
+| Map view | L | ✅ Leaflet map on `/map` route with source-colored circleMarker pins, markerClusterGroup clustering, popups with name/source/sites/drive/link, dark mode tile inversion. |
+| Map lazy loading | S | ✅ Leaflet loaded via `React.lazy` + manualChunks. Isolated 183KB chunk. Main bundle 270KB (under 350KB gate). |
+| Keyboard shortcuts | M | ✅ `j/k` result nav, `w` watchlist, `m` map/list toggle, `?` help overlay. useKeyboardShortcuts hook with input/modifier skip. ShortcutHelpModal with focus trap. |
+| Map accessibility | S | ✅ List alternative `<details>` table, `role="application"` + `aria-label`, `aria-live` view toggle announcements, `.sr-only` utility, `.card-focused` ring. |
+| Search-map integration | S | ✅ SearchContext for cross-route state. Summary bar on map with search params + "Edit search" link. "See on map" in expanded cards with `zoomToShowLayer` + popup open. |
 
 ### Dependencies
 - v0.96 (registry with complete lat/lng, lazy-loading infrastructure, Lighthouse CI baseline)

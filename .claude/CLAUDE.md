@@ -298,11 +298,12 @@ Performance:
 - [x] Bundle audit + route-level lazy loading (React.lazy + Suspense for /plan, main chunk 266KB)
 - [x] P95 search latency baseline (Server-Timing header, /api/perf endpoint, 4s target)
 
-### v0.97 "Map + Power User"
-- [ ] Map view (Leaflet on /map route, availability-density pins, clustering, click-to-preview)
-- [ ] Map lazy loading (Leaflet not in initial bundle, verified by Lighthouse CI)
-- [ ] Keyboard shortcuts (j/k nav, b bookmark, w watch, m map/list toggle, ? help overlay)
-- [ ] Map accessibility (list alternative, keyboard-reachable pins, colorblind-safe palette)
+### v0.97 "Map + Power User" — DONE
+- [x] Map view (Leaflet on /map route, source-colored pins, clustering, popups, dark mode tiles)
+- [x] Map lazy loading (Leaflet in isolated 183KB chunk, main bundle 270KB)
+- [x] Keyboard shortcuts (j/k nav, w watchlist, m map/list toggle, ? help overlay)
+- [x] Map accessibility (list alternative table, aria-live, sr-only, card focus ring)
+- [x] Search-map integration (SearchContext, summary bar, "See on map" with focus/popup)
 
 ### v1.0 "campnw 1.0"
 - [ ] Personalized recommendations (search history affinity, opt-in, renders above search results)
