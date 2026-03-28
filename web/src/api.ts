@@ -229,6 +229,8 @@ export interface UserData {
   default_state: string;
   default_nights: number;
   default_from: string;
+  tier?: "free" | "pro";
+  subscription_status?: string;
 }
 
 export interface SearchHistoryEntry {
@@ -286,7 +288,11 @@ export async function getMe(): Promise<UserData | null> {
   if (resp.status === 401) return null;
   if (!resp.ok) return null;
   const data = await resp.json();
-  return data.user;
+  return {
+    ...data.user,
+    tier: data.tier,
+    subscription_status: data.subscription_status,
+  };
 }
 
 export async function updateProfile(
@@ -342,6 +348,19 @@ export async function getWatches(): Promise<WatchData[]> {
   return resp.json();
 }
 
+export class WatchLimitError extends Error {
+  limit: number;
+  current: number;
+  tier: string;
+  constructor(detail: { limit: number; current: number; tier: string }) {
+    super("Watch limit reached");
+    this.name = "WatchLimitError";
+    this.limit = detail.limit;
+    this.current = detail.current;
+    this.tier = detail.tier;
+  }
+}
+
 export async function createWatch(
   params: CreateWatchParams
 ): Promise<WatchData> {
@@ -351,6 +370,10 @@ export async function createWatch(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
+  if (resp.status === 402) {
+    const data = await resp.json().catch(() => ({}));
+    throw new WatchLimitError(data.detail || { limit: 3, current: 3, tier: "free" });
+  }
   if (!resp.ok) throw new Error(`Failed to create watch: ${resp.status}`);
   return resp.json();
 }
@@ -506,6 +529,60 @@ export async function planChatStream(
   } catch (e) {
     onError(e instanceof Error ? e : new Error("Stream failed"));
   }
+}
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+
+export interface BillingStatus {
+  tier: "free" | "pro";
+  subscription_status: string;
+  max_watches: number;
+  current_watches: number;
+  plan_sessions_used: number;
+  plan_sessions_limit: number;
+  grandfathered_until: string | null;
+}
+
+export async function getBillingStatus(): Promise<BillingStatus> {
+  const resp = await fetch(`${API_BASE}/api/billing/status`, fetchOpts);
+  if (!resp.ok) {
+    return {
+      tier: "free",
+      subscription_status: "free",
+      max_watches: 3,
+      current_watches: 0,
+      plan_sessions_used: 0,
+      plan_sessions_limit: 3,
+      grandfathered_until: null,
+    };
+  }
+  return resp.json();
+}
+
+export async function createCheckoutSession(): Promise<{ url: string }> {
+  const resp = await fetch(`${API_BASE}/api/billing/checkout`, {
+    ...fetchOpts,
+    method: "POST",
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail || "Checkout failed");
+  }
+  return resp.json();
+}
+
+export async function createPortalSession(): Promise<{ url: string }> {
+  const resp = await fetch(`${API_BASE}/api/billing/portal`, {
+    ...fetchOpts,
+    method: "POST",
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail || "Portal failed");
+  }
+  return resp.json();
 }
 
 // ---------------------------------------------------------------------------

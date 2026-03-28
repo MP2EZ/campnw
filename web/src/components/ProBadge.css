@@ -1,0 +1,13 @@
+.pro-badge {
+  display: inline-block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  padding: 0.15rem var(--space-1);
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+  color: var(--accent-text, #fff);
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
