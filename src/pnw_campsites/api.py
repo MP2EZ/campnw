@@ -56,6 +56,35 @@ _poll_state: dict = {
     "last_errors": 0,
 }
 
+# ---------------------------------------------------------------------------
+# Subscription tiers
+# ---------------------------------------------------------------------------
+
+TIER_FREE = {
+    "tier": "free",
+    "max_watches": 3,
+    "poll_interval_minutes": 15,
+    "plan_sessions_per_month": 3,
+}
+TIER_PRO = {
+    "tier": "pro",
+    "max_watches": float("inf"),
+    "poll_interval_minutes": 5,
+    "plan_sessions_per_month": 20,
+}
+
+
+def _get_user_tier(user_id: int | None) -> dict:
+    """Return tier config for a user. Defaults to free."""
+    if not user_id or not _watch_db:
+        return TIER_FREE
+    user = _watch_db.get_user_by_id(user_id)
+    if not user:
+        return TIER_FREE
+    if user.subscription_status == "pro":
+        return TIER_PRO
+    return TIER_FREE
+
 
 async def _poll_all_watches() -> None:
     """Background job: poll all watches and dispatch notifications."""
@@ -867,7 +896,12 @@ async def get_me(request: Request):
     user = _watch_db.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    return {"user": _user_to_dict(user)}
+    tier = _get_user_tier(user_id)
+    return {
+        "user": _user_to_dict(user),
+        "tier": tier["tier"],
+        "subscription_status": user.subscription_status,
+    }
 
 
 @app.patch("/api/auth/me")
@@ -1051,6 +1085,24 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         raise HTTPException(
             status_code=409, detail="Watch already exists",
         )
+
+    # Enforce watch limit based on subscription tier
+    tier = _get_user_tier(user_id)
+    if user_id:
+        current_count = len(_watch_db.list_watches_by_user(user_id))
+    else:
+        current_count = len(_watch_db.list_watches_by_session(token))
+    if current_count >= tier["max_watches"]:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "watch_limit",
+                "limit": tier["max_watches"],
+                "current": current_count,
+                "tier": tier["tier"],
+            },
+        )
+
     saved = _watch_db.add_watch(watch)
     return WatchResponse(
         id=saved.id,
@@ -1116,28 +1168,88 @@ async def toggle_watch(watch_id: int, request: Request, response: Response):
 
 
 # ---------------------------------------------------------------------------
+# Billing
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/billing/status")
+async def billing_status(request: Request, response: Response):
+    """Return subscription tier, watch usage, and plan session usage."""
+    user_id = _get_current_user(request)
+    tier = _get_user_tier(user_id)
+
+    # Count watches
+    if user_id:
+        current_watches = len(_watch_db.list_watches_by_user(user_id))
+    else:
+        token = _get_session_token(request, response)
+        current_watches = len(_watch_db.list_watches_by_session(token))
+
+    # Count plan sessions this month
+    month_start = date.today().replace(day=1).isoformat()
+    session_key = request.cookies.get(SESSION_COOKIE) or request.client.host or "anon"
+    if user_id and _watch_db:
+        plan_used = _watch_db.count_plan_sessions(user_id=user_id, since=month_start)
+    elif _watch_db:
+        plan_used = _watch_db.count_plan_sessions(
+            session_token=session_key, since=month_start,
+        )
+    else:
+        plan_used = 0
+
+    # Grandfathered info
+    grandfathered_until = None
+    if user_id and _watch_db:
+        user = _watch_db.get_user_by_id(user_id)
+        if user and user.grandfathered_until:
+            grandfathered_until = user.grandfathered_until
+
+    return {
+        "tier": tier["tier"],
+        "subscription_status": (
+            _watch_db.get_user_by_id(user_id).subscription_status
+            if user_id and _watch_db
+            else "free"
+        ),
+        "max_watches": tier["max_watches"],
+        "current_watches": current_watches,
+        "plan_sessions_used": plan_used,
+        "plan_sessions_limit": tier["plan_sessions_per_month"],
+        "grandfathered_until": grandfathered_until,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Trip planner
 # ---------------------------------------------------------------------------
 
-# Simple in-memory rate limiter: session -> (date, count)
-_plan_rate_limit: dict[str, tuple[str, int]] = {}
-_PLAN_DAILY_LIMIT = 5
+def _check_plan_limit(
+    user_id: int | None, session_key: str,
+) -> tuple[bool, bool, int, int]:
+    """Check trip planner monthly limit.
 
-
-def _check_plan_rate_limit(session_key: str) -> bool:
-    """Return True if request is allowed, False if daily limit exceeded."""
-    from datetime import date
-
-    today = date.today().isoformat()
-    existing = _plan_rate_limit.get(session_key)
-    if existing is None or existing[0] != today:
-        _plan_rate_limit[session_key] = (today, 1)
-        return True
-    day, count = existing
-    if count >= _PLAN_DAILY_LIMIT:
-        return False
-    _plan_rate_limit[session_key] = (day, count + 1)
-    return True
+    Returns (allowed, soft_gate, used, limit).
+    - allowed=True, soft_gate=False: normal usage
+    - allowed=True, soft_gate=True: at limit, show upgrade prompt
+    - allowed=False: hard block
+    """
+    tier = _get_user_tier(user_id)
+    limit = tier["plan_sessions_per_month"]
+    month_start = date.today().replace(day=1).isoformat()
+    if user_id and _watch_db:
+        used = _watch_db.count_plan_sessions(user_id=user_id, since=month_start)
+    elif _watch_db:
+        used = _watch_db.count_plan_sessions(
+            session_token=session_key, since=month_start,
+        )
+    else:
+        return True, False, 0, limit
+    if used < limit:
+        return True, False, used, limit
+    if used == limit:
+        # Soft gate: show upgrade prompt but allow one more
+        return True, True, used, limit
+    return False, False, used, limit
 
 
 class PlanChatRequest(BaseModel):
@@ -1158,16 +1270,25 @@ async def plan_chat(body: PlanChatRequest, request: Request, response: Response)
     if not api_key:
         raise HTTPException(status_code=503, detail="Trip planner not configured")
 
-    # Rate limit by session token or IP
+    user_id = _get_current_user(request)
     session_key = request.cookies.get(SESSION_COOKIE) or request.client.host or "anon"
-    if not _check_plan_rate_limit(session_key):
+    allowed, soft_gate, used, limit = _check_plan_limit(user_id, session_key)
+    if not allowed:
         raise HTTPException(
             status_code=429,
-            detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
+            detail={
+                "error": "plan_limit",
+                "used": used,
+                "limit": limit,
+                "tier": _get_user_tier(user_id)["tier"],
+            },
         )
+    if _watch_db:
+        _watch_db.record_plan_session(user_id=user_id, session_token=session_key)
 
     result = await chat(body.messages, _engine, _registry, api_key)
-    return PlanChatResponse(**result)
+    resp = PlanChatResponse(**result)
+    return resp
 
 
 @app.post("/api/plan/chat/stream")
@@ -1178,12 +1299,21 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request):
     if not api_key:
         raise HTTPException(status_code=503, detail="Trip planner not configured")
 
+    user_id = _get_current_user(request)
     session_key = request.cookies.get(SESSION_COOKIE) or request.client.host or "anon"
-    if not _check_plan_rate_limit(session_key):
+    allowed, soft_gate, used, limit = _check_plan_limit(user_id, session_key)
+    if not allowed:
         raise HTTPException(
             status_code=429,
-            detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
+            detail={
+                "error": "plan_limit",
+                "used": used,
+                "limit": limit,
+                "tier": _get_user_tier(user_id)["tier"],
+            },
         )
+    if _watch_db:
+        _watch_db.record_plan_session(user_id=user_id, session_token=session_key)
 
     async def event_generator():
         async for event_json in chat_stream(body.messages, _engine, _registry, api_key):

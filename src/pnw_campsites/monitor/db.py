@@ -73,6 +73,11 @@ class User:
     default_from: str = ""
     created_at: str = ""
     last_login_at: str | None = None
+    subscription_status: str = "free"  # free, pro, grandfathered
+    stripe_customer_id: str = ""
+    subscription_id: str = ""
+    subscription_expires_at: str = ""
+    grandfathered_until: str = ""
 
 
 @dataclass
@@ -225,6 +230,43 @@ class WatchDB:
                 auth TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+        """)
+        # v0.95 subscription / billing columns on users
+        user_cols = [
+            r[1] for r in self._conn.execute("PRAGMA table_info(users)")
+        ]
+        for col, default in (
+            ("subscription_status", "'free'"),
+            ("stripe_customer_id", "''"),
+            ("subscription_id", "''"),
+            ("subscription_expires_at", "''"),
+            ("grandfathered_until", "''"),
+        ):
+            if col not in user_cols:
+                self._conn.execute(
+                    f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT {default}"
+                )
+        # v0.95 Stripe webhook idempotency
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS stripe_events (
+                event_id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                processed_at TEXT NOT NULL,
+                payload TEXT NOT NULL
+            );
+        """)
+        # v0.95 persistent plan session tracking (replaces in-memory rate limiter)
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS plan_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                session_token TEXT DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_plan_sessions_user
+                ON plan_sessions(user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_plan_sessions_session
+                ON plan_sessions(session_token, created_at);
         """)
         self._conn.commit()
 
@@ -416,6 +458,9 @@ class WatchDB:
         allowed = {
             "display_name", "home_base", "default_state",
             "default_nights", "default_from", "last_login_at",
+            "subscription_status", "stripe_customer_id",
+            "subscription_id", "subscription_expires_at",
+            "grandfathered_until",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -630,6 +675,79 @@ class WatchDB:
         )
         self._conn.commit()
         return new_state
+
+    # -------------------------------------------------------------------
+    # Plan sessions (persistent rate limiting)
+    # -------------------------------------------------------------------
+
+    def record_plan_session(
+        self, user_id: int | None = None, session_token: str = "",
+    ) -> None:
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "INSERT INTO plan_sessions (user_id, session_token, created_at)"
+            " VALUES (?, ?, ?)",
+            (user_id, session_token, now),
+        )
+        self._conn.commit()
+
+    def count_plan_sessions(
+        self, *, user_id: int | None = None,
+        session_token: str = "", since: str = "",
+    ) -> int:
+        """Count plan sessions since a given ISO date string."""
+        if user_id:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM plan_sessions"
+                " WHERE user_id=? AND created_at>=?",
+                (user_id, since),
+            ).fetchone()
+        elif session_token:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM plan_sessions"
+                " WHERE session_token=? AND created_at>=?",
+                (session_token, since),
+            ).fetchone()
+        else:
+            return 0
+        return row[0] if row else 0
+
+    # -------------------------------------------------------------------
+    # Stripe events (webhook idempotency)
+    # -------------------------------------------------------------------
+
+    def has_stripe_event(self, event_id: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM stripe_events WHERE event_id=?",
+            (event_id,),
+        ).fetchone()
+        return row is not None
+
+    def save_stripe_event(
+        self, event_id: str, event_type: str, payload: str,
+    ) -> None:
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "INSERT OR IGNORE INTO stripe_events"
+            " (event_id, event_type, processed_at, payload)"
+            " VALUES (?, ?, ?, ?)",
+            (event_id, event_type, now, payload),
+        )
+        self._conn.commit()
+
+    # -------------------------------------------------------------------
+    # Pro watch queries
+    # -------------------------------------------------------------------
+
+    def list_pro_watches(self) -> list[Watch]:
+        """Return enabled watches owned by users with pro subscription."""
+        rows = self._conn.execute(
+            "SELECT w.* FROM watches w"
+            " JOIN users u ON w.user_id = u.id"
+            " WHERE w.enabled=1 AND u.subscription_status='pro'"
+            " ORDER BY w.created_at",
+        ).fetchall()
+        return [self._row_to_watch(r) for r in rows]
 
     # -------------------------------------------------------------------
     # Snapshots
