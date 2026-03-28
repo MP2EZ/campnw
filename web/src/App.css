@@ -522,39 +522,39 @@ header p {
 }
 
 .source-recgov {
-  background: #e8f0e0;
-  color: var(--accent);
+  background: var(--src-recgov-badge-bg);
+  color: var(--src-recgov-badge-text);
 }
 
 .source-wa_state {
-  background: #deeef5;
-  color: #1a5276;
+  background: var(--src-wa-badge-bg);
+  color: var(--src-wa-badge-text);
 }
 
 .source-or_state {
-  background: #fef3e0;
-  color: #7d5a1a;
+  background: var(--src-or-badge-bg);
+  color: var(--src-or-badge-text);
 }
 
 .source-id_state {
-  background: #eee5f5;
-  color: #5b2d7a;
+  background: var(--src-id-badge-bg);
+  color: var(--src-id-badge-text);
 }
 
 .result-card.card-recgov {
-  border-left: 3px solid #5a8a32;
+  border-left: 3px solid var(--src-recgov-border);
 }
 
 .result-card.card-wa_state {
-  border-left: 3px solid #3498b0;
+  border-left: 3px solid var(--src-wa-border);
 }
 
 .result-card.card-or_state {
-  border-left: 3px solid #d4920a;
+  border-left: 3px solid var(--src-or-border);
 }
 
 .result-card.card-id_state {
-  border-left: 3px solid #7d3cb5;
+  border-left: 3px solid var(--src-id-border);
 }
 
 .tag-badge {
@@ -1074,19 +1074,11 @@ header p {
 }
 
 .source-toggle-btn.source-recgov {
-  background: #5a8a32;
+  background: var(--src-recgov-toggle);
 }
 
 .source-toggle-btn.source-wa_state {
-  background: #2a7a9a;
-}
-
-[data-theme="dark"] .source-toggle-btn.source-recgov {
-  background: #3a6a22;
-}
-
-[data-theme="dark"] .source-toggle-btn.source-wa_state {
-  background: #1a5a7a;
+  background: var(--src-wa-toggle);
 }
 
 /* ─── Focus styles ─────────────────────────────────────────────────── */
@@ -1351,44 +1343,7 @@ header p {
     color-scheme: dark;
   }
 
-  /* ── Source badges ─── */
-  .source-recgov {
-    background: #1e2e14;
-    color: #90c060;
-  }
-
-  .source-wa_state {
-    background: #162030;
-    color: #60a0c8;
-  }
-
-  .source-or_state {
-    background: #2a2010;
-    color: #c89050;
-  }
-
-  .source-id_state {
-    background: #221830;
-    color: #a070d0;
-  }
-
-  /* ── Card left-border accents ─── */
-  /* Slightly muted from their light-mode values so they glow softly */
-  .result-card.card-recgov {
-    border-left-color: #5a8a38;
-  }
-
-  .result-card.card-wa_state {
-    border-left-color: #3a88a8;
-  }
-
-  .result-card.card-or_state {
-    border-left-color: #c08820;
-  }
-
-  .result-card.card-id_state {
-    border-left-color: #7a40a8;
-  }
+  /* Source badges + card borders: handled by tokens.css */
 
   /* ── Tag badge (inline label on result card) ─── */
   .tag-badge {

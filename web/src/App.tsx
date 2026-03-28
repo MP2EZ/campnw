@@ -26,6 +26,7 @@ function track(event: string, data: Record<string, string | number>) {
   }
 }
 
+import "./tokens.css";
 import "./App.css";
 
 function formatDate(offset: number): string {
