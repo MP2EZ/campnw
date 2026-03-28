@@ -12,6 +12,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes('leaflet')) return 'leaflet'
           if (id.includes('react-markdown') || id.includes('remark-parse') || id.includes('remark-rehype')) {
             return 'markdown'
           }
