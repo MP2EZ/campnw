@@ -305,11 +305,27 @@ Performance:
 - [x] Map accessibility (list alternative table, aria-live, sr-only, card focus ring)
 - [x] Search-map integration (SearchContext, summary bar, "See on map" with focus/popup)
 
+### v0.98 "Quality Hardening" — DONE
+- [x] WCAG AA contrast fixes (--text-light, --accent dark mode pass 4.5:1)
+- [x] Skip navigation link (WCAG 2.4.1)
+- [x] Enhanced focus-visible styles with transition
+- [x] Missing hover transitions on 6 interactive elements
+- [x] Hardcoded color cleanup (15 #fff → --text-on-accent token, hover colors tokenized)
+- [x] React ErrorBoundary (prevents white-screen crashes)
+- [x] Consistent loading indicators (WatchPanel animated dots)
+- [x] jest-axe a11y tests for all routes (/, /map, /plan)
+- [x] Lighthouse CI expanded to /map, threshold bumped to 0.95
+
+### v0.99 "Pre-launch Audit"
+- [ ] Performance audit (bundle size regression check, P95 search latency, Lighthouse perf scores, unnecessary re-renders, lazy-load coverage)
+- [ ] Security audit (auth flow review, cookie/session hardening, input validation sweep, OWASP top 10 check, dependency CVE scan)
+- [ ] Cross-browser/device QA (Safari, Firefox, Chrome; iOS Safari, Android Chrome; PWA install flow)
+- [ ] Accessibility completeness (screen reader testing on all routes, keyboard nav end-to-end, ARIA pattern review beyond axe-core)
+- [ ] Mobile responsive audit (all routes at 320–768px, touch targets, viewport-specific layout bugs)
+
 ### v1.0 "campnw 1.0"
 - [ ] Personalized recommendations (search history affinity, opt-in, renders above search results)
-- [ ] WCAG 2.1 AA audit (expand axe-core CI from Level A to AA, all components)
-- [ ] Error state review (every provider-down, empty-state, offline path designed)
-- [ ] Final polish pass (spacing, transitions, dark mode, mobile responsive on all routes)
+- [ ] Final polish pass (spacing, transitions, remaining dark mode gaps)
 
 ### v1.1 "Predictions+"
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)

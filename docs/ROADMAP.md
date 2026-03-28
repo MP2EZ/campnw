@@ -1,7 +1,7 @@
 # campnw Roadmap: v0.2.1 to v1.0
 
 **Last updated:** March 2026
-**Current version:** v0.5 (deployed at campnw.palouselabs.com)
+**Current version:** v0.98 (deployed at campnw.palouselabs.com)
 
 ---
 
@@ -20,9 +20,11 @@ v0.7    [SHIPPED]  Oregon + Delight    — Vibe descriptions, contextual notific
 v0.8a   [SHIPPED]  Trip Planner MVP    — Conversational AI planner with tool calling
 v0.8b   [SHIPPED]  Trip Planner Polish — Streaming, itinerary cards, shareable links
 v0.95   [SHIPPED]  Monetization        — Free/Pro tiers, subscription billing, upgrade flows
-v0.96   ------->   Registry + Infra    — Registry expansion, bundle audit, Lighthouse CI
-v0.97   ------->   Map + Power User    — Map view, keyboard shortcuts, lazy loading
-v1.0    ------->   campnw 1.0          — Personalized recs, WCAG AA audit, final polish
+v0.96   [SHIPPED]  Registry + Infra    — Registry expansion, bundle audit, Lighthouse CI
+v0.97   [SHIPPED]  Map + Power User    — Map view, keyboard shortcuts, lazy loading
+v0.98   [SHIPPED]  Quality Hardening   — WCAG AA contrast, focus styles, ErrorBoundary, CI a11y
+v0.99   ------->   Pre-launch Audit    — Perf, security, cross-browser, mobile responsive
+v1.0    ------->   campnw 1.0          — Personalized recs, final polish
 v1.1    ------->   Predictions+        — Availability predictions, anomaly alerts, post-mortems
 ```
 
@@ -521,7 +523,7 @@ Four surfaces, no more:
 
 ---
 
-## v0.96 "Registry + Infra"
+## v0.96 "Registry + Infra" — DONE
 
 ### Theme
 Expand the campground registry to 1,000+ and establish performance infrastructure. Unglamorous prerequisite work that prevents rework: the map view needs complete lat/lng data, and Leaflet needs lazy-loading infrastructure already in place.
@@ -579,29 +581,91 @@ Map UI scope creep. Hard boundary: pins with density coloring, clustering, click
 
 ---
 
+## v0.98 "Quality Hardening" — DONE
+
+### Theme
+Tactical UI and accessibility fixes that close the gap from WCAG Level A to Level AA. Error resilience, design token hygiene, and CI gating improvements. An intermediate ship point between v0.97 (map + shortcuts) and v1.0 (personalized recs).
+
+### Features
+
+| Feature | Effort | Description |
+|---------|--------|-------------|
+| WCAG AA contrast fixes | S | Fix `--text-light` (both modes) and `--accent` (dark mode) to pass 4.5:1 minimum contrast ratio. |
+| Skip navigation link | S | Add skip-to-content link (WCAG 2.4.1), visible on keyboard focus, targets `<main>` landmark. |
+| Focus-visible enhancement | S | Add transition to global `:focus-visible` for smooth outline appearance. |
+| Missing hover transitions | S | Add `transition` to 6 interactive elements that snapped on hover (result-header, show-more-btn, watch-action-btn, user-menu-item, recent-chip, chat-new-btn). |
+| Hardcoded color cleanup | S | Replace 15 `color: #fff` with `--text-on-accent` token. Tokenize hardcoded hover backgrounds and chip borders. |
+| React ErrorBoundary | S | Wrap Routes with ErrorBoundary to prevent white-screen crashes. Styled recovery UI with reload button. |
+| Loading indicator consistency | S | Replace WatchPanel text "Loading..." with animated thinking-dots pattern matching search/chat. |
+| jest-axe a11y tests | S | axe-core tests for /, /map, /plan routes. Catches violations in CI before merge. |
+| Lighthouse CI expansion | S | Add /map to Lighthouse URL list. Bump accessibility threshold from 0.9 to 0.95. |
+
+### Dependencies
+- v0.97 (map view, keyboard shortcuts)
+
+### Quality Bar
+- All `--text-light` and `--accent` usages pass WCAG AA 4.5:1 contrast
+- Skip link visible on Tab, navigates to main content
+- All interactive elements have smooth hover/focus transitions
+- Zero hardcoded `color: #fff` in App.css (all via `--text-on-accent` token)
+- ErrorBoundary catches render errors with styled recovery UI
+- jest-axe passes on all routes
+- Lighthouse a11y ≥ 0.95 on /, /plan, /map
+
+### Key Risk
+None — all items are small, well-scoped, and independently verifiable.
+
+---
+
+## v0.99 "Pre-launch Audit"
+
+### Theme
+The comprehensive quality gate before v1.0. v0.98 handles tactical UI/a11y fixes (contrast, focus styles, token cleanup, ErrorBoundary, CI gating). This release is the broad sweep: performance profiling, security hardening, cross-browser QA, and accessibility testing that goes beyond what automated tools catch.
+
+### Features
+
+| Feature | Effort | Description |
+|---------|--------|-------------|
+| Performance audit | M | Bundle size regression check against v0.96 baseline. P95 search latency validation (<4s). Lighthouse perf scores across all routes. React profiler for unnecessary re-renders. Verify lazy-load coverage (trip planner, map, pricing). |
+| Security audit | M | Auth flow review (JWT lifecycle, cookie flags, session expiry). Input validation sweep across all API endpoints. OWASP top 10 checklist. `npm audit` + `pip-audit` for dependency CVEs. Stripe webhook signature verification confirmation. |
+| Cross-browser/device QA | M | Manual testing on Safari, Firefox, Chrome. iOS Safari and Android Chrome for PWA flows. PWA install + web push notification flow on mobile. Dark mode rendering across browsers. |
+| Accessibility completeness | S | Screen reader testing (VoiceOver) on all routes including trip planner and map. Keyboard navigation end-to-end (every interactive element reachable). ARIA pattern review beyond what axe-core catches (live regions, role usage, announcement timing). |
+| Mobile responsive audit | S | All routes tested at 320px–768px breakpoints. Touch target sizing (48px minimum). Viewport-specific layout bugs. Trip planner and map usability on small screens. |
+
+### Dependencies
+- v0.98 (contrast fixes, focus styles, ErrorBoundary, CI a11y gating at 0.95)
+
+### Quality Bar
+- Zero `npm audit` / `pip-audit` critical or high vulnerabilities
+- P95 search latency under 4 seconds (measured via Server-Timing)
+- Lighthouse scores: performance ≥0.9, accessibility ≥0.95, best practices ≥0.9 on all routes
+- All routes usable via keyboard-only and screen reader
+- No layout breakage at 320px viewport width
+
+### Key Risk
+Audit scope creep — this is a review milestone, not a rewrite. Fix issues found, but don't redesign. If a fix exceeds M effort, file it for v1.0 or v1.1.
+
+---
+
 ## v1.0 "campnw 1.0"
 
 ### Theme
-The capstone. Personalized recommendations turn accumulated search history and registry data into proactive suggestions. The WCAG AA audit ensures v1.0 is a quality bar, not just a feature checklist.
+The capstone. Personalized recommendations turn accumulated search history and registry data into proactive suggestions. With v0.98 and v0.99 handling quality hardening, v1.0 is purely about the final feature and polish.
 
 ### Features
 
 | Feature | Effort | Description |
 |---------|--------|-------------|
 | Personalized recommendations | L | Based on search history (tags, regions, date patterns) and watched campgrounds, surface "You might like" suggestions. Opt-in toggle in settings. Privacy-first: all computation server-side against user's own history. Renders as recommendation row above search results. |
-| WCAG 2.1 AA audit | M | Full audit across all components. Expand axe-core CI from Level A to Level AA blocking. Special attention to map view, trip planner, and billing flows. |
-| Error state review | S | Every provider-down, empty-state, and offline-handling path reviewed and given a designed response. No raw error messages in production. |
-| Final polish pass | S | Consistent spacing, transitions, loading states across all views. Dark mode audit. Mobile responsive check on all routes. |
+| Final polish pass | S | Any remaining spacing, transition, or dark mode gaps identified in v0.99 audit. |
 
 ### Dependencies
-- v0.97 (map view, keyboard shortcuts)
+- v0.99 (quality audit complete, all critical/high issues resolved)
 
 ### Quality Bar
-- Zero Level A or Level AA axe-core failures
-- P95 search under 4 seconds (measured)
-- Lighthouse performance, accessibility, and best practices scores all green
+- All v0.99 quality bar metrics maintained (no regressions)
 - Recommendations respect opt-in toggle
-- All error states designed and implemented
+- Recommendation queries add <200ms to page load
 
 ### Key Risk
 Personalized recommendations scope. At personal/friends scale, a simple query over search history with tag/region affinity scoring is sufficient. Do not build a recommendation engine. If backend work exceeds one week, it is over-scoped.
