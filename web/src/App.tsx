@@ -164,6 +164,7 @@ function SearchForm({
   const [maxDrive, setMaxDrive] = useState(initialValues?.max_drive ? String(initialValues.max_drive) : "");
   const [limit, setLimit] = useState(initialValues?.limit || 20);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [nlQuery, setNlQuery] = useState("");
   const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const quickPresets = useMemo(() => getQuickPresets(), []);
@@ -233,6 +234,44 @@ function SearchForm({
 
   return (
     <form onSubmit={handleSubmit} className="search-form">
+      {/* Natural language quick search */}
+      <div className="nl-search-section">
+        <div className="nl-search-row">
+          <input
+            type="text"
+            className="nl-search-input"
+            placeholder="Quick search: dog-friendly lakeside spot near Portland this weekend"
+            value={nlQuery}
+            onChange={(e) => setNlQuery(e.target.value)}
+            aria-label="Quick search in plain language"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && nlQuery.trim()) {
+                e.preventDefault();
+                onSearch(
+                  { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
+                  "find",
+                );
+                setNlQuery("");
+              }
+            }}
+          />
+          {nlQuery.trim() && (
+            <button
+              type="button"
+              className="nl-search-btn"
+              onClick={() => {
+                onSearch(
+                  { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
+                  "find",
+                );
+                setNlQuery("");
+              }}
+            >
+              Go
+            </button>
+          )}
+        </div>
+      </div>
       <div className="mode-toggle">
         <button
           type="button"
@@ -530,14 +569,11 @@ function SearchSummaryBar({
   params,
   dates,
   onEdit,
-  onNlSearch,
 }: {
   params: SearchParams;
   dates: { start: string; end: string };
   onEdit: () => void;
-  onNlSearch: (q: string) => void;
 }) {
-  const [nlQuery, setNlQuery] = useState("");
   const parts: string[] = [];
   if (params.state) parts.push(`${STATE_LABELS[params.state] || params.state} parks`);
   parts.push(formatDateRange(dates.start, dates.end));
@@ -548,30 +584,8 @@ function SearchSummaryBar({
   return (
     <div className="search-summary-bar">
       <p className="search-summary-text">{parts.join(" · ")}</p>
-      <form
-        className="nl-search-inline"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (nlQuery.trim()) {
-            onNlSearch(nlQuery.trim());
-            setNlQuery("");
-          }
-        }}
-      >
-        <input
-          type="text"
-          className="nl-search-input"
-          placeholder="Try: lakeside near Portland this weekend"
-          value={nlQuery}
-          onChange={(e) => setNlQuery(e.target.value)}
-          aria-label="Natural language search"
-        />
-        <button type="submit" className="nl-search-btn" disabled={!nlQuery.trim()}>
-          Go
-        </button>
-      </form>
       <button className="search-summary-edit" onClick={onEdit} type="button">
-        Filters
+        Edit
       </button>
     </div>
   );
@@ -1379,12 +1393,6 @@ export default function App() {
               params={activeSearchParams}
               dates={searchDates}
               onEdit={() => setFormCollapsed(false)}
-              onNlSearch={(q) => {
-                handleSearch(
-                  { start_date: "", end_date: "", q } as SearchParams,
-                  "find",
-                );
-              }}
             />
           ) : (
             <SearchForm

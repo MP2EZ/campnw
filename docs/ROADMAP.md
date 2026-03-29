@@ -1,4 +1,4 @@
-# campnw Roadmap: v0.2.1 to v1.1
+# Campable Roadmap: v0.2.1 to v1.2
 
 **Last updated:** March 2026
 **Current version:** v1.0 (deployed at campable.co)
@@ -26,6 +26,7 @@ v0.98   [SHIPPED]  Quality Hardening   — WCAG AA contrast, focus styles, Error
 v0.99   [SHIPPED]  Pre-launch Audit    — Security headers, CSP, login rate limit, lazy loading, CVE CI
 v1.0    [SHIPPED]  campnw 1.0          — OR State Parks, recs, collapsible form, hamburger, polish
 v1.1    ------->   Better Search       — NL search, registry expansion (MT/WY/NorCal), AI summaries
+v1.15   ------->   Brand + Identity    — Logo, palette, voice, og:image, notification copy
 v1.2    ------->   Trips + Watches     — Trip object, template watches, sharing, onboarding
 v1.3    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
@@ -714,6 +715,85 @@ Batch/infra first: Tag Audit (3) → Description Rewrite (4) → Registry Expans
 ### Cost
 - One-time: ~$0.20 (tag audit + description rewrite)
 - Ongoing: ~$7-8/month (NL search ~$3, summarizer ~$3, rec reasons ~$1, digest ~$0.05)
+
+---
+
+## v1.15 "Brand + Identity" (~2-3 weeks, parallelizable with late v1.1)
+
+### Theme
+Campable rebranded from "campnw" but still has no formal visual identity — no logo, no brand palette spec, no og:image template. This milestone establishes the brand system: logo mark, color formalization, typography, voice guidelines, and the high-value touchpoints that drive word-of-mouth (notification copy, share cards). Can be worked alongside v1.1 since there are no code dependencies between them.
+
+### Brand Positioning
+**Discovery engine** — not monitoring (Campnab/Campflare), not listings (Dyrt/Hipcamp). Campable answers "where can I actually go camping this weekend?" across multiple booking systems. The key differentiating word is **available**: real availability, right now, across every system.
+
+**Emotional territory:** Relief ("I can actually find something"), spontaneity ("let's just go"), local knowledge (a friend who knows all the spots).
+
+**Tagline:** "Find your weekend." (primary) · "Real-time campsite availability across the Pacific Northwest." (explanatory/SEO)
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Logo Mark | M | Prototype two directions: (A) Pin Drop — map pin with tent-shaped head, geometric; (B) Window/Ridgeline — rounded square with PNW treeline silhouette. Test both at 16px, 32px, 192px, 512px, and monochrome. The 16px favicon test decides the winner. Develop lowercase 'c' with pine-needle detail as compact variant. |
+| Brand Palette Formalization | S | Name and spec the existing `tokens.css` colors as the brand palette. Define Brand Green (primary accent, exact HSL, AA-tested on both themes), Near-Black, Warm Cream, Campfire Orange (CTA accent, ~#D4722A). Resolve WA source green vs brand green collision — either shift WA to teal or use clearly distinct shade. |
+| Typography System | S | Select and implement heading font (Plus Jakarta Sans or DM Sans). Two families max: heading/wordmark + system stack for body/data. No third accent font. Audit current system font usage and swap heading elements. |
+| Dark Mode Heatmap Fix | XS | Widen dark mode heatmap color scale so levels 0-1 are distinguishable. Minimum 2:1 contrast between adjacent levels. CSS-only. (Carried from v1.1 — now a brand requirement, not just a bug.) |
+| OG Image Template | S | Branded share card (1200×630) for link previews: logo mark + tagline + optional search context (source badge, campground name, dates, available count). Static SVG-to-PNG fallback. This is the acquisition touchpoint — shared in group chats and camping Facebook groups. |
+| Notification Copy Audit | S | Apply brand voice to all watch alert copy. Title = campground name. Body = dates + site count + time-context. Never "Availability Alert" or "High urgency." Data-driven urgency, not manufactured. Test against 10 real notification scenarios. |
+| PWA Assets | XS | Update manifest icons (192×192, 512×512), favicon (16×16, 32×32), apple-touch-icon, and splash screen with final logo mark. Monochrome variant for Android notification tray. |
+| Brand Voice Guide | XS | Lightweight single-page reference (not a 40-page PDF): colors with hex values, logo usage, icon style (Lucide, outlined, 1.5px, rounded), voice examples, anti-patterns. Lives in `docs/BRAND.md`. |
+
+### Scoping Consideration: Anthropic Batch API
+
+The `enrich` CLI (`llm_tags.py`) currently calls Haiku sequentially in a `for` loop via `AsyncAnthropic` — 741 individual calls for a full registry run. The Anthropic Message Batches API (`client.messages.batches.create`) offers 50% input token savings and bulk submission for async workloads.
+
+**Candidate jobs:** tag extraction, vibe generation, description rewrite — all offline, no latency requirement. These three passes have a data dependency chain (tags → vibes → descriptions), so they'd be 3 separate batch submissions, not 1.
+
+**Scope in v1.15 if:** the enrichment code is already being modified for brand palette or description work, making it a natural time to refactor the call pattern.
+
+**Defer to v1.2 if:** v1.15 stays purely design/CSS. v1.2's historical pattern extraction (741+ campgrounds × polling data) has higher volume and benefits more from batching. The `asyncio.gather()` with semaphore approach is a lighter-weight speed improvement that doesn't require changing the API pattern.
+
+**Note:** At current scale (~$0.10/full run), batch savings are ~$0.02-0.03 per run. The primary benefit is speed (bulk submission vs sequential awaits), not cost. Savings become meaningful at v1.2 volumes.
+
+### Voice Principles
+- **Declarative, not interrogative.** "3 sites open at Ohanapecosh" not "Looking for campsites?"
+- **Specific, not vague.** Always include the data point — campground name, dates, site count.
+- **Honest about limitations.** "We check 794 campgrounds across 3 booking systems."
+- **No outdoor-lifestyle marketing copy.** The user is already a camper. Don't sell camping — sell finding the campsite.
+- **No "Oops!" or "Uh oh!"** in error states. State what happened, what to do, move on.
+- **Discovery language** ("find", "search", "discover"), never monitoring language ("snag", "grab", "alert").
+
+### Design Decisions
+
+**Visual direction:** "AllTrails' clarity meets Hipcamp's warmth, printed in a National Park Service pamphlet." Information-dense and beautifully presented — like Dark Sky for campsite availability.
+
+**What it should NOT feel like:** REI catalog (too corporate), camping emoji overload (too cute), hipster craft brand (too precious), government website (too sterile).
+
+**Motion:** Snappy-functional (150-200ms, ease-out) for state changes. Slight overshoot (250-300ms) on feedback moments (watch confirmed). No celebration confetti, no bounce, no wiggle. The existing `--transition-fast` and `--transition-base` tokens are correct.
+
+**Iconography:** Lucide icon set (MIT, rounded, 24px grid). Outlined at 1.5px stroke, filled for active states. No custom nature icon set initially — customize only where Lucide has gaps.
+
+**Empty states:** Instructional, not decorative. No sad-tent illustrations. The SmartZeroState diagnostic data IS the content.
+
+### Sequencing
+Brand Palette (2) first — unblocks everything else. Typography (3) and Dark Mode Fix (4) can parallel. Logo (1) needs design iteration time. OG Image (5) and Notification Copy (6) depend on palette + logo. PWA Assets (7) and Brand Guide (8) ship last.
+
+### Quality Bar
+- Logo mark legible and recognizable at 16×16 favicon
+- Brand Green passes WCAG AA (4.5:1) for text on both light and dark backgrounds
+- WA source color visually distinct from brand green at all sizes
+- OG image renders correctly in iMessage, Discord, Slack, and Facebook link previews
+- All notification copy reviewed against 10 real-world watch alert scenarios
+- No net increase in main bundle size from font loading (use `font-display: swap`, preload)
+
+### Key Risks
+- Logo design quality — geometric marks are hard to get right at small sizes without a skilled designer. Budget for 2-3 iteration rounds.
+- Font loading performance — one custom font is fine, two will impact Lighthouse. System stack for body is non-negotiable.
+- WA green collision — changing a source color affects 10+ tokens and every source badge in the UI. Audit all usages before changing.
+
+### Cost
+- $0 (no LLM costs — this is design + CSS work)
+- Optional: $50-200 if commissioning logo from a designer
 
 ---
 

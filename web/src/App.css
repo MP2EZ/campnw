@@ -893,9 +893,8 @@ header p {
 
 .search-summary-bar {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: space-between;
   align-items: center;
-  gap: var(--space-2);
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -903,16 +902,18 @@ header p {
   margin-bottom: var(--space-3);
 }
 
-.nl-search-inline {
+.nl-search-section {
+  margin-bottom: var(--space-2);
+}
+
+.nl-search-row {
   display: flex;
-  flex: 1;
-  min-width: 200px;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .nl-search-input {
   flex: 1;
-  padding: 0.3rem var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
@@ -932,7 +933,7 @@ header p {
 }
 
 .nl-search-btn {
-  padding: 0.3rem var(--space-3);
+  padding: var(--space-2) var(--space-4);
   background: var(--accent);
   color: var(--text-on-accent);
   border: none;
@@ -940,16 +941,29 @@ header p {
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   cursor: pointer;
+  flex-shrink: 0;
   transition: opacity var(--transition-fast);
 }
 
-.nl-search-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
+.nl-search-btn:hover {
+  opacity: 0.9;
 }
 
-.nl-search-btn:hover:not(:disabled) {
-  opacity: 0.9;
+.nl-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.nl-divider::before,
+.nl-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 
 .search-summary-text {
