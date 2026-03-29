@@ -1036,7 +1036,10 @@ export default function App() {
           <>
           {searchSummary && (
             <div className="search-summary-banner" role="status">
-              <p>{searchSummary}</p>
+              <p dangerouslySetInnerHTML={{
+                __html: searchSummary
+                  .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+              }} />
               <button
                 type="button"
                 className="summary-dismiss"

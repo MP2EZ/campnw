@@ -566,15 +566,16 @@ header p {
 .search-summary-banner {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-3);
   background: var(--bg-card);
-  border: 1px solid var(--accent);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   margin-bottom: var(--space-3);
   font-size: var(--text-sm);
   color: var(--text);
-  font-style: italic;
+  line-height: 1.5;
 }
 
 .search-summary-banner p {
@@ -582,12 +583,20 @@ header p {
   flex: 1;
 }
 
+.search-summary-banner strong {
+  font-weight: var(--weight-semi);
+  color: var(--accent);
+}
+
 .summary-dismiss {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
   padding: 0;
   line-height: 1;
 }
