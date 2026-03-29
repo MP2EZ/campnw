@@ -530,11 +530,14 @@ function SearchSummaryBar({
   params,
   dates,
   onEdit,
+  onNlSearch,
 }: {
   params: SearchParams;
   dates: { start: string; end: string };
   onEdit: () => void;
+  onNlSearch: (q: string) => void;
 }) {
+  const [nlQuery, setNlQuery] = useState("");
   const parts: string[] = [];
   if (params.state) parts.push(`${STATE_LABELS[params.state] || params.state} parks`);
   parts.push(formatDateRange(dates.start, dates.end));
@@ -545,8 +548,30 @@ function SearchSummaryBar({
   return (
     <div className="search-summary-bar">
       <p className="search-summary-text">{parts.join(" · ")}</p>
+      <form
+        className="nl-search-inline"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (nlQuery.trim()) {
+            onNlSearch(nlQuery.trim());
+            setNlQuery("");
+          }
+        }}
+      >
+        <input
+          type="text"
+          className="nl-search-input"
+          placeholder="Try: lakeside near Portland this weekend"
+          value={nlQuery}
+          onChange={(e) => setNlQuery(e.target.value)}
+          aria-label="Natural language search"
+        />
+        <button type="submit" className="nl-search-btn" disabled={!nlQuery.trim()}>
+          Go
+        </button>
+      </form>
       <button className="search-summary-edit" onClick={onEdit} type="button">
-        Edit
+        Filters
       </button>
     </div>
   );
@@ -1058,7 +1083,10 @@ export default function App() {
     setLoading(true);
     setError(null);
     setResultsView(mode === "find" ? "dates" : "sites");
-    setSearchDates({ start: params.start_date, end: params.end_date });
+    // For NL search, dates come from parsed_params event later
+    if (params.start_date && params.end_date) {
+      setSearchDates({ start: params.start_date, end: params.end_date });
+    }
     setFormCollapsed(true);
 
     // Scroll to results area after DOM updates
@@ -1124,6 +1152,24 @@ export default function App() {
         );
       },
       abortController.signal,
+      (parsed) => {
+        // Update dates and params from NL parse result
+        if (parsed.start_date && parsed.end_date) {
+          setSearchDates({ start: parsed.start_date, end: parsed.end_date });
+        }
+        setActiveSearchParams({
+          ...params,
+          start_date: parsed.start_date,
+          end_date: parsed.end_date,
+          state: parsed.state || undefined,
+          nights: parsed.nights,
+          tags: parsed.tags || undefined,
+          from_location: parsed.from_location || undefined,
+          max_drive: parsed.max_drive || undefined,
+          name: parsed.name || undefined,
+          days_of_week: parsed.days_of_week || undefined,
+        });
+      },
     );
   };
 
@@ -1330,6 +1376,12 @@ export default function App() {
               params={activeSearchParams}
               dates={searchDates}
               onEdit={() => setFormCollapsed(false)}
+              onNlSearch={(q) => {
+                handleSearch(
+                  { start_date: "", end_date: "", q } as SearchParams,
+                  "find",
+                );
+              }}
             />
           ) : (
             <SearchForm

@@ -74,6 +74,7 @@ export interface SearchResponse {
 export interface SearchParams {
   start_date: string;
   end_date: string;
+  q?: string;
   state?: string;
   nights?: number;
   days_of_week?: string;
@@ -123,6 +124,18 @@ export interface DiagnosisEvent {
   action_chips: ActionChip[];
 }
 
+export interface ParsedParams {
+  start_date: string;
+  end_date: string;
+  state?: string | null;
+  nights?: number;
+  tags?: string | null;
+  from_location?: string | null;
+  max_drive?: number | null;
+  name?: string | null;
+  days_of_week?: string | null;
+}
+
 export async function searchCampsitesStream(
   params: SearchParams,
   onResult: (result: CampgroundResult) => void,
@@ -130,10 +143,14 @@ export async function searchCampsitesStream(
   onError: (err: Error) => void,
   onDiagnosis?: (event: DiagnosisEvent) => void,
   signal?: AbortSignal,
+  onParsed?: (params: ParsedParams) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
-  query.set("start_date", params.start_date);
-  query.set("end_date", params.end_date);
+  if (params.q) {
+    query.set("q", params.q);
+  }
+  if (params.start_date) query.set("start_date", params.start_date);
+  if (params.end_date) query.set("end_date", params.end_date);
   if (params.state) query.set("state", params.state);
   if (params.nights) query.set("nights", String(params.nights));
   if (params.days_of_week) query.set("days_of_week", params.days_of_week);
@@ -174,9 +191,11 @@ export async function searchCampsitesStream(
           }
           try {
             const parsed = JSON.parse(data);
-            if (parsed.type === "diagnosis" && onDiagnosis) {
+            if (parsed.type === "parsed_params" && onParsed) {
+              onParsed(parsed.params as ParsedParams);
+            } else if (parsed.type === "diagnosis" && onDiagnosis) {
               onDiagnosis(parsed as DiagnosisEvent);
-            } else {
+            } else if (!parsed.type) {
               onResult(parsed as CampgroundResult);
             }
           } catch {

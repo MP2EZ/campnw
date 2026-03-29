@@ -654,8 +654,8 @@ async def search(
 
 @app.get("/api/search/stream")
 async def search_stream(
-    start_date: date = Query(..., description="Start date"),
-    end_date: date = Query(..., description="End date"),
+    start_date: date | None = Query(None, description="Start date"),
+    end_date: date | None = Query(None, description="End date"),
     state: str | None = Query(None),
     nights: int = Query(2),
     mode: str | None = Query(None),
@@ -668,8 +668,48 @@ async def search_stream(
     no_groups: bool = Query(False),
     include_fcfs: bool = Query(False),
     limit: int = Query(20, ge=1, le=50),
+    q: str | None = Query(None, description="Natural language search query"),
 ):
     """SSE streaming search — yields results as each batch completes."""
+    import os
+
+    nl_parsed: dict | None = None
+
+    # Natural language query → structured params
+    if q and not start_date:
+        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if api_key:
+            from pnw_campsites.search.nl_parser import parse_natural_query
+
+            nl_parsed = await parse_natural_query(q, api_key)
+            # Apply NL-parsed values as defaults (explicit params override)
+            if "start_date" in nl_parsed:
+                start_date = date.fromisoformat(nl_parsed["start_date"])
+            if "end_date" in nl_parsed:
+                end_date = date.fromisoformat(nl_parsed["end_date"])
+            if not state and "state" in nl_parsed:
+                state = nl_parsed["state"]
+            if not tags and "tags" in nl_parsed:
+                tags = ",".join(nl_parsed["tags"])
+            if not from_location and "from_location" in nl_parsed:
+                from_location = nl_parsed["from_location"]
+            if not max_drive and "max_drive_minutes" in nl_parsed:
+                max_drive = nl_parsed["max_drive_minutes"]
+            if not name and "name_like" in nl_parsed:
+                name = nl_parsed["name_like"]
+            if "min_consecutive_nights" in nl_parsed:
+                nights = nl_parsed["min_consecutive_nights"]
+            if not days_of_week and "days_of_week" in nl_parsed:
+                days_of_week = nl_parsed["days_of_week"]
+
+    # Require dates (either from query params or NL parse)
+    if not start_date or not end_date:
+        # Default: 2 weeks out, 30-day window
+        from datetime import timedelta
+
+        start_date = start_date or (date.today() + timedelta(days=14))
+        end_date = end_date or (start_date + timedelta(days=30))
+
     days_set = (
         {int(d) for d in days_of_week.split(",")} if days_of_week else None
     )
@@ -692,6 +732,24 @@ async def search_stream(
     )
 
     async def event_generator():
+        # Emit parsed params so the frontend can show what was understood
+        if nl_parsed:
+            parsed_event = {
+                "type": "parsed_params",
+                "params": {
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "state": state,
+                    "nights": nights,
+                    "tags": tags,
+                    "from_location": from_location,
+                    "max_drive": max_drive,
+                    "name": name,
+                    "days_of_week": days_of_week,
+                },
+            }
+            yield f"data: {json.dumps(parsed_event)}\n\n"
+
         available_count = 0
         async for result in _engine.search_stream(query):
             data = _format_result(
