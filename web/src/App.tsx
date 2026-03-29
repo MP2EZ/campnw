@@ -1008,6 +1008,14 @@ export default function App() {
               </div>
             </div>
           </div>
+          {resultsDisplay === "map" ? (
+            <div className="inline-map">
+              <Suspense fallback={<div className="loading-page">Loading map...</div>}>
+                <MapView />
+              </Suspense>
+            </div>
+          ) : (
+          <>
           {searchSummary && (
             <div className="search-summary-banner" role="status">
               <p>{searchSummary}</p>
@@ -1021,7 +1029,6 @@ export default function App() {
               </button>
             </div>
           )}
-          {/* Source filter — client-side, instant toggle */}
           {resultSources.size > 1 && (
           <div className="source-toggle" role="group" aria-label="Filter by source">
             {[...resultSources].map((src) => {
@@ -1054,14 +1061,6 @@ export default function App() {
               ))}
             </div>
           )}
-          {resultsDisplay === "map" ? (
-            <div className="inline-map">
-              <Suspense fallback={<div className="loading-page">Loading map...</div>}>
-                <MapView />
-              </Suspense>
-            </div>
-          ) : (
-          <>
           {filteredResults.some((r) => r.booking_system === "wa_state") && (
             <p className="wa-data-note">
               <span className="source-badge source-wa_state">WA Parks</span>{" "}
