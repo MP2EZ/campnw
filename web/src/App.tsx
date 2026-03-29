@@ -140,13 +140,11 @@ function DayPicker({
 
 function SearchForm({
   onSearch,
-  loading,
   userDefaults,
   isLoggedIn,
   initialValues,
 }: {
   onSearch: (params: SearchParams, mode: SearchMode) => void;
-  loading: boolean;
   userDefaults?: { state: string; nights: number; from: string };
   isLoggedIn: boolean;
   initialValues?: SearchParams | null;
@@ -1321,7 +1319,6 @@ export default function App() {
           ) : (
             <SearchForm
               onSearch={handleSearch}
-              loading={loading}
               isLoggedIn={!!user}
               userDefaults={user ? {
                 state: user.default_state,
