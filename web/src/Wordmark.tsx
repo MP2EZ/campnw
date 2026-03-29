@@ -3,16 +3,16 @@ interface WordmarkProps {
   className?: string;
 }
 
-// camPNW wordmark — CSS text, single baseline, no SVG pixel offsets
+// campable wordmark — CSS text, single baseline, no SVG pixel offsets
 //
 // Design rationale:
-//   "cam" lowercase, regular weight → verb/noun, subordinate prefix
-//   "PNW" uppercase, heavy weight, open tracking → the place, the identity
+//   "camp" lowercase, regular weight → verb/noun, the action
+//   "able" lowercase, bold weight → capable, available, findable
 //
-// Weight contrast (400→800) carries the visual separation between the two
+// Weight contrast (400→700) carries the visual separation between the two
 // semantic parts without introducing a physical gap. Both parts share the
 // same baseline and color, so they read as a single mark rather than two
-// floating words. The tracked caps echo NPS/trail-marker engraved lettering.
+// floating words. Plus Jakarta Sans gives it a modern, geometric feel.
 //
 // Size scale: sm=20px (mobile header), md=28px (default), lg=36px (hero)
 
@@ -27,37 +27,34 @@ export function Wordmark({ size = "md", className }: WordmarkProps) {
 
   return (
     <span
-      aria-label="campnw"
+      aria-label="campable"
       className={className}
       style={{
         display: "inline-flex",
         alignItems: "baseline",
         fontSize,
         lineHeight,
+        fontFamily: "var(--font-heading)",
         userSelect: "none",
       }}
     >
       <span
         style={{
-          fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-          fontWeight: 400,
+          fontWeight: 500,
           color: "currentColor",
-          letterSpacing: "0.02em",
+          letterSpacing: "0.01em",
         }}
       >
         camp
       </span>
       <span
         style={{
-          fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-          fontWeight: 800,
+          fontWeight: 700,
           color: "currentColor",
-          letterSpacing: "0.06em",
+          letterSpacing: "0.01em",
         }}
       >
-        nw
+        able
       </span>
     </span>
   );

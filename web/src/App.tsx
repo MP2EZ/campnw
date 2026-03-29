@@ -12,6 +12,7 @@ const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").th
 import { UserMenu } from "./components/UserMenu";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Wordmark } from "./Wordmark";
 import { useAuth } from "./hooks/useAuth";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { SearchContext } from "./contexts/SearchContext";
@@ -1049,7 +1050,7 @@ export default function App() {
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem("campnw-dark");
+    const saved = localStorage.getItem("campable-dark");
     if (saved !== null) return saved === "true";
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
@@ -1081,7 +1082,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
-    localStorage.setItem("campnw-dark", String(darkMode));
+    localStorage.setItem("campable-dark", String(darkMode));
   }, [darkMode]);
 
   const handleSearch = async (params: SearchParams, mode: SearchMode) => {
@@ -1268,7 +1269,7 @@ export default function App() {
       <header>
         <div className="header-row">
           <div>
-            <h1>campnw</h1>
+            <h1><Wordmark /></h1>
             <p className="header-subtitle">Find available campsites across the Pacific Northwest</p>
           </div>
           <div className="header-actions">

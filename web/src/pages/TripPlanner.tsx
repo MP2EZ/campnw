@@ -77,10 +77,10 @@ function loadSaved<T>(key: string, fallback: T): T {
 
 export default function TripPlanner() {
   const [messages, setMessages] = useState<DisplayMessage[]>(
-    () => loadSaved("campnw-plan-messages", []),
+    () => loadSaved("campable-plan-messages", []),
   );
   const [apiMessages, setApiMessages] = useState<ChatMessage[]>(
-    () => loadSaved("campnw-plan-api-messages", []),
+    () => loadSaved("campable-plan-api-messages", []),
   );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -91,8 +91,8 @@ export default function TripPlanner() {
   // Persist conversation to localStorage
   useEffect(() => {
     if (messages.length > 0) {
-      localStorage.setItem("campnw-plan-messages", JSON.stringify(messages));
-      localStorage.setItem("campnw-plan-api-messages", JSON.stringify(apiMessages));
+      localStorage.setItem("campable-plan-messages", JSON.stringify(messages));
+      localStorage.setItem("campable-plan-api-messages", JSON.stringify(apiMessages));
     }
   }, [messages, apiMessages]);
 
@@ -226,8 +226,8 @@ export default function TripPlanner() {
   const handleNewConversation = () => {
     setMessages([]);
     setApiMessages([]);
-    localStorage.removeItem("campnw-plan-messages");
-    localStorage.removeItem("campnw-plan-api-messages");
+    localStorage.removeItem("campable-plan-messages");
+    localStorage.removeItem("campable-plan-api-messages");
   };
 
   return (

@@ -114,7 +114,7 @@ class TestEnrichNotification:
             api_key="",
         )
 
-        assert message == "Lake Camp: 2 site(s) newly available"
+        assert message == "2 sites open at Lake Camp"
         assert urgency == 2
 
     @pytest.mark.asyncio
@@ -141,7 +141,7 @@ class TestEnrichNotification:
                 api_key="test-key",
             )
 
-        assert message == "River Camp: 1 site(s) newly available"
+        assert message == "1 site open at River Camp"
         assert urgency == 2
 
     @pytest.mark.asyncio
@@ -166,7 +166,7 @@ class TestEnrichNotification:
                 api_key="test-key",
             )
 
-        assert message == "Test Camp: 5 site(s) newly available"
+        assert message == "5 sites open at Test Camp"
         assert urgency == 2
 
     @pytest.mark.asyncio
@@ -223,7 +223,7 @@ class TestEnrichNotification:
                 api_key="test-key",
             )
 
-        assert message == "Test Camp: 1 site(s) newly available"
+        assert message == "1 site open at Test Camp"
         assert urgency == 2
 
     @pytest.mark.asyncio

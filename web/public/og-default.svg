@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <!-- campable OG share card — 1200×630 -->
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700&amp;display=swap');
+      .bg { fill: #f5f5f0; }
+      .brand-green { fill: #2d5016; }
+      .brand-mid { fill: #4a8028; }
+      .text-primary { fill: #1a1a1a; font-family: 'Plus Jakarta Sans', sans-serif; }
+      .text-muted { fill: #666; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="1200" height="630"/>
+
+  <!-- Mountain ridge decoration (bottom) -->
+  <path class="brand-green" d="
+    M0 530 L120 420 L200 470 L320 360 L420 440 L520 350 L620 430
+    L720 370 L820 440 L920 380 L1020 430 L1100 390 L1200 450
+    L1200 630 L0 630 Z
+  " opacity="0.15"/>
+  <path class="brand-mid" d="
+    M0 570 L100 500 L200 530 L340 460 L440 510 L560 450 L660 500
+    L760 460 L860 500 L960 470 L1060 510 L1150 480 L1200 500
+    L1200 630 L0 630 Z
+  " opacity="0.12"/>
+
+  <!-- Pin logo (scaled) -->
+  <g transform="translate(80, 120) scale(0.25)">
+    <path class="brand-green" d="
+      M256 480 C256 480 96 288 96 192 C96 103.6 167.6 32 256 32
+      C344.4 32 416 103.6 416 192 C416 288 256 480 256 480Z
+    "/>
+    <path fill="#f5f5f0" d="
+      M256 100 L306 200 L280 200 L320 280 L192 280 L232 200 L206 200 Z
+    "/>
+    <rect fill="#f5f5f0" x="244" y="270" width="24" height="30" rx="2"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text class="text-primary" x="210" y="215" font-size="72" font-weight="500" letter-spacing="0.5">camp</text>
+  <text class="text-primary" x="430" y="215" font-size="72" font-weight="700" letter-spacing="0.5">able</text>
+
+  <!-- Tagline -->
+  <text class="text-primary" x="80" y="310" font-size="42" font-weight="700">Find your weekend.</text>
+
+  <!-- Explanatory -->
+  <text class="text-muted" x="80" y="370" font-size="24">Real-time campsite availability across the Pacific Northwest and beyond.</text>
+
+  <!-- Source badges -->
+  <g transform="translate(80, 420)">
+    <rect fill="#e8f0e0" width="100" height="32" rx="6"/>
+    <text fill="#2d5016" x="50" y="22" font-size="14" font-family="'Plus Jakarta Sans', sans-serif" font-weight="500" text-anchor="middle">Rec.gov</text>
+
+    <rect fill="#deeef5" x="112" width="100" height="32" rx="6"/>
+    <text fill="#1a5276" x="162" y="22" font-size="14" font-family="'Plus Jakarta Sans', sans-serif" font-weight="500" text-anchor="middle">WA Parks</text>
+
+    <rect fill="#fef3e0" x="224" width="100" height="32" rx="6"/>
+    <text fill="#7d5a1a" x="274" y="22" font-size="14" font-family="'Plus Jakarta Sans', sans-serif" font-weight="500" text-anchor="middle">OR Parks</text>
+  </g>
+
+  <!-- Stats line -->
+  <text class="text-muted" x="80" y="500" font-size="20">1,370 campgrounds · 6 states · WA · OR · ID · MT · WY · CA</text>
+</svg>
