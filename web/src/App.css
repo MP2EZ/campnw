@@ -2073,8 +2073,7 @@ header p {
   margin-top: var(--space-2);
 }
 
-.prefs-toggle {
-  display: flex;
+.prefs-form .prefs-toggle {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
