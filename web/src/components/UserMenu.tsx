@@ -215,7 +215,7 @@ function PreferencesForm({
         </select>
       </label>
       <label className="prefs-toggle">
-        <span>Personalized recs</span>
+        <span>Personalized recommendations</span>
         <input
           type="checkbox"
           checked={recsEnabled}

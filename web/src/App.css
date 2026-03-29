@@ -2035,7 +2035,7 @@ header p {
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  min-width: 260px;
+  width: 320px;
 }
 
 .prefs-form label {
