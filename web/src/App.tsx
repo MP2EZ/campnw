@@ -721,6 +721,7 @@ export default function App() {
 
   const isMap = location.pathname === "/map";
   const [mainMode, setMainMode] = useState<"search" | "plan">("search");
+  const [resultsDisplay, setResultsDisplay] = useState<"list" | "map">("list");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
@@ -776,7 +777,7 @@ export default function App() {
     { key: "j", handler: () => navigateCard(1), description: "Next result" },
     { key: "k", handler: () => navigateCard(-1), description: "Previous result" },
     { key: "w", handler: () => setWatchPanelOpen(true), description: "Open watchlist" },
-    { key: "m", handler: () => { const target = isMap ? "/" : "/map"; navigate(target); setLiveAnnouncement(target === "/map" ? "Switched to map view" : "Switched to list view"); }, description: "Toggle map/list" },
+    { key: "m", handler: () => { setResultsDisplay(d => { const next = d === "list" ? "map" : "list"; setLiveAnnouncement(next === "map" ? "Switched to map view" : "Switched to list view"); return next; }); }, description: "Toggle map/list" },
     { key: "?", handler: () => setHelpModalOpen(true), description: "Show shortcuts" },
   ], [navigateCard, navigate, isMap]);
 
@@ -991,14 +992,16 @@ export default function App() {
               </div>
               <div className="view-toggle map-toggle">
                 <button
-                  className="active"
-                  aria-pressed="true"
+                  className={resultsDisplay === "list" ? "active" : ""}
+                  aria-pressed={resultsDisplay === "list"}
+                  onClick={() => setResultsDisplay("list")}
                 >
                   ≡ List
                 </button>
                 <button
-                  onClick={() => navigate("/map")}
-                  aria-pressed="false"
+                  className={resultsDisplay === "map" ? "active" : ""}
+                  aria-pressed={resultsDisplay === "map"}
+                  onClick={() => setResultsDisplay("map")}
                 >
                   ⊞ Map
                 </button>
@@ -1051,6 +1054,14 @@ export default function App() {
               ))}
             </div>
           )}
+          {resultsDisplay === "map" ? (
+            <div className="inline-map">
+              <Suspense fallback={<div className="loading-page">Loading map...</div>}>
+                <MapView />
+              </Suspense>
+            </div>
+          ) : (
+          <>
           {filteredResults.some((r) => r.booking_system === "wa_state") && (
             <p className="wa-data-note">
               <span className="source-badge source-wa_state">WA Parks</span>{" "}
@@ -1090,6 +1101,8 @@ export default function App() {
               searchDates={searchDates || undefined}
               onSearch={handleSearch}
             />
+          )}
+          </>
           )}
         </div>
         );

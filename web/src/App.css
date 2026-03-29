@@ -2807,6 +2807,20 @@ a.header-btn {
   font-size: var(--text-xs);
 }
 
+/* ─── Inline Map ──────────────────────────────────────────────────── */
+
+.inline-map {
+  height: 70vh;
+  min-height: 400px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.inline-map .map-container {
+  height: 100%;
+}
+
 /* ─── Trips ───────────────────────────────────────────────────────── */
 
 .trips-page,
