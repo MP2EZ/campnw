@@ -2754,6 +2754,73 @@ a.header-btn {
   outline-offset: 2px;
 }
 
+/* ─── Mode Tabs (Search / Plan a Trip) ────────────────────────────── */
+
+.mode-tabs {
+  display: flex;
+  max-width: var(--max-w-app);
+  margin: 0 auto var(--space-3);
+  padding: 0 var(--space-3);
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+}
+
+.mode-tab {
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--text-light);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mode-tab:hover {
+  color: var(--text);
+}
+
+.mode-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: var(--weight-semi);
+}
+
+/* ─── Watch Bell ──────────────────────────────────────────────────── */
+
+.watch-bell {
+  font-size: var(--text-base);
+  position: relative;
+}
+
+/* ─── Results Toolbar ─────────────────────────────────────────────── */
+
+.results-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.map-toggle button {
+  font-size: var(--text-xs);
+}
+
+/* ─── Inline Map ──────────────────────────────────────────────────── */
+
+.inline-map {
+  height: 70vh;
+  min-height: 400px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.inline-map .map-container {
+  height: 100%;
+}
+
 /* ─── Trips ───────────────────────────────────────────────────────── */
 
 .trips-page,
