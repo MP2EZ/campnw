@@ -546,6 +546,35 @@ header p {
   color: var(--text-muted);
 }
 
+.search-summary-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text);
+  font-style: italic;
+}
+
+.search-summary-banner p {
+  margin: 0;
+  flex: 1;
+}
+
+.summary-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
 .view-toggle {
   display: flex;
   border: 1px solid var(--border-input);

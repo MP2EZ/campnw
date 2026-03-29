@@ -1015,6 +1015,7 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [results, setResults] = useState<SearchResponse | null>(null);
+  const [searchSummary, setSearchSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultsView, setResultsView] = useState<ResultsView>("dates");
@@ -1082,6 +1083,7 @@ export default function App() {
 
     setLoading(true);
     setError(null);
+    setSearchSummary(null);
     setResultsView(mode === "find" ? "dates" : "sites");
     // For NL search, dates come from parsed_params event later
     if (params.start_date && params.end_date) {
@@ -1170,6 +1172,7 @@ export default function App() {
           days_of_week: parsed.days_of_week || undefined,
         });
       },
+      (text) => setSearchSummary(text),
     );
   };
 
@@ -1430,6 +1433,19 @@ export default function App() {
               </button>
             </div>
           </div>
+          {searchSummary && (
+            <div className="search-summary-banner" role="status">
+              <p>{searchSummary}</p>
+              <button
+                type="button"
+                className="summary-dismiss"
+                onClick={() => setSearchSummary(null)}
+                aria-label="Dismiss summary"
+              >
+                ×
+              </button>
+            </div>
+          )}
           {/* Source filter — client-side, instant toggle */}
           {resultSources.size > 1 && (
           <div className="source-toggle" role="group" aria-label="Filter by source">

@@ -144,6 +144,7 @@ export async function searchCampsitesStream(
   onDiagnosis?: (event: DiagnosisEvent) => void,
   signal?: AbortSignal,
   onParsed?: (params: ParsedParams) => void,
+  onSummary?: (text: string) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   if (params.q) {
@@ -193,6 +194,8 @@ export async function searchCampsitesStream(
             const parsed = JSON.parse(data);
             if (parsed.type === "parsed_params" && onParsed) {
               onParsed(parsed.params as ParsedParams);
+            } else if (parsed.type === "summary" && onSummary) {
+              onSummary(parsed.text as string);
             } else if (parsed.type === "diagnosis" && onDiagnosis) {
               onDiagnosis(parsed as DiagnosisEvent);
             } else if (!parsed.type) {

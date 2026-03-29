@@ -420,6 +420,51 @@ class CampgroundResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+async def _generate_search_summary(
+    results_data: list[dict],
+    query: SearchQuery,
+) -> str | None:
+    """Generate a brief AI summary of search results. Returns None on failure."""
+    import asyncio
+    import os
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return None
+
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+
+    compact = json.dumps(results_data[:20])  # cap at 20 for token budget
+    state_str = query.state or "all states"
+    date_str = f"{query.start_date} to {query.end_date}"
+
+    prompt = (
+        "Summarize these campsite search results in 1-2 sentences. "
+        "Highlight: total availability, closest/best options, date patterns "
+        "(weekday vs weekend), or standout features.\n\n"
+        f"Search: {state_str}, {date_str}, "
+        f"{query.min_consecutive_nights} nights\n"
+        f"Results ({len(results_data)} campgrounds with availability):\n"
+        f"{compact}\n\n"
+        "Be specific and concise. Reference campground names. No preamble."
+    )
+
+    try:
+        response = await asyncio.wait_for(
+            client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=150,
+                messages=[{"role": "user", "content": prompt}],
+            ),
+            timeout=3.0,
+        )
+        return response.content[0].text.strip()
+    except Exception:
+        return None
+
+
 def _build_availability_url(
     facility_id: str,
     booking_system: BookingSystem,
@@ -751,6 +796,7 @@ async def search_stream(
             yield f"data: {json.dumps(parsed_event)}\n\n"
 
         available_count = 0
+        summary_data: list[dict] = []
         async for result in _engine.search_stream(query):
             data = _format_result(
                 result, booking_system or BookingSystem.RECGOV
@@ -758,6 +804,24 @@ async def search_stream(
             yield f"data: {json.dumps(data.model_dump())}\n\n"
             if result.total_available_sites > 0:
                 available_count += 1
+                summary_data.append({
+                    "name": result.campground.name,
+                    "sites": result.total_available_sites,
+                    "drive": result.estimated_drive_minutes,
+                    "tags": result.campground.tags[:3],
+                    "state": result.campground.state,
+                })
+
+        # AI summary when enough results to warrant it
+        if available_count > 5:
+            try:
+                summary_text = await _generate_search_summary(
+                    summary_data, query,
+                )
+                if summary_text:
+                    yield f"data: {json.dumps({'type': 'summary', 'text': summary_text})}\n\n"
+            except Exception:
+                pass  # Silent skip — summary is optional
 
         # Diagnosis when no reservable availability found
         if available_count == 0:
