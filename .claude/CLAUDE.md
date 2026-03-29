@@ -187,7 +187,7 @@ Full roadmap details: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs
 - [x] Error handling: retry on 429/5xx, typed errors, warning banners
 - [x] Event tracking (search params, card expand, booking clicks)
 - [x] Fly.io deployment with GitHub Actions CI/CD
-- [x] Custom domain (campnw.palouselabs.com)
+- [x] Custom domain (campable.co)
 - [x] Registry enrichment: auto-tags from RIDB + GoingToCamp descriptions
 
 ### v0.2 "Watches on the Web" — DONE

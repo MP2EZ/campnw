@@ -1,7 +1,7 @@
 # campnw Roadmap: v0.2.1 to v1.1
 
 **Last updated:** March 2026
-**Current version:** v1.0 (deployed at campnw.palouselabs.com)
+**Current version:** v1.0 (deployed at campable.co)
 
 ---
 

@@ -26,7 +26,7 @@ For v1.0, campnw introduces AI-powered natural language search, letting users de
 
 "I've been using the beta for two months," said Sarah Chen, a nurse practitioner from Seattle who camps 6-8 times per year. "Last month I found a lakeside site at a state park I'd never heard of, 90 minutes from home, that was open the exact weekend I needed. I never would have found it searching normally. I booked it in five minutes."
 
-campnw is available now at campnw.palouselabs.com. Search and basic monitoring are free.
+campnw is available now at campable.co. Search and basic monitoring are free.
 
 ---
 

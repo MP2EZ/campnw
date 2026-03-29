@@ -2,7 +2,7 @@
 
 Find available campsites across the Pacific Northwest.
 
-**Live at [campnw.palouselabs.com](https://campnw.palouselabs.com)**
+**Live at [campable.co](https://campable.co)**
 
 campnw searches real-time availability across Recreation.gov (federal campgrounds) and Washington State Parks in a single query. Filter by drive time, trip type, tags (lakeside, pet-friendly, old-growth...), and toggle between sources instantly.
 
