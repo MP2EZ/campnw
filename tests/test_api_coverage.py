@@ -283,8 +283,14 @@ class TestPushEndpoints:
 class TestAdminDigest:
     """Tests for GET /api/admin/digest."""
 
+    def test_digest_requires_auth(self, api_client: TestClient):
+        """Unauthenticated request should return 401."""
+        resp = api_client.get("/api/admin/digest")
+        assert resp.status_code == 401
+
     def test_digest_returns_report(self, api_client: TestClient):
-        """Admin digest should return a report object."""
+        """Authenticated digest should return a report object."""
+        _signup_and_login(api_client)
         resp = api_client.get("/api/admin/digest")
         assert resp.status_code == 200
         data = resp.json()
@@ -292,6 +298,7 @@ class TestAdminDigest:
 
     def test_digest_with_no_data(self, api_client: TestClient):
         """Digest with no search history should return a message."""
+        _signup_and_login(api_client)
         resp = api_client.get("/api/admin/digest")
         assert resp.status_code == 200
         assert "No searches" in resp.json()["report"]

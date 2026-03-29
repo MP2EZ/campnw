@@ -330,8 +330,11 @@ async def timing_middleware(request: Request, call_next):
 
 
 @app.get("/api/admin/digest")
-async def admin_digest():
-    """On-demand analytics digest generation (for testing)."""
+async def admin_digest(request: Request):
+    """On-demand analytics digest generation. Requires authentication."""
+    user_id = _get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     from pnw_campsites.analytics.digest import generate_weekly_digest
 
     report = await generate_weekly_digest(_watch_db)
@@ -1124,6 +1127,19 @@ class UpdateProfileRequest(BaseModel):
     default_from: str | None = Field(default=None, max_length=200)
 
 
+# ---------------------------------------------------------------------------
+# Client IP extraction (respects X-Forwarded-For behind Fly.io proxy)
+# ---------------------------------------------------------------------------
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract real client IP, preferring X-Forwarded-For behind a proxy."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 # In-memory auth rate limiter: ip -> (window_start, count)
 _auth_rate_limit: dict[str, tuple[float, int]] = {}
 _AUTH_WINDOW_SECONDS = 900  # 15 minutes
@@ -1132,7 +1148,7 @@ _AUTH_MAX_ATTEMPTS = 10
 
 def _check_auth_rate_limit(request: Request) -> None:
     """Raise 429 if auth attempts from this IP exceed threshold."""
-    ip = request.client.host if request.client else "unknown"
+    ip = _get_client_ip(request)
     now = time.monotonic()
     existing = _auth_rate_limit.get(ip)
     if existing is None or (now - existing[0]) > _AUTH_WINDOW_SECONDS:
@@ -1402,8 +1418,12 @@ async def push_subscribe(body: PushSubscribeRequest, request: Request, response:
 
 @app.delete("/api/push/subscribe")
 async def push_unsubscribe(body: PushUnsubscribeRequest, request: Request):
-    """Remove a web push subscription (e.g. when the user unsubscribes)."""
-    _watch_db.delete_push_subscription(body.endpoint)
+    """Remove a web push subscription. Scoped to current user/session."""
+    user_id = _get_current_user(request)
+    session_token = request.cookies.get(SESSION_COOKIE, "") if not user_id else ""
+    _watch_db.delete_push_subscription_scoped(
+        body.endpoint, user_id=user_id, session_token=session_token,
+    )
     return {"ok": True}
 
 
@@ -1592,7 +1612,7 @@ async def plan_chat(body: PlanChatRequest, request: Request, response: Response)
         raise HTTPException(status_code=503, detail="Trip planner not configured")
 
     # Rate limit by session token or IP
-    session_key = request.cookies.get(SESSION_COOKIE) or request.client.host or "anon"
+    session_key = request.cookies.get(SESSION_COOKIE) or _get_client_ip(request)
     if not _check_plan_rate_limit(session_key):
         raise HTTPException(
             status_code=429,
@@ -1611,7 +1631,7 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request):
     if not api_key:
         raise HTTPException(status_code=503, detail="Trip planner not configured")
 
-    session_key = request.cookies.get(SESSION_COOKIE) or request.client.host or "anon"
+    session_key = request.cookies.get(SESSION_COOKIE) or _get_client_ip(request)
     if not _check_plan_rate_limit(session_key):
         raise HTTPException(
             status_code=429,

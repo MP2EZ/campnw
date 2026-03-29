@@ -381,6 +381,27 @@ class WatchDB:
         )
         self._conn.commit()
 
+    def delete_push_subscription_scoped(
+        self,
+        endpoint: str,
+        user_id: int | None = None,
+        session_token: str = "",
+    ) -> None:
+        """Remove a push subscription only if owned by user/session."""
+        if user_id:
+            self._conn.execute(
+                "DELETE FROM push_subscriptions"
+                " WHERE endpoint=? AND user_id=?",
+                (endpoint, user_id),
+            )
+        elif session_token:
+            self._conn.execute(
+                "DELETE FROM push_subscriptions"
+                " WHERE endpoint=? AND session_token=?",
+                (endpoint, session_token),
+            )
+        self._conn.commit()
+
     # -------------------------------------------------------------------
     # Users
     # -------------------------------------------------------------------

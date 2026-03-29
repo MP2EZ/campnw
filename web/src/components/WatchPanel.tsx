@@ -99,7 +99,7 @@ export const WatchPanel = memo(function WatchPanel({
       >
         <div className="watch-panel-header">
           <h2 id="watch-panel-title">Watchlist</h2>
-          <button className="watch-close" onClick={onClose} ref={closeRef}>
+          <button className="watch-close" onClick={onClose} ref={closeRef} aria-label="Close watchlist">
             &times;
           </button>
         </div>
