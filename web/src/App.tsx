@@ -720,6 +720,7 @@ export default function App() {
   });
 
   const isMap = location.pathname === "/map";
+  const [mainMode, setMainMode] = useState<"search" | "plan">("search");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
@@ -794,9 +795,6 @@ export default function App() {
           </div>
           <div className="header-actions">
             <div className="header-secondary">
-              <Link to="/plan" className="plan-cta">
-                Plan a Trip
-              </Link>
               <button
                 className="header-btn watch-bell"
                 onClick={() => setWatchPanelOpen(true)}
@@ -834,13 +832,12 @@ export default function App() {
               </button>
               {mobileMenuOpen && (
                 <div className="mobile-menu">
-                  <Link
-                    to="/plan"
+                  <button
                     className="header-btn"
-                    onClick={() => setMobileMenuOpen(false)}
+                    onClick={() => { setMainMode("plan"); navigate("/"); setMobileMenuOpen(false); }}
                   >
                     Plan a Trip
-                  </Link>
+                  </button>
                   {user && (
                     <Link
                       to="/trips"
@@ -914,6 +911,31 @@ export default function App() {
         <Route path="/trips/:tripId" element={<TripDetail />} />
         <Route path="/" element={
           <main id="main-content">
+          <div className="mode-tabs" role="tablist" aria-label="Discovery mode">
+            <button
+              role="tab"
+              className={`mode-tab${mainMode === "search" ? " active" : ""}`}
+              aria-selected={mainMode === "search"}
+              onClick={() => setMainMode("search")}
+            >
+              Search
+            </button>
+            <button
+              role="tab"
+              className={`mode-tab${mainMode === "plan" ? " active" : ""}`}
+              aria-selected={mainMode === "plan"}
+              onClick={() => setMainMode("plan")}
+            >
+              Plan a Trip
+            </button>
+          </div>
+
+          {mainMode === "plan" ? (
+            <Suspense fallback={<div className="loading-page">Loading planner...</div>}>
+              <TripPlanner />
+            </Suspense>
+          ) : (
+          <>
           {formCollapsed && activeSearchParams && searchDates ? (
             <SearchSummaryBar
               params={activeSearchParams}
@@ -1072,6 +1094,8 @@ export default function App() {
         </div>
         );
       })()}
+      </>
+      )}
       </main>
         } />
       </Routes>

@@ -2754,27 +2754,38 @@ a.header-btn {
   outline-offset: 2px;
 }
 
-/* ─── Plan CTA Button ─────────────────────────────────────────────── */
+/* ─── Mode Tabs (Search / Plan a Trip) ────────────────────────────── */
 
-.plan-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semi);
-  text-decoration: none;
-  cursor: pointer;
-  transition: background var(--transition-base);
-  white-space: nowrap;
+.mode-tabs {
+  display: flex;
+  max-width: var(--max-w-app);
+  margin: 0 auto var(--space-3);
+  padding: 0 var(--space-3);
+  gap: 0;
+  border-bottom: 2px solid var(--border);
 }
 
-.plan-cta:hover {
-  background: var(--accent-hover);
+.mode-tab {
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--text-light);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mode-tab:hover {
+  color: var(--text);
+}
+
+.mode-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: var(--weight-semi);
 }
 
 /* ─── Watch Bell ──────────────────────────────────────────────────── */
