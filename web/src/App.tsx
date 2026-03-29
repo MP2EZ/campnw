@@ -1036,9 +1036,20 @@ export default function App() {
           <>
           {searchSummary && (
             <div className="search-summary-banner" role="status">
-              <p dangerouslySetInnerHTML={{
-                __html: searchSummary
-                  .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+              <div className="summary-content" dangerouslySetInnerHTML={{
+                __html: (() => {
+                  const lines = searchSummary.trim().split("\n").filter(l => l.trim());
+                  const hasBullets = lines.some(l => l.trim().startsWith("- "));
+                  if (hasBullets) {
+                    const items = lines
+                      .filter(l => l.trim().startsWith("- "))
+                      .map(l => l.trim().replace(/^- /, "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"))
+                      .map(l => `<li>${l}</li>`)
+                      .join("");
+                    return `<ul>${items}</ul>`;
+                  }
+                  return searchSummary.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+                })()
               }} />
               <button
                 type="button"
