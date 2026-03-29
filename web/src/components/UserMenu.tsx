@@ -223,10 +223,10 @@ function PreferencesForm({
         Show personalized recommendations
       </label>
       <div className="prefs-actions">
-        <button type="submit" className="search-btn" disabled={saving}>
+        <button type="submit" className="btn-primary" disabled={saving}>
           {saving ? "..." : "Save"}
         </button>
-        <button type="button" className="auth-switch-btn" onClick={onCancel}>
+        <button type="button" className="btn-secondary" onClick={onCancel}>
           Cancel
         </button>
       </div>

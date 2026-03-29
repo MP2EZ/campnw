@@ -1982,9 +1982,9 @@ header p {
   margin-top: 4px;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
-  min-width: 180px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-overlay);
+  min-width: 200px;
   z-index: var(--z-overlay);
   overflow: hidden;
 }
@@ -2033,39 +2033,44 @@ header p {
 .prefs-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  min-width: 260px;
 }
 
 .prefs-form label {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  font-size: var(--text-body);
+  gap: var(--space-1);
+  font-size: var(--text-sm);
   font-weight: var(--weight-medium);
-  color: var(--text-muted);
+  color: var(--text-light);
 }
 
-.prefs-form input,
+.prefs-form input[type="text"],
+.prefs-form input[type="number"],
 .prefs-form select {
-  padding: 0.35rem var(--space-2);
-  border: 1px solid var(--border-input);
-  border-radius: var(--radius-xs);
-  font-size: var(--text-body);
-  background: var(--bg-input);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--bg);
   color: var(--text);
+  transition: border-color var(--transition-fast);
+}
+
+.prefs-form input[type="text"]:focus,
+.prefs-form input[type="number"]:focus,
+.prefs-form select:focus {
+  border-color: var(--accent);
+  outline: none;
 }
 
 .prefs-actions {
   display: flex;
   gap: var(--space-2);
   align-items: center;
-  margin-top: var(--space-1);
-}
-
-.prefs-actions .search-btn {
-  padding: 0.35rem var(--space-3);
-  font-size: var(--text-body);
+  margin-top: var(--space-2);
 }
 
 .prefs-toggle {
