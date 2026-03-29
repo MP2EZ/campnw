@@ -16,6 +16,7 @@ from pnw_campsites.monitor.notify import notify_console, notify_ntfy
 from pnw_campsites.monitor.watcher import poll_all
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
+from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.search.engine import (
@@ -106,6 +107,16 @@ def _format_results(results, show_urls: bool = True) -> None:
                     if reservable_windows else None
                 )
                 print(f"  Book: {wa_state_availability_url(cg.facility_id, start, end)}")
+            elif cg.booking_system == BookingSystem.OR_STATE:
+                end = (
+                    date.fromisoformat(reservable_windows[-1].end_date)
+                    if reservable_windows else None
+                )
+                from pnw_campsites.urls import or_state_availability_url
+                book = or_state_availability_url(
+                    cg.facility_id, cg.booking_url_slug, start, end,
+                )
+                print(f"  Book: {book}")
             else:
                 print(f"  Book: {recgov_availability_url(cg.facility_id, start)}")
 
@@ -138,10 +149,12 @@ def _parse_booking_system(value: str | None) -> BookingSystem | None:
         "recgov": BookingSystem.RECGOV,
         "wa-state": BookingSystem.WA_STATE,
         "wa_state": BookingSystem.WA_STATE,
+        "or-state": BookingSystem.OR_STATE,
+        "or_state": BookingSystem.OR_STATE,
     }
     result = mapping.get(value.lower())
     if result is None:
-        print(f"ERROR: Unknown source '{value}'. Options: recgov, wa-state")
+        print(f"ERROR: Unknown source '{value}'. Options: recgov, wa-state, or-state")
         sys.exit(1)
     return result
 
@@ -174,12 +187,13 @@ async def cmd_search(args: argparse.Namespace) -> None:
     # Determine which providers to initialize
     need_recgov = booking_system in (None, BookingSystem.RECGOV)
     need_goingtocamp = booking_system in (None, BookingSystem.WA_STATE)
+    need_reserveamerica = booking_system in (None, BookingSystem.OR_STATE)
 
     api_key = os.getenv("RIDB_API_KEY") if need_recgov else None
     if need_recgov and not api_key:
         if booking_system is None:
             # Searching all sources — proceed without rec.gov
-            print("Note: RIDB_API_KEY not set; searching WA State Parks only")
+            print("Note: RIDB_API_KEY not set; searching state parks only")
             need_recgov = False
         else:
             print("ERROR: RIDB_API_KEY not set in .env")
@@ -188,20 +202,25 @@ async def cmd_search(args: argparse.Namespace) -> None:
     registry = CampgroundRegistry()
     recgov = RecGovClient(ridb_api_key=api_key) if need_recgov and api_key else None
     goingtocamp = GoingToCampClient() if need_goingtocamp else None
+    reserveamerica = ReserveAmericaClient() if need_reserveamerica else None
 
     try:
         if recgov:
             await recgov.__aenter__()
         if goingtocamp:
             await goingtocamp.__aenter__()
+        if reserveamerica:
+            await reserveamerica.__aenter__()
 
-        engine = SearchEngine(registry, recgov, goingtocamp)
+        engine = SearchEngine(registry, recgov, goingtocamp, reserveamerica)
         results = await engine.search(query)
     finally:
         if recgov:
             await recgov.__aexit__(None, None, None)
         if goingtocamp:
             await goingtocamp.__aexit__(None, None, None)
+        if reserveamerica:
+            await reserveamerica.__aexit__(None, None, None)
 
     _format_results(results)
     registry.close()
@@ -215,8 +234,10 @@ async def cmd_check(args: argparse.Namespace) -> None:
     start_date, end_date = _parse_dates(args.dates)
 
     is_wa_state = booking_system == BookingSystem.WA_STATE
+    is_or_state = booking_system == BookingSystem.OR_STATE
+    is_state_park = is_wa_state or is_or_state
 
-    if not is_wa_state:
+    if not is_state_park:
         api_key = os.getenv("RIDB_API_KEY")
         if not api_key:
             print("ERROR: RIDB_API_KEY not set in .env")
@@ -225,16 +246,20 @@ async def cmd_check(args: argparse.Namespace) -> None:
     registry = CampgroundRegistry()
     recgov = None
     goingtocamp = None
+    reserveamerica = None
 
     try:
         if is_wa_state:
             goingtocamp = GoingToCampClient()
             await goingtocamp.__aenter__()
+        elif is_or_state:
+            reserveamerica = ReserveAmericaClient()
+            await reserveamerica.__aenter__()
         else:
             recgov = RecGovClient(ridb_api_key=api_key)
             await recgov.__aenter__()
 
-        engine = SearchEngine(registry, recgov, goingtocamp)
+        engine = SearchEngine(registry, recgov, goingtocamp, reserveamerica)
         result = await engine.check_specific(
             facility_id=args.facility_id,
             start_date=start_date,
@@ -247,11 +272,19 @@ async def cmd_check(args: argparse.Namespace) -> None:
             await recgov.__aexit__(None, None, None)
         if goingtocamp:
             await goingtocamp.__aexit__(None, None, None)
+        if reserveamerica:
+            await reserveamerica.__aexit__(None, None, None)
 
     cg = result.campground
     print(f"{cg.name} (facility_id={cg.facility_id})")
     if is_wa_state:
         print(f"Book: {wa_state_availability_url(cg.facility_id, start_date, end_date)}")
+    elif is_or_state:
+        from pnw_campsites.urls import or_state_availability_url
+        book = or_state_availability_url(
+            cg.facility_id, cg.booking_url_slug, start_date, end_date,
+        )
+        print(f"Book: {book}")
     else:
         print(f"Book: {recgov_availability_url(cg.facility_id, start_date)}")
 
@@ -451,7 +484,10 @@ def main() -> None:
                           help="Include FCFS (first-come-first-served) site details")
     p_search.add_argument("--limit", type=int, default=20,
                           help="Max campgrounds to check (default: 20)")
-    p_search.add_argument("--source", help="Booking system: recgov, wa-state (default: all)")
+    p_search.add_argument(
+        "--source",
+        help="Booking system: recgov, wa-state, or-state (default: all)",
+    )
 
     # --- check ---
     p_check = sub.add_parser("check", help="Check a specific campground")
@@ -460,7 +496,10 @@ def main() -> None:
                          help="Date range: YYYY-MM-DD:YYYY-MM-DD or this-weekend/next-weekend")
     p_check.add_argument("--nights", type=int, default=1,
                          help="Minimum consecutive nights (default: 1)")
-    p_check.add_argument("--source", help="Booking system: recgov, wa-state (default: recgov)")
+    p_check.add_argument(
+        "--source",
+        help="Booking system: recgov, wa-state, or-state (default: recgov)",
+    )
 
     # --- list ---
     p_list = sub.add_parser("list", help="List campgrounds in the registry")
@@ -468,7 +507,10 @@ def main() -> None:
     p_list.add_argument("--tags", help="Comma-separated tags to filter by")
     p_list.add_argument("--max-drive", type=int, help="Max drive minutes from Seattle")
     p_list.add_argument("--name", help="Filter by name (substring match)")
-    p_list.add_argument("--source", help="Booking system: recgov, wa-state (default: all)")
+    p_list.add_argument(
+        "--source",
+        help="Booking system: recgov, wa-state, or-state (default: all)",
+    )
 
     # --- watch ---
     p_watch = sub.add_parser("watch", help="Monitor campgrounds for changes")

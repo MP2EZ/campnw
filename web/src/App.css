@@ -1410,6 +1410,10 @@ header p {
   background: var(--src-wa-toggle);
 }
 
+.source-toggle-btn.source-or_state {
+  background: var(--src-or-toggle);
+}
+
 /* ─── Focus styles ─────────────────────────────────────────────────── */
 
 :focus-visible {
