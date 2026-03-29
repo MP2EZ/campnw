@@ -714,11 +714,25 @@ header p {
   margin-left: var(--space-2);
 }
 
+.result-pitch {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  margin: var(--space-1) 0 0;
+}
+
 .result-vibe {
   font-style: italic;
   color: var(--text-muted);
   font-size: var(--text-base);
   padding: var(--space-2) var(--space-4) 0;
+  margin: 0;
+}
+
+.result-best-for {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  padding: var(--space-1) var(--space-4) 0;
   margin: 0;
 }
 

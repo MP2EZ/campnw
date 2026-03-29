@@ -109,6 +109,9 @@ class Campground(BaseModel):
     tags: list[str] = Field(default_factory=list)  # lakeside, river, kid-friendly, etc.
     booking_url_slug: str = ""  # URL slug for booking systems (e.g. RA)
     vibe: str = ""  # One-sentence campground character description
+    elevator_pitch: str = ""  # One sentence for collapsed result card
+    description_rewrite: str = ""  # 2-3 sentences for expanded view
+    best_for: str = ""  # Label: "families", "backpackers", etc.
     notes: str = ""  # personal notes
     rating: int | None = None  # 1-5 personal rating
     total_sites: int | None = None

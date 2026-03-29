@@ -340,6 +340,9 @@ class CampgroundResultResponse(BaseModel):
     fcfs_sites: int
     tags: list[str] = []
     vibe: str = ""
+    elevator_pitch: str = ""
+    description_rewrite: str = ""
+    best_for: str = ""
     estimated_drive_minutes: int | None = None
     availability_url: str | None = None
     windows: list[WindowResponse]
@@ -491,6 +494,9 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
         fcfs_sites=r.fcfs_sites,
         tags=cg.tags,
         vibe=cg.vibe,
+        elevator_pitch=cg.elevator_pitch,
+        description_rewrite=cg.description_rewrite,
+        best_for=cg.best_for,
         estimated_drive_minutes=r.estimated_drive_minutes,
         availability_url=_build_availability_url(
             cg.facility_id, cg.booking_system, start, end,

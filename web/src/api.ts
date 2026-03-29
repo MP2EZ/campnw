@@ -24,6 +24,9 @@ export interface CampgroundResult {
   fcfs_sites: number;
   tags: string[];
   vibe?: string;
+  elevator_pitch?: string;
+  description_rewrite?: string;
+  best_for?: string;
   estimated_drive_minutes: number | null;
   availability_url: string | null;
   windows: Window[];

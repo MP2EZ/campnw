@@ -142,6 +142,74 @@ async def generate_vibe(
         return ""
 
 
+async def generate_description(
+    name: str,
+    tags: list[str],
+    vibe: str,
+    total_sites: int | None,
+    state: str,
+    notes: str,
+    api_key: str,
+) -> dict[str, str]:
+    """Generate elevator_pitch, description_rewrite, best_for for a campground.
+
+    Returns dict with keys: elevator_pitch, description_rewrite, best_for.
+    Empty dict on failure.
+    """
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+
+    tag_str = ", ".join(tags) if tags else "none"
+    size_str = f"{total_sites} sites" if total_sites else "unknown size"
+    vibe_str = f"Character: {vibe}" if vibe else ""
+    source_desc = notes[:2000] if notes else ""
+
+    prompt = (
+        "Generate three descriptions for this campground. Return ONLY a JSON "
+        "object with these keys:\n"
+        '- "elevator_pitch": One sentence (max 100 chars) for a search result '
+        "card. Capture what makes this place distinctive.\n"
+        '- "description_rewrite": 2-3 sentences (max 250 chars) for an expanded '
+        "view. Setting, key activities, what sets it apart.\n"
+        '- "best_for": A short label (max 30 chars) for who this campground is '
+        'ideal for. Examples: "families with young kids", "RV road-trippers", '
+        '"backpackers seeking solitude".\n\n'
+        f"Campground: {name}\n"
+        f"State: {state}\n"
+        f"Tags: {tag_str}\n"
+        f"Size: {size_str}\n"
+        f"{vibe_str}\n"
+        f"Original description: {source_desc}\n\n"
+        "Constraints: Only reference features explicitly stated above. Do not "
+        "invent amenities. Be specific, not generic. Return ONLY the JSON."
+    )
+
+    try:
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text.strip()
+        # Handle markdown code blocks
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        result = json.loads(text)
+        # Enforce length limits
+        pitch = result.get("elevator_pitch", "")[:100]
+        desc = result.get("description_rewrite", "")[:250]
+        best = result.get("best_for", "")[:30]
+        return {
+            "elevator_pitch": pitch,
+            "description_rewrite": desc,
+            "best_for": best,
+        }
+    except Exception as e:
+        _logger.warning("Description generation failed for %s: %s", name, e)
+        return {}
+
+
 async def enrich_registry(
     registry_path: str | None = None,
     api_key: str | None = None,
@@ -215,6 +283,38 @@ async def enrich_registry(
         if vibe:
             registry.update_vibe(cg.id, vibe)
             _logger.info("Vibe: %s -> %s", cg.name, vibe)
+
+    # Generate descriptions for campgrounds that lack them
+    all_cgs = registry.search(enabled_only=True)
+    desc_candidates = [cg for cg in all_cgs if not cg.elevator_pitch][:limit]
+
+    _logger.info(
+        "Found %d campgrounds needing descriptions (limit %d)",
+        len(desc_candidates),
+        limit,
+    )
+
+    for cg in desc_candidates:
+        desc = await generate_description(
+            cg.name, cg.tags, cg.vibe, cg.total_sites,
+            cg.state, cg.notes, api_key,
+        )
+
+        if dry_run:
+            _logger.info("DRY RUN desc: %s -> %s", cg.name, desc)
+            continue
+
+        if desc:
+            registry.update_description(
+                cg.id,
+                desc.get("elevator_pitch", ""),
+                desc.get("description_rewrite", ""),
+                desc.get("best_for", ""),
+            )
+            _logger.info(
+                "Description: %s -> %s",
+                cg.name, desc.get("elevator_pitch", ""),
+            )
 
     registry.close()
     return enriched

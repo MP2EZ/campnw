@@ -913,14 +913,20 @@ function ResultCard({
             {summaryText}
             {result.fcfs_sites > 0 && <>{" "}+ {result.fcfs_sites} <span title="First-come, first-served">FCFS</span></>}
           </p>
+          {result.elevator_pitch && (
+            <p className="result-pitch">{result.elevator_pitch}</p>
+          )}
         </div>
         <span className="expand-icon" aria-hidden="true">{expanded ? "−" : "+"}</span>
       </button>
 
       <div className={`card-body${expanded ? " card-body-open" : ""}`}>
         <div className="card-body-inner">
-          {result.vibe && (
-            <p className="result-vibe">{result.vibe}</p>
+          {(result.description_rewrite || result.vibe) && (
+            <p className="result-vibe">{result.description_rewrite || result.vibe}</p>
+          )}
+          {result.best_for && (
+            <p className="result-best-for">Best for: {result.best_for}</p>
           )}
           {result.availability_url && (
             <div className="card-toolbar">
