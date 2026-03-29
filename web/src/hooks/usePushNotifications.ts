@@ -15,7 +15,7 @@ export function usePushNotifications() {
   const [subscribed, setSubscribed] = useState(false);
 
   useEffect(() => {
-    if (localStorage.getItem("campnw-push-subscribed") === "true") {
+    if (localStorage.getItem("campable-push-subscribed") === "true") {
       setSubscribed(true);
     }
   }, []);
@@ -51,7 +51,7 @@ export function usePushNotifications() {
 
     await subscribePush(subscription.endpoint, p256dh, authStr);
     setSubscribed(true);
-    localStorage.setItem("campnw-push-subscribed", "true");
+    localStorage.setItem("campable-push-subscribed", "true");
     return true;
   }, []);
 

@@ -242,7 +242,7 @@ async def lifespan(app: FastAPI):
                         await c.post(
                             f"https://ntfy.sh/{topic}",
                             content=report[:4000].encode(),
-                            headers={"Title": "campnw Weekly Digest"},
+                            headers={"Title": "campable Weekly Digest"},
                         )
                 except Exception as e:
                     log.warning("Digest ntfy send failed: %s", e)

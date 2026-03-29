@@ -1,7 +1,7 @@
 {
-  "name": "campnw",
-  "short_name": "campnw",
-  "description": "Find available campsites across the Pacific Northwest",
+  "name": "campable",
+  "short_name": "campable",
+  "description": "Find available campsites across the Pacific Northwest and beyond",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#171714",
