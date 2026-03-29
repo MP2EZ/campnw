@@ -603,12 +603,12 @@ function FirstVisitState({ onSearch }: { onSearch: (params: SearchParams, mode: 
   const suggestions = [
     { label: "Weekend getaway in WA", params: { start_date: presets[0].start, end_date: presets[0].end, state: "WA", nights: 2 } },
     { label: "Lakeside in the next 30 days", params: { start_date: presets[2].start, end_date: presets[2].end, tags: "lakeside", nights: 2 } },
-    { label: "Next weekend in WA Parks", params: { start_date: presets[1].start, end_date: presets[1].end, source: "wa-state", nights: 1 } },
+    { label: "Camping near Portland", params: { start_date: presets[1].start, end_date: presets[1].end, from_location: "portland", nights: 2 } },
   ];
   return (
     <div className="first-visit">
       <p className="first-visit-title">Find your next campsite</p>
-      <p className="first-visit-subtitle">Search for available sites across Washington, Oregon, and Idaho parks</p>
+      <p className="first-visit-subtitle">Search across WA, OR, ID, MT, WY, and Northern California</p>
       <div className="first-visit-suggestions">
         {suggestions.map((s) => (
           <button
@@ -793,7 +793,7 @@ export default function App() {
         <div className="header-row">
           <div>
             <h1><Link to="/" className="wordmark-link"><Wordmark /></Link></h1>
-            <p className="header-subtitle">Find available campsites across the Pacific Northwest</p>
+            <p className="header-subtitle">Find available campsites across the western US</p>
           </div>
           <div className="header-actions">
             <nav className="header-nav" aria-label="Main navigation">
