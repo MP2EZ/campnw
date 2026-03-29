@@ -50,8 +50,8 @@ export function OnboardingModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Welcome setup">
-      <div className="onboarding-modal">
+    <div className="watch-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Welcome setup">
+      <div className="onboarding-modal" onClick={(e) => e.stopPropagation()}>
         <div className="onboarding-header">
           <h2>Welcome to campable</h2>
           <p className="onboarding-subtitle">
