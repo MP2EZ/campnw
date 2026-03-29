@@ -8,7 +8,7 @@ import os
 import time
 from collections import deque
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -151,7 +151,7 @@ async def _poll_tranche(tranche: int | None = None) -> None:
             except Exception:
                 pass
 
-    _poll_state["last_poll"] = datetime.now().isoformat()
+    _poll_state["last_poll"] = datetime.now(timezone.utc).isoformat()
     _poll_state["last_changes"] = total_changes
     _poll_state["last_errors"] = total_errors
     _poll_state["active_watches"] = len(results)
