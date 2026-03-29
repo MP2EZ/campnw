@@ -1,6 +1,21 @@
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
 // ---------------------------------------------------------------------------
+// Event tracking
+// ---------------------------------------------------------------------------
+
+export function track(event: string, data: Record<string, string | number>) {
+  try {
+    navigator.sendBeacon(
+      `${API_BASE}/api/track`,
+      JSON.stringify({ event, ...data })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Typed fetch helper — eliminates untyped resp.json() calls
 // ---------------------------------------------------------------------------
 
@@ -270,6 +285,32 @@ export interface WatchData {
   created_at: string;
 }
 
+// ---------------------------------------------------------------------------
+// Trips
+// ---------------------------------------------------------------------------
+
+export interface TripCampground {
+  id: number;
+  facility_id: string;
+  source: string;
+  name: string;
+  sort_order: number;
+  notes: string;
+  added_at: string;
+}
+
+export interface TripData {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  campground_count?: number;
+  campgrounds?: TripCampground[];
+}
+
 export interface CreateWatchParams {
   facility_id: string;
   name?: string;
@@ -453,6 +494,77 @@ export async function toggleWatch(
   });
   if (!resp.ok) throw new Error(`Failed to toggle watch: ${resp.status}`);
   return resp.json();
+}
+
+// ---------------------------------------------------------------------------
+// Trip CRUD
+// ---------------------------------------------------------------------------
+
+export async function getTrips(): Promise<TripData[]> {
+  return fetchJson<TripData[]>(`${API_BASE}/api/trips`, fetchOpts);
+}
+
+export async function createTrip(
+  name: string,
+  opts: { start_date?: string; end_date?: string; notes?: string } = {},
+): Promise<TripData> {
+  const resp = await fetch(`${API_BASE}/api/trips`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, ...opts }),
+  });
+  return resp.json();
+}
+
+export async function getTrip(tripId: number): Promise<TripData> {
+  return fetchJson<TripData>(`${API_BASE}/api/trips/${tripId}`, fetchOpts);
+}
+
+export async function updateTrip(
+  tripId: number,
+  updates: Partial<Pick<TripData, "name" | "start_date" | "end_date" | "notes">>,
+): Promise<TripData> {
+  const resp = await fetch(`${API_BASE}/api/trips/${tripId}`, {
+    ...fetchOpts,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  return resp.json();
+}
+
+export async function deleteTrip(tripId: number): Promise<void> {
+  await fetch(`${API_BASE}/api/trips/${tripId}`, {
+    ...fetchOpts,
+    method: "DELETE",
+  });
+}
+
+export async function addCampgroundToTrip(
+  tripId: number,
+  facilityId: string,
+  source: string = "recgov",
+  name: string = "",
+): Promise<TripCampground> {
+  const resp = await fetch(`${API_BASE}/api/trips/${tripId}/campgrounds`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ facility_id: facilityId, source, name }),
+  });
+  return resp.json();
+}
+
+export async function removeCampgroundFromTrip(
+  tripId: number,
+  facilityId: string,
+  source: string = "recgov",
+): Promise<void> {
+  await fetch(`${API_BASE}/api/trips/${tripId}/campgrounds/${facilityId}?source=${source}`, {
+    ...fetchOpts,
+    method: "DELETE",
+  });
 }
 
 // ---------------------------------------------------------------------------

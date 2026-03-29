@@ -326,6 +326,7 @@ from pnw_campsites.routes.push import router as push_router  # noqa: E402
 from pnw_campsites.routes.recommendations import router as recs_router  # noqa: E402
 from pnw_campsites.routes.search import router as search_router  # noqa: E402
 from pnw_campsites.routes.tracking import router as tracking_router  # noqa: E402
+from pnw_campsites.routes.trips import router as trips_router  # noqa: E402
 from pnw_campsites.routes.watches import router as watches_router  # noqa: E402
 
 app.include_router(search_router)
@@ -335,6 +336,7 @@ app.include_router(push_router)
 app.include_router(planner_router)
 app.include_router(tracking_router)
 app.include_router(recs_router)
+app.include_router(trips_router)
 app.include_router(poll_router)
 
 # Re-export for test compatibility
