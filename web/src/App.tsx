@@ -36,6 +36,21 @@ function formatDate(offset: number): string {
 
 
 
+// Map a freetext home_base to a known drive-from key
+const KNOWN_BASE_KEYS = [
+  "seattle", "bellevue", "portland", "spokane", "bellingham",
+  "bend", "bozeman", "missoula", "jackson", "sacramento", "reno", "moscow",
+];
+
+function resolveHomeBase(homeBase: string): string {
+  if (!homeBase) return "";
+  const lower = homeBase.toLowerCase().replace(/[^a-z]/g, " ").trim();
+  for (const key of KNOWN_BASE_KEYS) {
+    if (lower.startsWith(key) || lower === key) return key;
+  }
+  return "";
+}
+
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_PRESETS: Record<string, [string, string]> = {
   "": ["Any", ""],
@@ -925,7 +940,7 @@ export default function App() {
               userDefaults={user ? {
                 state: user.default_state,
                 nights: user.default_nights,
-                from: user.default_from,
+                from: resolveHomeBase(user.home_base) || user.default_from,
               } : undefined}
               initialValues={activeSearchParams}
             />
