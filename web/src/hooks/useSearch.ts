@@ -33,6 +33,7 @@ export interface UserData {
 export interface UseSearchReturn {
   results: SearchResponse | null;
   searchSummary: string | null;
+  setSearchSummary: React.Dispatch<React.SetStateAction<string | null>>;
   loading: boolean;
   error: string | null;
   resultsView: ResultsView;
@@ -45,7 +46,7 @@ export interface UseSearchReturn {
   formCollapsed: boolean;
   setFormCollapsed: (v: boolean) => void;
   focusedCardIndex: number;
-  setFocusedCardIndex: (i: number) => void;
+  setFocusedCardIndex: React.Dispatch<React.SetStateAction<number>>;
   liveAnnouncement: string;
   setLiveAnnouncement: (s: string) => void;
   cardRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
@@ -214,6 +215,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   return {
     results,
     searchSummary,
+    setSearchSummary,
     loading,
     error,
     resultsView,

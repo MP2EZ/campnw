@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
-import { searchCampsitesStream, saveSearchHistory, getSearchHistory, getRecommendations } from "./api";
+import { getSearchHistory, getRecommendations } from "./api";
 import type {
-  Recommendation, CampgroundResult, SearchParams, SearchResponse, Window,
-  SearchHistoryEntry, DiagnosisEvent,
+  Recommendation, SearchParams, SearchResponse, Window,
+  SearchHistoryEntry,
 } from "./api";
 import { WatchPanel, WatchButton } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
@@ -1031,7 +1031,7 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const {
-    results, searchSummary, loading, error,
+    results, searchSummary, setSearchSummary, loading, error,
     resultsView, setResultsView,
     searchDates, sourceFilter, resultSources, filteredResults,
     activeSearchParams, formCollapsed, setFormCollapsed,
