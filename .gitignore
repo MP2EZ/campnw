@@ -49,3 +49,10 @@ stats.html
 
 # Vite scaffold assets (unused)
 web/src/assets/
+
+# Working files
+clearnight-snapshot.txt
+full-page-screenshot.png
+page-snapshot.txt
+ux-audit/
+scripts/probe_*.py
