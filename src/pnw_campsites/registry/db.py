@@ -67,7 +67,7 @@ class CampgroundRegistry:
                 "ALTER TABLE campgrounds ADD COLUMN booking_url_slug TEXT DEFAULT ''"
             )
             self._conn.commit()
-        for col in ("elevator_pitch", "description_rewrite", "best_for"):
+        for col in ("elevator_pitch", "description_rewrite", "best_for", "booking_tips"):
             if col not in cols:
                 self._conn.execute(
                     f"ALTER TABLE campgrounds ADD COLUMN {col} TEXT DEFAULT ''"
@@ -164,12 +164,50 @@ class CampgroundRegistry:
         return self._row_to_campground(row)
 
     def bulk_upsert(self, campgrounds: list[Campground]) -> int:
-        """Upsert multiple campgrounds. Returns count inserted/updated."""
-        count = 0
-        for cg in campgrounds:
-            self.upsert(cg)
-            count += 1
-        return count
+        """Upsert multiple campgrounds in a single transaction."""
+        now = datetime.now().isoformat()
+        sql = """\
+            INSERT INTO campgrounds (
+                facility_id, name, booking_system, latitude, longitude,
+                region, state, drive_minutes_from_base, tags, notes,
+                rating, total_sites, enabled, booking_url_slug,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(booking_system, facility_id) DO UPDATE SET
+                name=excluded.name,
+                latitude=excluded.latitude,
+                longitude=excluded.longitude,
+                region=excluded.region,
+                state=excluded.state,
+                drive_minutes_from_base=COALESCE(
+                    campgrounds.drive_minutes_from_base,
+                    excluded.drive_minutes_from_base
+                ),
+                tags=CASE WHEN campgrounds.tags = '[]'
+                    THEN excluded.tags ELSE campgrounds.tags END,
+                notes=CASE WHEN campgrounds.notes = ''
+                    THEN excluded.notes ELSE campgrounds.notes END,
+                rating=COALESCE(campgrounds.rating, excluded.rating),
+                total_sites=excluded.total_sites,
+                enabled=campgrounds.enabled,
+                booking_url_slug=CASE WHEN campgrounds.booking_url_slug = ''
+                    THEN excluded.booking_url_slug
+                    ELSE campgrounds.booking_url_slug END,
+                updated_at=?
+        """
+        rows = [
+            (
+                cg.facility_id, cg.name, cg.booking_system.value,
+                cg.latitude, cg.longitude, cg.region, cg.state,
+                cg.drive_minutes_from_base, json.dumps(cg.tags), cg.notes,
+                cg.rating, cg.total_sites, int(cg.enabled), cg.booking_url_slug,
+                now, now, now,
+            )
+            for cg in campgrounds
+        ]
+        self._conn.executemany(sql, rows)
+        self._conn.commit()
+        return len(campgrounds)
 
     # -------------------------------------------------------------------
     # Read
@@ -249,6 +287,13 @@ class CampgroundRegistry:
         self._conn.execute(
             "UPDATE campgrounds SET tags=?, updated_at=? WHERE id=?",
             (json.dumps(tags), datetime.now().isoformat(), campground_id),
+        )
+        self._conn.commit()
+
+    def update_booking_tips(self, campground_id: int, tips_json: str) -> None:
+        self._conn.execute(
+            "UPDATE campgrounds SET booking_tips=?, updated_at=? WHERE id=?",
+            (tips_json, datetime.now().isoformat(), campground_id),
         )
         self._conn.commit()
 

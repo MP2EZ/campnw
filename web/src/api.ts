@@ -1,5 +1,60 @@
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
+// ---------------------------------------------------------------------------
+// Event tracking
+// ---------------------------------------------------------------------------
+
+export function track(event: string, data: Record<string, string | number>) {
+  try {
+    navigator.sendBeacon(
+      `${API_BASE}/api/track`,
+      JSON.stringify({ event, ...data })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Typed fetch helper — eliminates untyped resp.json() calls
+// ---------------------------------------------------------------------------
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const resp = await fetch(url, init);
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(
+      (body as { detail?: string }).detail || `Request failed: ${resp.status}`,
+    );
+  }
+  return resp.json() as Promise<T>;
+}
+
+// ---------------------------------------------------------------------------
+// SSE type guards — runtime checks instead of unsafe `as T` casts
+// ---------------------------------------------------------------------------
+
+function isSSEDiagnosis(data: unknown): data is DiagnosisEvent {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "diagnosis";
+}
+
+function isSSEParsedParams(data: unknown): data is { type: "parsed_params"; params: ParsedParams } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "parsed_params";
+}
+
+function isSSESummary(data: unknown): data is { type: "summary"; text: string } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "summary";
+}
+
+function isCampgroundResult(data: unknown): data is CampgroundResult {
+  return typeof data === "object" && data !== null
+    && typeof (data as Record<string, unknown>).facility_id === "string"
+    && !("type" in (data as Record<string, unknown>));
+}
+
 export interface Window {
   campsite_id: string;
   site_name: string;
@@ -108,9 +163,7 @@ export async function searchCampsites(
   if (params.include_fcfs) query.set("include_fcfs", "true");
   if (params.limit) query.set("limit", String(params.limit));
 
-  const resp = await fetch(`${API_BASE}/api/search?${query}`);
-  if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
-  return resp.json();
+  return fetchJson<SearchResponse>(`${API_BASE}/api/search?${query}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -191,15 +244,15 @@ export async function searchCampsitesStream(
             return;
           }
           try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === "parsed_params" && onParsed) {
-              onParsed(parsed.params as ParsedParams);
-            } else if (parsed.type === "summary" && onSummary) {
-              onSummary(parsed.text as string);
-            } else if (parsed.type === "diagnosis" && onDiagnosis) {
-              onDiagnosis(parsed as DiagnosisEvent);
-            } else if (!parsed.type) {
-              onResult(parsed as CampgroundResult);
+            const parsed: unknown = JSON.parse(data);
+            if (isSSEParsedParams(parsed) && onParsed) {
+              onParsed(parsed.params);
+            } else if (isSSESummary(parsed) && onSummary) {
+              onSummary(parsed.text);
+            } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
+              onDiagnosis(parsed);
+            } else if (isCampgroundResult(parsed)) {
+              onResult(parsed);
             }
           } catch {
             // skip malformed lines
@@ -232,6 +285,32 @@ export interface WatchData {
   created_at: string;
 }
 
+// ---------------------------------------------------------------------------
+// Trips
+// ---------------------------------------------------------------------------
+
+export interface TripCampground {
+  id: number;
+  facility_id: string;
+  source: string;
+  name: string;
+  sort_order: number;
+  notes: string;
+  added_at: string;
+}
+
+export interface TripData {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  campground_count?: number;
+  campgrounds?: TripCampground[];
+}
+
 export interface CreateWatchParams {
   facility_id: string;
   name?: string;
@@ -257,6 +336,8 @@ export interface UserData {
   default_nights: number;
   default_from: string;
   recommendations_enabled: boolean;
+  preferred_tags: string[];
+  onboarding_complete: boolean;
 }
 
 export interface Recommendation {
@@ -349,9 +430,7 @@ export async function deleteAccount(): Promise<void> {
 }
 
 export async function exportData(): Promise<object> {
-  const resp = await fetch(`${API_BASE}/api/auth/export`, fetchOpts);
-  if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
-  return resp.json();
+  return fetchJson<object>(`${API_BASE}/api/auth/export`, fetchOpts);
 }
 
 export async function getSearchHistory(): Promise<SearchHistoryEntry[]> {
@@ -385,9 +464,7 @@ export async function getRecommendations(): Promise<Recommendation[]> {
 }
 
 export async function getWatches(): Promise<WatchData[]> {
-  const resp = await fetch(`${API_BASE}/api/watches`, fetchOpts);
-  if (!resp.ok) throw new Error(`Failed to load watches: ${resp.status}`);
-  return resp.json();
+  return fetchJson<WatchData[]>(`${API_BASE}/api/watches`, fetchOpts);
 }
 
 export async function createWatch(
@@ -419,6 +496,77 @@ export async function toggleWatch(
   });
   if (!resp.ok) throw new Error(`Failed to toggle watch: ${resp.status}`);
   return resp.json();
+}
+
+// ---------------------------------------------------------------------------
+// Trip CRUD
+// ---------------------------------------------------------------------------
+
+export async function getTrips(): Promise<TripData[]> {
+  return fetchJson<TripData[]>(`${API_BASE}/api/trips`, fetchOpts);
+}
+
+export async function createTrip(
+  name: string,
+  opts: { start_date?: string; end_date?: string; notes?: string } = {},
+): Promise<TripData> {
+  const resp = await fetch(`${API_BASE}/api/trips`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, ...opts }),
+  });
+  return resp.json();
+}
+
+export async function getTrip(tripId: number): Promise<TripData> {
+  return fetchJson<TripData>(`${API_BASE}/api/trips/${tripId}`, fetchOpts);
+}
+
+export async function updateTrip(
+  tripId: number,
+  updates: Partial<Pick<TripData, "name" | "start_date" | "end_date" | "notes">>,
+): Promise<TripData> {
+  const resp = await fetch(`${API_BASE}/api/trips/${tripId}`, {
+    ...fetchOpts,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  return resp.json();
+}
+
+export async function deleteTrip(tripId: number): Promise<void> {
+  await fetch(`${API_BASE}/api/trips/${tripId}`, {
+    ...fetchOpts,
+    method: "DELETE",
+  });
+}
+
+export async function addCampgroundToTrip(
+  tripId: number,
+  facilityId: string,
+  source: string = "recgov",
+  name: string = "",
+): Promise<TripCampground> {
+  const resp = await fetch(`${API_BASE}/api/trips/${tripId}/campgrounds`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ facility_id: facilityId, source, name }),
+  });
+  return resp.json();
+}
+
+export async function removeCampgroundFromTrip(
+  tripId: number,
+  facilityId: string,
+  source: string = "recgov",
+): Promise<void> {
+  await fetch(`${API_BASE}/api/trips/${tripId}/campgrounds/${facilityId}?source=${source}`, {
+    ...fetchOpts,
+    method: "DELETE",
+  });
 }
 
 // ---------------------------------------------------------------------------

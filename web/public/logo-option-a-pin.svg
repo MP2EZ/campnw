@@ -1,31 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Option A: Pin Drop — map pin with tent/tree-shaped head -->
-  <!-- Brand green fill, geometric, reads at 16px as a simple pin shape -->
+  <!-- campable logo mark — pin drop with layered Pacific Northwest evergreen -->
   <defs>
     <style>
-      .pin-fill { fill: #2d5016; }
-      .pin-detail { fill: #f5f5f0; }
+      .pin { fill: #2d5016; }
+      .tree { fill: #f5f5f0; }
     </style>
   </defs>
-  <!-- Pin body — teardrop shape -->
-  <path class="pin-fill" d="
-    M256 480
-    C256 480 96 288 96 192
-    C96 103.6 167.6 32 256 32
-    C344.4 32 416 103.6 416 192
-    C416 288 256 480 256 480Z
+
+  <!-- Pin body — smooth teardrop with cubic beziers -->
+  <path class="pin" d="
+    M256 476
+    C256 476 88 296 88 196
+    C88 103 163 28 256 28
+    C349 28 424 103 424 196
+    C424 296 256 476 256 476Z
   "/>
-  <!-- Tree/tent silhouette inside the pin head -->
-  <path class="pin-detail" d="
-    M256 100
-    L306 200
-    L280 200
-    L320 280
-    L192 280
-    L232 200
-    L206 200
+
+  <!-- Three-tier evergreen tree — layered triangles with slight overlap -->
+  <!-- Top tier (smallest) -->
+  <path class="tree" d="
+    M256 92
+    L296 164 L276 164
+    L316 232 L196 232
+    L236 164 L216 164 Z
+  "/>
+  <!-- Bottom tier (widest) -->
+  <path class="tree" d="
+    M196 222
+    L336 222
+    L358 290
+    L154 290
     Z
   "/>
-  <!-- Tree trunk -->
-  <rect class="pin-detail" x="244" y="270" width="24" height="30" rx="2"/>
+
+  <!-- Trunk — rounded rectangle -->
+  <rect class="tree" x="240" y="282" width="32" height="42" rx="4"/>
 </svg>

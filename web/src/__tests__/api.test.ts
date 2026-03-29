@@ -98,11 +98,14 @@ describe('API: Search', () => {
   })
 
   test('searchCampsites throws on non-ok response', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 400 })
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 400,
+      json: async () => ({}),
+    })
 
     await expect(
       searchCampsites({ start_date: '2026-06-01', end_date: '2026-06-30' })
-    ).rejects.toThrow('Search failed: 400')
+    ).rejects.toThrow('Request failed: 400')
   })
 })
 
@@ -134,10 +137,13 @@ describe('API: Watches', () => {
   })
 
   test('getWatches throws on non-ok response', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 403 })
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 403,
+      json: async () => ({}),
+    })
 
     await expect(getWatches()).rejects.toThrow(
-      'Failed to load watches: 403'
+      'Request failed: 403'
     )
   })
 
@@ -430,9 +436,12 @@ describe('API: Auth', () => {
   })
 
   test('exportData throws on non-ok response', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 403 })
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 403,
+      json: async () => ({}),
+    })
 
-    await expect(exportData()).rejects.toThrow('Export failed: 403')
+    await expect(exportData()).rejects.toThrow('Request failed: 403')
   })
 })
 

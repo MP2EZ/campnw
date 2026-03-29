@@ -112,6 +112,7 @@ class Campground(BaseModel):
     elevator_pitch: str = ""  # One sentence for collapsed result card
     description_rewrite: str = ""  # 2-3 sentences for expanded view
     best_for: str = ""  # Label: "families", "backpackers", etc.
+    booking_tips: str = ""  # JSON array of tips from availability history
     notes: str = ""  # personal notes
     rating: int | None = None  # 1-5 personal rating
     total_sites: int | None = None

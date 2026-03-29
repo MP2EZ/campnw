@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
-import { searchCampsitesStream, saveSearchHistory, getSearchHistory, getRecommendations } from "./api";
+import { getSearchHistory, getRecommendations } from "./api";
 import type {
-  Recommendation, CampgroundResult, SearchParams, SearchResponse, Window,
-  SearchHistoryEntry, DiagnosisEvent,
+  Recommendation, SearchParams, SearchResponse,
+  SearchHistoryEntry,
 } from "./api";
-import { WatchPanel, WatchButton } from "./components/WatchPanel";
+import { WatchPanel } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
+import { ResultCard, SOURCE_LABELS } from "./components/ResultCard";
+import { OnboardingModal } from "./components/OnboardingModal";
 const AuthModal = lazy(() => import("./components/AuthModal").then(m => ({ default: m.AuthModal })));
 const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").then(m => ({ default: m.ShortcutHelpModal })));
 import { UserMenu } from "./components/UserMenu";
@@ -14,23 +16,14 @@ import { SmartZeroState } from "./components/SmartZeroState";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Wordmark } from "./Wordmark";
 import { useAuth } from "./hooks/useAuth";
+import { useSearch } from "./hooks/useSearch";
+import type { SearchMode, ResultsView } from "./hooks/useSearch";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { SearchContext } from "./contexts/SearchContext";
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const MapView = lazy(() => import("./pages/MapView"));
-
-const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
-
-function track(event: string, data: Record<string, string | number>) {
-  try {
-    navigator.sendBeacon(
-      `${API_BASE}/api/track`,
-      JSON.stringify({ event, ...data })
-    );
-  } catch {
-    // ignore
-  }
-}
+const TripsPage = lazy(() => import("./pages/TripsPage"));
+const TripDetail = lazy(() => import("./pages/TripDetail"));
 
 import "./tokens.css";
 import "./App.css";
@@ -41,10 +34,8 @@ function formatDate(offset: number): string {
   return d.toISOString().split("T")[0];
 }
 
-type SearchMode = "find" | "exact";
-type ResultsView = "dates" | "sites";
+// SearchMode and ResultsView imported from hooks/useSearch
 
-const INITIAL_BLOCKS_SHOWN = 3;
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_PRESETS: Record<string, [string, string]> = {
@@ -454,6 +445,7 @@ function SearchForm({
         type="button"
         className="advanced-toggle"
         onClick={() => setShowAdvanced(!showAdvanced)}
+        aria-expanded={showAdvanced}
       >
         {showAdvanced ? "Fewer filters ▴" : "More filters ▾"}
         {!showAdvanced && state && (
@@ -685,343 +677,6 @@ function ResultsSkeleton() {
   );
 }
 
-interface DateBlock {
-  key: string;
-  start_date: string;
-  end_date: string;
-  nights: number;
-  dayName: string;
-  sites: Window[];
-}
-
-function groupByDateBlock(windows: Window[]): DateBlock[] {
-  const blockMap = new Map<string, DateBlock>();
-  for (const w of windows) {
-    if (w.is_fcfs) continue;
-    const key = `${w.start_date}→${w.end_date}`;
-    if (!blockMap.has(key)) {
-      const start = new Date(w.start_date + "T12:00:00");
-      blockMap.set(key, {
-        key,
-        start_date: w.start_date,
-        end_date: w.end_date,
-        nights: w.nights,
-        dayName: start.toLocaleDateString("en-US", { weekday: "short" }),
-        sites: [],
-      });
-    }
-    blockMap.get(key)!.sites.push(w);
-  }
-  return Array.from(blockMap.values()).sort((a, b) =>
-    a.start_date.localeCompare(b.start_date)
-  );
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function meaningfulLoop(loop: string, campgroundName: string): string | null {
-  const normalize = (s: string) =>
-    s.toUpperCase().replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim();
-  const nl = normalize(loop);
-  const nc = normalize(campgroundName);
-  if (!nl || nl === nc || nc.includes(nl) || nl.includes(nc)) return null;
-  return loop;
-}
-
-function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
-  const blocks = groupByDateBlock(result.windows);
-  const fcfsSites = result.windows.filter((w) => w.is_fcfs);
-  const isWaState = result.booking_system === "wa_state";
-  const [showAll, setShowAll] = useState(false);
-
-  const visibleBlocks = showAll ? blocks : blocks.slice(0, INITIAL_BLOCKS_SHOWN);
-  const hiddenCount = blocks.length - INITIAL_BLOCKS_SHOWN;
-
-  return (
-    <div className="site-list">
-      {visibleBlocks.map((block) => (
-        <div key={block.key} className="date-block">
-          <div className="date-block-header">
-            <span className="date-block-range">
-              {block.dayName} {fmtDate(block.start_date)} → {new Date(block.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {fmtDate(block.end_date)}
-            </span>
-            <span className="date-block-meta">
-              {block.nights}n · {block.sites.length} site
-              {block.sites.length !== 1 && "s"}
-            </span>
-          </div>
-          {isWaState ? (
-            <div className="date-block-sites">
-              <a
-                href={result.availability_url || "#"}
-                target="_blank"
-                rel="noopener"
-                className="site-chip wa-book-link"
-              >
-                {block.sites.length} site
-                {block.sites.length !== 1 ? "s" : ""} available
-                <span className="site-chip-meta">Book on GoingToCamp</span>
-              </a>
-            </div>
-          ) : (
-            <div className="date-block-sites">
-              {block.sites.map((w, i) => (
-                <a
-                  key={i}
-                  href={w.booking_url || result.availability_url || "#"}
-                  target="_blank"
-                  rel="noopener"
-                  className="site-chip"
-                  onClick={() => track("book_click", {
-                    facility_id: result.facility_id,
-                    name: result.name,
-                    source: result.booking_system,
-                    type: "site",
-                    site: w.site_name,
-                  })}
-                >
-                  Site {w.site_name}
-                  <span className="site-chip-meta">
-                    {(() => {
-                      const loop = meaningfulLoop(w.loop, result.name);
-                      return loop ? `${loop} · ${w.max_people}p` : `${w.max_people}p`;
-                    })()}
-                  </span>
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-      {!showAll && hiddenCount > 0 && (
-        <button
-          className="show-more-btn"
-          onClick={() => setShowAll(true)}
-        >
-          Show {hiddenCount} more date range{hiddenCount !== 1 && "s"}
-        </button>
-      )}
-      {fcfsSites.length > 0 && (
-        <div className="fcfs-section">
-          <p className="fcfs-label">
-            {fcfsSites.length} First-come, first-served (FCFS) site{fcfsSites.length !== 1 && "s"} — not
-            bookable online
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Results: Site View (Option A) ───────────────────────────────────
-
-function SiteView({ result }: { result: SearchResponse["results"][0] }) {
-  if (result.booking_system === "wa_state") {
-    return <DateBlockView result={result} />;
-  }
-
-  const bySite = new Map<string, Window[]>();
-  for (const w of result.windows) {
-    if (!bySite.has(w.site_name)) bySite.set(w.site_name, []);
-    bySite.get(w.site_name)!.push(w);
-  }
-
-  return (
-    <div className="site-list">
-      {Array.from(bySite.entries()).map(([siteName, windows]) => {
-        const w0 = windows[0];
-        return (
-          <div key={siteName} className="site-group">
-            <h4>
-              Site {siteName}
-              <span className="site-meta">
-                {(() => {
-                  const loop = meaningfulLoop(w0.loop, result.name);
-                  return loop ? `${loop} · ` : "";
-                })()}{w0.campsite_type} · max {w0.max_people}p
-              </span>
-            </h4>
-            {w0.is_fcfs ? (
-              <p className="fcfs-label"><span title="First-come, first-served">FCFS</span> — not bookable online</p>
-            ) : (
-              <div className="windows-grid">
-                {windows.map((w, i) => {
-                  const start = new Date(w.start_date + "T12:00:00");
-                  const dayName = start.toLocaleDateString("en-US", {
-                    weekday: "short",
-                  });
-                  return (
-                    <a
-                      key={i}
-                      href={w.booking_url || result.availability_url || "#"}
-                      target="_blank"
-                      rel="noopener"
-                      className="window-chip"
-                    >
-                      {dayName} {fmtDate(w.start_date)} → {new Date(w.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {fmtDate(w.end_date)} ({w.nights}n)
-                    </a>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-const SOURCE_LABELS: Record<string, string> = {
-  recgov: "Rec.gov",
-  wa_state: "WA Parks",
-  or_state: "OR Parks",
-  id_state: "ID Parks",
-};
-
-// ─── Result Card ─────────────────────────────────────────────────────
-
-function ResultCard({
-  result,
-  view,
-  searchDates,
-  focused,
-  headerRef,
-}: {
-  result: SearchResponse["results"][0];
-  view: ResultsView;
-  searchDates?: { start: string; end: string };
-  focused?: boolean;
-  headerRef?: (el: HTMLButtonElement | null) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  const handleToggle = () => {
-    const next = !expanded;
-    setExpanded(next);
-    if (next) {
-      track("card_expand", {
-        facility_id: result.facility_id,
-        name: result.name,
-        source: result.booking_system,
-      });
-    }
-    if (next && cardRef.current) {
-      setTimeout(() => {
-        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 50);
-    }
-  };
-
-  if (result.error) {
-    return (
-      <div className="result-card error">
-        <h3>{result.name}</h3>
-        <p className="error-text">{result.error}</p>
-      </div>
-    );
-  }
-
-  const sourceLabel = SOURCE_LABELS[result.booking_system] || result.booking_system;
-  const dateBlocks = groupByDateBlock(result.windows);
-  const summaryText =
-    view === "dates"
-      ? `${result.total_available_sites} sites · ${dateBlocks.length} opening${dateBlocks.length !== 1 ? "s" : ""}`
-      : `${result.total_available_sites} sites · ${result.windows.filter((w) => !w.is_fcfs).length} openings`;
-
-  return (
-    <div className={`result-card card-${result.booking_system}${focused ? " card-focused" : ""}`} ref={cardRef}>
-      <button
-        className="result-header"
-        onClick={handleToggle}
-        aria-expanded={expanded}
-        type="button"
-        ref={headerRef}
-        tabIndex={-1}
-      >
-        <div>
-          <h3>
-            {result.name}{" "}
-            <span className={`source-badge source-${result.booking_system}`}>
-              {sourceLabel}
-            </span>
-            {result.estimated_drive_minutes != null && (
-              <span className="drive-badge">
-                {result.estimated_drive_minutes < 60
-                  ? `~${result.estimated_drive_minutes}m`
-                  : `~${Math.floor(result.estimated_drive_minutes / 60)}h ${result.estimated_drive_minutes % 60}m`}
-              </span>
-            )}
-            {(result.tags || []).slice(0, 4).map((tag) => (
-              <span key={tag} className="tag-badge">{tag}</span>
-            ))}
-          </h3>
-          <p className="result-summary">
-            {summaryText}
-            {result.fcfs_sites > 0 && <>{" "}+ {result.fcfs_sites} <span title="First-come, first-served">FCFS</span></>}
-          </p>
-          {result.elevator_pitch && (
-            <p className="result-pitch">{result.elevator_pitch}</p>
-          )}
-        </div>
-        <span className="expand-icon" aria-hidden="true">{expanded ? "−" : "+"}</span>
-      </button>
-
-      <div className={`card-body${expanded ? " card-body-open" : ""}`}>
-        <div className="card-body-inner">
-          {(result.description_rewrite || result.vibe) && (
-            <p className="result-vibe">{result.description_rewrite || result.vibe}</p>
-          )}
-          {result.best_for && (
-            <p className="result-best-for">Best for: {result.best_for}</p>
-          )}
-          {result.availability_url && (
-            <div className="card-toolbar">
-              <a
-                href={result.availability_url}
-                target="_blank"
-                rel="noopener"
-                className="book-link"
-                onClick={() => track("book_click", {
-                  facility_id: result.facility_id,
-                  name: result.name,
-                  source: result.booking_system,
-                  type: "view_page",
-                })}
-              >
-                View on{" "}
-                {result.booking_system === "wa_state"
-                  ? "GoingToCamp"
-                  : "Recreation.gov"}{" "}
-                ↗
-              </a>
-              {result.latitude && result.longitude && (
-                <Link to={`/map?focus=${result.facility_id}`} className="map-link">
-                  See on map
-                </Link>
-              )}
-              {searchDates && (
-                <WatchButton
-                  facilityId={result.facility_id}
-                  name={result.name}
-                  startDate={searchDates.start}
-                  endDate={searchDates.end}
-                />
-              )}
-            </div>
-          )}
-          {view === "dates" ? (
-            <DateBlockView result={result} />
-          ) : (
-            <SiteView result={result} />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── App ─────────────────────────────────────────────────────────────
 
@@ -1029,26 +684,21 @@ export default function App() {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [results, setResults] = useState<SearchResponse | null>(null);
-  const [searchSummary, setSearchSummary] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resultsView, setResultsView] = useState<ResultsView>("dates");
-  const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
-  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
-  const lastSearchParams = useRef<SearchParams | null>(null);
-  const lastSearchMode = useRef<SearchMode>("find");
-  const [activeSearchParams, setActiveSearchParams] = useState<SearchParams | null>(null);
+  const {
+    results, searchSummary, setSearchSummary, loading, error,
+    resultsView, setResultsView,
+    searchDates, sourceFilter, resultSources, filteredResults,
+    activeSearchParams, formCollapsed, setFormCollapsed,
+    focusedCardIndex, setFocusedCardIndex,
+    liveAnnouncement, setLiveAnnouncement,
+    cardRefs, maxResults, handleSearch, toggleSource,
+  } = useSearch(user ?? null);
+
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [formCollapsed, setFormCollapsed] = useState(false);
-  const searchAbortRef = useRef<AbortController | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
-  const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
-  const [liveAnnouncement, setLiveAnnouncement] = useState("");
-  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("campable-dark");
     if (saved !== null) return saved === "true";
@@ -1058,148 +708,12 @@ export default function App() {
   const isSearch = location.pathname === "/";
   const isPlan = location.pathname === "/plan";
   const isMap = location.pathname === "/map";
-
-  const maxResults = lastSearchParams.current?.limit || 20;
-
-  // Auto-enable all sources present in results
-  const resultSources = useMemo(() => {
-    if (!results) return new Set<string>();
-    return new Set(results.results.map((r) => r.booking_system));
-  }, [results]);
-
-  useEffect(() => {
-    if (resultSources.size > 0) {
-      setSourceFilter(resultSources);
-    }
-  }, [resultSources]);
-
-  const filteredResults = useMemo(() => {
-    if (!results) return [];
-    return results.results
-      .filter((r) => sourceFilter.has(r.booking_system))
-      .slice(0, maxResults);
-  }, [results, sourceFilter, maxResults]);
+  const isTrips = location.pathname.startsWith("/trips");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
     localStorage.setItem("campable-dark", String(darkMode));
   }, [darkMode]);
-
-  const handleSearch = async (params: SearchParams, mode: SearchMode) => {
-    const searchParams = { ...params };
-    lastSearchParams.current = params;
-    lastSearchMode.current = mode;
-    setActiveSearchParams(params);
-
-    // Abort any in-flight search stream
-    searchAbortRef.current?.abort();
-    const abortController = new AbortController();
-    searchAbortRef.current = abortController;
-
-    setLoading(true);
-    setError(null);
-    setSearchSummary(null);
-    setResultsView(mode === "find" ? "dates" : "sites");
-    // For NL search, dates come from parsed_params event later
-    if (params.start_date && params.end_date) {
-      setSearchDates({ start: params.start_date, end: params.end_date });
-    }
-    setFormCollapsed(true);
-
-    // Scroll to results area after DOM updates
-    setTimeout(() => {
-      document.querySelector(".results-skeleton, .results")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
-
-    // Sync search params to URL for shareable links
-    const url = new URL(window.location.href);
-    url.search = "";
-    for (const [k, v] of Object.entries(searchParams)) {
-      if (v !== undefined && v !== "" && v !== false) {
-        url.searchParams.set(k, String(v));
-      }
-    }
-    window.history.replaceState(null, "", url.toString());
-    // Stream results as they arrive
-    const streamedResults: CampgroundResult[] = [];
-    setResults({
-      campgrounds_checked: 0,
-      campgrounds_with_availability: 0,
-      results: [],
-      warnings: [],
-    });
-
-    await searchCampsitesStream(
-      searchParams,
-      (result) => {
-        streamedResults.push(result);
-        setResults({
-          campgrounds_checked: streamedResults.length,
-          campgrounds_with_availability: streamedResults.filter(
-            (r) => r.total_available_sites > 0
-          ).length,
-          results: [...streamedResults],
-          warnings: [],
-        });
-      },
-      () => {
-        setLoading(false);
-        searchAbortRef.current = null;
-        // Save search to history (fire-and-forget, only for logged-in users)
-        if (user) {
-          const withAvail = streamedResults.filter((r) => r.total_available_sites > 0).length;
-          saveSearchHistory(params, withAvail);
-        }
-      },
-      (err) => {
-        setError(err.message);
-        setLoading(false);
-        searchAbortRef.current = null;
-      },
-      (diagEvent: DiagnosisEvent) => {
-        setResults((prev) =>
-          prev
-            ? {
-                ...prev,
-                diagnosis: diagEvent.diagnosis ?? undefined,
-                date_suggestions: diagEvent.date_suggestions,
-                action_chips: diagEvent.action_chips,
-              }
-            : prev
-        );
-      },
-      abortController.signal,
-      (parsed) => {
-        // Update dates and params from NL parse result
-        if (parsed.start_date && parsed.end_date) {
-          setSearchDates({ start: parsed.start_date, end: parsed.end_date });
-        }
-        setActiveSearchParams({
-          ...params,
-          start_date: parsed.start_date,
-          end_date: parsed.end_date,
-          state: parsed.state || undefined,
-          nights: parsed.nights,
-          tags: parsed.tags || undefined,
-          from_location: parsed.from_location || undefined,
-          max_drive: parsed.max_drive || undefined,
-          name: parsed.name || undefined,
-          days_of_week: parsed.days_of_week || undefined,
-        });
-      },
-      (text) => setSearchSummary(text),
-    );
-  };
-
-  const toggleSource = (src: string) => {
-    const next = new Set(sourceFilter);
-    if (next.has(src) && next.size > 1) {
-      next.delete(src);
-    } else if (!next.has(src)) {
-      next.add(src);
-    }
-    setSourceFilter(next);
-  };
 
   const searchContextValue = useMemo(() => ({
     results,
@@ -1209,11 +723,6 @@ export default function App() {
     sourceFilter,
     filteredResults,
   }), [results, loading, searchDates, activeSearchParams, sourceFilter, filteredResults]);
-
-  // Reset focused card when results change
-  useEffect(() => {
-    setFocusedCardIndex(-1);
-  }, [filteredResults]);
 
   // Close mobile menu on click outside or Escape
   useEffect(() => {
@@ -1269,7 +778,7 @@ export default function App() {
       <header>
         <div className="header-row">
           <div>
-            <h1><Wordmark /></h1>
+            <h1><Link to="/" className="wordmark-link"><Wordmark /></Link></h1>
             <p className="header-subtitle">Find available campsites across the Pacific Northwest</p>
           </div>
           <div className="header-actions">
@@ -1294,6 +803,13 @@ export default function App() {
                 aria-current={isPlan ? "page" : undefined}
               >
                 Plan
+              </Link>
+              <Link
+                to="/trips"
+                className={`header-btn${isTrips ? " active" : ""}`}
+                aria-current={isTrips ? "page" : undefined}
+              >
+                Trips
               </Link>
             </nav>
             <div className="header-secondary">
@@ -1374,6 +890,12 @@ export default function App() {
             onClose={() => setAuthModalOpen(false)}
           />
         )}
+        {user && !user.onboarding_complete && (
+          <OnboardingModal onClose={() => {
+            // Refresh user data so onboarding_complete reflects
+            // (updateProfile already sets it in context)
+          }} />
+        )}
         {helpModalOpen && (
           <ShortcutHelpModal
             open={helpModalOpen}
@@ -1387,6 +909,8 @@ export default function App() {
       <Routes>
         <Route path="/plan" element={<TripPlanner />} />
         <Route path="/map" element={<MapView />} />
+        <Route path="/trips" element={<TripsPage />} />
+        <Route path="/trips/:tripId" element={<TripDetail />} />
         <Route path="/" element={
           <main id="main-content">
           {formCollapsed && activeSearchParams && searchDates ? (
@@ -1412,7 +936,7 @@ export default function App() {
 
       {!results && !loading && !error && <FirstVisitState onSearch={handleSearch} />}
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="error-banner" role="alert">{error}</div>}
 
       {loading && (!results || results.results.length === 0) && <ResultsSkeleton />}
 

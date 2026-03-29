@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 _docker_db = Path("/app/data/watches.db")
@@ -57,6 +57,9 @@ class Watch:
     notification_channel: str = ""  # ntfy, pushover, web_push, or ""
     enabled: bool = True
     created_at: str = ""
+    trip_id: int | None = None
+    watch_type: str = "single"  # "single" or "template"
+    search_params: str = ""  # JSON search pattern for template watches
 
 
 @dataclass
@@ -72,6 +75,8 @@ class User:
     default_nights: int = 2
     default_from: str = ""
     recommendations_enabled: bool = False
+    preferred_tags: list[str] | None = None
+    onboarding_complete: bool = False
     created_at: str = ""
     last_login_at: str | None = None
 
@@ -85,6 +90,48 @@ class Snapshot:
     available_sites: dict[str, list[str]] = field(
         default_factory=dict
     )  # site_id -> [available dates]
+
+
+@dataclass
+class Trip:
+    """A trip grouping campgrounds together."""
+
+    id: int | None = None
+    user_id: int | None = None
+    name: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    notes: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+
+@dataclass
+class TripCampground:
+    """A campground associated with a trip."""
+
+    id: int | None = None
+    trip_id: int | None = None
+    facility_id: str = ""
+    source: str = "recgov"
+    name: str = ""
+    sort_order: int = 0
+    notes: str = ""
+    added_at: str = ""
+
+
+@dataclass
+class SharedLink:
+    """A shareable link for a watch or trip."""
+
+    id: int | None = None
+    uuid: str = ""
+    watch_id: int | None = None
+    trip_id: int | None = None
+    created_by: int | None = None
+    expires_at: str = ""
+    revoked: bool = False
+    created_at: str = ""
 
 
 class WatchDB:
@@ -236,6 +283,90 @@ class WatchDB:
                 "ALTER TABLE users ADD COLUMN"
                 " recommendations_enabled INTEGER DEFAULT 0"
             )
+        if "preferred_tags" not in user_cols:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " preferred_tags TEXT DEFAULT '[]'"
+            )
+        if "onboarding_complete" not in user_cols:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " onboarding_complete INTEGER DEFAULT 0"
+            )
+        # v1.2: trips
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS trips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                name TEXT NOT NULL DEFAULT '',
+                start_date TEXT DEFAULT '',
+                end_date TEXT DEFAULT '',
+                notes TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_trips_user ON trips(user_id);
+            CREATE TABLE IF NOT EXISTS trip_campgrounds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+                facility_id TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'recgov',
+                name TEXT NOT NULL DEFAULT '',
+                sort_order INTEGER DEFAULT 0,
+                notes TEXT DEFAULT '',
+                added_at TEXT NOT NULL,
+                UNIQUE(trip_id, facility_id, source)
+            );
+        """)
+        # v1.2: link watches to trips
+        watch_cols2 = [
+            r[1] for r in self._conn.execute("PRAGMA table_info(watches)")
+        ]
+        if "trip_id" not in watch_cols2:
+            self._conn.execute(
+                "ALTER TABLE watches ADD COLUMN trip_id INTEGER"
+            )
+        # v1.2: shared links
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS shared_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                watch_id INTEGER REFERENCES watches(id) ON DELETE CASCADE,
+                trip_id INTEGER REFERENCES trips(id) ON DELETE CASCADE,
+                created_by INTEGER NOT NULL REFERENCES users(id),
+                expires_at TEXT NOT NULL,
+                revoked INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_shared_uuid ON shared_links(uuid);
+        """)
+        self._conn.commit()
+
+        # v1.2: analytics digests
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS analytics_digests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                digest_type TEXT NOT NULL,
+                period TEXT NOT NULL,
+                content TEXT NOT NULL,
+                generated_at TEXT NOT NULL,
+                UNIQUE(digest_type, period)
+            );
+        """)
+        # v1.2: template watches
+        watch_cols3 = [
+            r[1] for r in self._conn.execute("PRAGMA table_info(watches)")
+        ]
+        if "watch_type" not in watch_cols3:
+            self._conn.execute(
+                "ALTER TABLE watches ADD COLUMN"
+                " watch_type TEXT DEFAULT 'single'"
+            )
+        if "search_params" not in watch_cols3:
+            self._conn.execute(
+                "ALTER TABLE watches ADD COLUMN"
+                " search_params TEXT DEFAULT ''"
+            )
         self._conn.commit()
 
     # -------------------------------------------------------------------
@@ -381,6 +512,27 @@ class WatchDB:
         )
         self._conn.commit()
 
+    def delete_push_subscription_scoped(
+        self,
+        endpoint: str,
+        user_id: int | None = None,
+        session_token: str = "",
+    ) -> None:
+        """Remove a push subscription only if owned by user/session."""
+        if user_id:
+            self._conn.execute(
+                "DELETE FROM push_subscriptions"
+                " WHERE endpoint=? AND user_id=?",
+                (endpoint, user_id),
+            )
+        elif session_token:
+            self._conn.execute(
+                "DELETE FROM push_subscriptions"
+                " WHERE endpoint=? AND session_token=?",
+                (endpoint, session_token),
+            )
+        self._conn.commit()
+
     # -------------------------------------------------------------------
     # Users
     # -------------------------------------------------------------------
@@ -426,11 +578,15 @@ class WatchDB:
         allowed = {
             "display_name", "home_base", "default_state",
             "default_nights", "default_from", "last_login_at",
-            "recommendations_enabled",
+            "recommendations_enabled", "preferred_tags",
+            "onboarding_complete",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return self.get_user_by_id(user_id)
+        # Serialize list fields to JSON
+        if "preferred_tags" in updates and isinstance(updates["preferred_tags"], list):
+            updates["preferred_tags"] = json.dumps(updates["preferred_tags"])
         set_clause = ", ".join(f"{k}=?" for k in updates)
         self._conn.execute(
             f"UPDATE users SET {set_clause} WHERE id=?",
@@ -450,6 +606,13 @@ class WatchDB:
     def _row_to_user(self, row: sqlite3.Row) -> User:
         d = dict(row)
         d["recommendations_enabled"] = bool(d.get("recommendations_enabled", 0))
+        d["onboarding_complete"] = bool(d.get("onboarding_complete", 0))
+        tags_raw = d.pop("preferred_tags", "[]") or "[]"
+        d["preferred_tags"] = json.loads(tags_raw) if isinstance(tags_raw, str) else tags_raw
+        # Filter to known User fields (DB may have extra columns from other branches)
+        import dataclasses
+        valid_fields = {f.name for f in dataclasses.fields(User)}
+        d = {k: v for k, v in d.items() if k in valid_fields}
         return User(**d)
 
     # -------------------------------------------------------------------
@@ -610,8 +773,9 @@ class WatchDB:
             INSERT INTO watches
                 (facility_id, name, start_date, end_date, min_nights,
                  days_of_week, notify_topic, notification_channel,
-                 session_token, user_id, enabled, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 session_token, user_id, enabled, created_at,
+                 watch_type, search_params)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 watch.facility_id,
@@ -626,6 +790,8 @@ class WatchDB:
                 watch.user_id,
                 int(watch.enabled),
                 now,
+                watch.watch_type,
+                watch.search_params,
             ),
         )
         self._conn.commit()
@@ -724,3 +890,240 @@ class WatchDB:
             polled_at=row["polled_at"],
             available_sites=json.loads(row["available_sites"]),
         )
+
+    # -------------------------------------------------------------------
+    # Trips
+    # -------------------------------------------------------------------
+
+    MAX_TRIPS_PER_USER = 10
+
+    def create_trip(self, user_id: int, name: str, **fields: object) -> Trip:
+        """Create a new trip. Raises ValueError if user has too many trips."""
+        count = self._conn.execute(
+            "SELECT COUNT(*) FROM trips WHERE user_id=?", (user_id,),
+        ).fetchone()[0]
+        if count >= self.MAX_TRIPS_PER_USER:
+            raise ValueError(
+                f"Maximum {self.MAX_TRIPS_PER_USER} trips per user"
+            )
+        now = datetime.now().isoformat()
+        row = self._conn.execute(
+            "INSERT INTO trips (user_id, name, start_date, end_date, notes,"
+            " created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                user_id,
+                name,
+                fields.get("start_date", ""),
+                fields.get("end_date", ""),
+                fields.get("notes", ""),
+                now,
+                now,
+            ),
+        )
+        self._conn.commit()
+        return Trip(
+            id=row.lastrowid,
+            user_id=user_id,
+            name=name,
+            start_date=str(fields.get("start_date", "")),
+            end_date=str(fields.get("end_date", "")),
+            notes=str(fields.get("notes", "")),
+            created_at=now,
+            updated_at=now,
+        )
+
+    def get_trip(self, trip_id: int) -> Trip | None:
+        row = self._conn.execute(
+            "SELECT * FROM trips WHERE id=?", (trip_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return self._row_to_trip(row)
+
+    def list_trips_by_user(self, user_id: int) -> list[Trip]:
+        rows = self._conn.execute(
+            "SELECT * FROM trips WHERE user_id=? ORDER BY updated_at DESC",
+            (user_id,),
+        ).fetchall()
+        return [self._row_to_trip(r) for r in rows]
+
+    def update_trip(self, trip_id: int, **fields: object) -> Trip | None:
+        allowed = {"name", "start_date", "end_date", "notes"}
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if not updates:
+            return self.get_trip(trip_id)
+        updates["updated_at"] = datetime.now().isoformat()
+        set_clause = ", ".join(f"{k}=?" for k in updates)
+        self._conn.execute(
+            f"UPDATE trips SET {set_clause} WHERE id=?",
+            (*updates.values(), trip_id),
+        )
+        self._conn.commit()
+        return self.get_trip(trip_id)
+
+    def delete_trip(self, trip_id: int) -> bool:
+        cursor = self._conn.execute(
+            "DELETE FROM trips WHERE id=?", (trip_id,),
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    def _row_to_trip(self, row: sqlite3.Row) -> Trip:
+        return Trip(
+            id=row["id"],
+            user_id=row["user_id"],
+            name=row["name"],
+            start_date=row["start_date"],
+            end_date=row["end_date"],
+            notes=row["notes"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    # -------------------------------------------------------------------
+    # Trip campgrounds
+    # -------------------------------------------------------------------
+
+    def add_campground_to_trip(
+        self, trip_id: int, facility_id: str, source: str = "recgov",
+        name: str = "", notes: str = "",
+    ) -> TripCampground:
+        """Add a campground to a trip. Raises IntegrityError if duplicate."""
+        now = datetime.now().isoformat()
+        # Get next sort_order
+        max_order = self._conn.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) FROM trip_campgrounds"
+            " WHERE trip_id=?",
+            (trip_id,),
+        ).fetchone()[0]
+        row = self._conn.execute(
+            "INSERT INTO trip_campgrounds"
+            " (trip_id, facility_id, source, name, sort_order, notes, added_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (trip_id, facility_id, source, name, max_order + 1, notes, now),
+        )
+        self._conn.commit()
+        # Touch trip updated_at
+        self._conn.execute(
+            "UPDATE trips SET updated_at=? WHERE id=?",
+            (now, trip_id),
+        )
+        self._conn.commit()
+        return TripCampground(
+            id=row.lastrowid,
+            trip_id=trip_id,
+            facility_id=facility_id,
+            source=source,
+            name=name,
+            sort_order=max_order + 1,
+            notes=notes,
+            added_at=now,
+        )
+
+    def remove_campground_from_trip(
+        self, trip_id: int, facility_id: str, source: str = "recgov",
+    ) -> bool:
+        cursor = self._conn.execute(
+            "DELETE FROM trip_campgrounds"
+            " WHERE trip_id=? AND facility_id=? AND source=?",
+            (trip_id, facility_id, source),
+        )
+        self._conn.commit()
+        if cursor.rowcount > 0:
+            now = datetime.now().isoformat()
+            self._conn.execute(
+                "UPDATE trips SET updated_at=? WHERE id=?", (now, trip_id),
+            )
+            self._conn.commit()
+        return cursor.rowcount > 0
+
+    def get_trip_campgrounds(self, trip_id: int) -> list[TripCampground]:
+        rows = self._conn.execute(
+            "SELECT * FROM trip_campgrounds WHERE trip_id=?"
+            " ORDER BY sort_order",
+            (trip_id,),
+        ).fetchall()
+        return [
+            TripCampground(
+                id=r["id"],
+                trip_id=r["trip_id"],
+                facility_id=r["facility_id"],
+                source=r["source"],
+                name=r["name"],
+                sort_order=r["sort_order"],
+                notes=r["notes"],
+                added_at=r["added_at"],
+            )
+            for r in rows
+        ]
+
+    # -------------------------------------------------------------------
+    # Shared links
+    # -------------------------------------------------------------------
+
+    def create_shared_link(
+        self, user_id: int,
+        watch_id: int | None = None,
+        trip_id: int | None = None,
+        expires_days: int = 30,
+    ) -> SharedLink:
+        """Create a shareable link for a watch or trip."""
+        import uuid as _uuid
+
+        if not watch_id and not trip_id:
+            raise ValueError("Must specify watch_id or trip_id")
+
+        link_uuid = _uuid.uuid4().hex[:12]
+        now = datetime.now()
+        expires_at = (now + timedelta(days=expires_days)).isoformat()
+
+        self._conn.execute(
+            "INSERT INTO shared_links"
+            " (uuid, watch_id, trip_id, created_by, expires_at, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (link_uuid, watch_id, trip_id, user_id, expires_at, now.isoformat()),
+        )
+        self._conn.commit()
+        return SharedLink(
+            uuid=link_uuid,
+            watch_id=watch_id,
+            trip_id=trip_id,
+            created_by=user_id,
+            expires_at=expires_at,
+            created_at=now.isoformat(),
+        )
+
+    def get_shared_link(self, uuid: str) -> SharedLink | None:
+        row = self._conn.execute(
+            "SELECT * FROM shared_links WHERE uuid=?", (uuid,),
+        ).fetchone()
+        if not row:
+            return None
+        return SharedLink(
+            id=row["id"],
+            uuid=row["uuid"],
+            watch_id=row["watch_id"],
+            trip_id=row["trip_id"],
+            created_by=row["created_by"],
+            expires_at=row["expires_at"],
+            revoked=bool(row["revoked"]),
+            created_at=row["created_at"],
+        )
+
+    def revoke_shared_link(self, uuid: str, user_id: int) -> bool:
+        cursor = self._conn.execute(
+            "UPDATE shared_links SET revoked=1"
+            " WHERE uuid=? AND created_by=?",
+            (uuid, user_id),
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    def cleanup_expired_links(self) -> int:
+        now = datetime.now().isoformat()
+        cursor = self._conn.execute(
+            "DELETE FROM shared_links WHERE expires_at < ?", (now,),
+        )
+        self._conn.commit()
+        return cursor.rowcount

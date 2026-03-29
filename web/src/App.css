@@ -241,6 +241,15 @@ header h1 {
   color: var(--accent);
 }
 
+.wordmark-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.wordmark-link:hover {
+  opacity: 0.85;
+}
+
 /* Wordmark sits where h1 was — same vertical rhythm */
 header .wordmark {
   display: block;
@@ -360,6 +369,10 @@ header p {
   font-weight: var(--weight-normal);
   color: var(--text-light);
   margin-top: 0.1rem;
+}
+
+.trip-type-btn.active .trip-type-hint {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 /* ─── Date quick presets ──────────────────────────────────────────── */
@@ -2056,7 +2069,7 @@ header p {
 }
 
 .prefs-toggle {
-  display: flex;
+  flex-direction: row;
   align-items: center;
   gap: var(--space-2);
   font-size: var(--text-sm);
@@ -2066,7 +2079,11 @@ header p {
 }
 
 .prefs-toggle input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
   margin: 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
 }
 
 /* ─── Recent Searches ─────────────────────────────────────────────── */
@@ -2692,4 +2709,396 @@ a.header-btn {
 .result-card.card-focused {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ─── Trips ───────────────────────────────────────────────────────── */
+
+.trips-page,
+.trip-detail {
+  max-width: var(--max-w-app);
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-3);
+}
+
+.trip-create-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.trip-name-input {
+  flex: 1;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.trip-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.trip-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
+  background: var(--bg-card);
+  transition: box-shadow var(--transition-fast);
+}
+
+.trip-list-item:hover {
+  box-shadow: var(--shadow-card);
+}
+
+.trip-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-decoration: none;
+  color: var(--text);
+  flex: 1;
+}
+
+.trip-name {
+  font-weight: var(--weight-semi);
+  font-size: var(--text-base);
+}
+
+.trip-meta {
+  font-size: var(--text-xs);
+  color: var(--text-light);
+}
+
+.trip-delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+  font-size: var(--text-lg);
+  padding: var(--space-1);
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+
+.trip-delete-btn:hover {
+  color: var(--error);
+}
+
+.trips-empty,
+.trips-loading {
+  color: var(--text-light);
+  font-size: var(--text-sm);
+}
+
+.trip-detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.trip-back-link {
+  font-size: var(--text-sm);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.trip-detail-title {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.trip-edit-btn {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.trip-edit-name {
+  display: flex;
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.trip-campground-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.trip-campground-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
+  background: var(--bg-card);
+}
+
+.trip-campground-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trip-campground-name {
+  font-weight: var(--weight-medium);
+}
+
+.trip-remove-btn {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+  font-size: var(--text-lg);
+  padding: var(--space-1);
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+
+.trip-remove-btn:hover {
+  color: var(--error);
+}
+
+/* SaveToTripButton */
+
+.save-to-trip-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.save-to-trip-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.save-to-trip-btn:hover {
+  background: var(--bg);
+}
+
+.save-to-trip-saved {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}
+
+.save-to-trip-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-overlay);
+  padding: var(--space-2);
+  z-index: var(--z-overlay);
+  min-width: 200px;
+}
+
+.save-to-trip-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-2);
+}
+
+.save-to-trip-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-sm);
+  transition: background var(--transition-fast);
+}
+
+.save-to-trip-list button:hover {
+  background: var(--bg);
+}
+
+.save-to-trip-create {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.save-to-trip-create input {
+  flex: 1;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.save-to-trip-create button {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  cursor: pointer;
+}
+
+/* ─── Shared button styles ────────────────────────────────────────── */
+
+.btn-primary {
+  padding: var(--space-2) var(--space-4);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semi);
+  cursor: pointer;
+  transition: background var(--transition-base);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-primary:disabled {
+  background: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  color: var(--text-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.btn-secondary:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+/* ─── Onboarding Modal ────────────────────────────────────────────── */
+
+.onboarding-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-overlay);
+  max-width: var(--max-w-modal);
+  width: 90vw;
+  padding: var(--space-5);
+  z-index: var(--z-modal);
+}
+
+.onboarding-header {
+  text-align: center;
+  margin-bottom: var(--space-4);
+}
+
+.onboarding-header h2 {
+  margin: 0 0 var(--space-1);
+}
+
+.onboarding-subtitle {
+  color: var(--text-light);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.onboarding-step {
+  display: inline-block;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-light);
+}
+
+.onboarding-label {
+  display: block;
+  font-weight: var(--weight-medium);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-1);
+}
+
+.onboarding-input {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+
+.onboarding-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.onboarding-tag {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.onboarding-tag:hover {
+  border-color: var(--accent);
+}
+
+.onboarding-tag.selected {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+
+.onboarding-tag-count {
+  font-size: var(--text-xs);
+  color: var(--text-light);
+  text-align: center;
+  margin-bottom: var(--space-3);
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }

@@ -63,7 +63,7 @@ export function ShortcutHelpModal({
       >
         <div className="watch-panel-header">
           <h2>Keyboard shortcuts</h2>
-          <button className="watch-close" onClick={onClose} ref={closeRef}>
+          <button className="watch-close" onClick={onClose} ref={closeRef} aria-label="Close">
             &times;
           </button>
         </div>
