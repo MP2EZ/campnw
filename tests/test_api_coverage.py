@@ -245,7 +245,9 @@ class TestPollStatus:
         resp = api_client.get("/api/poll-status")
         data = resp.json()
         assert data["last_poll"] == "2026-03-28T12:00:00"
-        assert data["active_watches"] == 5
+        # active_watches is sourced from DB (not in-memory state);
+        # fresh test user has no watches so count is 0
+        assert data["active_watches"] == 0
 
 
 # ---------------------------------------------------------------------------

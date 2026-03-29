@@ -197,6 +197,8 @@ async def lifespan(app: FastAPI):
             id="watch_poller_t0",
             max_instances=1,
             coalesce=True,
+            # Fire immediately on startup so watches don't wait 15 min
+            next_run_time=datetime.now(),
         )
         scheduler.add_job(
             partial(_poll_tranche, tranche=1),
