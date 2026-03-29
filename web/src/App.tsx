@@ -376,6 +376,12 @@ function SearchForm({
             <option value="portland">Portland</option>
             <option value="spokane">Spokane</option>
             <option value="bellingham">Bellingham</option>
+            <option value="bend">Bend, OR</option>
+            <option value="bozeman">Bozeman, MT</option>
+            <option value="missoula">Missoula, MT</option>
+            <option value="jackson">Jackson, WY</option>
+            <option value="sacramento">Sacramento, CA</option>
+            <option value="reno">Reno, NV</option>
             <option value="moscow">Moscow, ID</option>
           </select>
         </label>
@@ -426,6 +432,9 @@ function SearchForm({
               <option value="WA">WA</option>
               <option value="OR">OR</option>
               <option value="ID">ID</option>
+              <option value="MT">MT</option>
+              <option value="WY">WY</option>
+              <option value="CA">CA</option>
             </select>
           </label>
           <label>

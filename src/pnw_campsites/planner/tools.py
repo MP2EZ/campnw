@@ -37,7 +37,7 @@ TOOLS: list[dict] = [
                 },
                 "state": {
                     "type": "string",
-                    "enum": ["WA", "OR", "ID"],
+                    "enum": ["WA", "OR", "ID", "MT", "WY", "CA"],
                     "description": "State filter",
                 },
                 "nights": {

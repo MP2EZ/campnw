@@ -44,14 +44,17 @@ EXCLUDE_PATTERNS = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
-# PNW bounding box — filter out facilities clearly outside the region
-# Rough bounds: WA/OR/ID plus a small buffer
-PNW_BOUNDS = {
-    "min_lat": 41.5,   # southern OR border
+# Bounding box — filter out facilities clearly outside the coverage area
+# Covers WA/OR/ID + MT/WY/NorCal
+REGION_BOUNDS = {
+    "min_lat": 37.5,   # NorCal (includes Yosemite at ~37.7N)
     "max_lat": 49.1,   # northern WA border
     "min_lon": -125.0,  # Pacific coast
-    "max_lon": -110.5,  # eastern ID border
+    "max_lon": -104.0,  # eastern WY border
 }
+
+# NorCal latitude cutoff — CA campgrounds south of this are excluded
+NORCAL_MIN_LAT = 37.5
 
 
 def is_campground(facility: RIDBFacility) -> bool:
@@ -68,10 +71,12 @@ def is_campground(facility: RIDBFacility) -> bool:
     if facility.latitude == 0.0 and facility.longitude == 0.0:
         return False
 
-    # Must be within PNW bounding box (RIDB returns some out-of-state results)
+    # Must be within coverage bounding box
     if not (
-        PNW_BOUNDS["min_lat"] <= facility.latitude <= PNW_BOUNDS["max_lat"]
-        and PNW_BOUNDS["min_lon"] <= facility.longitude <= PNW_BOUNDS["max_lon"]
+        REGION_BOUNDS["min_lat"] <= facility.latitude <= REGION_BOUNDS["max_lat"]
+        and REGION_BOUNDS["min_lon"]
+        <= facility.longitude
+        <= REGION_BOUNDS["max_lon"]
     ):
         return False
 
@@ -115,11 +120,14 @@ async def seed(states: list[str], dry_run: bool = False) -> None:
 
         for state in states:
             facilities = await fetch_state_facilities(client, state)
-            campgrounds = [
-                facility_to_campground(f, state)
-                for f in facilities
-                if is_campground(f)
-            ]
+            campgrounds = []
+            for f in facilities:
+                if not is_campground(f):
+                    continue
+                # NorCal filter: exclude southern CA campgrounds
+                if state == "CA" and f.latitude < NORCAL_MIN_LAT:
+                    continue
+                campgrounds.append(facility_to_campground(f, state))
             excluded = len(facilities) - len(campgrounds)
             print(f"  {state}: {len(campgrounds)} campgrounds ({excluded} filtered out)")
             all_campgrounds.extend(campgrounds)
@@ -142,8 +150,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Seed campground registry from RIDB")
     parser.add_argument(
         "--state",
-        choices=["WA", "OR", "ID"],
-        help="Seed a single state (default: all 3)",
+        choices=["WA", "OR", "ID", "MT", "WY", "CA"],
+        help="Seed a single state (default: all)",
     )
     parser.add_argument(
         "--dry-run",
@@ -152,7 +160,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    states = [args.state] if args.state else ["WA", "OR", "ID"]
+    states = [args.state] if args.state else ["WA", "OR", "ID", "MT", "WY", "CA"]
     asyncio.run(seed(states, dry_run=args.dry_run))
 
 
