@@ -214,13 +214,39 @@ async def poll_all(
         tranche: If set (0 or 1), only poll watches where id % 2 == tranche.
                  Used to split polling into two offset cycles.
     """
+    from pnw_campsites.monitor.expand import expand_template
+
     watches = watch_db.list_watches(enabled_only=True)
     if tranche is not None:
         watches = [w for w in watches if w.id % 2 == tranche]
 
+    # Expand template watches into virtual single watches
+    expanded: list[Watch] = []
+    for watch in watches:
+        if watch.watch_type == "template" and watch.search_params and registry:
+            facility_ids = expand_template(watch.search_params, registry)
+            for fid in facility_ids:
+                virtual = Watch(
+                    id=watch.id,
+                    facility_id=fid,
+                    name=watch.name,
+                    start_date=watch.start_date,
+                    end_date=watch.end_date,
+                    min_nights=watch.min_nights,
+                    days_of_week=watch.days_of_week,
+                    notify_topic=watch.notify_topic,
+                    user_id=watch.user_id,
+                    notification_channel=watch.notification_channel,
+                    enabled=True,
+                    watch_type="single",  # poll as single
+                )
+                expanded.append(virtual)
+        else:
+            expanded.append(watch)
+
     # Group watches by facility_id to share availability data
     by_facility: dict[str, list[Watch]] = defaultdict(list)
-    for watch in watches:
+    for watch in expanded:
         by_facility[watch.facility_id].append(watch)
 
     results: list[PollResult] = []

@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/watches", tags=["watches"])
 
 
 class WatchRequest(BaseModel):
-    facility_id: str = Field(max_length=30, pattern=r"^[-\w]{1,30}$")
+    facility_id: str = Field(default="", max_length=30, pattern=r"^[-\w]{0,30}$")
     name: str = Field(default="", max_length=200)
     start_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     end_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
@@ -33,6 +33,8 @@ class WatchRequest(BaseModel):
     notification_channel: str = Field(
         default="", max_length=20, pattern=r"^(ntfy|pushover|web_push|)?$"
     )
+    watch_type: str = Field(default="single", pattern=r"^(single|template)$")
+    search_params: dict | None = None
 
 
 class WatchResponse(BaseModel):
@@ -47,6 +49,8 @@ class WatchResponse(BaseModel):
     notification_channel: str
     enabled: bool
     created_at: str
+    watch_type: str = "single"
+    search_params: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -69,16 +73,33 @@ def _owns_watch(watch: Watch, user_id: int | None, session_token: str) -> bool:
 
 @router.post("", response_model=WatchResponse)
 async def create_watch(body: WatchRequest, request: Request, response: Response):
+    import json as _json
+
     db = get_watch_db()
     registry = get_registry()
     user_id = get_current_user(request)
     token = get_session_token(request, response) if not user_id else ""
 
+    # Validate: template needs search_params, single needs facility_id
+    if body.watch_type == "template":
+        if not body.search_params:
+            raise HTTPException(
+                status_code=422,
+                detail="Template watches require search_params",
+            )
+    elif not body.facility_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Single watches require facility_id",
+        )
+
     # Look up name from registry if not provided
     name = body.name
-    if not name:
+    if not name and body.facility_id:
         cg = registry.get_by_facility_id(body.facility_id)
         name = cg.name if cg else f"Facility {body.facility_id}"
+    if not name and body.watch_type == "template":
+        name = "Search pattern watch"
 
     watch = Watch(
         facility_id=body.facility_id,
@@ -91,24 +112,33 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         notification_channel=body.notification_channel,
         session_token=token,
         user_id=user_id,
+        watch_type=body.watch_type,
+        search_params=_json.dumps(body.search_params) if body.search_params else "",
     )
-    if db.has_duplicate_watch(watch):
+    if body.watch_type == "single" and db.has_duplicate_watch(watch):
         raise HTTPException(
             status_code=409, detail="Watch already exists",
         )
     saved = db.add_watch(watch)
+    return _watch_to_response(saved)
+
+
+def _watch_to_response(w: Watch) -> WatchResponse:
+    import json as _json
     return WatchResponse(
-        id=saved.id,
-        facility_id=saved.facility_id,
-        name=saved.name,
-        start_date=saved.start_date,
-        end_date=saved.end_date,
-        min_nights=saved.min_nights,
-        days_of_week=saved.days_of_week,
-        notify_topic=saved.notify_topic,
-        notification_channel=saved.notification_channel,
-        enabled=saved.enabled,
-        created_at=saved.created_at,
+        id=w.id,
+        facility_id=w.facility_id,
+        name=w.name,
+        start_date=w.start_date,
+        end_date=w.end_date,
+        min_nights=w.min_nights,
+        days_of_week=w.days_of_week,
+        notify_topic=w.notify_topic,
+        notification_channel=w.notification_channel,
+        enabled=w.enabled,
+        created_at=w.created_at,
+        watch_type=w.watch_type,
+        search_params=_json.loads(w.search_params) if w.search_params else None,
     )
 
 
@@ -121,22 +151,7 @@ async def list_watches(request: Request, response: Response):
     else:
         token = get_session_token(request, response)
         watches = db.list_watches_by_session(token)
-    return [
-        WatchResponse(
-            id=w.id,
-            facility_id=w.facility_id,
-            name=w.name,
-            start_date=w.start_date,
-            end_date=w.end_date,
-            min_nights=w.min_nights,
-            days_of_week=w.days_of_week,
-            notify_topic=w.notify_topic,
-            notification_channel=w.notification_channel,
-            enabled=w.enabled,
-            created_at=w.created_at,
-        )
-        for w in watches
-    ]
+    return [_watch_to_response(w) for w in watches]
 
 
 @router.delete("/{watch_id}")

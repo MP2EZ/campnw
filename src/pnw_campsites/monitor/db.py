@@ -58,6 +58,8 @@ class Watch:
     enabled: bool = True
     created_at: str = ""
     trip_id: int | None = None
+    watch_type: str = "single"  # "single" or "template"
+    search_params: str = ""  # JSON search pattern for template watches
 
 
 @dataclass
@@ -338,6 +340,22 @@ class WatchDB:
             );
             CREATE INDEX IF NOT EXISTS idx_shared_uuid ON shared_links(uuid);
         """)
+        self._conn.commit()
+
+        # v1.2: template watches
+        watch_cols3 = [
+            r[1] for r in self._conn.execute("PRAGMA table_info(watches)")
+        ]
+        if "watch_type" not in watch_cols3:
+            self._conn.execute(
+                "ALTER TABLE watches ADD COLUMN"
+                " watch_type TEXT DEFAULT 'single'"
+            )
+        if "search_params" not in watch_cols3:
+            self._conn.execute(
+                "ALTER TABLE watches ADD COLUMN"
+                " search_params TEXT DEFAULT ''"
+            )
         self._conn.commit()
 
     # -------------------------------------------------------------------
@@ -740,8 +758,9 @@ class WatchDB:
             INSERT INTO watches
                 (facility_id, name, start_date, end_date, min_nights,
                  days_of_week, notify_topic, notification_channel,
-                 session_token, user_id, enabled, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 session_token, user_id, enabled, created_at,
+                 watch_type, search_params)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 watch.facility_id,
@@ -756,6 +775,8 @@ class WatchDB:
                 watch.user_id,
                 int(watch.enabled),
                 now,
+                watch.watch_type,
+                watch.search_params,
             ),
         )
         self._conn.commit()
