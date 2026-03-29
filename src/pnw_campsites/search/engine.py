@@ -631,7 +631,7 @@ class SearchEngine:
     async def _suggest_alternative_dates(
         self, query: SearchQuery, max_suggestions: int = 3,
     ) -> list[DateSuggestion]:
-        """Probe nearby date windows for availability."""
+        """Probe nearby date windows for availability (in parallel)."""
         if not query.start_date or not query.end_date:
             return []
 
@@ -642,15 +642,14 @@ class SearchEngine:
             (-7, "1 week earlier"),
         ]
 
-        suggestions: list[DateSuggestion] = []
+        # Build all valid probe queries upfront
+        probes: list[tuple[date, date, str, SearchQuery]] = []
         for delta_days, reason in shifts:
             shifted_start = query.start_date + timedelta(days=delta_days)
             shifted_end = shifted_start + timedelta(days=span)
-            # Don't suggest dates in the past
             if shifted_start < date.today():
                 continue
-
-            shifted_query = SearchQuery(
+            probes.append((shifted_start, shifted_end, reason, SearchQuery(
                 start_date=shifted_start,
                 end_date=shifted_end,
                 state=query.state,
@@ -665,29 +664,36 @@ class SearchEngine:
                 max_people=query.max_people,
                 days_of_week=query.days_of_week,
                 max_campgrounds=5,
-            )
-            shifted_results = await self.search(
-                shifted_query, _skip_diagnosis=True,
-            )
-            if shifted_results.campgrounds_with_availability > 0:
+            )))
+
+        if not probes:
+            return []
+
+        # Run all probes in parallel
+        probe_results = await asyncio.gather(
+            *(self.search(q, _skip_diagnosis=True) for _, _, _, q in probes)
+        )
+
+        suggestions: list[DateSuggestion] = []
+        for (shifted_start, shifted_end, reason, _), result in zip(
+            probes, probe_results, strict=True,
+        ):
+            if result.campgrounds_with_availability > 0:
                 suggestions.append(DateSuggestion(
                     start_date=shifted_start.isoformat(),
                     end_date=shifted_end.isoformat(),
                     campgrounds_with_availability=(
-                        shifted_results.campgrounds_with_availability
+                        result.campgrounds_with_availability
                     ),
                     reason=reason,
                 ))
-            if len(suggestions) >= max_suggestions:
-                break
 
-        # Sort by proximity to original dates
         suggestions.sort(
             key=lambda s: abs(
                 (date.fromisoformat(s.start_date) - query.start_date).days
             ),
         )
-        return suggestions
+        return suggestions[:max_suggestions]
 
     def _suggest_similar_campgrounds(
         self, query: SearchQuery,
