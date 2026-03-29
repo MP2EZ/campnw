@@ -159,8 +159,8 @@ class TestFormatPollResult:
 
         formatted = format_poll_result(result)
 
-        assert "New availability at Ohanapecosh Campground!" in formatted
-        assert "1 site(s) with new dates:" in formatted
+        assert "1 site open at Ohanapecosh Campground" in formatted
+        assert "Site A001" in formatted
         assert "https://www.recreation.gov/camping/campgrounds/232465" in formatted
         assert "startDate=2026-06-01" in formatted
 
@@ -189,7 +189,7 @@ class TestFormatPollResult:
 
         formatted = format_poll_result(result)
 
-        assert "15 site(s) with new dates:" in formatted
+        assert "15 sites open at" in formatted
         assert "Site 0" in formatted
         assert "Site 9" in formatted
         assert "... and 5 more sites" in formatted
@@ -208,8 +208,7 @@ class TestFormatPollResult:
 
         formatted = format_poll_result(result)
 
-        assert "New availability at Test Camp!" in formatted
-        assert "0 site(s) with new dates:" in formatted
+        assert "0 sites open at Test Camp" in formatted
         assert "https://www.recreation.gov" in formatted
 
     def test_format_poll_result_includes_booking_url_with_date(self):
@@ -251,10 +250,9 @@ class TestFormatPollResult:
         formatted = format_poll_result(result)
         lines = formatted.split("\n")
 
-        # Header, count, blank, site, blank, URL
-        assert len(lines) >= 5
-        assert "New availability" in lines[0]
-        assert "site(s)" in lines[1]
+        # Header, blank, site, blank, URL
+        assert len(lines) >= 4
+        assert "open at Test Camp" in lines[0]
         assert "Book:" in lines[-1]
 
 
@@ -375,7 +373,7 @@ class TestNotifyNtfy:
             body = request.content.decode() if isinstance(
                 request.content, bytes
             ) else request.content
-            assert "New availability at Test Camp" in body
+            assert "open at Test Camp" in body
             assert "Site A001" in body
 
     @pytest.mark.asyncio
@@ -421,7 +419,7 @@ class TestNotifyNtfy:
             body = request.content.decode() if isinstance(
                 request.content, bytes
             ) else request.content
-            assert "2 site(s) with new dates" in body
+            assert "2 sites open at Test Camp" in body
             assert "Site A" in body
             assert "Site B" in body
 
@@ -520,7 +518,7 @@ class TestContextualFormatting:
         formatted = format_poll_result(result)
 
         assert "Popular weekend spot just opened!" in formatted
-        assert "New availability at Ohanapecosh Campground!" not in formatted
+        assert "1 site open at Ohanapecosh Campground" not in formatted
 
     def test_format_poll_result_without_context_message(self):
         """When context_message is empty, uses standard formatting."""
@@ -546,10 +544,10 @@ class TestContextualFormatting:
 
         formatted = format_poll_result(result)
 
-        assert "New availability at Ohanapecosh Campground!" in formatted
+        assert "1 site open at Ohanapecosh Campground" in formatted
 
-    def test_format_poll_result_urgency_3_includes_fire_emoji(self):
-        """Urgency 3 includes fire emoji prefix when context_message is set."""
+    def test_format_poll_result_urgency_3_no_emoji(self):
+        """Urgency 3 no longer uses fire emoji — data speaks, not emoji."""
         watch = Watch(
             id=1,
             facility_id="232465",
@@ -572,8 +570,8 @@ class TestContextualFormatting:
 
         formatted = format_poll_result(result)
 
-        # Should include fire emoji (U+1F525)
-        assert "\U0001f525" in formatted
+        # No emoji prefix — brand voice is data-driven, not emoji-driven
+        assert "\U0001f525" not in formatted
         assert "Peak weekend availability opened!" in formatted
 
     def test_format_poll_result_urgency_1_no_prefix(self):
@@ -671,7 +669,7 @@ class TestContextualFormatting:
 
         assert "First change context" in formatted
         assert "Second change context" not in formatted
-        assert "\U0001f525" in formatted  # Uses first change urgency (3)
+        assert "\U0001f525" not in formatted  # No emoji — brand voice
 
 
 class TestNotifyPushover:

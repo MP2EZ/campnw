@@ -35,7 +35,7 @@ export function UserMenu() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "campnw-data.json";
+    a.download = "campable-data.json";
     a.click();
     URL.revokeObjectURL(url);
     setOpen(false);

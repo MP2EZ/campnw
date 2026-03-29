@@ -72,7 +72,7 @@ def format_digest(analytics: dict) -> str:
         return "No searches recorded this week."
 
     lines = [
-        f"campnw Weekly Digest ({analytics['period_days']}-day window)",
+        f"campable Weekly Digest ({analytics['period_days']}-day window)",
         f"{'=' * 40}",
         f"Total searches: {analytics['total_searches']}",
         f"Zero-result rate: {analytics['zero_result_rate']}%"

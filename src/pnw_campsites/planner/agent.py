@@ -14,7 +14,7 @@ from .tools import TOOLS, execute_tool
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT_TEMPLATE = """\
-You are campnw's trip planner for the Pacific Northwest (WA, OR, ID).
+You are campable's trip planner for the Pacific Northwest and beyond (WA, OR, ID, MT, WY, CA).
 Today is {today} ({weekday}).
 
 CORE PRINCIPLE: Act, don't ask. Resolve what you can and search immediately.
