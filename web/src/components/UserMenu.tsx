@@ -130,7 +130,7 @@ function PreferencesForm({
   onSave,
   onCancel,
 }: {
-  user: { display_name: string; home_base: string; default_state: string; default_nights: number; default_from: string; recommendations_enabled?: boolean };
+  user: { display_name: string; home_base: string; default_state: string; default_nights: number; recommendations_enabled?: boolean };
   onSave: (updates: Record<string, string | number | boolean>) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -138,7 +138,6 @@ function PreferencesForm({
   const [homeBase, setHomeBase] = useState(user.home_base);
   const [defaultState, setDefaultState] = useState(user.default_state);
   const [defaultNights, setDefaultNights] = useState(user.default_nights);
-  const [defaultFrom, setDefaultFrom] = useState(user.default_from);
   const [recsEnabled, setRecsEnabled] = useState(user.recommendations_enabled ?? false);
   const [saving, setSaving] = useState(false);
 
@@ -150,7 +149,6 @@ function PreferencesForm({
       home_base: homeBase,
       default_state: defaultState,
       default_nights: defaultNights,
-      default_from: defaultFrom,
       recommendations_enabled: recsEnabled,
     });
     setSaving(false);
@@ -199,34 +197,20 @@ function PreferencesForm({
           max={14}
         />
       </label>
-      <label>
-        Drive from
-        <select
-          value={defaultFrom}
-          onChange={(e) => setDefaultFrom(e.target.value)}
-        >
-          <option value="">--</option>
-          <option value="seattle">Seattle</option>
-          <option value="bellevue">Bellevue</option>
-          <option value="portland">Portland</option>
-          <option value="spokane">Spokane</option>
-          <option value="bellingham">Bellingham</option>
-          <option value="moscow">Moscow, ID</option>
-        </select>
-      </label>
       <label className="prefs-toggle">
+        <span>Personalized recommendations</span>
         <input
           type="checkbox"
           checked={recsEnabled}
           onChange={(e) => setRecsEnabled(e.target.checked)}
         />
-        Show personalized recommendations
+        <span className="toggle-track" />
       </label>
       <div className="prefs-actions">
-        <button type="submit" className="search-btn" disabled={saving}>
+        <button type="submit" className="btn-primary" disabled={saving}>
           {saving ? "..." : "Save"}
         </button>
-        <button type="button" className="auth-switch-btn" onClick={onCancel}>
+        <button type="button" className="btn-secondary" onClick={onCancel}>
           Cancel
         </button>
       </div>
