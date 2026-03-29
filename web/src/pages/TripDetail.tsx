@@ -71,8 +71,9 @@ export default function TripDetail() {
 
   return (
     <div className="trip-detail">
+      <Link to="/trips" className="trip-back-link">&larr; All trips</Link>
+
       <div className="trip-detail-header">
-        <Link to="/trips" className="trip-back-link">&larr; All trips</Link>
         {editing ? (
           <div className="trip-edit-name">
             <input
@@ -88,8 +89,8 @@ export default function TripDetail() {
             <button onClick={() => setEditing(false)} className="btn-secondary">Cancel</button>
           </div>
         ) : (
-          <h2 className="trip-detail-title">
-            {trip.name}
+          <>
+            <h2 className="trip-detail-title">{trip.name}</h2>
             <button
               className="trip-edit-btn"
               onClick={() => { setEditName(trip.name); setEditing(true); }}
@@ -97,11 +98,11 @@ export default function TripDetail() {
             >
               Edit
             </button>
-          </h2>
+            <button className="trip-delete-btn" onClick={handleDelete} title="Delete trip">
+              Delete trip
+            </button>
+          </>
         )}
-        <button className="trip-delete-btn" onClick={handleDelete} title="Delete trip">
-          Delete trip
-        </button>
       </div>
 
       {trip.notes && <p className="trip-notes">{trip.notes}</p>}
