@@ -465,6 +465,65 @@ async def _generate_search_summary(
         return None
 
 
+async def _enhance_rec_reasons(
+    results: list[dict],
+    affinities: dict,
+) -> list[str] | None:
+    """Generate personalized recommendation reasons via Haiku batch call."""
+    import asyncio
+    import os
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return None
+
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+
+    top_tags = sorted(
+        affinities["tags"].items(), key=lambda x: -x[1],
+    )[:5]
+    top_states = sorted(
+        affinities["states"].items(), key=lambda x: -x[1],
+    )[:3]
+
+    recs_summary = json.dumps([
+        {"name": r["name"], "state": r["state"], "tags": r["tags"][:3],
+         "vibe": r.get("vibe", "")[:60]}
+        for r in results
+    ])
+
+    prompt = (
+        "Generate a brief personalized recommendation reason (1 sentence, "
+        "max 80 chars) for each campground. The user tends to search for "
+        f"{', '.join(t for t, _ in top_tags)} in "
+        f"{', '.join(s for s, _ in top_states)}.\n\n"
+        f"Campgrounds:\n{recs_summary}\n\n"
+        "Return a JSON array of strings, one reason per campground, same "
+        "order. Reference specific campground attributes. No preamble."
+    )
+
+    try:
+        response = await asyncio.wait_for(
+            client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=400,
+                messages=[{"role": "user", "content": prompt}],
+            ),
+            timeout=2.0,
+        )
+        text = response.content[0].text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        reasons = json.loads(text)
+        if isinstance(reasons, list) and len(reasons) == len(results):
+            return [r[:80] for r in reasons]
+    except Exception:
+        pass
+    return None
+
+
 def _build_availability_url(
     facility_id: str,
     booking_system: BookingSystem,
@@ -1239,6 +1298,18 @@ async def recommendations(request: Request):
     # Strip internal score from response
     for r in results:
         del r["score"]
+
+    # Enhance reasons with LLM if user has enough search history
+    if results and len(affinities["tags"]) >= 3:
+        try:
+            enhanced = await _enhance_rec_reasons(results, affinities)
+            if enhanced:
+                for r, reason in zip(results, enhanced, strict=False):
+                    if reason:
+                        r["reason"] = reason
+        except Exception:
+            pass  # Keep template reasons on failure
+
     return results
 
 
