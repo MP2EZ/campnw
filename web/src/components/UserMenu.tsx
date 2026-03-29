@@ -215,12 +215,13 @@ function PreferencesForm({
         </select>
       </label>
       <label className="prefs-toggle">
+        <span>Show personalized recommendations</span>
         <input
           type="checkbox"
           checked={recsEnabled}
           onChange={(e) => setRecsEnabled(e.target.checked)}
         />
-        Show personalized recommendations
+        <span className="toggle-track" />
       </label>
       <div className="prefs-actions">
         <button type="submit" className="btn-primary" disabled={saving}>
