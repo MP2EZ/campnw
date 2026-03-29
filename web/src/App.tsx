@@ -446,7 +446,7 @@ function SearchForm({
         {[
           "lakeside", "riverside", "beach", "old-growth",
           "pet-friendly", "rv-friendly", "tent-only",
-          "trails", "swimming", "shade",
+          "trails", "swimming", "shade", "campfire",
         ].map((tag) => (
           <button
             key={tag}

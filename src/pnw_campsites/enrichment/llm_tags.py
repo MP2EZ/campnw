@@ -10,37 +10,52 @@ from pydantic import BaseModel, field_validator
 _logger = logging.getLogger(__name__)
 
 VALID_TAGS = [
+    # Location / setting
     "lakeside",
     "riverside",
-    "beach",
-    "oceanfront",
+    "beach",       # includes former oceanfront
     "old-growth",
     "forest",
     "alpine",
-    "meadow",
     "desert",
-    "pet-friendly",
+    "backcountry",
+    "remote",
+    # Accommodation type
     "rv-friendly",
     "tent-only",
     "walk-in",
+    "pull-through",
+    "group-sites",
+    "dispersed",
+    # Activities
     "trails",
     "swimming",
     "fishing",
     "boating",
+    "boat-launch",
+    "equestrian",  # includes former horse-camp
     "climbing",
-    "shade",
-    "scenic",
-    "remote",
+    "winter-camping",
+    # Amenities / features
+    "pet-friendly",
     "kid-friendly",
+    "accessible",
+    "campfire",
+    "shade",
     "hot-springs",
     "waterfall",
-    "glacier",
-    "volcanic",
-    "bear-box",
-    "group-sites",
-    "horse-camp",
-    "accessible",
 ]
+
+# Tags renamed/merged — map old names to new canonical names
+_TAG_RENAMES = {
+    "oceanfront": "beach",
+    "horse-camp": "equestrian",
+    "scenic": None,    # removed: too generic
+    "glacier": None,   # removed: zero usage
+    "volcanic": None,  # removed: 1 usage, too specific
+    "bear-box": None,  # removed: safety feature, not a search criterion
+    "meadow": None,    # removed: 2 usages, too generic
+}
 
 
 class TagExtractionResult(BaseModel):
@@ -49,7 +64,14 @@ class TagExtractionResult(BaseModel):
     @field_validator("tags")
     @classmethod
     def validate_tags(cls, v):
-        return [t for t in v if t in VALID_TAGS]
+        result = []
+        for t in v:
+            if t in VALID_TAGS:
+                result.append(t)
+            elif t in _TAG_RENAMES and _TAG_RENAMES[t] is not None:
+                result.append(_TAG_RENAMES[t])
+            # else: drop removed/unknown tags
+        return list(dict.fromkeys(result))  # dedupe preserving order
 
 
 async def extract_tags(
