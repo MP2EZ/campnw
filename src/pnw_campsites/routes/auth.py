@@ -54,6 +54,9 @@ class UpdateProfileRequest(BaseModel):
     default_state: str | None = Field(default=None, max_length=2)
     default_nights: int | None = Field(default=None, ge=1, le=14)
     default_from: str | None = Field(default=None, max_length=200)
+    recommendations_enabled: bool | None = None
+    preferred_tags: list[str] | None = None
+    onboarding_complete: bool | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -86,12 +89,15 @@ def _check_auth_rate_limit(request: Request) -> None:
 
 
 def _set_auth_cookie(response: Response, user_id: int) -> None:
+    import os
+
     token = create_jwt(user_id)
+    is_prod = bool(os.getenv("FLY_APP_NAME"))
     response.set_cookie(
         TOKEN_COOKIE, token,
         max_age=TOKEN_MAX_AGE,
         httponly=True,
-        secure=True,
+        secure=is_prod,
         samesite="lax",
     )
 
@@ -106,6 +112,8 @@ def _user_to_dict(user: User) -> dict:
         "default_nights": user.default_nights,
         "default_from": user.default_from,
         "recommendations_enabled": user.recommendations_enabled,
+        "preferred_tags": user.preferred_tags or [],
+        "onboarding_complete": user.onboarding_complete,
     }
 
 

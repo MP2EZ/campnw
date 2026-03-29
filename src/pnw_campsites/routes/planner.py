@@ -12,8 +12,10 @@ from starlette.responses import Response
 from pnw_campsites.routes.deps import (
     SESSION_COOKIE,
     get_client_ip,
+    get_current_user,
     get_engine,
     get_registry,
+    get_watch_db,
 )
 
 router = APIRouter(prefix="/api/plan", tags=["planner"])
@@ -116,3 +118,96 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request):
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------------------
+# Save as Trip
+# ---------------------------------------------------------------------------
+
+
+class SaveTripRequest(BaseModel):
+    """Extract campgrounds from a planner conversation and save as a trip."""
+
+    messages: list[PlanMessage] = Field(..., min_length=1, max_length=50)
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+def _extract_campgrounds_from_messages(messages: list[dict]) -> list[dict]:
+    """Extract unique facility_ids from tool_call results in conversation."""
+    import json as _json
+
+    seen = set()
+    campgrounds = []
+    for msg in messages:
+        for tc in msg.get("tool_calls", []):
+            result_str = tc.get("result", "")
+            if not result_str:
+                continue
+            try:
+                result = _json.loads(result_str)
+            except (ValueError, TypeError):
+                continue
+            # search_campgrounds returns {"campgrounds": [...]}
+            for cg in result.get("campgrounds", []):
+                fid = cg.get("facility_id", "")
+                if fid and fid not in seen:
+                    seen.add(fid)
+                    campgrounds.append({
+                        "facility_id": fid,
+                        "name": cg.get("name", ""),
+                        "source": cg.get("booking_system", "recgov"),
+                    })
+            # check_availability / get_campground_detail return single facility
+            fid = result.get("facility_id", "")
+            if fid and fid not in seen:
+                seen.add(fid)
+                campgrounds.append({
+                    "facility_id": fid,
+                    "name": result.get("name", ""),
+                    "source": result.get("booking_system", "recgov"),
+                })
+    return campgrounds
+
+
+@router.post("/save-trip")
+async def save_plan_as_trip(body: SaveTripRequest, request: Request):
+    user_id = get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    db = get_watch_db()
+
+    # Extract campgrounds from tool results in conversation
+    msgs = [m.model_dump() for m in body.messages]
+    campgrounds = _extract_campgrounds_from_messages(msgs)
+
+    # Infer date range from messages (simple: find YYYY-MM-DD patterns)
+    import re
+    all_text = " ".join(m.get("content", "") for m in msgs)
+    date_matches = sorted(set(re.findall(r"\d{4}-\d{2}-\d{2}", all_text)))
+    start_date = date_matches[0] if date_matches else ""
+    end_date = date_matches[-1] if date_matches else ""
+
+    try:
+        trip = db.create_trip(
+            user_id, body.name,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+    import contextlib
+
+    for cg in campgrounds:
+        with contextlib.suppress(Exception):
+            db.add_campground_to_trip(
+                trip.id, cg["facility_id"], cg.get("source", "recgov"),
+                name=cg.get("name", ""),
+            )
+
+    return {
+        "trip_id": trip.id,
+        "name": trip.name,
+        "campground_count": len(campgrounds),
+    }
