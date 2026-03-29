@@ -1,7 +1,7 @@
-# campnw Roadmap: v0.2.1 to v1.0
+# Campable Roadmap: v0.2.1 to v1.2
 
 **Last updated:** March 2026
-**Current version:** v0.98 (deployed at campnw.palouselabs.com)
+**Current version:** v1.0 (deployed at campable.co)
 
 ---
 
@@ -23,9 +23,12 @@ v0.95   [SHIPPED]  Monetization        — Free/Pro tiers, subscription billing,
 v0.96   [SHIPPED]  Registry + Infra    — Registry expansion, bundle audit, Lighthouse CI
 v0.97   [SHIPPED]  Map + Power User    — Map view, keyboard shortcuts, lazy loading
 v0.98   [SHIPPED]  Quality Hardening   — WCAG AA contrast, focus styles, ErrorBoundary, CI a11y
-v0.99   ------->   Pre-launch Audit    — Perf, security, cross-browser, mobile responsive
-v1.0    ------->   campnw 1.0          — Personalized recs, final polish
-v1.1    ------->   Predictions+        — Availability predictions, anomaly alerts, post-mortems
+v0.99   [SHIPPED]  Pre-launch Audit    — Security headers, CSP, login rate limit, lazy loading, CVE CI
+v1.0    [SHIPPED]  campnw 1.0          — OR State Parks, recs, collapsible form, hamburger, polish
+v1.1    ------->   Better Search       — NL search, registry expansion (MT/WY/NorCal), AI summaries
+v1.15   ------->   Brand + Identity    — Logo, palette, voice, og:image, notification copy
+v1.2    ------->   Trips + Watches     — Trip object, template watches, sharing, onboarding
+v1.3    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
 Each milestone is a shippable increment with clear user value. Predictions+ deferred to v1.1 — data collection running since v0.5, quality improves with time.
@@ -650,57 +653,208 @@ Audit scope creep — this is a review milestone, not a rewrite. Fix issues foun
 ## v1.0 "campnw 1.0"
 
 ### Theme
-The capstone. Personalized recommendations turn accumulated search history and registry data into proactive suggestions. The v0.99 UX audit identified specific polish items that replace the generic "final polish pass" — these are the concrete improvements that elevate the product from functional tool to polished product.
+The capstone. Oregon State Parks via ReserveAmerica completes tri-state coverage. Personalized recommendations, collapsible search form, mobile hamburger menu, and UX polish across the board.
 
-### Features
+### Features — ALL SHIPPED
 
-| Feature | Effort | Description |
+| Feature | Status | Description |
 |---------|--------|-------------|
-| Personalized recommendations | L | Based on search history (tags, regions, date patterns) and watched campgrounds, surface "You might like" suggestions. Opt-in toggle in settings. Privacy-first: all computation server-side against user's own history. Renders as recommendation row above search results. |
-| Collapsible search form + scroll-to-results | M | After search, auto-scroll to results area. Collapse form to compact summary bar ("WA parks, Apr 11-May 11, 2 nights" + Edit button). Biggest single usability win — the form fills the entire viewport on both desktop and mobile today. |
-| Mobile hamburger menu | M | Consolidate Watchlist, theme toggle, and Sign in behind a compact menu icon on mobile (≤640px). Keep Search/Map/Plan as visible primary tabs. Frees ~30% of header horizontal space. |
-| Card expand/collapse animation | S | 200ms CSS height transition on result card expand/collapse. Cards currently snap open/closed. |
-| Jargon cleanup | S | "windows" → "openings" or "date ranges". Expand "FCFS" to "First-come, first-served" on first use with tooltip. Add result counts to source filter tabs: "Rec.gov (2) / WA Parks (14)". |
-| Loading skeleton | S | Shimmer/skeleton placeholder in results area while SSE results stream in. Currently blank. |
-| First-visit empty state | S | Illustration or prompt with suggested searches ("Start by searching for a weekend getaway"). Currently shows only the form with no guidance. |
-| Dark mode polish | S | Heat map levels 0-1 nearly indistinguishable — widen low-end color scale. Warning banner border (#4a3e20 on #21211e) barely visible. |
-| A11y completions | S | Add `<meta name="description">` for SEO. Sign-in modal close button `aria-label="Close"`. Heat map legend: add numeric context for colorblind users. |
-| Mobile result polish | S | Heat map: simplified view or larger cells at 375px. Expanded card availability rows: wrap date range + site count to separate lines at narrow widths. |
+| Oregon State Parks provider | DONE | ReserveAmerica provider (53 parks), `curl_cffi` WAF bypass, seed script, dynamic source filter buttons, SSE abort-and-restart support. |
+| Personalized recommendations | DONE | Search history affinity (tags, regions, date patterns). Opt-in toggle. Renders as recommendation row above search results. |
+| Collapsible search form + scroll-to-results | DONE | Auto-scroll to results, form collapses to compact summary bar with Edit button. |
+| Mobile hamburger menu | DONE | Watchlist, theme toggle, Sign in behind menu icon on mobile (≤640px). |
+| Card expand/collapse animation | DONE | CSS grid-template-rows transition with opacity fade. |
+| Jargon cleanup | DONE | "openings" terminology. FCFS expanded via `title` tooltip. Dynamic source filter counts. |
+| Loading skeleton | DONE | `ResultsSkeleton` shimmer placeholder during SSE streaming. |
+| First-visit empty state | DONE | `FirstVisitState` component with suggested searches for new users. |
+| Dark mode warning banner | DONE | Dedicated `--warning-border` dark mode token. |
+| A11y completions | DONE | Meta description tag. Sign-in modal close `aria-label`. Heat map legend with "0 sites" / "N+ sites" numeric labels. |
+| Mobile result polish | DONE | Heat map larger cells at ≤640px. Date row flex-wrap at narrow widths. |
 
-### Dependencies
-- v0.99 (quality audit complete, all critical/high issues resolved)
+### Remaining Minor Polish (deferred to v1.0.1 or v1.1)
 
-### Quality Bar
-- All v0.99 quality bar metrics maintained (no regressions)
-- Recommendations respect opt-in toggle
-- Recommendation queries add <200ms to page load
-- Lighthouse accessibility ≥0.95 maintained across all routes
-- Bundle size ≤350KB main chunk
-
-### Key Risk
-Personalized recommendations scope. At personal/friends scale, a simple query over search history with tag/region affinity scoring is sufficient. Do not build a recommendation engine. If backend work exceeds one week, it is over-scoped.
+| Item | Effort | Description |
+|------|--------|-------------|
+| Dark mode heat map levels 0-1 | XS | `--heatmap-0` (#1e1e1a) and `--heatmap-1` (#2e4a1e) too similar in dark mode. Widen low-end color scale. |
+| FCFS inline expansion | XS | Currently tooltip-only. Could expand "First-come, first-served" inline on first occurrence per session. |
 
 ---
 
-## v1.1 "Predictions+"
+## v1.1 "Better Search + Coverage" (~3-4 weeks)
 
 ### Theme
-The intelligence layer, now with 9-12 months of polling data instead of 6. More data means better predictions, fewer cold-start states, and more meaningful anomaly detection. Deferred from pre-v1.0 because: (1) data quality improves with time, (2) nothing in v1.0 depends on predictions, (3) serial developer focus is faster than context-switching between statistical modeling and geographic visualization.
+Find campsites faster, across more of the northwest, with better data. Natural language search is the headline feature. Registry expansion and quality improvements make every search better. AI summarization and recommendation reasons add intelligence to results. Polling data continues accumulating toward v1.3 predictions.
 
 ### Features
 
-| Feature | Effort | Description |
-|---------|--------|-------------|
+| Feature | Size | Description |
+|---------|------|-------------|
+| Natural Language Search | M | Freeform text input parsed by Haiku into structured search params via tool_use. Shows parsed interpretation with "Edit filters" link. Date inference, tag mapping, 1.5s latency budget. |
+| Registry Expansion (MT, WY, NorCal) | S | Add campgrounds via existing RIDB seed pipeline. NorCal filtered to ≥38.5°N. Drive times calculated, enrichment run on new entries. |
+| Tag Taxonomy Audit | XS | Single Sonnet call to analyze 29-tag vocabulary — merges, gaps, removals. Manual review, re-run enrichment for affected entries. |
+| Registry Description Rewrite | S | Haiku generates elevator_pitch, description_rewrite, best_for per campground. New registry columns with graceful fallback to RIDB originals. |
+| Post-Search Result Summarizer | S | Trailing SSE event after results stream. Haiku summarizes patterns across 5+ results. 3s timeout, silent failure. |
+| Personalized Rec Reasons | S | LLM-generated contextual reasons replace template strings. 24h cache. Min 3 searches before enabling. Graceful fallback. |
+| Search Analytics Digest | S | Weekly APScheduler job aggregates search_history, Haiku produces product intelligence report. Stored in analytics_digests table, optional ntfy push. |
+| Dark Mode Heatmap Fix | XS | Widen dark mode heatmap color scale so levels 0-1 are distinguishable. CSS-only, 2:1 min contrast between adjacent levels. |
+
+### Sequencing
+Batch/infra first: Tag Audit (3) → Description Rewrite (4) → Registry Expansion (2). Then headline: NL Search (1). Then AI features (5, 6, 7) in any order. Heatmap fix (8) whenever.
+
+### Quality Bar
+- NL search: test suite of 20-30 natural language queries with expected structured output
+- Registry descriptions: spot-check 20-30 before bulk write; reject hallucinated amenities
+- Summarizer: P95 under 2s; never blocks result display
+- All new features pass Lighthouse a11y ≥0.95
+
+### Key Risks
+- NL date inference edge cases ("July 4th weekend" must resolve to future, not past)
+- Description hallucination (Haiku may infer amenities not in source data — prompt constrains to stated facts)
+- NorCal latitude cutoff — verify RIDB returns coords for CA facilities
+
+### Cost
+- One-time: ~$0.20 (tag audit + description rewrite)
+- Ongoing: ~$7-8/month (NL search ~$3, summarizer ~$3, rec reasons ~$1, digest ~$0.05)
+
+---
+
+## v1.15 "Brand + Identity" (~2-3 weeks, parallelizable with late v1.1)
+
+### Theme
+Campable rebranded from "campnw" but still has no formal visual identity — no logo, no brand palette spec, no og:image template. This milestone establishes the brand system: logo mark, color formalization, typography, voice guidelines, and the high-value touchpoints that drive word-of-mouth (notification copy, share cards). Can be worked alongside v1.1 since there are no code dependencies between them.
+
+### Brand Positioning
+**Discovery engine** — not monitoring (Campnab/Campflare), not listings (Dyrt/Hipcamp). Campable answers "where can I actually go camping this weekend?" across multiple booking systems. The key differentiating word is **available**: real availability, right now, across every system.
+
+**Emotional territory:** Relief ("I can actually find something"), spontaneity ("let's just go"), local knowledge (a friend who knows all the spots).
+
+**Tagline:** "Find your weekend." (primary) · "Real-time campsite availability across the Pacific Northwest." (explanatory/SEO)
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Logo Mark | M | Prototype two directions: (A) Pin Drop — map pin with tent-shaped head, geometric; (B) Window/Ridgeline — rounded square with PNW treeline silhouette. Test both at 16px, 32px, 192px, 512px, and monochrome. The 16px favicon test decides the winner. Develop lowercase 'c' with pine-needle detail as compact variant. |
+| Brand Palette Formalization | S | Name and spec the existing `tokens.css` colors as the brand palette. Define Brand Green (primary accent, exact HSL, AA-tested on both themes), Near-Black, Warm Cream, Campfire Orange (CTA accent, ~#D4722A). Resolve WA source green vs brand green collision — either shift WA to teal or use clearly distinct shade. |
+| Typography System | S | Select and implement heading font (Plus Jakarta Sans or DM Sans). Two families max: heading/wordmark + system stack for body/data. No third accent font. Audit current system font usage and swap heading elements. |
+| Dark Mode Heatmap Fix | XS | Widen dark mode heatmap color scale so levels 0-1 are distinguishable. Minimum 2:1 contrast between adjacent levels. CSS-only. (Carried from v1.1 — now a brand requirement, not just a bug.) |
+| OG Image Template | S | Branded share card (1200×630) for link previews: logo mark + tagline + optional search context (source badge, campground name, dates, available count). Static SVG-to-PNG fallback. This is the acquisition touchpoint — shared in group chats and camping Facebook groups. |
+| Notification Copy Audit | S | Apply brand voice to all watch alert copy. Title = campground name. Body = dates + site count + time-context. Never "Availability Alert" or "High urgency." Data-driven urgency, not manufactured. Test against 10 real notification scenarios. |
+| PWA Assets | XS | Update manifest icons (192×192, 512×512), favicon (16×16, 32×32), apple-touch-icon, and splash screen with final logo mark. Monochrome variant for Android notification tray. |
+| Brand Voice Guide | XS | Lightweight single-page reference (not a 40-page PDF): colors with hex values, logo usage, icon style (Lucide, outlined, 1.5px, rounded), voice examples, anti-patterns. Lives in `docs/BRAND.md`. |
+
+### Scoping Consideration: Anthropic Batch API
+
+The `enrich` CLI (`llm_tags.py`) currently calls Haiku sequentially in a `for` loop via `AsyncAnthropic` — 741 individual calls for a full registry run. The Anthropic Message Batches API (`client.messages.batches.create`) offers 50% input token savings and bulk submission for async workloads.
+
+**Candidate jobs:** tag extraction, vibe generation, description rewrite — all offline, no latency requirement. These three passes have a data dependency chain (tags → vibes → descriptions), so they'd be 3 separate batch submissions, not 1.
+
+**Scope in v1.15 if:** the enrichment code is already being modified for brand palette or description work, making it a natural time to refactor the call pattern.
+
+**Defer to v1.2 if:** v1.15 stays purely design/CSS. v1.2's historical pattern extraction (741+ campgrounds × polling data) has higher volume and benefits more from batching. The `asyncio.gather()` with semaphore approach is a lighter-weight speed improvement that doesn't require changing the API pattern.
+
+**Note:** At current scale (~$0.10/full run), batch savings are ~$0.02-0.03 per run. The primary benefit is speed (bulk submission vs sequential awaits), not cost. Savings become meaningful at v1.2 volumes.
+
+### Voice Principles
+- **Declarative, not interrogative.** "3 sites open at Ohanapecosh" not "Looking for campsites?"
+- **Specific, not vague.** Always include the data point — campground name, dates, site count.
+- **Honest about limitations.** "We check 794 campgrounds across 3 booking systems."
+- **No outdoor-lifestyle marketing copy.** The user is already a camper. Don't sell camping — sell finding the campsite.
+- **No "Oops!" or "Uh oh!"** in error states. State what happened, what to do, move on.
+- **Discovery language** ("find", "search", "discover"), never monitoring language ("snag", "grab", "alert").
+
+### Design Decisions
+
+**Visual direction:** "AllTrails' clarity meets Hipcamp's warmth, printed in a National Park Service pamphlet." Information-dense and beautifully presented — like Dark Sky for campsite availability.
+
+**What it should NOT feel like:** REI catalog (too corporate), camping emoji overload (too cute), hipster craft brand (too precious), government website (too sterile).
+
+**Motion:** Snappy-functional (150-200ms, ease-out) for state changes. Slight overshoot (250-300ms) on feedback moments (watch confirmed). No celebration confetti, no bounce, no wiggle. The existing `--transition-fast` and `--transition-base` tokens are correct.
+
+**Iconography:** Lucide icon set (MIT, rounded, 24px grid). Outlined at 1.5px stroke, filled for active states. No custom nature icon set initially — customize only where Lucide has gaps.
+
+**Empty states:** Instructional, not decorative. No sad-tent illustrations. The SmartZeroState diagnostic data IS the content.
+
+### Sequencing
+Brand Palette (2) first — unblocks everything else. Typography (3) and Dark Mode Fix (4) can parallel. Logo (1) needs design iteration time. OG Image (5) and Notification Copy (6) depend on palette + logo. PWA Assets (7) and Brand Guide (8) ship last.
+
+### Quality Bar
+- Logo mark legible and recognizable at 16×16 favicon
+- Brand Green passes WCAG AA (4.5:1) for text on both light and dark backgrounds
+- WA source color visually distinct from brand green at all sizes
+- OG image renders correctly in iMessage, Discord, Slack, and Facebook link previews
+- All notification copy reviewed against 10 real-world watch alert scenarios
+- No net increase in main bundle size from font loading (use `font-display: swap`, preload)
+
+### Key Risks
+- Logo design quality — geometric marks are hard to get right at small sizes without a skilled designer. Budget for 2-3 iteration rounds.
+- Font loading performance — one custom font is fine, two will impact Lighthouse. System stack for body is non-negotiable.
+- WA green collision — changing a source color affects 10+ tokens and every source badge in the UI. Audit all usages before changing.
+
+### Cost
+- $0 (no LLM costs — this is design + CSS work)
+- Optional: $50-200 if commissioning logo from a designer
+
+---
+
+## v1.2 "Trips + Watches" (~5-7 weeks)
+
+### Theme
+Plan and track trips. The Trip object is the hub that search, watches, and the planner all connect to. Template watches make Pro worth paying for. Watch sharing drives organic growth. Historical patterns validate polling data quality while producing user-visible "Booking Tips." Identity improvements make accounts stickier.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Trip Object | L | First-class entity: trips table + trip_campgrounds junction. CRUD API, "Save to trip" on result cards, aggregated availability view, trip-linked watches. 10 trips free, 25 Pro. |
+| Template Watches | L | Watch a search pattern, not a single campground. Expands to matching registry entries at poll time. 20-campground/cycle cap. "Watch this search" button on results page. |
+| Watch Sharing | S | UUID-based shareable link. Read-only view of watch/trip availability. 30-day expiry, no auth required to view, 10 req/hr rate limit per UUID. |
+| Trip Planner → Persistent Itinerary | M | "Save as Trip" button in chat when AI has recommended campgrounds. Extracts from tool_use calls. User can prune after saving. |
+| Onboarding + Profile | S | Post-signup 2-step modal: set home base + select preferred tags. Feeds into search defaults and recommendation scoring. Profile page with editable preferences. |
+| Campground Comparison | S | Select 2-3 campgrounds, get inline comparison panel: data table + Haiku narrative. Falls back to data-only if Haiku unavailable. |
+| Historical Pattern Extraction | M | Aggregate availability_history into per-campground booking tips via Haiku. 30-day observation minimum. Monthly batch refresh. "Booking Tips" in expanded cards with data freshness indicator. |
+| Notification Quality Feedback Loop | S | Monthly batch correlating notifications with booking clicks. 50-notification minimum. Outputs prompt suggestions for manual review. |
+
+### Sequencing
+Trip Object (1) is critical path — blocks Watch Sharing (3) and Planner-to-Itinerary (4). Template Watches (2) can parallel with 4. Onboarding (5) and Comparison (6) are independent. Historical Patterns (7) depends on data maturity — start pipeline early. Notification Feedback (8) last.
+
+### Quality Bar
+- Trip CRUD: full API test coverage, cross-source campground support (recgov + wa-state + or-state in same trip)
+- Template watches: validated against Pro 5-min polling budget (20 campgrounds × 12 polls/hr = 240 calls/hr max)
+- Shared links: no PII exposed, rate limited, graceful expiry
+- Historical patterns: "Still learning..." for campgrounds with <30 days data
+- Onboarding: skippable, no degradation if skipped
+
+### Key Risks
+- Template watch rate limiting: 20-campground cap needs validation against API budgets
+- Trip-campground composite key: (facility_id + source) to handle cross-source trips correctly
+- Historical pattern sparsity: only watched/searched campgrounds have data; unwatched ones show nothing
+
+### Cost
+- One-time: ~$1.00 (historical pattern extraction)
+- Ongoing: ~$1-2/month (comparison ~$1, notification loop ~$0.01)
+
+---
+
+## v1.3 "Predictions+" (~Q1 2027, needs 9-12 months of polling data)
+
+### Theme
+The intelligence layer. By Q1 2027, there will be 9-12 months of polling data. v1.2's historical pattern extraction has validated data quality. The statistical model, anomaly detection, and post-mortems all ship together because they share the same data pipeline.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
 | Statistical prediction model | L | Time-series analysis on `availability_history`: median days-before-date cancellations appear, confidence intervals, booking window detection. Per-campground. |
 | Availability prediction display | L | "Sites typically free up X-Y days before the date" with confidence band. Cold start: "still learning." Integrates into result cards and check view. |
 | Prediction confidence display | S | Visual confidence indicator (low/medium/high) based on sample size. Transparent about data limitations. |
 | Smart notification scoring | M | When a watch fires, attach urgency: "Usually books within 30 minutes" vs "Typically stays open for hours." |
-| Anomaly-based deal alerts | M | Detect statistically unusual availability against seasonal baseline. Proactive alerts for popular campgrounds with rare openings. Pro-only (ties into v0.95 billing). |
-| "Why did I miss it?" post-mortem | S | Timing analysis and actionable tuning suggestions when watched sites open and re-book before user acts. |
+| Anomaly-based deal alerts | M | Detect statistically unusual availability against seasonal baseline. Proactive alerts for popular campgrounds with rare openings. Pro-only. Haiku narrates the alert with historical context. |
+| "Why did I miss it?" post-mortem | M | Timing analysis + Haiku-narrated actionable tuning suggestions when watched sites open and re-book before user acts. |
 
 ### Dependencies
-- v1.0 shipped
-- Polling data accumulating since v0.5 (9-12 months by this point)
+- v1.2 shipped (historical pattern extraction validates data quality)
+- 9-12 months of polling data (accumulating since March 2026)
 
 ### Quality Bar
 - Predictions never shown without confidence level
@@ -709,7 +863,7 @@ The intelligence layer, now with 9-12 months of polling data instead of 6. More 
 - All prediction displays pass contrast on both themes
 
 ### Key Risk
-Data quality and sample size for less-popular campgrounds. The additional months of data accumulation from deferring to post-v1.0 directly mitigates this.
+Data quality and sample size for less-popular campgrounds. v1.2's pattern extraction serves as early validation.
 
 ---
 
@@ -728,7 +882,9 @@ Data quality and sample size for less-popular campgrounds. The additional months
 | v0.95 | Upgrade modal keyboard-accessible. Pricing page passes Level AA contrast on both themes. Cancel flow accessible. |
 | v0.97 | Map view has list-based alternative. Pin interactions keyboard-reachable. Colorblind-safe density palette. |
 | v1.0 | Full WCAG 2.1 AA audit. CI expanded to block Level AA failures. |
-| v1.1 | Prediction displays pass contrast on both themes. Confidence indicators accessible. |
+| v1.1 | NL search input accessible (label, aria-live for parsed interpretation). Summarizer card keyboard-dismissible. |
+| v1.2 | Trip views meet Level AA. Shared link views accessible without auth. Comparison panel keyboard-navigable. |
+| v1.3 | Prediction displays pass contrast on both themes. Confidence indicators accessible. |
 
 The principle: fix accessibility at build time, not in a batch audit. Color contrast and semantic HTML are cheapest when designed from the start.
 
@@ -752,25 +908,28 @@ The principle: fix accessibility at build time, not in a batch audit. Color cont
 | v0.96 | Lighthouse CI baseline established. P95 search latency measured. `/plan` route lazy-loaded. |
 | v0.97 | Map view lazy-loaded. Initial bundle size does not increase. Lighthouse does not regress. |
 | v1.0 | P95 search under 4 seconds. Lighthouse performance, accessibility, best practices all green. |
+| v1.1 | NL search parsing under 1.5s P95. Summarizer under 2s P95. No regression on main bundle size. |
+| v1.2 | Trip views load under 1s. Template watch polling stays within API rate budgets. |
+| v1.3 | Prediction queries add <200ms to page load. |
 
-### Data Collection (start at v0.5, use at v1.1)
-The `availability_history` table ships silently in v0.5 alongside background polling. Every poll cycle writes a row. By v1.1, there should be 9–12 months of data — strictly better for prediction quality than the original v0.9 target of 4–6 months.
+### Data Collection (start at v0.5, use at v1.3)
+The `availability_history` table ships silently in v0.5 alongside background polling. Every poll cycle writes a row. v1.2's Historical Pattern Extraction (C2) validates data quality at ~6 months. By v1.3 (~Q1 2027), there should be 9–12 months of data — strictly better for prediction quality than the original v0.9 target.
 
 ### Registry Maintenance
 The campground registry is a living dataset. Automated monthly re-seeding from RIDB and quarterly refresh from GoingToCamp should be set up in v0.5. Drift detection (campgrounds that consistently 404) should flag entries for manual review.
 
 ### Cost Model
-| Component | v0.2–v0.4 | v0.5–v0.9 | v0.95+ (with Pro revenue) |
+| Component | v0.2–v0.4 | v0.5–v1.0 | v1.1+ (with AI features) |
 |-----------|-----------|-----------|--------------------------|
 | Fly.io | ~$0/mo (auto-sleep) | ~$5–7/mo (always-on for polling) | ~$7–15/mo |
-| Anthropic API | $0 | ~$1/mo (enrichment, notifications) | ~$10–30/mo (trip planner at scale) |
+| Anthropic API | $0 | ~$1/mo (enrichment, notifications) | ~$18–40/mo (trip planner + NL search + summarizer + rec reasons) |
 | Payment provider fees | $0 | $0 | ~2.9–5% per txn ($0.45–0.75 per $5 sub) |
 | Auth provider | $0 (self-rolled PyJWT) | $0 | $0 |
-| Total cost | ~$0/mo | ~$6–8/mo | ~$17–50/mo |
+| Total cost | ~$0/mo | ~$6–8/mo | ~$26–60/mo |
 | Pro revenue (target) | $0 | $0 | $75–750/mo (15–150 subscribers) |
-| **Net** | ~$0/mo | -$6–8/mo | **+$25–700/mo** |
+| **Net** | ~$0/mo | -$6–8/mo | **+$15–690/mo** |
 
-Break-even requires 2-4 Pro subscribers at $5/mo. At 150 Pro subscribers, net ~$500-700/mo.
+Break-even requires ~6 Pro subscribers at $5/mo with all v1.1 AI features enabled. Watch cost creep — the ~$8/mo in new AI features (NL search, summarizer, rec reasons) is the largest single cost increase since v0.5.
 
 Rate limiting on AI features is non-negotiable. Spend limits in the Anthropic account are a pre-ship requirement for v0.5 (when the SDK is first introduced).
 
@@ -790,30 +949,45 @@ Current GitHub Actions CI/CD deploys to Fly.io on push to main. Key additions:
 
 ---
 
-## What's Explicitly Post-v1.0
+## What's Explicitly Post-v1.3
 
-- **Idaho State Parks** (separate booking system, low demand)
+- **Idaho State Parks** (Brandt/Idaho Time at getoutside.idaho.gov — behind AWS WAF with mandatory visual CAPTCHA, would need paid CAPTCHA-solving service; ~20 state parks, low demand. Probed March 2026.)
+- **BC Parks (Canada)** (revisit based on demand signals from B1 analytics digest)
 - **Native mobile apps** (web-first is right for this scale)
 - **Booking intermediation** (legal complexity, misaligned with the tool's positioning)
 - **User reviews and photo uploads** (community features need critical mass)
 - **Cell coverage overlay** (crowdsourced data is hard to bootstrap)
-- **Full personalized recommendation engine** (basic version in v1.0, ML-powered post-v1.0)
 
 ---
 
-## AI Feature Backlog (Evaluated, Not Scheduled)
+## AI Feature Backlog (Evaluated)
 
-Features brainstormed and scored during the March 2026 AI feature review. Each was evaluated on novelty/delight, impact, innovation, feasibility, and data readiness. These were not added to the roadmap — rationale for each below.
+Features brainstormed and scored during the March 2026 AI feature review. Re-evaluated post-v1.0 and slotted into v1.1-v1.3 where appropriate. See also: `docs/AI-OPPORTUNITIES-2026-03-28.md` for the full analysis and `docs/REQUIREMENTS-v1.1-v1.2.md` for detailed acceptance criteria.
 
-### Deferred (might revisit post-v1.0)
+### Scheduled
+
+| Feature | Version | Source |
+|---------|---------|--------|
+| Natural Language Search | v1.1 | A1 — re-evaluated: highest-impact UX feature, trip planner proves the pattern |
+| Post-Search Result Summarizer | v1.1 | A2 |
+| Personalized Rec Reasons | v1.1 | A5 |
+| Tag Taxonomy Audit | v1.1 | C3 |
+| Registry Description Rewrite | v1.1 | C1 |
+| Search Analytics Digest | v1.1 | B1 |
+| Campground Comparison | v1.2 | A3 |
+| Historical Pattern Extraction | v1.2 | C2 |
+| Notification Quality Feedback Loop | v1.2 | B2 |
+| Anomaly Narrator | v1.3 | B3 |
+| "Why Did I Miss It?" Post-Mortem | v1.3 | A4 |
+
+### Deferred (revisit when conditions change)
 
 | Feature | Description | Why Not Now |
 |---------|-------------|-------------|
-| **NL search (text → form)** | Natural language input auto-fills structured search form via Claude Haiku. "Somewhere near Rainier, 2 nights in July, lakeside" → pre-filled form fields. | Scored low innovation/low impact. The structured form already works well, and NL-to-form is the most commoditized LLM use case. The integration cost (prompt engineering, injection defense, accuracy tracking, spend limits) is high relative to the marginal UX improvement. Most users will try it once then revert to the form because it's faster and more predictable. Could revisit if the form becomes more complex post-v1.0. |
-| **Shoulder season finder** | Identify "best value" booking windows per campground from multi-season availability data. "Best value at Lake Quinault: May 16–June 6 — nearly identical to peak experience at 30% the booking competition." | Needs 12+ months of polling data to compare across seasons. Revisit after v0.9 ships and the prediction model reveals what the data can actually support. Medium impact — useful but not a workflow-changer. |
-| **Trip compatibility scorer** | Score campgrounds on fit for a specific trip (kids + late June + 4 nights → "87/100, strong kid-friendly, but pit toilets only"). | Largely redundant with the trip planner (v0.8), which provides this reasoning conversationally. As a standalone score on search results, it's moderate effort for moderate value. Could become a lightweight ranking signal in search results post-v1.0. |
-| **Availability narrative digest** | Weekly "campsite weather report" email — what's opening up across PNW in the next 3-6 weeks, synthesized from polling data. | Charming concept, but the engagement pattern doesn't match how people use an episodic tool. Would require email infrastructure for a feature most users would unsubscribe from within two weeks. The same data insights surface better through anomaly alerts (v0.9) which fire at the right moment, not on a schedule. |
-| **Watch drift detection** | Detect when a user's search behavior has drifted from their watch parameters and nudge: "You've been searching July but this watch is for June." | Needs meaningful search history volume to detect behavioral patterns. At personal/friends scale, the signal is too weak — could easily produce false positives. Revisit if user base grows significantly. |
+| **Shoulder season finder** | Identify "best value" booking windows per campground from multi-season availability data. | Needs 12+ months of polling data. Revisit after v1.3 prediction model ships. |
+| **Trip compatibility scorer** | Score campgrounds on fit for a specific trip. | Largely redundant with trip planner conversational reasoning. |
+| **Availability narrative digest** | Weekly "campsite weather report" email. | Engagement pattern doesn't match episodic tool usage. Anomaly alerts (v1.3) fire at the right moment instead. |
+| **Watch drift detection** | Detect when search behavior has drifted from watch parameters. | Needs meaningful search volume. Revisit if user base grows. |
 
 ### Skipped (not worth building)
 
@@ -853,3 +1027,7 @@ Features brainstormed and scored during the March 2026 AI feature review. Each w
 | Split v1.0 into v0.96/v0.97/v1.0 | Three focused releases of 2-4 weeks each beat one 10-week monolith. Each is independently shippable. Single developer context means serial focus is faster than context-switching. Registry first (map needs lat/lng), map+shortcuts together (shared keyboard model), recommendations last (capstone on top of both). | Ship as one v1.0 — rejected because 10+ weeks of mixed work with no intermediate ship points. |
 | Defer Predictions+ to v1.1 | Data collection running since v0.5. Every month of deferral improves prediction quality. No v1.0 feature depends on predictions. Avoids interleaving statistical modeling with geographic visualization. | Ship v0.9 before v1.0 — rejected because it delays v1.0 by 4-6 weeks and predictions improve with more data. Interleave between v0.96/v0.97 — rejected because it splits focus across unrelated domains. |
 | Personalized recommendations in v1.0, not deferred | Recommendations make v1.0 feel like a product milestone rather than "map + shortcuts." Without it, v1.0 is indistinguishable from v0.97. Scope must be tight: query over search history with tag/region affinity, not a recommendation engine. | Defer to v1.1 — considered but v1.0 needs a capstone beyond polish. |
+| Restructure post-v1.0 into v1.1/v1.2/v1.3 | Predictions+ needs 9-12 months of polling data (collection started March 2026). Jumping straight to predictions leaves a ~9-month gap. v1.1 (AI search + registry quality) and v1.2 (trips + watches) fill the gap with user value while data matures. | Ship nothing, wait for data — rejected because momentum matters for personal projects and registry quality improvements have immediate payoff. |
+| NL search in v1.1, reversing v0.6 deferral | Originally scored "low innovation/low impact" in March 2026 AI review. Re-evaluated: trip planner proves the Haiku tool_use pattern works, structured form has grown to 8+ fields, and NL input is the highest-impact single UX feature. Product review confirmed: if you only ship one thing post-v1.0, it should be this. | Keep deferred — rejected because the pattern is proven and the form complexity has increased. |
+| Registry expansion to MT/WY/NorCal | All use existing RIDB provider — it's a seed script update, not new infrastructure. Broadens discovery for road trips beyond the PNW triangle. Low effort, high coverage payoff. | BC Parks — considered but different country, different booking system, lower demand. Idaho state parks — CAPTCHA-blocked. |
+| Trip Object as v1.2 headline | Trips are the connective tissue between search, watches, and the planner. Without them, these features are independent tools. With them, there's a workflow: search → save to trip → watch → get alerted → book. Template watches and watch sharing both build on the trip concept. | Trips in v1.1 — rejected because NL search + registry quality is the right first move. Trips in v1.3 — rejected because watches are the Pro feature and need strengthening before predictions. |

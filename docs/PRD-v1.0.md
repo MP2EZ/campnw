@@ -8,7 +8,7 @@
 
 ## 0. Current State (as of March 2026)
 
-campnw is live at campnw.palouselabs.com. Versions 0.1 through 0.7 have shipped. The core product — multi-provider discovery, monitoring, accounts, background polling, and AI-powered delight features — is fully operational.
+campnw is live at campable.co. Versions 0.1 through 0.7 have shipped. The core product — multi-provider discovery, monitoring, accounts, background polling, and AI-powered delight features — is fully operational.
 
 **What's live:**
 - Search across Recreation.gov + WA State Parks with tag, drive time, and date filtering
@@ -79,7 +79,7 @@ campnw v1.0 is the answer to: "I want to go camping this summer — where should
 
 ### Journey 1: Flexible Discovery ("I want to go camping, help me find something")
 
-1. User lands on campnw.com. No account required for search.
+1. User lands on campable.co. No account required for search.
 2. User selects "Find a date" mode.
 3. User specifies: general region (e.g., "within 2 hours of Seattle"), date range (e.g., June), preferred weekend pattern (e.g., Friday–Sunday), and optional preferences (lakeside, pet-friendly).
 4. campnw queries Recreation.gov availability and GoingToCamp in parallel across all matching campgrounds in the registry.
@@ -426,7 +426,7 @@ Upgrade prompts appear at the moment of genuine value, not on page load, not dur
 
 ## 7. Technical Architecture Considerations
 
-### Current State (deployed at campnw.palouselabs.com)
+### Current State (deployed at campable.co)
 - FastAPI backend + SQLite + React/Vite/TypeScript
 - Deployed on Fly.io (Docker, min_machines_running=1, ~$2/mo always-on)
 - GitHub Actions CI/CD with test gating (346 tests, 82% backend coverage, 70% CI threshold)

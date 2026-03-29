@@ -29,15 +29,15 @@ class TestTagExtractionResult:
 
     def test_valid_tags_extracted(self):
         """Valid tags from VALID_TAGS list are preserved."""
-        result = TagExtractionResult(tags=["lakeside", "scenic", "forest"])
-        assert result.tags == ["lakeside", "scenic", "forest"]
+        result = TagExtractionResult(tags=["lakeside", "shade", "forest"])
+        assert result.tags == ["lakeside", "shade", "forest"]
 
     def test_invalid_tags_filtered(self):
         """Invalid tags not in VALID_TAGS are filtered out."""
         result = TagExtractionResult(
-            tags=["lakeside", "invalid-tag", "scenic"]
+            tags=["lakeside", "invalid-tag", "shade"]
         )
-        assert result.tags == ["lakeside", "scenic"]
+        assert result.tags == ["lakeside", "shade"]
 
     def test_empty_tags(self):
         """Empty tag list is valid."""
@@ -55,7 +55,7 @@ class TestExtractTags:
         mock_response = MagicMock()
         mock_response.content = [
             MagicMock(
-                text='{"tags": ["lakeside", "scenic", "forest"]}'
+                text='{"tags": ["lakeside", "shade", "forest"]}'
             )
         ]
 
@@ -74,7 +74,7 @@ class TestExtractTags:
                 api_key="test-key",
             )
 
-        assert tags == ["lakeside", "scenic", "forest"]
+        assert tags == ["lakeside", "shade", "forest"]
 
     @pytest.mark.asyncio
     async def test_extract_tags_short_description(self):
@@ -102,7 +102,7 @@ class TestExtractTags:
         mock_response = MagicMock()
         mock_response.content = [
             MagicMock(
-                text='```json\n{"tags": ["lakeside", "scenic"]}\n```'
+                text='```json\n{"tags": ["lakeside", "shade"]}\n```'
             )
         ]
 
@@ -121,7 +121,7 @@ class TestExtractTags:
                 api_key="test-key",
             )
 
-        assert sorted(tags) == ["lakeside", "scenic"]
+        assert sorted(tags) == ["lakeside", "shade"]
 
     @pytest.mark.asyncio
     async def test_extract_tags_api_error(self):
@@ -175,7 +175,7 @@ class TestExtractTags:
     async def test_extract_tags_valid_tags_list(self):
         """Checks that VALID_TAGS contains expected tag values."""
         assert "lakeside" in VALID_TAGS
-        assert "scenic" in VALID_TAGS
+        assert "shade" in VALID_TAGS
         assert "pet-friendly" in VALID_TAGS
         assert "trails" in VALID_TAGS
         assert len(VALID_TAGS) > 20
@@ -313,7 +313,7 @@ class TestGenerateVibe:
         ):
             vibe = await generate_vibe(
                 name="Alpine Camp",
-                tags=["alpine", "scenic", "hiking"],
+                tags=["alpine", "shade", "hiking"],
                 site_count=20,
                 description="High altitude alpine camp",
                 api_key="test-key",

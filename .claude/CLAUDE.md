@@ -16,6 +16,7 @@ src/pnw_campsites/
   providers/          # Thin API clients per booking system
     recgov.py         # Recreation.gov (RIDB metadata + undocumented availability)
     goingtocamp.py    # WA State Parks (GoingToCamp, curl_cffi WAF bypass)
+    reserveamerica.py # OR State Parks (ReserveAmerica, curl_cffi, Redux SSR extraction)
   registry/           # Campground registry (SQLite-backed)
     models.py         # Data models (campground, campsite, availability)
     db.py             # SQLite operations
@@ -59,9 +60,21 @@ Two APIs, both critical:
 - 75 WA State Parks with campsites seeded in registry (`scripts/seed_wa_state.py`)
 - Site names not available via API — identified by resource ID (e.g., `WA--2147482394`)
 
-### Oregon/Idaho State Parks — Phase 4 (Stretch)
-- ReserveAmerica platform, blocked by bot protection
-- Will need Playwright/headless browser
+### Oregon State Parks / ReserveAmerica — DONE
+- Base: `www.reserveamerica.com` (unified site, NOT state subdomain)
+- WAF bypass: `curl_cffi` with Chrome131 TLS fingerprint impersonation
+- Data: Redux state JSON embedded in HTML `<script>` tags (~2MB per page)
+- Path: `backend.productSearch.searchResults.records[].availabilityGrid[]`
+- Statuses: AVAILABLE, RESERVED, NOT_AVAILABLE, WALK_UP
+- 14-day availability window per request, 20 records per page, 1 req/sec rate limit
+- 53 Oregon State Parks seeded in registry (`scripts/seed_or_state.py`)
+- `booking_url_slug` column in registry for RA URL construction
+
+### Idaho State Parks — Deferred (Post-v1.0)
+- Migrated from ReserveAmerica to Brandt/Idaho Time at `getoutside.idaho.gov` (Jan 2025)
+- Booking paths (`/camping/*`) behind AWS WAF with mandatory visual CAPTCHA
+- Homepage has park metadata (20 campable parks) but no availability data
+- Would require paid CAPTCHA-solving service — not worth it for ~20 parks
 
 ## CLI Usage (for Claude Code conversations)
 
@@ -174,7 +187,7 @@ Full roadmap details: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs
 - [x] Error handling: retry on 429/5xx, typed errors, warning banners
 - [x] Event tracking (search params, card expand, booking clicks)
 - [x] Fly.io deployment with GitHub Actions CI/CD
-- [x] Custom domain (campnw.palouselabs.com)
+- [x] Custom domain (campable.co)
 - [x] Registry enrichment: auto-tags from RIDB + GoingToCamp descriptions
 
 ### v0.2 "Watches on the Web" — DONE
@@ -260,7 +273,7 @@ Performance:
 ### v0.7 "Oregon + Delight" — DONE
 - [x] Site character / "vibe" descriptions (Haiku-generated, rendered in expanded cards)
 - [x] Contextual watch notifications (LLM-enriched alerts with urgency 1-3 scoring)
-- [ ] Oregon State Parks provider — deferred (ReserveAmerica has no availability API; Playwright required)
+- [x] Oregon State Parks provider (ReserveAmerica, 53 parks, curl_cffi WAF bypass) — shipped in v1.0
 - [ ] Booking link validation — deferred
 - [ ] Registry gap detector — deferred
 
@@ -335,29 +348,63 @@ Performance:
 - [x] Expanded a11y test (search results interaction state)
 - [ ] Cross-browser/device QA (Safari, Firefox, Chrome; iOS Safari, Android Chrome; PWA install flow) — manual, deferred
 
-### v1.0 "campnw 1.0"
-- [ ] Personalized recommendations (search history affinity, opt-in, renders above search results)
-- [ ] Collapsible search form + scroll-to-results (auto-scroll after search, compact summary bar)
-- [ ] Mobile hamburger menu (consolidate Watchlist, theme, Sign in behind menu icon on mobile)
-- [ ] Card expand/collapse animation (200ms height transition)
-- [ ] Jargon cleanup ("windows" → "openings", expand "FCFS" on first use, source filter counts)
-- [ ] Loading skeleton/shimmer while SSE results stream in
-- [ ] First-visit empty state (illustration or suggested searches for new users)
-- [ ] Dark mode heat map differentiation (levels 0-1 nearly indistinguishable)
-- [ ] Dark mode warning banner border visibility
-- [ ] Meta description tag for SEO
-- [ ] Sign-in modal close button aria-label
-- [ ] Heat map legend — add numeric context for colorblind users
-- [ ] Mobile heat map — simplified view or larger cells at 375px
-- [ ] Mobile expanded card date row wrapping
+### v1.0 "campnw 1.0" — DONE
+- [x] Oregon State Parks provider (ReserveAmerica, 53 parks, curl_cffi, dynamic source filters, SSE abort)
+- [x] Personalized recommendations (search history affinity, opt-in, renders above search results)
+- [x] Collapsible search form + scroll-to-results (auto-scroll after search, compact summary bar)
+- [x] Mobile hamburger menu (consolidate Watchlist, theme, Sign in behind menu icon on mobile)
+- [x] Card expand/collapse animation (CSS grid-template-rows transition)
+- [x] Jargon cleanup ("openings" terminology, FCFS title tooltip, dynamic source filter counts)
+- [x] Loading skeleton/shimmer while SSE results stream in
+- [x] First-visit empty state (suggested searches for new users)
+- [x] Dark mode warning banner border visibility (--warning-border token)
+- [x] Meta description tag for SEO
+- [x] Sign-in modal close button aria-label
+- [x] Heat map legend — numeric context ("0 sites" / "N+ sites") for colorblind users
+- [x] Mobile heat map — larger cells at 375px
+- [x] Mobile expanded card date row wrapping
+- [ ] Dark mode heat map differentiation (levels 0-1 nearly indistinguishable) — deferred to v1.0.1
 
-### v1.1 "Predictions+"
+### v1.1 "Better Search + Coverage" (~3-4 weeks)
+- [ ] Natural Language Search (Haiku tool_use extraction, parsed interpretation, date inference)
+- [ ] Registry expansion (MT, WY, NorCal via RIDB, ≥38.5°N for CA)
+- [ ] Tag Taxonomy Audit (single Sonnet call, manual review)
+- [ ] Registry Description Rewrite (elevator_pitch, description_rewrite, best_for columns)
+- [ ] Post-Search Result Summarizer (trailing SSE event, >5 results, 3s timeout)
+- [ ] Personalized Rec Reasons (Haiku-generated, 24h cache, min 3 searches)
+- [ ] Search Analytics Digest (weekly APScheduler job, analytics_digests table)
+- [ ] Dark mode heatmap fix (widen levels 0-1 contrast) → moved to v1.15
+
+### v1.15 "Brand + Identity" (~2-3 weeks, parallelizable with late v1.1)
+- [ ] Logo mark (Pin Drop vs Window/Ridgeline — prototype both, 16px favicon test decides)
+- [ ] Brand palette formalization (name tokens.css colors, spec Brand Green HSL, resolve WA green collision)
+- [ ] Typography system (Plus Jakarta Sans or DM Sans for headings, system stack for body)
+- [ ] Dark mode heatmap fix (widen levels 0-1 contrast — brand requirement, CSS-only)
+- [ ] OG image template (1200×630 share card: logo + tagline + search context)
+- [ ] Notification copy audit (brand voice on all watch alerts, 10 real-world scenarios)
+- [ ] PWA assets (manifest icons, favicon, apple-touch-icon, splash with final mark)
+- [ ] Brand voice guide (docs/BRAND.md — colors, logo, icons, voice examples, anti-patterns)
+- [ ] Scoping: Anthropic Batch API for `enrich` CLI (50% input savings, bulk submit — defer to v1.2 if v1.15 stays CSS-only)
+
+### v1.2 "Trips + Watches" (~5-7 weeks)
+- [ ] Trip object (trips + trip_campgrounds tables, CRUD API, "Save to trip", aggregated view)
+- [ ] Template watches (search-pattern watches, 20 campground/cycle cap, "Watch this search")
+- [ ] Watch sharing (UUID link, read-only, 30-day expiry, no auth to view)
+- [ ] Trip planner → persistent itinerary ("Save as Trip" from chat tool_use results)
+- [ ] Onboarding + profile (post-signup modal: home base + preferred tags, profile page)
+- [ ] Campground Comparison (select 2-3, inline panel, Haiku narrative + data table)
+- [ ] Historical Pattern Extraction ("Booking Tips" in cards, 30-day min, monthly refresh)
+- [ ] Notification Quality Feedback Loop (monthly batch, 50-notification min)
+
+### v1.3 "Predictions+" (~Q1 2027, needs 9-12 months polling data)
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)
 - [ ] Predictive availability display ("typically frees up X days before" with confidence bands)
 - [ ] Prediction confidence display with "still learning" cold start
 - [ ] Smart notification scoring ("usually books within 30 min")
-- [ ] Anomaly-based deal alerts (Pro-only, proactive alerts for unusual availability)
-- [ ] "Why did I miss it?" post-mortem (explains missed cancellations, suggests tuning)
+- [ ] Anomaly-based deal alerts (Pro-only, Haiku-narrated with historical context)
+- [ ] "Why did I miss it?" post-mortem (Haiku-narrated timing analysis + tuning suggestions)
+
+Full requirements: `docs/REQUIREMENTS-v1.1-v1.2.md` | Full roadmap: `docs/ROADMAP.md` | Brand details: v1.15 in ROADMAP.md
 
 ## Key Design Decisions
 
@@ -407,4 +454,4 @@ All frontend styling uses design tokens defined in `web/src/tokens.css`. **Never
 - Some RIDB facilities return 404 on the availability endpoint (scenic byways, areas, corridors) — these aren't reservable campgrounds. Errors are caught and reported gracefully.
 - GoingToCamp resource/site details endpoint returns 404 — site names not available via API. Sites identified by resource ID (e.g., `WA--2147482394`).
 - GoingToCamp map hierarchy must be traversed park-by-park via the `resourceLocationId → childMapId` mapping from `/api/maps` links. Starting from region maps returns ALL parks' sites.
-- Registry has 741 campgrounds: 697 rec.gov (WA 161, OR 268, ID 268) + 75 WA State Parks. Re-seed with `scripts/seed_registry.py` and `scripts/seed_wa_state.py`
+- Registry has 794 campgrounds: 666 rec.gov + 75 WA State Parks + 53 OR State Parks. Re-seed with `scripts/seed_registry.py`, `scripts/seed_wa_state.py`, and `scripts/seed_or_state.py`
