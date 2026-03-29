@@ -122,7 +122,7 @@ describe('App Component', () => {
     // By default "Find a date" is active, so day presets should be visible
     expect(screen.getByText('Any')).toBeInTheDocument()
     expect(screen.getByText('Weekend')).toBeInTheDocument()
-    expect(screen.getByText('Long wknd')).toBeInTheDocument()
+    expect(screen.getByText('Long weekend')).toBeInTheDocument()
     expect(screen.getByText('Weekdays')).toBeInTheDocument()
     expect(screen.getByText('Custom')).toBeInTheDocument()
   })

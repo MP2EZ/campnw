@@ -719,10 +719,7 @@ export default function App() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
 
-  const isSearch = location.pathname === "/";
-  const isPlan = location.pathname === "/plan";
   const isMap = location.pathname === "/map";
-  const isTrips = location.pathname.startsWith("/trips");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
@@ -796,43 +793,17 @@ export default function App() {
             <p className="header-subtitle">Find available campsites across the western US</p>
           </div>
           <div className="header-actions">
-            <nav className="header-nav" aria-label="Main navigation">
-              <Link
-                to="/"
-                className={`header-btn${isSearch ? " active" : ""}`}
-                aria-current={isSearch ? "page" : undefined}
-              >
-                Search
-              </Link>
-              <Link
-                to="/map"
-                className={`header-btn${isMap ? " active" : ""}`}
-                aria-current={isMap ? "page" : undefined}
-              >
-                Map
-              </Link>
-              <Link
-                to="/plan"
-                className={`header-btn${isPlan ? " active" : ""}`}
-                aria-current={isPlan ? "page" : undefined}
-              >
-                Plan
-              </Link>
-              <Link
-                to="/trips"
-                className={`header-btn${isTrips ? " active" : ""}`}
-                aria-current={isTrips ? "page" : undefined}
-              >
-                Trips
-              </Link>
-            </nav>
             <div className="header-secondary">
+              <Link to="/plan" className="plan-cta">
+                Plan a Trip
+              </Link>
               <button
-                className="header-btn"
+                className="header-btn watch-bell"
                 onClick={() => setWatchPanelOpen(true)}
                 title="Watchlist"
+                aria-label="Watchlist"
               >
-                Watchlist
+                🔔
               </button>
               <button
                 className="header-btn theme-toggle"
@@ -863,6 +834,28 @@ export default function App() {
               </button>
               {mobileMenuOpen && (
                 <div className="mobile-menu">
+                  <Link
+                    to="/plan"
+                    className="header-btn"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Plan a Trip
+                  </Link>
+                  {user && (
+                    <Link
+                      to="/trips"
+                      className="header-btn"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      My Trips
+                    </Link>
+                  )}
+                  <button
+                    className="header-btn"
+                    onClick={() => { setWatchPanelOpen(true); setMobileMenuOpen(false); }}
+                  >
+                    Watchlist
+                  </button>
                   {user ? (
                     <UserMenu />
                   ) : (
@@ -873,12 +866,6 @@ export default function App() {
                       Sign in
                     </button>
                   )}
-                  <button
-                    className="header-btn"
-                    onClick={() => { setWatchPanelOpen(true); setMobileMenuOpen(false); }}
-                  >
-                    Watchlist
-                  </button>
                   <button
                     className="header-btn theme-toggle"
                     onClick={() => { setDarkMode(!darkMode); setMobileMenuOpen(false); }}
@@ -963,21 +950,37 @@ export default function App() {
               Checked {Math.min(results.campgrounds_checked, maxResults)} campgrounds —{" "}
               {withAvailability} with availability
             </p>
-            <div className="view-toggle">
-              <button
-                className={resultsView === "dates" ? "active" : ""}
-                onClick={() => setResultsView("dates")}
-                aria-pressed={resultsView === "dates"}
-              >
-                By date
-              </button>
-              <button
-                className={resultsView === "sites" ? "active" : ""}
-                onClick={() => setResultsView("sites")}
-                aria-pressed={resultsView === "sites"}
-              >
-                By site
-              </button>
+            <div className="results-toolbar-right">
+              <div className="view-toggle">
+                <button
+                  className={resultsView === "dates" ? "active" : ""}
+                  onClick={() => setResultsView("dates")}
+                  aria-pressed={resultsView === "dates"}
+                >
+                  By date
+                </button>
+                <button
+                  className={resultsView === "sites" ? "active" : ""}
+                  onClick={() => setResultsView("sites")}
+                  aria-pressed={resultsView === "sites"}
+                >
+                  By site
+                </button>
+              </div>
+              <div className="view-toggle map-toggle">
+                <button
+                  className="active"
+                  aria-pressed="true"
+                >
+                  ≡ List
+                </button>
+                <button
+                  onClick={() => navigate("/map")}
+                  aria-pressed="false"
+                >
+                  ⊞ Map
+                </button>
+              </div>
             </div>
           </div>
           {searchSummary && (

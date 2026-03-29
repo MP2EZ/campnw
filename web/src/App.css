@@ -2754,6 +2754,48 @@ a.header-btn {
   outline-offset: 2px;
 }
 
+/* ─── Plan CTA Button ─────────────────────────────────────────────── */
+
+.plan-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semi);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--transition-base);
+  white-space: nowrap;
+}
+
+.plan-cta:hover {
+  background: var(--accent-hover);
+}
+
+/* ─── Watch Bell ──────────────────────────────────────────────────── */
+
+.watch-bell {
+  font-size: var(--text-base);
+  position: relative;
+}
+
+/* ─── Results Toolbar ─────────────────────────────────────────────── */
+
+.results-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.map-toggle button {
+  font-size: var(--text-xs);
+}
+
 /* ─── Trips ───────────────────────────────────────────────────────── */
 
 .trips-page,
