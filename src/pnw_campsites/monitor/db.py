@@ -342,6 +342,17 @@ class WatchDB:
         """)
         self._conn.commit()
 
+        # v1.2: analytics digests
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS analytics_digests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                digest_type TEXT NOT NULL,
+                period TEXT NOT NULL,
+                content TEXT NOT NULL,
+                generated_at TEXT NOT NULL,
+                UNIQUE(digest_type, period)
+            );
+        """)
         # v1.2: template watches
         watch_cols3 = [
             r[1] for r in self._conn.execute("PRAGMA table_info(watches)")
