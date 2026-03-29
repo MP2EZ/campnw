@@ -1008,6 +1008,24 @@ export default function App() {
               </div>
             </div>
           </div>
+          {resultSources.size > 1 && (
+          <div className="source-toggle" role="group" aria-label="Filter by source">
+            {[...resultSources].map((src) => {
+              const count = results.results.filter((r) => r.booking_system === src && r.total_available_sites > 0).length;
+              return (
+                <button
+                  key={src}
+                  type="button"
+                  className={`source-toggle-btn source-${src} ${sourceFilter.has(src) ? "active" : ""}`}
+                  onClick={() => toggleSource(src)}
+                  aria-pressed={sourceFilter.has(src)}
+                >
+                  {SOURCE_LABELS[src] || src}{count > 0 && ` (${count})`}
+                </button>
+              );
+            })}
+          </div>
+          )}
           {resultsDisplay === "map" ? (
             <div className="inline-map">
               <Suspense fallback={<div className="loading-page">Loading map...</div>}>
@@ -1028,24 +1046,6 @@ export default function App() {
                 ×
               </button>
             </div>
-          )}
-          {resultSources.size > 1 && (
-          <div className="source-toggle" role="group" aria-label="Filter by source">
-            {[...resultSources].map((src) => {
-              const count = results.results.filter((r) => r.booking_system === src && r.total_available_sites > 0).length;
-              return (
-                <button
-                  key={src}
-                  type="button"
-                  className={`source-toggle-btn source-${src} ${sourceFilter.has(src) ? "active" : ""}`}
-                  onClick={() => toggleSource(src)}
-                  aria-pressed={sourceFilter.has(src)}
-                >
-                  {SOURCE_LABELS[src] || src}{count > 0 && ` (${count})`}
-                </button>
-              );
-            })}
-          </div>
           )}
           {searchDates && withAvailability > 0 && (
             <CalendarHeatMap
