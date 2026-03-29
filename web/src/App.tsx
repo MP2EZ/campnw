@@ -1034,6 +1034,27 @@ export default function App() {
             </div>
           ) : (
           <>
+          {searchDates && withAvailability > 0 && (
+            <CalendarHeatMap
+              results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}
+              startDate={searchDates.start}
+              endDate={searchDates.end}
+            />
+          )}
+          {results.warnings?.length > 0 && (
+            <div className="warning-banner">
+              {results.warnings.map((w, i) => (
+                <p key={i}>{w.message}</p>
+              ))}
+            </div>
+          )}
+          {filteredResults.some((r) => r.booking_system === "wa_state") && (
+            <p className="wa-data-note">
+              <span className="source-badge source-wa_state">WA Parks</span>{" "}
+              site data is limited — names, types, and capacity aren't available
+              from their booking system. Check GoingToCamp for full details.
+            </p>
+          )}
           {searchSummary && (
             <div className="search-summary-banner" role="status">
               <div className="summary-content" dangerouslySetInnerHTML={{
@@ -1060,27 +1081,6 @@ export default function App() {
                 ×
               </button>
             </div>
-          )}
-          {searchDates && withAvailability > 0 && (
-            <CalendarHeatMap
-              results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}
-              startDate={searchDates.start}
-              endDate={searchDates.end}
-            />
-          )}
-          {results.warnings?.length > 0 && (
-            <div className="warning-banner">
-              {results.warnings.map((w, i) => (
-                <p key={i}>{w.message}</p>
-              ))}
-            </div>
-          )}
-          {filteredResults.some((r) => r.booking_system === "wa_state") && (
-            <p className="wa-data-note">
-              <span className="source-badge source-wa_state">WA Parks</span>{" "}
-              site data is limited — names, types, and capacity aren't available
-              from their booking system. Check GoingToCamp for full details.
-            </p>
           )}
           {filteredResults
             .filter((r) => r.total_available_sites > 0)
