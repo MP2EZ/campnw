@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 _docker_db = Path("/app/data/watches.db")
@@ -116,6 +116,20 @@ class TripCampground:
     sort_order: int = 0
     notes: str = ""
     added_at: str = ""
+
+
+@dataclass
+class SharedLink:
+    """A shareable link for a watch or trip."""
+
+    id: int | None = None
+    uuid: str = ""
+    watch_id: int | None = None
+    trip_id: int | None = None
+    created_by: int | None = None
+    expires_at: str = ""
+    revoked: bool = False
+    created_at: str = ""
 
 
 class WatchDB:
@@ -310,6 +324,20 @@ class WatchDB:
             self._conn.execute(
                 "ALTER TABLE watches ADD COLUMN trip_id INTEGER"
             )
+        # v1.2: shared links
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS shared_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                watch_id INTEGER REFERENCES watches(id) ON DELETE CASCADE,
+                trip_id INTEGER REFERENCES trips(id) ON DELETE CASCADE,
+                created_by INTEGER NOT NULL REFERENCES users(id),
+                expires_at TEXT NOT NULL,
+                revoked INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_shared_uuid ON shared_links(uuid);
+        """)
         self._conn.commit()
 
     # -------------------------------------------------------------------
@@ -993,3 +1021,73 @@ class WatchDB:
             )
             for r in rows
         ]
+
+    # -------------------------------------------------------------------
+    # Shared links
+    # -------------------------------------------------------------------
+
+    def create_shared_link(
+        self, user_id: int,
+        watch_id: int | None = None,
+        trip_id: int | None = None,
+        expires_days: int = 30,
+    ) -> SharedLink:
+        """Create a shareable link for a watch or trip."""
+        import uuid as _uuid
+
+        if not watch_id and not trip_id:
+            raise ValueError("Must specify watch_id or trip_id")
+
+        link_uuid = _uuid.uuid4().hex[:12]
+        now = datetime.now()
+        expires_at = (now + timedelta(days=expires_days)).isoformat()
+
+        self._conn.execute(
+            "INSERT INTO shared_links"
+            " (uuid, watch_id, trip_id, created_by, expires_at, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (link_uuid, watch_id, trip_id, user_id, expires_at, now.isoformat()),
+        )
+        self._conn.commit()
+        return SharedLink(
+            uuid=link_uuid,
+            watch_id=watch_id,
+            trip_id=trip_id,
+            created_by=user_id,
+            expires_at=expires_at,
+            created_at=now.isoformat(),
+        )
+
+    def get_shared_link(self, uuid: str) -> SharedLink | None:
+        row = self._conn.execute(
+            "SELECT * FROM shared_links WHERE uuid=?", (uuid,),
+        ).fetchone()
+        if not row:
+            return None
+        return SharedLink(
+            id=row["id"],
+            uuid=row["uuid"],
+            watch_id=row["watch_id"],
+            trip_id=row["trip_id"],
+            created_by=row["created_by"],
+            expires_at=row["expires_at"],
+            revoked=bool(row["revoked"]),
+            created_at=row["created_at"],
+        )
+
+    def revoke_shared_link(self, uuid: str, user_id: int) -> bool:
+        cursor = self._conn.execute(
+            "UPDATE shared_links SET revoked=1"
+            " WHERE uuid=? AND created_by=?",
+            (uuid, user_id),
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    def cleanup_expired_links(self) -> int:
+        now = datetime.now().isoformat()
+        cursor = self._conn.execute(
+            "DELETE FROM shared_links WHERE expires_at < ?", (now,),
+        )
+        self._conn.commit()
+        return cursor.rowcount
