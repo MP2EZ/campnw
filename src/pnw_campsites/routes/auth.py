@@ -89,12 +89,15 @@ def _check_auth_rate_limit(request: Request) -> None:
 
 
 def _set_auth_cookie(response: Response, user_id: int) -> None:
+    import os
+
     token = create_jwt(user_id)
+    is_prod = bool(os.getenv("FLY_APP_NAME"))
     response.set_cookie(
         TOKEN_COOKIE, token,
         max_age=TOKEN_MAX_AGE,
         httponly=True,
-        secure=True,
+        secure=is_prod,
         samesite="lax",
     )
 

@@ -609,6 +609,10 @@ class WatchDB:
         d["onboarding_complete"] = bool(d.get("onboarding_complete", 0))
         tags_raw = d.pop("preferred_tags", "[]") or "[]"
         d["preferred_tags"] = json.loads(tags_raw) if isinstance(tags_raw, str) else tags_raw
+        # Filter to known User fields (DB may have extra columns from other branches)
+        import dataclasses
+        valid_fields = {f.name for f in dataclasses.fields(User)}
+        d = {k: v for k, v in d.items() if k in valid_fields}
         return User(**d)
 
     # -------------------------------------------------------------------

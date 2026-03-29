@@ -85,12 +85,15 @@ def get_session_token(request: Request, response: Response) -> str:
 
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
+        import os
+
         token = str(uuid.uuid4())
+        is_prod = bool(os.getenv("FLY_APP_NAME"))
         response.set_cookie(
             SESSION_COOKIE, token,
             max_age=90 * 24 * 3600,  # 90 days
             httponly=True,
-            secure=True,
+            secure=is_prod,
             samesite="lax",
         )
     return token
