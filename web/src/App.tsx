@@ -918,7 +918,7 @@ export default function App() {
               aria-selected={mainMode === "search"}
               onClick={() => setMainMode("search")}
             >
-              Search
+              Find a Site
             </button>
             <button
               role="tab"
