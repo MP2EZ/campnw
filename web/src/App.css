@@ -2760,23 +2760,40 @@ a.header-btn {
 .trip-detail {
   max-width: var(--max-w-app);
   margin: 0 auto;
-  padding: var(--space-4) var(--space-3);
+  padding: var(--space-5) var(--space-3);
+}
+
+.trips-page h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semi);
+  margin: 0 0 var(--space-3);
 }
 
 .trip-create-row {
   display: flex;
   gap: var(--space-2);
   margin-bottom: var(--space-4);
+  align-items: center;
 }
 
 .trip-name-input {
   flex: 1;
-  padding: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--bg-card);
+  background: var(--bg);
   color: var(--text);
   font-size: var(--text-sm);
+  transition: border-color var(--transition-fast);
+}
+
+.trip-name-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.trip-create-row .btn-primary {
+  white-space: nowrap;
 }
 
 .trip-list {
@@ -2789,7 +2806,7 @@ a.header-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   margin-bottom: var(--space-2);
@@ -2804,7 +2821,7 @@ a.header-btn {
 .trip-link {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 0.15rem;
   text-decoration: none;
   color: var(--text);
   flex: 1;
@@ -2812,7 +2829,7 @@ a.header-btn {
 
 .trip-name {
   font-weight: var(--weight-semi);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
 }
 
 .trip-meta {
@@ -2825,8 +2842,8 @@ a.header-btn {
   border: none;
   color: var(--text-light);
   cursor: pointer;
-  font-size: var(--text-lg);
-  padding: var(--space-1);
+  font-size: var(--text-base);
+  padding: var(--space-1) var(--space-2);
   line-height: 1;
   transition: color var(--transition-fast);
 }
@@ -2839,13 +2856,16 @@ a.header-btn {
 .trips-loading {
   color: var(--text-light);
   font-size: var(--text-sm);
+  text-align: center;
+  padding: var(--space-6) 0;
 }
+
+/* ─── Trip Detail ─────────────────────────────────────────────────── */
 
 .trip-detail-header {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
   margin-bottom: var(--space-4);
 }
 
@@ -2853,14 +2873,20 @@ a.header-btn {
   font-size: var(--text-sm);
   color: var(--accent);
   text-decoration: none;
+  white-space: nowrap;
+}
+
+.trip-back-link:hover {
+  text-decoration: underline;
 }
 
 .trip-detail-title {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--space-2);
   margin: 0;
+  font-size: var(--text-lg);
 }
 
 .trip-edit-btn {
@@ -2869,12 +2895,35 @@ a.header-btn {
   background: none;
   border: none;
   cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.trip-edit-btn:hover {
+  text-decoration: underline;
+}
+
+.trip-detail-header .trip-delete-btn {
+  font-size: var(--text-xs);
+  color: var(--text-light);
+  margin-left: auto;
 }
 
 .trip-edit-name {
   display: flex;
   gap: var(--space-2);
   flex: 1;
+  align-items: center;
+}
+
+.trip-edit-name .trip-name-input {
+  flex: 1;
+}
+
+.trip-detail h3 {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semi);
+  color: var(--text-light);
+  margin: 0 0 var(--space-2);
 }
 
 .trip-campground-list {
@@ -2887,11 +2936,16 @@ a.header-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   margin-bottom: var(--space-2);
   background: var(--bg-card);
+  transition: box-shadow var(--transition-fast);
+}
+
+.trip-campground-item:hover {
+  box-shadow: var(--shadow-card);
 }
 
 .trip-campground-info {
@@ -2902,6 +2956,7 @@ a.header-btn {
 
 .trip-campground-name {
   font-weight: var(--weight-medium);
+  font-size: var(--text-sm);
 }
 
 .trip-remove-btn {
@@ -2909,8 +2964,8 @@ a.header-btn {
   border: none;
   color: var(--text-light);
   cursor: pointer;
-  font-size: var(--text-lg);
-  padding: var(--space-1);
+  font-size: var(--text-base);
+  padding: var(--space-1) var(--space-2);
   line-height: 1;
   transition: color var(--transition-fast);
 }
