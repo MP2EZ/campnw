@@ -274,6 +274,22 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
 # ---------------------------------------------------------------------------
 
 
+@router.get("/campgrounds/{facility_id}/tips")
+async def get_booking_tips(facility_id: str):
+    """Return cached booking tips for a campground."""
+    import json as _json
+    registry = get_registry()
+    cg = registry.get_by_facility_id(facility_id)
+    if not cg:
+        return {"tips": [], "data_through": None}
+    tips_raw = cg.booking_tips or "[]"
+    try:
+        tips = _json.loads(tips_raw) if isinstance(tips_raw, str) else tips_raw
+    except (ValueError, TypeError):
+        tips = []
+    return {"tips": tips, "facility_id": facility_id}
+
+
 @router.get("/search", response_model=SearchResponse)
 async def search(
     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
