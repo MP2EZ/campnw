@@ -1,5 +1,45 @@
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
+// ---------------------------------------------------------------------------
+// Typed fetch helper — eliminates untyped resp.json() calls
+// ---------------------------------------------------------------------------
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const resp = await fetch(url, init);
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(
+      (body as { detail?: string }).detail || `Request failed: ${resp.status}`,
+    );
+  }
+  return resp.json() as Promise<T>;
+}
+
+// ---------------------------------------------------------------------------
+// SSE type guards — runtime checks instead of unsafe `as T` casts
+// ---------------------------------------------------------------------------
+
+function isSSEDiagnosis(data: unknown): data is DiagnosisEvent {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "diagnosis";
+}
+
+function isSSEParsedParams(data: unknown): data is { type: "parsed_params"; params: ParsedParams } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "parsed_params";
+}
+
+function isSSESummary(data: unknown): data is { type: "summary"; text: string } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "summary";
+}
+
+function isCampgroundResult(data: unknown): data is CampgroundResult {
+  return typeof data === "object" && data !== null
+    && typeof (data as Record<string, unknown>).facility_id === "string"
+    && !("type" in (data as Record<string, unknown>));
+}
+
 export interface Window {
   campsite_id: string;
   site_name: string;
@@ -108,9 +148,7 @@ export async function searchCampsites(
   if (params.include_fcfs) query.set("include_fcfs", "true");
   if (params.limit) query.set("limit", String(params.limit));
 
-  const resp = await fetch(`${API_BASE}/api/search?${query}`);
-  if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
-  return resp.json();
+  return fetchJson<SearchResponse>(`${API_BASE}/api/search?${query}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -191,15 +229,15 @@ export async function searchCampsitesStream(
             return;
           }
           try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === "parsed_params" && onParsed) {
-              onParsed(parsed.params as ParsedParams);
-            } else if (parsed.type === "summary" && onSummary) {
-              onSummary(parsed.text as string);
-            } else if (parsed.type === "diagnosis" && onDiagnosis) {
-              onDiagnosis(parsed as DiagnosisEvent);
-            } else if (!parsed.type) {
-              onResult(parsed as CampgroundResult);
+            const parsed: unknown = JSON.parse(data);
+            if (isSSEParsedParams(parsed) && onParsed) {
+              onParsed(parsed.params);
+            } else if (isSSESummary(parsed) && onSummary) {
+              onSummary(parsed.text);
+            } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
+              onDiagnosis(parsed);
+            } else if (isCampgroundResult(parsed)) {
+              onResult(parsed);
             }
           } catch {
             // skip malformed lines
@@ -349,9 +387,7 @@ export async function deleteAccount(): Promise<void> {
 }
 
 export async function exportData(): Promise<object> {
-  const resp = await fetch(`${API_BASE}/api/auth/export`, fetchOpts);
-  if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
-  return resp.json();
+  return fetchJson<object>(`${API_BASE}/api/auth/export`, fetchOpts);
 }
 
 export async function getSearchHistory(): Promise<SearchHistoryEntry[]> {
@@ -385,9 +421,7 @@ export async function getRecommendations(): Promise<Recommendation[]> {
 }
 
 export async function getWatches(): Promise<WatchData[]> {
-  const resp = await fetch(`${API_BASE}/api/watches`, fetchOpts);
-  if (!resp.ok) throw new Error(`Failed to load watches: ${resp.status}`);
-  return resp.json();
+  return fetchJson<WatchData[]>(`${API_BASE}/api/watches`, fetchOpts);
 }
 
 export async function createWatch(
