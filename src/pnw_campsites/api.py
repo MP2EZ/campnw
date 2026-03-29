@@ -1593,8 +1593,13 @@ def _check_plan_rate_limit(session_key: str) -> bool:
     return True
 
 
+class PlanMessage(BaseModel):
+    role: str = Field(..., pattern=r"^(user|assistant)$")
+    content: str = Field(..., max_length=10_000)
+
+
 class PlanChatRequest(BaseModel):
-    messages: list[dict]
+    messages: list[PlanMessage] = Field(..., min_length=1, max_length=50)
 
 
 class PlanChatResponse(BaseModel):
@@ -1619,7 +1624,8 @@ async def plan_chat(body: PlanChatRequest, request: Request, response: Response)
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
         )
 
-    result = await chat(body.messages, _engine, _registry, api_key)
+    msgs = [m.model_dump() for m in body.messages]
+    result = await chat(msgs, _engine, _registry, api_key)
     return PlanChatResponse(**result)
 
 
@@ -1638,8 +1644,10 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request):
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
         )
 
+    msgs = [m.model_dump() for m in body.messages]
+
     async def event_generator():
-        async for event_json in chat_stream(body.messages, _engine, _registry, api_key):
+        async for event_json in chat_stream(msgs, _engine, _registry, api_key):
             yield f"data: {event_json}\n\n"
         yield "data: [DONE]\n\n"
 

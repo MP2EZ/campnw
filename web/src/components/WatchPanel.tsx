@@ -148,6 +148,7 @@ export const WatchPanel = memo(function WatchPanel({
                   className="watch-action-btn"
                   onClick={() => handleToggle(w.id)}
                   title={w.enabled ? "Pause" : "Resume"}
+                  aria-label={w.enabled ? `Pause watch for ${w.name}` : `Resume watch for ${w.name}`}
                 >
                   {w.enabled ? "⏸" : "▶"}
                 </button>
@@ -155,6 +156,7 @@ export const WatchPanel = memo(function WatchPanel({
                   className="watch-action-btn watch-delete"
                   onClick={() => handleDelete(w.id)}
                   title="Delete"
+                  aria-label={`Delete watch for ${w.name}`}
                 >
                   ×
                 </button>

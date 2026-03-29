@@ -371,6 +371,10 @@ header p {
   margin-top: 0.1rem;
 }
 
+.trip-type-btn.active .trip-type-hint {
+  color: rgba(255, 255, 255, 0.78);
+}
+
 /* ─── Date quick presets ──────────────────────────────────────────── */
 
 .date-presets-wrap {

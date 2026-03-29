@@ -19,7 +19,15 @@ TOKEN_MAX_AGE = 30 * 24 * 3600  # 30 days
 def _get_secret() -> str:
     global _JWT_SECRET
     if _JWT_SECRET is None:
-        _JWT_SECRET = os.getenv("JWT_SECRET") or secrets.token_hex(32)
+        env_secret = os.getenv("JWT_SECRET")
+        if not env_secret:
+            if os.getenv("FLY_APP_NAME"):
+                raise RuntimeError(
+                    "JWT_SECRET must be set in production. "
+                    "Run: fly secrets set JWT_SECRET=\"$(openssl rand -hex 32)\""
+                )
+            env_secret = secrets.token_hex(32)
+        _JWT_SECRET = env_secret
     return _JWT_SECRET
 
 
