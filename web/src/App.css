@@ -70,12 +70,12 @@
   --error-bg: #281818;
   --error-border: #4a2828;
   --error-text: #d07070;
-  /* Heat map — single-hue dark green */
-  --heatmap-0: #1e1e1a;
-  --heatmap-1: #2e4a1e;
-  --heatmap-2: #2a4020;
-  --heatmap-3: #3a5a2a;
-  --heatmap-4: #4a7a38;
+  /* Heat map — single-hue dark green, widened luminance steps */
+  --heatmap-0: #1a1a16;
+  --heatmap-1: #1e3a14;
+  --heatmap-2: #2d6a1e;
+  --heatmap-3: #4a9a30;
+  --heatmap-4: #6abf48;
 }
 
 /* ─── Skip link (WCAG 2.4.1) ──────────────────────────────────────── */
