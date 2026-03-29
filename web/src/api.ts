@@ -126,6 +126,7 @@ export async function searchCampsitesStream(
   onDone: () => void,
   onError: (err: Error) => void,
   onDiagnosis?: (event: DiagnosisEvent) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const query = new URLSearchParams();
   query.set("start_date", params.start_date);
@@ -144,7 +145,7 @@ export async function searchCampsitesStream(
   if (params.limit) query.set("limit", String(params.limit));
 
   try {
-    const resp = await fetch(`${API_BASE}/api/search/stream?${query}`);
+    const resp = await fetch(`${API_BASE}/api/search/stream?${query}`, { signal });
     if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
 
     const reader = resp.body?.getReader();
@@ -183,6 +184,7 @@ export async function searchCampsitesStream(
     }
     onDone();
   } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") return;
     onError(e instanceof Error ? e : new Error("Stream failed"));
   }
 }

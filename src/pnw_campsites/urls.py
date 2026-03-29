@@ -76,13 +76,13 @@ def or_state_availability_url(
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> str:
-    """Deep link to an OR State Park's availability on ReserveAmerica."""
+    """Deep link to an OR State Park's availability on ReserveAmerica.
+
+    Only passes arrivalDate (positions the 14-day calendar grid).
+    RA treats departureDate as a booking checkout date, not a viewing
+    window — passing our full search range would imply a multi-month stay.
+    """
     url = f"{RA_BASE_URL}/explore/{slug}/OR/{park_id}/campsite-availability"
-    if start_date and end_date:
-        url += (
-            f"?arrivalDate={start_date.isoformat()}"
-            f"&departureDate={end_date.isoformat()}"
-        )
-    elif start_date:
+    if start_date:
         url += f"?arrivalDate={start_date.isoformat()}"
     return url

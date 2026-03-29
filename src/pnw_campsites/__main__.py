@@ -113,7 +113,10 @@ def _format_results(results, show_urls: bool = True) -> None:
                     if reservable_windows else None
                 )
                 from pnw_campsites.urls import or_state_availability_url
-                print(f"  Book: {or_state_availability_url(cg.facility_id, cg.booking_url_slug, start, end)}")
+                book = or_state_availability_url(
+                    cg.facility_id, cg.booking_url_slug, start, end,
+                )
+                print(f"  Book: {book}")
             else:
                 print(f"  Book: {recgov_availability_url(cg.facility_id, start)}")
 
@@ -278,7 +281,10 @@ async def cmd_check(args: argparse.Namespace) -> None:
         print(f"Book: {wa_state_availability_url(cg.facility_id, start_date, end_date)}")
     elif is_or_state:
         from pnw_campsites.urls import or_state_availability_url
-        print(f"Book: {or_state_availability_url(cg.facility_id, cg.booking_url_slug, start_date, end_date)}")
+        book = or_state_availability_url(
+            cg.facility_id, cg.booking_url_slug, start_date, end_date,
+        )
+        print(f"Book: {book}")
     else:
         print(f"Book: {recgov_availability_url(cg.facility_id, start_date)}")
 
@@ -478,7 +484,10 @@ def main() -> None:
                           help="Include FCFS (first-come-first-served) site details")
     p_search.add_argument("--limit", type=int, default=20,
                           help="Max campgrounds to check (default: 20)")
-    p_search.add_argument("--source", help="Booking system: recgov, wa-state, or-state (default: all)")
+    p_search.add_argument(
+        "--source",
+        help="Booking system: recgov, wa-state, or-state (default: all)",
+    )
 
     # --- check ---
     p_check = sub.add_parser("check", help="Check a specific campground")
@@ -487,7 +496,10 @@ def main() -> None:
                          help="Date range: YYYY-MM-DD:YYYY-MM-DD or this-weekend/next-weekend")
     p_check.add_argument("--nights", type=int, default=1,
                          help="Minimum consecutive nights (default: 1)")
-    p_check.add_argument("--source", help="Booking system: recgov, wa-state, or-state (default: recgov)")
+    p_check.add_argument(
+        "--source",
+        help="Booking system: recgov, wa-state, or-state (default: recgov)",
+    )
 
     # --- list ---
     p_list = sub.add_parser("list", help="List campgrounds in the registry")
@@ -495,7 +507,10 @@ def main() -> None:
     p_list.add_argument("--tags", help="Comma-separated tags to filter by")
     p_list.add_argument("--max-drive", type=int, help="Max drive minutes from Seattle")
     p_list.add_argument("--name", help="Filter by name (substring match)")
-    p_list.add_argument("--source", help="Booking system: recgov, wa-state, or-state (default: all)")
+    p_list.add_argument(
+        "--source",
+        help="Booking system: recgov, wa-state, or-state (default: all)",
+    )
 
     # --- watch ---
     p_watch = sub.add_parser("watch", help="Monitor campgrounds for changes")
