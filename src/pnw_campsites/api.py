@@ -223,6 +223,40 @@ async def lifespan(app: FastAPI):
             # Offset by 7.5 minutes from tranche 0
             next_run_time=datetime.now() + timedelta(minutes=7, seconds=30),
         )
+        # Weekly analytics digest — Monday 8am Pacific
+        async def _weekly_digest():
+            import logging
+
+            import httpx as _httpx
+
+            from pnw_campsites.analytics.digest import generate_weekly_digest
+
+            log = logging.getLogger(__name__)
+            report = await generate_weekly_digest(_watch_db)
+            log.info("Weekly digest:\n%s", report)
+            # Send via ntfy if configured
+            topic = os.getenv("DIGEST_NTFY_TOPIC")
+            if topic and report:
+                try:
+                    async with _httpx.AsyncClient() as c:
+                        await c.post(
+                            f"https://ntfy.sh/{topic}",
+                            content=report[:4000].encode(),
+                            headers={"Title": "campnw Weekly Digest"},
+                        )
+                except Exception as e:
+                    log.warning("Digest ntfy send failed: %s", e)
+
+        scheduler.add_job(
+            _weekly_digest,
+            "cron",
+            day_of_week="mon",
+            hour=8,
+            id="weekly_digest",
+            max_instances=1,
+            coalesce=True,
+        )
+
         scheduler.start()
         next_t0 = scheduler.get_job("watch_poller_t0").next_run_time
         _poll_state["next_poll"] = (
@@ -293,6 +327,15 @@ async def timing_middleware(request: Request, call_next):
         "frame-ancestors 'none'"
     )
     return response
+
+
+@app.get("/api/admin/digest")
+async def admin_digest():
+    """On-demand analytics digest generation (for testing)."""
+    from pnw_campsites.analytics.digest import generate_weekly_digest
+
+    report = await generate_weekly_digest(_watch_db)
+    return {"report": report}
 
 
 @app.get("/api/perf")
