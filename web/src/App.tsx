@@ -140,13 +140,11 @@ function DayPicker({
 
 function SearchForm({
   onSearch,
-  loading,
   userDefaults,
   isLoggedIn,
   initialValues,
 }: {
   onSearch: (params: SearchParams, mode: SearchMode) => void;
-  loading: boolean;
   userDefaults?: { state: string; nights: number; from: string };
   isLoggedIn: boolean;
   initialValues?: SearchParams | null;
@@ -166,6 +164,7 @@ function SearchForm({
   const [maxDrive, setMaxDrive] = useState(initialValues?.max_drive ? String(initialValues.max_drive) : "");
   const [limit, setLimit] = useState(initialValues?.limit || 20);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [nlQuery, setNlQuery] = useState("");
   const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const quickPresets = useMemo(() => getQuickPresets(), []);
@@ -235,6 +234,44 @@ function SearchForm({
 
   return (
     <form onSubmit={handleSubmit} className="search-form">
+      {/* Natural language quick search */}
+      <div className="nl-search-section">
+        <div className="nl-search-row">
+          <input
+            type="text"
+            className="nl-search-input"
+            placeholder="Quick search: dog-friendly lakeside spot near Portland this weekend"
+            value={nlQuery}
+            onChange={(e) => setNlQuery(e.target.value)}
+            aria-label="Quick search in plain language"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && nlQuery.trim()) {
+                e.preventDefault();
+                onSearch(
+                  { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
+                  "find",
+                );
+                setNlQuery("");
+              }
+            }}
+          />
+          {nlQuery.trim() && (
+            <button
+              type="button"
+              className="nl-search-btn"
+              onClick={() => {
+                onSearch(
+                  { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
+                  "find",
+                );
+                setNlQuery("");
+              }}
+            >
+              Go
+            </button>
+          )}
+        </div>
+      </div>
       <div className="mode-toggle">
         <button
           type="button"
@@ -378,6 +415,12 @@ function SearchForm({
             <option value="portland">Portland</option>
             <option value="spokane">Spokane</option>
             <option value="bellingham">Bellingham</option>
+            <option value="bend">Bend, OR</option>
+            <option value="bozeman">Bozeman, MT</option>
+            <option value="missoula">Missoula, MT</option>
+            <option value="jackson">Jackson, WY</option>
+            <option value="sacramento">Sacramento, CA</option>
+            <option value="reno">Reno, NV</option>
             <option value="moscow">Moscow, ID</option>
           </select>
         </label>
@@ -428,6 +471,9 @@ function SearchForm({
               <option value="WA">WA</option>
               <option value="OR">OR</option>
               <option value="ID">ID</option>
+              <option value="MT">MT</option>
+              <option value="WY">WY</option>
+              <option value="CA">CA</option>
             </select>
           </label>
           <label>
@@ -448,7 +494,7 @@ function SearchForm({
         {[
           "lakeside", "riverside", "beach", "old-growth",
           "pet-friendly", "rv-friendly", "tent-only",
-          "trails", "swimming", "shade",
+          "trails", "swimming", "shade", "campfire",
         ].map((tag) => (
           <button
             key={tag}
@@ -915,14 +961,20 @@ function ResultCard({
             {summaryText}
             {result.fcfs_sites > 0 && <>{" "}+ {result.fcfs_sites} <span title="First-come, first-served">FCFS</span></>}
           </p>
+          {result.elevator_pitch && (
+            <p className="result-pitch">{result.elevator_pitch}</p>
+          )}
         </div>
         <span className="expand-icon" aria-hidden="true">{expanded ? "−" : "+"}</span>
       </button>
 
       <div className={`card-body${expanded ? " card-body-open" : ""}`}>
         <div className="card-body-inner">
-          {result.vibe && (
-            <p className="result-vibe">{result.vibe}</p>
+          {(result.description_rewrite || result.vibe) && (
+            <p className="result-vibe">{result.description_rewrite || result.vibe}</p>
+          )}
+          {result.best_for && (
+            <p className="result-best-for">Best for: {result.best_for}</p>
           )}
           {result.availability_url && (
             <div className="card-toolbar">
@@ -977,6 +1029,7 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [results, setResults] = useState<SearchResponse | null>(null);
+  const [searchSummary, setSearchSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultsView, setResultsView] = useState<ResultsView>("dates");
@@ -1044,8 +1097,12 @@ export default function App() {
 
     setLoading(true);
     setError(null);
+    setSearchSummary(null);
     setResultsView(mode === "find" ? "dates" : "sites");
-    setSearchDates({ start: params.start_date, end: params.end_date });
+    // For NL search, dates come from parsed_params event later
+    if (params.start_date && params.end_date) {
+      setSearchDates({ start: params.start_date, end: params.end_date });
+    }
     setFormCollapsed(true);
 
     // Scroll to results area after DOM updates
@@ -1111,6 +1168,25 @@ export default function App() {
         );
       },
       abortController.signal,
+      (parsed) => {
+        // Update dates and params from NL parse result
+        if (parsed.start_date && parsed.end_date) {
+          setSearchDates({ start: parsed.start_date, end: parsed.end_date });
+        }
+        setActiveSearchParams({
+          ...params,
+          start_date: parsed.start_date,
+          end_date: parsed.end_date,
+          state: parsed.state || undefined,
+          nights: parsed.nights,
+          tags: parsed.tags || undefined,
+          from_location: parsed.from_location || undefined,
+          max_drive: parsed.max_drive || undefined,
+          name: parsed.name || undefined,
+          days_of_week: parsed.days_of_week || undefined,
+        });
+      },
+      (text) => setSearchSummary(text),
     );
   };
 
@@ -1321,7 +1397,6 @@ export default function App() {
           ) : (
             <SearchForm
               onSearch={handleSearch}
-              loading={loading}
               isLoggedIn={!!user}
               userDefaults={user ? {
                 state: user.default_state,
@@ -1366,6 +1441,19 @@ export default function App() {
               </button>
             </div>
           </div>
+          {searchSummary && (
+            <div className="search-summary-banner" role="status">
+              <p>{searchSummary}</p>
+              <button
+                type="button"
+                className="summary-dismiss"
+                onClick={() => setSearchSummary(null)}
+                aria-label="Dismiss summary"
+              >
+                ×
+              </button>
+            </div>
+          )}
           {/* Source filter — client-side, instant toggle */}
           {resultSources.size > 1 && (
           <div className="source-toggle" role="group" aria-label="Filter by source">

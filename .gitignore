@@ -42,6 +42,9 @@ Thumbs.db
 .coverage
 htmlcov/
 
+# Linter cache
+.ruff_cache/
+
 # Node
 node_modules/
 web/dist/
@@ -49,3 +52,7 @@ stats.html
 
 # Vite scaffold assets (unused)
 web/src/assets/
+
+# Working files (temp exploration artifacts)
+scripts/probe_*.py
+ux-audit/

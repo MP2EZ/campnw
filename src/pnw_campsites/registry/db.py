@@ -67,6 +67,12 @@ class CampgroundRegistry:
                 "ALTER TABLE campgrounds ADD COLUMN booking_url_slug TEXT DEFAULT ''"
             )
             self._conn.commit()
+        for col in ("elevator_pitch", "description_rewrite", "best_for"):
+            if col not in cols:
+                self._conn.execute(
+                    f"ALTER TABLE campgrounds ADD COLUMN {col} TEXT DEFAULT ''"
+                )
+                self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
@@ -250,6 +256,26 @@ class CampgroundRegistry:
         self._conn.execute(
             "UPDATE campgrounds SET vibe=?, updated_at=? WHERE id=?",
             (vibe, datetime.now().isoformat(), campground_id),
+        )
+        self._conn.commit()
+
+    def update_description(
+        self,
+        campground_id: int,
+        elevator_pitch: str,
+        description_rewrite: str,
+        best_for: str,
+    ) -> None:
+        self._conn.execute(
+            "UPDATE campgrounds SET elevator_pitch=?, description_rewrite=?,"
+            " best_for=?, updated_at=? WHERE id=?",
+            (
+                elevator_pitch,
+                description_rewrite,
+                best_for,
+                datetime.now().isoformat(),
+                campground_id,
+            ),
         )
         self._conn.commit()
 

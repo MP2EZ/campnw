@@ -223,6 +223,40 @@ async def lifespan(app: FastAPI):
             # Offset by 7.5 minutes from tranche 0
             next_run_time=datetime.now() + timedelta(minutes=7, seconds=30),
         )
+        # Weekly analytics digest — Monday 8am Pacific
+        async def _weekly_digest():
+            import logging
+
+            import httpx as _httpx
+
+            from pnw_campsites.analytics.digest import generate_weekly_digest
+
+            log = logging.getLogger(__name__)
+            report = await generate_weekly_digest(_watch_db)
+            log.info("Weekly digest:\n%s", report)
+            # Send via ntfy if configured
+            topic = os.getenv("DIGEST_NTFY_TOPIC")
+            if topic and report:
+                try:
+                    async with _httpx.AsyncClient() as c:
+                        await c.post(
+                            f"https://ntfy.sh/{topic}",
+                            content=report[:4000].encode(),
+                            headers={"Title": "campnw Weekly Digest"},
+                        )
+                except Exception as e:
+                    log.warning("Digest ntfy send failed: %s", e)
+
+        scheduler.add_job(
+            _weekly_digest,
+            "cron",
+            day_of_week="mon",
+            hour=8,
+            id="weekly_digest",
+            max_instances=1,
+            coalesce=True,
+        )
+
         scheduler.start()
         next_t0 = scheduler.get_job("watch_poller_t0").next_run_time
         _poll_state["next_poll"] = (
@@ -295,6 +329,15 @@ async def timing_middleware(request: Request, call_next):
     return response
 
 
+@app.get("/api/admin/digest")
+async def admin_digest():
+    """On-demand analytics digest generation (for testing)."""
+    from pnw_campsites.analytics.digest import generate_weekly_digest
+
+    report = await generate_weekly_digest(_watch_db)
+    return {"report": report}
+
+
 @app.get("/api/perf")
 async def perf_stats():
     if not _search_timings:
@@ -340,6 +383,9 @@ class CampgroundResultResponse(BaseModel):
     fcfs_sites: int
     tags: list[str] = []
     vibe: str = ""
+    elevator_pitch: str = ""
+    description_rewrite: str = ""
+    best_for: str = ""
     estimated_drive_minutes: int | None = None
     availability_url: str | None = None
     windows: list[WindowResponse]
@@ -417,6 +463,110 @@ class CampgroundResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+async def _generate_search_summary(
+    results_data: list[dict],
+    query: SearchQuery,
+) -> str | None:
+    """Generate a brief AI summary of search results. Returns None on failure."""
+    import asyncio
+    import os
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return None
+
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+
+    compact = json.dumps(results_data[:20])  # cap at 20 for token budget
+    state_str = query.state or "all states"
+    date_str = f"{query.start_date} to {query.end_date}"
+
+    prompt = (
+        "Summarize these campsite search results in 1-2 sentences. "
+        "Highlight: total availability, closest/best options, date patterns "
+        "(weekday vs weekend), or standout features.\n\n"
+        f"Search: {state_str}, {date_str}, "
+        f"{query.min_consecutive_nights} nights\n"
+        f"Results ({len(results_data)} campgrounds with availability):\n"
+        f"{compact}\n\n"
+        "Be specific and concise. Reference campground names. No preamble."
+    )
+
+    try:
+        response = await asyncio.wait_for(
+            client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=150,
+                messages=[{"role": "user", "content": prompt}],
+            ),
+            timeout=3.0,
+        )
+        return response.content[0].text.strip()
+    except Exception:
+        return None
+
+
+async def _enhance_rec_reasons(
+    results: list[dict],
+    affinities: dict,
+) -> list[str] | None:
+    """Generate personalized recommendation reasons via Haiku batch call."""
+    import asyncio
+    import os
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return None
+
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+
+    top_tags = sorted(
+        affinities["tags"].items(), key=lambda x: -x[1],
+    )[:5]
+    top_states = sorted(
+        affinities["states"].items(), key=lambda x: -x[1],
+    )[:3]
+
+    recs_summary = json.dumps([
+        {"name": r["name"], "state": r["state"], "tags": r["tags"][:3],
+         "vibe": r.get("vibe", "")[:60]}
+        for r in results
+    ])
+
+    prompt = (
+        "Generate a brief personalized recommendation reason (1 sentence, "
+        "max 80 chars) for each campground. The user tends to search for "
+        f"{', '.join(t for t, _ in top_tags)} in "
+        f"{', '.join(s for s, _ in top_states)}.\n\n"
+        f"Campgrounds:\n{recs_summary}\n\n"
+        "Return a JSON array of strings, one reason per campground, same "
+        "order. Reference specific campground attributes. No preamble."
+    )
+
+    try:
+        response = await asyncio.wait_for(
+            client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=400,
+                messages=[{"role": "user", "content": prompt}],
+            ),
+            timeout=2.0,
+        )
+        text = response.content[0].text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        reasons = json.loads(text)
+        if isinstance(reasons, list) and len(reasons) == len(results):
+            return [r[:80] for r in reasons]
+    except Exception:
+        pass
+    return None
+
+
 def _build_availability_url(
     facility_id: str,
     booking_system: BookingSystem,
@@ -491,6 +641,9 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
         fcfs_sites=r.fcfs_sites,
         tags=cg.tags,
         vibe=cg.vibe,
+        elevator_pitch=cg.elevator_pitch,
+        description_rewrite=cg.description_rewrite,
+        best_for=cg.best_for,
         estimated_drive_minutes=r.estimated_drive_minutes,
         availability_url=_build_availability_url(
             cg.facility_id, cg.booking_system, start, end,
@@ -648,8 +801,8 @@ async def search(
 
 @app.get("/api/search/stream")
 async def search_stream(
-    start_date: date = Query(..., description="Start date"),
-    end_date: date = Query(..., description="End date"),
+    start_date: date | None = Query(None, description="Start date"),
+    end_date: date | None = Query(None, description="End date"),
     state: str | None = Query(None),
     nights: int = Query(2),
     mode: str | None = Query(None),
@@ -662,8 +815,48 @@ async def search_stream(
     no_groups: bool = Query(False),
     include_fcfs: bool = Query(False),
     limit: int = Query(20, ge=1, le=50),
+    q: str | None = Query(None, description="Natural language search query"),
 ):
     """SSE streaming search — yields results as each batch completes."""
+    import os
+
+    nl_parsed: dict | None = None
+
+    # Natural language query → structured params
+    if q and not start_date:
+        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if api_key:
+            from pnw_campsites.search.nl_parser import parse_natural_query
+
+            nl_parsed = await parse_natural_query(q, api_key)
+            # Apply NL-parsed values as defaults (explicit params override)
+            if "start_date" in nl_parsed:
+                start_date = date.fromisoformat(nl_parsed["start_date"])
+            if "end_date" in nl_parsed:
+                end_date = date.fromisoformat(nl_parsed["end_date"])
+            if not state and "state" in nl_parsed:
+                state = nl_parsed["state"]
+            if not tags and "tags" in nl_parsed:
+                tags = ",".join(nl_parsed["tags"])
+            if not from_location and "from_location" in nl_parsed:
+                from_location = nl_parsed["from_location"]
+            if not max_drive and "max_drive_minutes" in nl_parsed:
+                max_drive = nl_parsed["max_drive_minutes"]
+            if not name and "name_like" in nl_parsed:
+                name = nl_parsed["name_like"]
+            if "min_consecutive_nights" in nl_parsed:
+                nights = nl_parsed["min_consecutive_nights"]
+            if not days_of_week and "days_of_week" in nl_parsed:
+                days_of_week = nl_parsed["days_of_week"]
+
+    # Require dates (either from query params or NL parse)
+    if not start_date or not end_date:
+        # Default: 2 weeks out, 30-day window
+        from datetime import timedelta
+
+        start_date = start_date or (date.today() + timedelta(days=14))
+        end_date = end_date or (start_date + timedelta(days=30))
+
     days_set = (
         {int(d) for d in days_of_week.split(",")} if days_of_week else None
     )
@@ -686,7 +879,26 @@ async def search_stream(
     )
 
     async def event_generator():
+        # Emit parsed params so the frontend can show what was understood
+        if nl_parsed:
+            parsed_event = {
+                "type": "parsed_params",
+                "params": {
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "state": state,
+                    "nights": nights,
+                    "tags": tags,
+                    "from_location": from_location,
+                    "max_drive": max_drive,
+                    "name": name,
+                    "days_of_week": days_of_week,
+                },
+            }
+            yield f"data: {json.dumps(parsed_event)}\n\n"
+
         available_count = 0
+        summary_data: list[dict] = []
         async for result in _engine.search_stream(query):
             data = _format_result(
                 result, booking_system or BookingSystem.RECGOV
@@ -694,6 +906,24 @@ async def search_stream(
             yield f"data: {json.dumps(data.model_dump())}\n\n"
             if result.total_available_sites > 0:
                 available_count += 1
+                summary_data.append({
+                    "name": result.campground.name,
+                    "sites": result.total_available_sites,
+                    "drive": result.estimated_drive_minutes,
+                    "tags": result.campground.tags[:3],
+                    "state": result.campground.state,
+                })
+
+        # AI summary when enough results to warrant it
+        if available_count > 5:
+            try:
+                summary_text = await _generate_search_summary(
+                    summary_data, query,
+                )
+                if summary_text:
+                    yield f"data: {json.dumps({'type': 'summary', 'text': summary_text})}\n\n"
+            except Exception:
+                pass  # Silent skip — summary is optional
 
         # Diagnosis when no reservable availability found
         if available_count == 0:
@@ -1111,6 +1341,18 @@ async def recommendations(request: Request):
     # Strip internal score from response
     for r in results:
         del r["score"]
+
+    # Enhance reasons with LLM if user has enough search history
+    if results and len(affinities["tags"]) >= 3:
+        try:
+            enhanced = await _enhance_rec_reasons(results, affinities)
+            if enhanced:
+                for r, reason in zip(results, enhanced, strict=False):
+                    if reason:
+                        r["reason"] = reason
+        except Exception:
+            pass  # Keep template reasons on failure
+
     return results
 
 

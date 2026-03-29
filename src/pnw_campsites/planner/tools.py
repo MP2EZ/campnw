@@ -37,7 +37,7 @@ TOOLS: list[dict] = [
                 },
                 "state": {
                     "type": "string",
-                    "enum": ["WA", "OR", "ID"],
+                    "enum": ["WA", "OR", "ID", "MT", "WY", "CA"],
                     "description": "State filter",
                 },
                 "nights": {
@@ -51,8 +51,12 @@ TOOLS: list[dict] = [
                     "items": {"type": "string"},
                     "description": (
                         "Tags to filter by. Available: lakeside, riverside, "
-                        "old-growth, pet-friendly, kid-friendly, beach, mountain-views, "
-                        "secluded, group-sites, hookups, walk-in"
+                        "beach, old-growth, forest, alpine, desert, backcountry, "
+                        "remote, rv-friendly, tent-only, walk-in, pull-through, "
+                        "group-sites, dispersed, trails, swimming, fishing, "
+                        "boating, boat-launch, equestrian, climbing, "
+                        "winter-camping, pet-friendly, kid-friendly, accessible, "
+                        "campfire, shade, hot-springs, waterfall"
                     ),
                 },
                 "from_location": {
