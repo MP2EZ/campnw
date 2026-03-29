@@ -9,6 +9,23 @@ from pydantic import BaseModel, field_validator
 
 _logger = logging.getLogger(__name__)
 
+
+def _truncate(text: str, max_len: int) -> str:
+    """Truncate text at the last sentence or word boundary within max_len."""
+    if len(text) <= max_len:
+        return text
+    # Try to cut at last sentence boundary
+    truncated = text[:max_len]
+    last_period = truncated.rfind(". ")
+    if last_period > max_len // 2:
+        return truncated[: last_period + 1]
+    # Fall back to last word boundary
+    last_space = truncated.rfind(" ")
+    if last_space > 0:
+        return truncated[:last_space] + "..."
+    return truncated[:max_len]
+
+
 VALID_TAGS = [
     # Location / setting
     "lakeside",
@@ -190,11 +207,11 @@ async def generate_description(
     prompt = (
         "Generate three descriptions for this campground. Return ONLY a JSON "
         "object with these keys:\n"
-        '- "elevator_pitch": One sentence (max 100 chars) for a search result '
+        '- "elevator_pitch": One sentence (max 120 chars) for a search result '
         "card. Capture what makes this place distinctive.\n"
-        '- "description_rewrite": 2-3 sentences (max 250 chars) for an expanded '
+        '- "description_rewrite": 2-3 sentences (max 350 chars) for an expanded '
         "view. Setting, key activities, what sets it apart.\n"
-        '- "best_for": A short label (max 30 chars) for who this campground is '
+        '- "best_for": A short label (max 50 chars) for who this campground is '
         'ideal for. Examples: "families with young kids", "RV road-trippers", '
         '"backpackers seeking solitude".\n\n'
         f"Campground: {name}\n"
@@ -218,10 +235,10 @@ async def generate_description(
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         result = json.loads(text)
-        # Enforce length limits
-        pitch = result.get("elevator_pitch", "")[:100]
-        desc = result.get("description_rewrite", "")[:250]
-        best = result.get("best_for", "")[:30]
+        # Enforce length limits — truncate at sentence or word boundary
+        pitch = _truncate(result.get("elevator_pitch", ""), 120)
+        desc = _truncate(result.get("description_rewrite", ""), 350)
+        best = _truncate(result.get("best_for", ""), 50)
         return {
             "elevator_pitch": pitch,
             "description_rewrite": desc,
