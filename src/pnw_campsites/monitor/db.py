@@ -73,6 +73,8 @@ class User:
     default_nights: int = 2
     default_from: str = ""
     recommendations_enabled: bool = False
+    preferred_tags: list[str] | None = None
+    onboarding_complete: bool = False
     created_at: str = ""
     last_login_at: str | None = None
 
@@ -264,6 +266,16 @@ class WatchDB:
             self._conn.execute(
                 "ALTER TABLE users ADD COLUMN"
                 " recommendations_enabled INTEGER DEFAULT 0"
+            )
+        if "preferred_tags" not in user_cols:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " preferred_tags TEXT DEFAULT '[]'"
+            )
+        if "onboarding_complete" not in user_cols:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " onboarding_complete INTEGER DEFAULT 0"
             )
         # v1.2: trips
         self._conn.executescript("""\
@@ -509,11 +521,15 @@ class WatchDB:
         allowed = {
             "display_name", "home_base", "default_state",
             "default_nights", "default_from", "last_login_at",
-            "recommendations_enabled",
+            "recommendations_enabled", "preferred_tags",
+            "onboarding_complete",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return self.get_user_by_id(user_id)
+        # Serialize list fields to JSON
+        if "preferred_tags" in updates and isinstance(updates["preferred_tags"], list):
+            updates["preferred_tags"] = json.dumps(updates["preferred_tags"])
         set_clause = ", ".join(f"{k}=?" for k in updates)
         self._conn.execute(
             f"UPDATE users SET {set_clause} WHERE id=?",
@@ -533,6 +549,9 @@ class WatchDB:
     def _row_to_user(self, row: sqlite3.Row) -> User:
         d = dict(row)
         d["recommendations_enabled"] = bool(d.get("recommendations_enabled", 0))
+        d["onboarding_complete"] = bool(d.get("onboarding_complete", 0))
+        tags_raw = d.pop("preferred_tags", "[]") or "[]"
+        d["preferred_tags"] = json.loads(tags_raw) if isinstance(tags_raw, str) else tags_raw
         return User(**d)
 
     # -------------------------------------------------------------------

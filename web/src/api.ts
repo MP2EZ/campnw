@@ -336,6 +336,8 @@ export interface UserData {
   default_nights: number;
   default_from: string;
   recommendations_enabled: boolean;
+  preferred_tags: string[];
+  onboarding_complete: boolean;
 }
 
 export interface Recommendation {

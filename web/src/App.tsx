@@ -8,6 +8,7 @@ import type {
 import { WatchPanel } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
 import { ResultCard, SOURCE_LABELS } from "./components/ResultCard";
+import { OnboardingModal } from "./components/OnboardingModal";
 const AuthModal = lazy(() => import("./components/AuthModal").then(m => ({ default: m.AuthModal })));
 const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").then(m => ({ default: m.ShortcutHelpModal })));
 import { UserMenu } from "./components/UserMenu";
@@ -888,6 +889,12 @@ export default function App() {
             open={authModalOpen}
             onClose={() => setAuthModalOpen(false)}
           />
+        )}
+        {user && !user.onboarding_complete && (
+          <OnboardingModal onClose={() => {
+            // Refresh user data so onboarding_complete reflects
+            // (updateProfile already sets it in context)
+          }} />
         )}
         {helpModalOpen && (
           <ShortcutHelpModal
