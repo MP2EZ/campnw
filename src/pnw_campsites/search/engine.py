@@ -13,6 +13,7 @@ from pnw_campsites.geo import estimated_drive_minutes, geocode_address, is_known
 from pnw_campsites.providers.errors import FacilityNotFoundError, RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
+from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import (
     BookingSystem,
@@ -293,10 +294,12 @@ class SearchEngine:
         registry: CampgroundRegistry,
         recgov_client: RecGovClient | None = None,
         goingtocamp_client: GoingToCampClient | None = None,
+        reserveamerica_client: ReserveAmericaClient | None = None,
     ) -> None:
         self._registry = registry
         self._recgov = recgov_client
         self._goingtocamp = goingtocamp_client
+        self._reserveamerica = reserveamerica_client
 
     async def search(
         self, query: SearchQuery, *, _skip_diagnosis: bool = False,
@@ -798,6 +801,19 @@ class SearchEngine:
                     )
                 availability = await self._goingtocamp.get_availability(
                     int(campground.facility_id), start_month, end_month
+                )
+            elif campground.booking_system == BookingSystem.OR_STATE:
+                if not self._reserveamerica:
+                    return CampgroundResult(
+                        campground=campground,
+                        error="ReserveAmerica client not configured",
+                    )
+                availability = await self._reserveamerica.get_availability(
+                    campground.facility_id,
+                    campground.booking_url_slug,
+                    campground.state,
+                    start_month,
+                    end_month,
                 )
             else:
                 if not self._recgov:

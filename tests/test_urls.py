@@ -3,6 +3,7 @@
 from datetime import date
 
 from pnw_campsites.urls import (
+    or_state_availability_url,
     recgov_availability_url,
     recgov_campground_url,
     recgov_campsite_booking_url,
@@ -185,3 +186,58 @@ class TestWaStateAvailabilityUrl:
             "https://washington.goingtocamp.com/create-booking/results"
             "?resourceLocationId=-2147483624"
         )
+
+
+class TestOrStateAvailabilityUrl:
+    """Tests for or_state_availability_url."""
+
+    def test_without_dates(self):
+        """URL without dates has no query params."""
+        url = or_state_availability_url("402178", "fort-stevens-state-park")
+        assert url == (
+            "https://www.reserveamerica.com/explore/"
+            "fort-stevens-state-park/OR/402178/campsite-availability"
+        )
+        assert "?" not in url
+
+    def test_with_start_date(self):
+        """URL with start_date includes arrivalDate only."""
+        start = date(2026, 6, 15)
+        url = or_state_availability_url(
+            "402178", "fort-stevens-state-park",
+            start_date=start,
+        )
+        assert "arrivalDate=2026-06-15" in url
+        assert "departureDate" not in url
+
+    def test_end_date_is_ignored(self):
+        """end_date is intentionally not passed to RA URLs."""
+        start = date(2026, 6, 15)
+        end = date(2026, 8, 15)
+        url = or_state_availability_url(
+            "402178", "fort-stevens-state-park",
+            start_date=start, end_date=end,
+        )
+        assert "arrivalDate=2026-06-15" in url
+        assert "departureDate" not in url
+
+    def test_url_structure(self):
+        """URL follows /explore/{slug}/OR/{park_id}/campsite-availability."""
+        url = or_state_availability_url(
+            "402334", "jessie-m-honeyman-memorial-state-park",
+            start_date=date(2026, 7, 1),
+        )
+        expected = (
+            "https://www.reserveamerica.com/explore/"
+            "jessie-m-honeyman-memorial-state-park/OR/402334/"
+            "campsite-availability?arrivalDate=2026-07-01"
+        )
+        assert url == expected
+
+    def test_none_dates_produce_no_params(self):
+        """Explicitly passing None for dates produces no query params."""
+        url = or_state_availability_url(
+            "402178", "fort-stevens-state-park",
+            start_date=None, end_date=None,
+        )
+        assert "?" not in url

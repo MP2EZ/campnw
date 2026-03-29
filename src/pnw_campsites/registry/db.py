@@ -62,6 +62,11 @@ class CampgroundRegistry:
                 "ALTER TABLE campgrounds ADD COLUMN vibe TEXT DEFAULT ''"
             )
             self._conn.commit()
+        if "booking_url_slug" not in cols:
+            self._conn.execute(
+                "ALTER TABLE campgrounds ADD COLUMN booking_url_slug TEXT DEFAULT ''"
+            )
+            self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
@@ -99,8 +104,9 @@ class CampgroundRegistry:
             INSERT INTO campgrounds (
                 facility_id, name, booking_system, latitude, longitude,
                 region, state, drive_minutes_from_base, tags, notes,
-                rating, total_sites, enabled, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                rating, total_sites, enabled, booking_url_slug,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(booking_system, facility_id) DO UPDATE SET
                 name=excluded.name,
                 latitude=excluded.latitude,
@@ -118,6 +124,9 @@ class CampgroundRegistry:
                 rating=COALESCE(campgrounds.rating, excluded.rating),
                 total_sites=excluded.total_sites,
                 enabled=campgrounds.enabled,
+                booking_url_slug=CASE WHEN campgrounds.booking_url_slug = ''
+                    THEN excluded.booking_url_slug
+                    ELSE campgrounds.booking_url_slug END,
                 updated_at=?
             """,
             (
@@ -134,6 +143,7 @@ class CampgroundRegistry:
                 cg.rating,
                 cg.total_sites,
                 int(cg.enabled),
+                cg.booking_url_slug,
                 now,
                 now,
                 now,  # for the ON CONFLICT updated_at

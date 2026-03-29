@@ -497,8 +497,8 @@ function SearchForm({
         </div>
       )}
 
-      <button type="submit" className="search-btn" disabled={loading}>
-        {loading ? "Searching..." : "Search"}
+      <button type="submit" className="search-btn">
+        Search
       </button>
     </form>
   );
@@ -826,6 +826,13 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
   );
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  recgov: "Rec.gov",
+  wa_state: "WA Parks",
+  or_state: "OR Parks",
+  id_state: "ID Parks",
+};
+
 // ─── Result Card ─────────────────────────────────────────────────────
 
 function ResultCard({
@@ -870,13 +877,7 @@ function ResultCard({
     );
   }
 
-  const sourceLabels: Record<string, string> = {
-    recgov: "Rec.gov",
-    wa_state: "WA Parks",
-    or_state: "OR Parks",
-    id_state: "ID Parks",
-  };
-  const sourceLabel = sourceLabels[result.booking_system] || result.booking_system;
+  const sourceLabel = SOURCE_LABELS[result.booking_system] || result.booking_system;
   const dateBlocks = groupByDateBlock(result.windows);
   const summaryText =
     view === "dates"
@@ -980,7 +981,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [resultsView, setResultsView] = useState<ResultsView>("dates");
   const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
-  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(["recgov", "wa_state"]));
+  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
   const lastSearchParams = useRef<SearchParams | null>(null);
   const lastSearchMode = useRef<SearchMode>("find");
   const [activeSearchParams, setActiveSearchParams] = useState<SearchParams | null>(null);
@@ -989,6 +990,7 @@ export default function App() {
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [formCollapsed, setFormCollapsed] = useState(false);
+  const searchAbortRef = useRef<AbortController | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
@@ -1004,6 +1006,19 @@ export default function App() {
   const isMap = location.pathname === "/map";
 
   const maxResults = lastSearchParams.current?.limit || 20;
+
+  // Auto-enable all sources present in results
+  const resultSources = useMemo(() => {
+    if (!results) return new Set<string>();
+    return new Set(results.results.map((r) => r.booking_system));
+  }, [results]);
+
+  useEffect(() => {
+    if (resultSources.size > 0) {
+      setSourceFilter(resultSources);
+    }
+  }, [resultSources]);
+
   const filteredResults = useMemo(() => {
     if (!results) return [];
     return results.results
@@ -1021,6 +1036,11 @@ export default function App() {
     lastSearchParams.current = params;
     lastSearchMode.current = mode;
     setActiveSearchParams(params);
+
+    // Abort any in-flight search stream
+    searchAbortRef.current?.abort();
+    const abortController = new AbortController();
+    searchAbortRef.current = abortController;
 
     setLoading(true);
     setError(null);
@@ -1066,6 +1086,7 @@ export default function App() {
       },
       () => {
         setLoading(false);
+        searchAbortRef.current = null;
         // Save search to history (fire-and-forget, only for logged-in users)
         if (user) {
           const withAvail = streamedResults.filter((r) => r.total_available_sites > 0).length;
@@ -1075,6 +1096,7 @@ export default function App() {
       (err) => {
         setError(err.message);
         setLoading(false);
+        searchAbortRef.current = null;
       },
       (diagEvent: DiagnosisEvent) => {
         setResults((prev) =>
@@ -1088,6 +1110,7 @@ export default function App() {
             : prev
         );
       },
+      abortController.signal,
     );
   };
 
@@ -1344,30 +1367,24 @@ export default function App() {
             </div>
           </div>
           {/* Source filter — client-side, instant toggle */}
-          {(() => {
-            const recgovCount = results.results.filter((r) => r.booking_system === "recgov" && r.total_available_sites > 0).length;
-            const waCount = results.results.filter((r) => r.booking_system === "wa_state" && r.total_available_sites > 0).length;
-            return (
+          {resultSources.size > 1 && (
           <div className="source-toggle" role="group" aria-label="Filter by source">
-            <button
-              type="button"
-              className={`source-toggle-btn source-recgov ${sourceFilter.has("recgov") ? "active" : ""}`}
-              onClick={() => toggleSource("recgov")}
-              aria-pressed={sourceFilter.has("recgov")}
-            >
-              Rec.gov{recgovCount > 0 && ` (${recgovCount})`}
-            </button>
-            <button
-              type="button"
-              className={`source-toggle-btn source-wa_state ${sourceFilter.has("wa_state") ? "active" : ""}`}
-              onClick={() => toggleSource("wa_state")}
-              aria-pressed={sourceFilter.has("wa_state")}
-            >
-              WA Parks{waCount > 0 && ` (${waCount})`}
-            </button>
+            {[...resultSources].map((src) => {
+              const count = results.results.filter((r) => r.booking_system === src && r.total_available_sites > 0).length;
+              return (
+                <button
+                  key={src}
+                  type="button"
+                  className={`source-toggle-btn source-${src} ${sourceFilter.has(src) ? "active" : ""}`}
+                  onClick={() => toggleSource(src)}
+                  aria-pressed={sourceFilter.has(src)}
+                >
+                  {SOURCE_LABELS[src] || src}{count > 0 && ` (${count})`}
+                </button>
+              );
+            })}
           </div>
-            );
-          })()}
+          )}
           {searchDates && withAvailability > 0 && (
             <CalendarHeatMap
               results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}

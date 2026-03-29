@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
+RA_BASE_URL = "https://www.reserveamerica.com"
+
 
 def recgov_campground_url(facility_id: str) -> str:
     """URL for a campground's page on recreation.gov."""
@@ -60,4 +62,27 @@ def wa_state_availability_url(
         url += f"&searchTime={start_date.isoformat()}"
     if end_date:
         url += f"&endDate={end_date.isoformat()}"
+    return url
+
+
+# ---------------------------------------------------------------------------
+# OR State Parks (ReserveAmerica)
+# ---------------------------------------------------------------------------
+
+
+def or_state_availability_url(
+    park_id: str,
+    slug: str,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> str:
+    """Deep link to an OR State Park's availability on ReserveAmerica.
+
+    Only passes arrivalDate (positions the 14-day calendar grid).
+    RA treats departureDate as a booking checkout date, not a viewing
+    window — passing our full search range would imply a multi-month stay.
+    """
+    url = f"{RA_BASE_URL}/explore/{slug}/OR/{park_id}/campsite-availability"
+    if start_date:
+        url += f"?arrivalDate={start_date.isoformat()}"
     return url

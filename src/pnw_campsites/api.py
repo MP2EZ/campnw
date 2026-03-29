@@ -32,10 +32,12 @@ from pnw_campsites.auth import (
 from pnw_campsites.monitor.db import User, Watch, WatchDB
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
+from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.search.engine import SearchEngine, SearchQuery
 from pnw_campsites.urls import (
+    or_state_availability_url,
     recgov_availability_url,
     recgov_campsite_booking_url,
     wa_state_availability_url,
@@ -48,6 +50,7 @@ from pnw_campsites.urls import (
 _registry: CampgroundRegistry | None = None
 _recgov: RecGovClient | None = None
 _goingtocamp: GoingToCampClient | None = None
+_reserveamerica: ReserveAmericaClient | None = None
 _engine: SearchEngine | None = None
 _watch_db: WatchDB | None = None
 _poll_state: dict = {
@@ -175,7 +178,7 @@ async def _poll_tranche(tranche: int | None = None) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _registry, _recgov, _goingtocamp, _engine, _watch_db
+    global _registry, _recgov, _goingtocamp, _reserveamerica, _engine, _watch_db
     load_dotenv()
 
     _registry = CampgroundRegistry()
@@ -187,7 +190,10 @@ async def lifespan(app: FastAPI):
     _goingtocamp = GoingToCampClient()
     await _goingtocamp.__aenter__()
 
-    _engine = SearchEngine(_registry, _recgov, _goingtocamp)
+    _reserveamerica = ReserveAmericaClient()
+    await _reserveamerica.__aenter__()
+
+    _engine = SearchEngine(_registry, _recgov, _goingtocamp, _reserveamerica)
     _watch_db = WatchDB()
 
     # Start background watch poller — two tranches offset by 7.5 minutes
@@ -236,6 +242,8 @@ async def lifespan(app: FastAPI):
         await _recgov.__aexit__(None, None, None)
     if _goingtocamp:
         await _goingtocamp.__aexit__(None, None, None)
+    if _reserveamerica:
+        await _reserveamerica.__aexit__(None, None, None)
     if _registry:
         _registry.close()
 
@@ -414,9 +422,12 @@ def _build_availability_url(
     booking_system: BookingSystem,
     start_date: date | None,
     end_date: date | None = None,
+    slug: str = "",
 ) -> str:
     if booking_system == BookingSystem.WA_STATE:
         return wa_state_availability_url(facility_id, start_date, end_date)
+    if booking_system == BookingSystem.OR_STATE:
+        return or_state_availability_url(facility_id, slug, start_date, end_date)
     return recgov_availability_url(facility_id, start_date)
 
 
@@ -482,7 +493,8 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
         vibe=cg.vibe,
         estimated_drive_minutes=r.estimated_drive_minutes,
         availability_url=_build_availability_url(
-            cg.facility_id, cg.booking_system, start, end
+            cg.facility_id, cg.booking_system, start, end,
+            slug=cg.booking_url_slug,
         ) if start else None,
         windows=windows,
         error=r.error,
