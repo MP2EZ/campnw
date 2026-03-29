@@ -14,6 +14,8 @@ import { SmartZeroState } from "./components/SmartZeroState";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Wordmark } from "./Wordmark";
 import { useAuth } from "./hooks/useAuth";
+import { useSearch } from "./hooks/useSearch";
+import type { SearchMode, ResultsView } from "./hooks/useSearch";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { SearchContext } from "./contexts/SearchContext";
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
@@ -41,8 +43,7 @@ function formatDate(offset: number): string {
   return d.toISOString().split("T")[0];
 }
 
-type SearchMode = "find" | "exact";
-type ResultsView = "dates" | "sites";
+// SearchMode and ResultsView imported from hooks/useSearch
 
 const INITIAL_BLOCKS_SHOWN = 3;
 
@@ -1029,26 +1030,21 @@ export default function App() {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [results, setResults] = useState<SearchResponse | null>(null);
-  const [searchSummary, setSearchSummary] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resultsView, setResultsView] = useState<ResultsView>("dates");
-  const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
-  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
-  const lastSearchParams = useRef<SearchParams | null>(null);
-  const lastSearchMode = useRef<SearchMode>("find");
-  const [activeSearchParams, setActiveSearchParams] = useState<SearchParams | null>(null);
+  const {
+    results, searchSummary, loading, error,
+    resultsView, setResultsView,
+    searchDates, sourceFilter, resultSources, filteredResults,
+    activeSearchParams, formCollapsed, setFormCollapsed,
+    focusedCardIndex, setFocusedCardIndex,
+    liveAnnouncement, setLiveAnnouncement,
+    cardRefs, maxResults, handleSearch, toggleSource,
+  } = useSearch(user ?? null);
+
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [formCollapsed, setFormCollapsed] = useState(false);
-  const searchAbortRef = useRef<AbortController | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
-  const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
-  const [liveAnnouncement, setLiveAnnouncement] = useState("");
-  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("campable-dark");
     if (saved !== null) return saved === "true";
@@ -1059,147 +1055,10 @@ export default function App() {
   const isPlan = location.pathname === "/plan";
   const isMap = location.pathname === "/map";
 
-  const maxResults = lastSearchParams.current?.limit || 20;
-
-  // Auto-enable all sources present in results
-  const resultSources = useMemo(() => {
-    if (!results) return new Set<string>();
-    return new Set(results.results.map((r) => r.booking_system));
-  }, [results]);
-
-  useEffect(() => {
-    if (resultSources.size > 0) {
-      setSourceFilter(resultSources);
-    }
-  }, [resultSources]);
-
-  const filteredResults = useMemo(() => {
-    if (!results) return [];
-    return results.results
-      .filter((r) => sourceFilter.has(r.booking_system))
-      .slice(0, maxResults);
-  }, [results, sourceFilter, maxResults]);
-
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
     localStorage.setItem("campable-dark", String(darkMode));
   }, [darkMode]);
-
-  const handleSearch = async (params: SearchParams, mode: SearchMode) => {
-    const searchParams = { ...params };
-    lastSearchParams.current = params;
-    lastSearchMode.current = mode;
-    setActiveSearchParams(params);
-
-    // Abort any in-flight search stream
-    searchAbortRef.current?.abort();
-    const abortController = new AbortController();
-    searchAbortRef.current = abortController;
-
-    setLoading(true);
-    setError(null);
-    setSearchSummary(null);
-    setResultsView(mode === "find" ? "dates" : "sites");
-    // For NL search, dates come from parsed_params event later
-    if (params.start_date && params.end_date) {
-      setSearchDates({ start: params.start_date, end: params.end_date });
-    }
-    setFormCollapsed(true);
-
-    // Scroll to results area after DOM updates
-    setTimeout(() => {
-      document.querySelector(".results-skeleton, .results")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
-
-    // Sync search params to URL for shareable links
-    const url = new URL(window.location.href);
-    url.search = "";
-    for (const [k, v] of Object.entries(searchParams)) {
-      if (v !== undefined && v !== "" && v !== false) {
-        url.searchParams.set(k, String(v));
-      }
-    }
-    window.history.replaceState(null, "", url.toString());
-    // Stream results as they arrive
-    const streamedResults: CampgroundResult[] = [];
-    setResults({
-      campgrounds_checked: 0,
-      campgrounds_with_availability: 0,
-      results: [],
-      warnings: [],
-    });
-
-    await searchCampsitesStream(
-      searchParams,
-      (result) => {
-        streamedResults.push(result);
-        setResults({
-          campgrounds_checked: streamedResults.length,
-          campgrounds_with_availability: streamedResults.filter(
-            (r) => r.total_available_sites > 0
-          ).length,
-          results: [...streamedResults],
-          warnings: [],
-        });
-      },
-      () => {
-        setLoading(false);
-        searchAbortRef.current = null;
-        // Save search to history (fire-and-forget, only for logged-in users)
-        if (user) {
-          const withAvail = streamedResults.filter((r) => r.total_available_sites > 0).length;
-          saveSearchHistory(params, withAvail);
-        }
-      },
-      (err) => {
-        setError(err.message);
-        setLoading(false);
-        searchAbortRef.current = null;
-      },
-      (diagEvent: DiagnosisEvent) => {
-        setResults((prev) =>
-          prev
-            ? {
-                ...prev,
-                diagnosis: diagEvent.diagnosis ?? undefined,
-                date_suggestions: diagEvent.date_suggestions,
-                action_chips: diagEvent.action_chips,
-              }
-            : prev
-        );
-      },
-      abortController.signal,
-      (parsed) => {
-        // Update dates and params from NL parse result
-        if (parsed.start_date && parsed.end_date) {
-          setSearchDates({ start: parsed.start_date, end: parsed.end_date });
-        }
-        setActiveSearchParams({
-          ...params,
-          start_date: parsed.start_date,
-          end_date: parsed.end_date,
-          state: parsed.state || undefined,
-          nights: parsed.nights,
-          tags: parsed.tags || undefined,
-          from_location: parsed.from_location || undefined,
-          max_drive: parsed.max_drive || undefined,
-          name: parsed.name || undefined,
-          days_of_week: parsed.days_of_week || undefined,
-        });
-      },
-      (text) => setSearchSummary(text),
-    );
-  };
-
-  const toggleSource = (src: string) => {
-    const next = new Set(sourceFilter);
-    if (next.has(src) && next.size > 1) {
-      next.delete(src);
-    } else if (!next.has(src)) {
-      next.add(src);
-    }
-    setSourceFilter(next);
-  };
 
   const searchContextValue = useMemo(() => ({
     results,
@@ -1209,11 +1068,6 @@ export default function App() {
     sourceFilter,
     filteredResults,
   }), [results, loading, searchDates, activeSearchParams, sourceFilter, filteredResults]);
-
-  // Reset focused card when results change
-  useEffect(() => {
-    setFocusedCardIndex(-1);
-  }, [filteredResults]);
 
   // Close mobile menu on click outside or Escape
   useEffect(() => {
