@@ -120,6 +120,28 @@ class ActionChip:
 
 
 @dataclass
+class _PreparedSearch:
+    """Intermediate result from registry filter + distance computation."""
+
+    campgrounds: list
+    drive_times: dict
+    registry_count: int
+    distance_filtered: int
+    start_month: date
+    end_month: date
+    from_coords: tuple | None
+
+
+@dataclass
+class StreamDiagnosisEvent:
+    """Yielded by search_stream when zero results, so API doesn't need a second search."""
+
+    diagnosis: SearchDiagnosis | None
+    date_suggestions: list[DateSuggestion]
+    action_chips: list[ActionChip]
+
+
+@dataclass
 class SearchResults:
     """Complete results from a discovery search."""
 
@@ -301,11 +323,9 @@ class SearchEngine:
         self._goingtocamp = goingtocamp_client
         self._reserveamerica = reserveamerica_client
 
-    async def search(
-        self, query: SearchQuery, *, _skip_diagnosis: bool = False,
-    ) -> SearchResults:
-        """Run a discovery search: filter registry, then check availability."""
-        # Step 1: Filter registry — search all providers if no specific system
+    async def _prepare_search(self, query: SearchQuery) -> _PreparedSearch:
+        """Shared setup for search() and search_stream(): registry filter,
+        coordinate resolution, drive-time computation, per-source limiter."""
         campgrounds = self._registry.search(
             state=query.state,
             tags=query.tags,
@@ -314,7 +334,6 @@ class SearchEngine:
         )
         registry_count = len(campgrounds)
 
-        # Step 1b: Resolve origin and filter/sort by distance
         from_coords = query.from_coords
         if not from_coords and query.from_location:
             if is_known_base(query.from_location):
@@ -323,7 +342,8 @@ class SearchEngine:
                 from_coords = await geocode_address(query.from_location)
             query.from_coords = from_coords
 
-        drive_times: dict[str, int] = {}  # facility_id -> minutes
+        drive_times: dict[str, int] = {}
+        distance_filtered = 0
         if from_coords:
             for cg in campgrounds:
                 if cg.latitude and cg.longitude:
@@ -331,8 +351,6 @@ class SearchEngine:
                         from_coords[0], from_coords[1],
                         cg.latitude, cg.longitude,
                     )
-
-            # Filter by max drive time
             pre_distance_count = len(campgrounds)
             if query.max_drive_minutes:
                 campgrounds = [
@@ -341,17 +359,10 @@ class SearchEngine:
                     <= query.max_drive_minutes
                 ]
             distance_filtered = pre_distance_count - len(campgrounds)
-
-            # Sort by distance (closest first)
             campgrounds.sort(
                 key=lambda cg: drive_times.get(cg.facility_id, 9999)
             )
-        else:
-            distance_filtered = 0
 
-        # Limit per source — each source gets max_campgrounds slots so
-        # the client-side source filter always has a full set to show.
-        # When a specific booking_system is requested, just cap globally.
         if not query.booking_system:
             by_source: dict[str, list] = {}
             for cg in campgrounds:
@@ -359,21 +370,51 @@ class SearchEngine:
             campgrounds = []
             for source_cgs in by_source.values():
                 campgrounds.extend(source_cgs[: query.max_campgrounds])
-            # Re-sort by distance after merging
             if from_coords:
                 campgrounds.sort(
-                    key=lambda cg: drive_times.get(
-                        cg.facility_id, 9999,
-                    )
+                    key=lambda cg: drive_times.get(cg.facility_id, 9999)
                 )
         else:
             campgrounds = campgrounds[: query.max_campgrounds]
+
+        if query.start_date and query.end_date:
+            start_month = query.start_date
+            end_month = query.end_date
+        elif query.start_date:
+            start_month = query.start_date
+            end_month = query.start_date
+        else:
+            today = date.today()
+            start_month = today
+            end_month = today.replace(
+                month=today.month + 1 if today.month < 12 else 1,
+                year=today.year if today.month < 12 else today.year + 1,
+            )
+
+        return _PreparedSearch(
+            campgrounds=campgrounds,
+            drive_times=drive_times,
+            registry_count=registry_count,
+            distance_filtered=distance_filtered,
+            start_month=start_month,
+            end_month=end_month,
+            from_coords=from_coords,
+        )
+
+    async def search(
+        self, query: SearchQuery, *, _skip_diagnosis: bool = False,
+    ) -> SearchResults:
+        """Run a discovery search: filter registry, then check availability."""
+        prep = await self._prepare_search(query)
+        campgrounds = prep.campgrounds
+        drive_times = prep.drive_times
+        from_coords = prep.from_coords
 
         if not campgrounds:
             empty_results = SearchResults(query=query)
             if not _skip_diagnosis:
                 diagnosis, chips = self._diagnose_zero_results(
-                    query, registry_count, distance_filtered, 0, 0,
+                    query, prep.registry_count, prep.distance_filtered, 0, 0,
                 )
                 empty_results.diagnosis = diagnosis
                 empty_results.action_chips = chips
@@ -382,25 +423,12 @@ class SearchEngine:
                 )
             return empty_results
 
-        # Step 2: Determine month range from dates
-        if query.start_date and query.end_date:
-            start_month = query.start_date
-            end_month = query.end_date
-        elif query.start_date:
-            start_month = query.start_date
-            end_month = query.start_date
-        else:
-            # Default: check current month + next month
-            today = date.today()
-            start_month = today
-            end_month = today.replace(
-                month=today.month + 1 if today.month < 12 else 1,
-                year=today.year if today.month < 12 else today.year + 1,
-            )
+        start_month = prep.start_month
+        end_month = prep.end_month
 
-        # Step 3: Fetch availability in parallel (batched to respect rate limits)
-        batch_size = 5  # concurrent availability requests
-        batch_delay = 0.3  # seconds between batches
+        # Fetch availability in parallel (batched to respect rate limits)
+        batch_size = 5
+        batch_delay = 0.3
         all_results: list[CampgroundResult] = []
         search_start = time.monotonic()
 
@@ -472,7 +500,7 @@ class SearchEngine:
                 if r.total_available_sites == 0 and not r.error
             )
             diagnosis, chips = self._diagnose_zero_results(
-                query, registry_count, distance_filtered,
+                query, prep.registry_count, prep.distance_filtered,
                 len(all_results), all_unavailable,
             )
             results.diagnosis = diagnosis
@@ -688,101 +716,73 @@ class SearchEngine:
         )]
 
     async def search_stream(
-        self, query: SearchQuery
-    ) -> AsyncIterator[CampgroundResult]:
-        """Stream search results as each batch completes."""
-        # Reuse the same setup as search() — registry filter + distance
-        campgrounds = self._registry.search(
-            state=query.state,
-            tags=query.tags,
-            booking_system=query.booking_system,
-            name_like=query.name_like,
-        )
+        self, query: SearchQuery,
+    ) -> AsyncIterator[CampgroundResult | StreamDiagnosisEvent]:
+        """Stream search results as each batch completes.
 
-        from_coords = query.from_coords
-        if not from_coords and query.from_location:
-            if is_known_base(query.from_location):
-                from_coords = resolve_base(query.from_location)
-            else:
-                from_coords = await geocode_address(query.from_location)
-            query.from_coords = from_coords
-
-        drive_times: dict[str, int] = {}
-        if from_coords:
-            for cg in campgrounds:
-                if cg.latitude and cg.longitude:
-                    drive_times[cg.facility_id] = estimated_drive_minutes(
-                        from_coords[0], from_coords[1],
-                        cg.latitude, cg.longitude,
-                    )
-            if query.max_drive_minutes:
-                campgrounds = [
-                    cg for cg in campgrounds
-                    if drive_times.get(cg.facility_id, 9999)
-                    <= query.max_drive_minutes
-                ]
-            campgrounds.sort(
-                key=lambda cg: drive_times.get(cg.facility_id, 9999)
-            )
-
-        # Limit per source (same logic as search())
-        if not query.booking_system:
-            by_src: dict[str, list] = {}
-            for cg in campgrounds:
-                by_src.setdefault(
-                    cg.booking_system.value, [],
-                ).append(cg)
-            campgrounds = []
-            for src_cgs in by_src.values():
-                campgrounds.extend(
-                    src_cgs[: query.max_campgrounds]
-                )
-            if from_coords:
-                campgrounds.sort(
-                    key=lambda cg: drive_times.get(
-                        cg.facility_id, 9999,
-                    )
-                )
-        else:
-            campgrounds = campgrounds[: query.max_campgrounds]
+        Yields CampgroundResult for each campground with availability,
+        and a final StreamDiagnosisEvent if zero results were found
+        (so the API doesn't need a second search() call).
+        """
+        prep = await self._prepare_search(query)
+        campgrounds = prep.campgrounds
+        drive_times = prep.drive_times
 
         if not campgrounds:
-            return
-
-        if query.start_date and query.end_date:
-            start_month = query.start_date
-            end_month = query.end_date
-        elif query.start_date:
-            start_month = query.start_date
-            end_month = query.start_date
-        else:
-            today = date.today()
-            start_month = today
-            end_month = today.replace(
-                month=today.month + 1 if today.month < 12 else 1,
-                year=today.year if today.month < 12 else today.year + 1,
+            diagnosis, chips = self._diagnose_zero_results(
+                query, prep.registry_count, prep.distance_filtered, 0, 0,
             )
+            date_suggestions = await self._suggest_alternative_dates(query)
+            yield StreamDiagnosisEvent(
+                diagnosis=diagnosis,
+                date_suggestions=date_suggestions,
+                action_chips=chips,
+            )
+            return
 
         batch_size = 5
         batch_delay = 0.3
+        available_count = 0
+        checked_count = 0
+        all_unavailable = 0
 
         for i in range(0, len(campgrounds), batch_size):
             if i > 0:
                 await asyncio.sleep(batch_delay)
             batch = campgrounds[i : i + batch_size]
             tasks = [
-                self._check_campground(cg, start_month, end_month, query)
+                self._check_campground(
+                    cg, prep.start_month, prep.end_month, query,
+                )
                 for cg in batch
             ]
             batch_results = await asyncio.gather(*tasks)
             for r in batch_results:
+                checked_count += 1
                 if drive_times:
                     fid = r.campground.facility_id
                     if fid in drive_times:
                         r.estimated_drive_minutes = drive_times[fid]
-                # Only yield results with availability or FCFS
                 if r.total_available_sites > 0 or r.fcfs_sites > 0:
+                    available_count += 1
                     yield r
+                elif not r.error:
+                    all_unavailable += 1
+
+        # Yield diagnosis if nothing had availability
+        if available_count == 0:
+            diagnosis, chips = self._diagnose_zero_results(
+                query, prep.registry_count, prep.distance_filtered,
+                checked_count, all_unavailable,
+            )
+            if query.name_like:
+                chips.extend(self._suggest_similar_campgrounds(query))
+            date_suggestions = await self._suggest_alternative_dates(query)
+            yield StreamDiagnosisEvent(
+                diagnosis=diagnosis,
+                date_suggestions=date_suggestions,
+                action_chips=chips,
+            )
 
     async def _check_campground(
         self,

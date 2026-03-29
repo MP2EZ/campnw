@@ -35,7 +35,7 @@ from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import BookingSystem
-from pnw_campsites.search.engine import SearchEngine, SearchQuery
+from pnw_campsites.search.engine import SearchEngine, SearchQuery, StreamDiagnosisEvent
 from pnw_campsites.urls import (
     or_state_availability_url,
     recgov_availability_url,
@@ -902,19 +902,63 @@ async def search_stream(
 
         available_count = 0
         summary_data: list[dict] = []
-        async for result in _engine.search_stream(query):
+        async for item in _engine.search_stream(query):
+            # StreamDiagnosisEvent = zero results, emit diagnosis
+            if isinstance(item, StreamDiagnosisEvent):
+                if item.diagnosis or item.date_suggestions:
+                    meta = {
+                        "type": "diagnosis",
+                        "diagnosis": (
+                            {
+                                "registry_matches": item.diagnosis.registry_matches,
+                                "distance_filtered": item.diagnosis.distance_filtered,
+                                "checked_for_availability": (
+                                    item.diagnosis.checked_for_availability
+                                ),
+                                "binding_constraint": (
+                                    item.diagnosis.binding_constraint
+                                ),
+                                "explanation": item.diagnosis.explanation,
+                            }
+                            if item.diagnosis
+                            else None
+                        ),
+                        "date_suggestions": [
+                            {
+                                "start_date": s.start_date,
+                                "end_date": s.end_date,
+                                "campgrounds_with_availability": (
+                                    s.campgrounds_with_availability
+                                ),
+                                "reason": s.reason,
+                            }
+                            for s in item.date_suggestions
+                        ],
+                        "action_chips": [
+                            {
+                                "action": c.action,
+                                "label": c.label,
+                                "params": c.params,
+                            }
+                            for c in item.action_chips
+                        ],
+                    }
+                    yield f"data: {json.dumps(meta)}\n\n"
+                continue
+
+            # CampgroundResult — normal result
             data = _format_result(
-                result, booking_system or BookingSystem.RECGOV
+                item, booking_system or BookingSystem.RECGOV
             )
             yield f"data: {json.dumps(data.model_dump())}\n\n"
-            if result.total_available_sites > 0:
+            if item.total_available_sites > 0:
                 available_count += 1
                 summary_data.append({
-                    "name": result.campground.name,
-                    "sites": result.total_available_sites,
-                    "drive": result.estimated_drive_minutes,
-                    "tags": result.campground.tags[:3],
-                    "state": result.campground.state,
+                    "name": item.campground.name,
+                    "sites": item.total_available_sites,
+                    "drive": item.estimated_drive_minutes,
+                    "tags": item.campground.tags[:3],
+                    "state": item.campground.state,
                 })
 
         # AI summary when enough results to warrant it
@@ -927,49 +971,6 @@ async def search_stream(
                     yield f"data: {json.dumps({'type': 'summary', 'text': summary_text})}\n\n"
             except Exception:
                 pass  # Silent skip — summary is optional
-
-        # Diagnosis when no reservable availability found
-        if available_count == 0:
-            full = await _engine.search(query)
-            if full.diagnosis or full.date_suggestions:
-                meta = {
-                    "type": "diagnosis",
-                    "diagnosis": (
-                        {
-                            "registry_matches": full.diagnosis.registry_matches,
-                            "distance_filtered": full.diagnosis.distance_filtered,
-                            "checked_for_availability": (
-                                full.diagnosis.checked_for_availability
-                            ),
-                            "binding_constraint": (
-                                full.diagnosis.binding_constraint
-                            ),
-                            "explanation": full.diagnosis.explanation,
-                        }
-                        if full.diagnosis
-                        else None
-                    ),
-                    "date_suggestions": [
-                        {
-                            "start_date": s.start_date,
-                            "end_date": s.end_date,
-                            "campgrounds_with_availability": (
-                                s.campgrounds_with_availability
-                            ),
-                            "reason": s.reason,
-                        }
-                        for s in full.date_suggestions
-                    ],
-                    "action_chips": [
-                        {
-                            "action": c.action,
-                            "label": c.label,
-                            "params": c.params,
-                        }
-                        for c in full.action_chips
-                    ],
-                }
-                yield f"data: {json.dumps(meta)}\n\n"
 
         yield "data: [DONE]\n\n"
 

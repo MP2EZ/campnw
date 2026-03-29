@@ -1361,10 +1361,10 @@ class TestSearchIntegration:
     async def test_search_stream_empty_when_no_campgrounds(
         self, registry
     ) -> None:
-        """search_stream returns empty iterator if no campgrounds match."""
+        """search_stream yields diagnosis event if no campgrounds match."""
         from unittest.mock import AsyncMock
 
-        from pnw_campsites.search.engine import SearchEngine
+        from pnw_campsites.search.engine import SearchEngine, StreamDiagnosisEvent
 
         recgov = AsyncMock()
         engine = SearchEngine(registry=registry, recgov_client=recgov)
@@ -1375,10 +1375,13 @@ class TestSearchIntegration:
         )
 
         results = []
-        async for result in engine.search_stream(query):
-            results.append(result)
+        async for item in engine.search_stream(query):
+            results.append(item)
 
-        assert len(results) == 0
+        # Should yield exactly one StreamDiagnosisEvent (not CampgroundResults)
+        assert len(results) == 1
+        assert isinstance(results[0], StreamDiagnosisEvent)
+        assert results[0].diagnosis is not None
 
     def test_suggest_similar_campgrounds_returns_chips(self, registry) -> None:
         """_suggest_similar_campgrounds returns action chips."""
