@@ -51,7 +51,7 @@ describe('App Component', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
     renderApp()
     expect(
-      screen.getByText('Find available campsites across the Pacific Northwest')
+      screen.getByText('Find available campsites across the western US')
     ).toBeInTheDocument()
   })
 
