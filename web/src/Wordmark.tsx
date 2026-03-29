@@ -3,17 +3,8 @@ interface WordmarkProps {
   className?: string;
 }
 
-// campable wordmark — CSS text, single baseline, no SVG pixel offsets
-//
-// Design rationale:
-//   "camp" lowercase, regular weight → verb/noun, the action
-//   "able" lowercase, bold weight → capable, available, findable
-//
-// Weight contrast (400→700) carries the visual separation between the two
-// semantic parts without introducing a physical gap. Both parts share the
-// same baseline and color, so they read as a single mark rather than two
-// floating words. Plus Jakarta Sans gives it a modern, geometric feel.
-//
+// campable wordmark — uniform bold, single baseline
+// Plus Jakarta Sans 700, clean and modern
 // Size scale: sm=20px (mobile header), md=28px (default), lg=36px (hero)
 
 const sizes = {
@@ -30,32 +21,16 @@ export function Wordmark({ size = "md", className }: WordmarkProps) {
       aria-label="campable"
       className={className}
       style={{
-        display: "inline-flex",
-        alignItems: "baseline",
         fontSize,
         lineHeight,
         fontFamily: "var(--font-heading)",
+        fontWeight: 700,
+        letterSpacing: "0.01em",
+        color: "currentColor",
         userSelect: "none",
       }}
     >
-      <span
-        style={{
-          fontWeight: 500,
-          color: "currentColor",
-          letterSpacing: "0.01em",
-        }}
-      >
-        camp
-      </span>
-      <span
-        style={{
-          fontWeight: 700,
-          color: "currentColor",
-          letterSpacing: "0.01em",
-        }}
-      >
-        able
-      </span>
+      campable
     </span>
   );
 }
