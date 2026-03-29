@@ -55,7 +55,7 @@ const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_PRESETS: Record<string, [string, string]> = {
   "": ["Any", ""],
   "4,5,6": ["Weekend", "F–Su"],
-  "3,4,5,6": ["Long wknd", "Th–Su"],
+  "3,4,5,6": ["Long weekend", "Th–Su"],
   "0,1,2,3,4": ["Weekdays", ""],
 };
 
@@ -80,8 +80,8 @@ function getQuickPresets(): Array<{ label: string; start: string; end: string }>
   const nextSun = add(nextFri, 2);
 
   return [
-    { label: "This wknd", start: fmt(thisFri), end: fmt(thisSun) },
-    { label: "Next wknd", start: fmt(nextFri), end: fmt(nextSun) },
+    { label: "This weekend", start: fmt(thisFri), end: fmt(thisSun) },
+    { label: "Next weekend", start: fmt(nextFri), end: fmt(nextSun) },
     { label: "Next 30 days", start: fmt(today), end: fmt(add(today, 30)) },
   ];
 }
