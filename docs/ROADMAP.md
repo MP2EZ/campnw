@@ -797,23 +797,23 @@ Brand Palette (2) first — unblocks everything else. Typography (3) and Dark Mo
 
 ---
 
-## v1.2 "Trips + Watches" (~5-7 weeks)
+## v1.2 "Trips + Watches" — DONE
 
 ### Theme
 Plan and track trips. The Trip object is the hub that search, watches, and the planner all connect to. Template watches make Pro worth paying for. Watch sharing drives organic growth. Historical patterns validate polling data quality while producing user-visible "Booking Tips." Identity improvements make accounts stickier.
 
 ### Features
 
-| Feature | Size | Description |
-|---------|------|-------------|
-| Trip Object | L | First-class entity: trips table + trip_campgrounds junction. CRUD API, "Save to trip" on result cards, aggregated availability view, trip-linked watches. 10 trips free, 25 Pro. |
-| Template Watches | L | Watch a search pattern, not a single campground. Expands to matching registry entries at poll time. 20-campground/cycle cap. "Watch this search" button on results page. |
-| Watch Sharing | S | UUID-based shareable link. Read-only view of watch/trip availability. 30-day expiry, no auth required to view, 10 req/hr rate limit per UUID. |
-| Trip Planner → Persistent Itinerary | M | "Save as Trip" button in chat when AI has recommended campgrounds. Extracts from tool_use calls. User can prune after saving. |
-| Onboarding + Profile | S | Post-signup 2-step modal: set home base + select preferred tags. Feeds into search defaults and recommendation scoring. Profile page with editable preferences. |
-| Campground Comparison | S | Select 2-3 campgrounds, get inline comparison panel: data table + Haiku narrative. Falls back to data-only if Haiku unavailable. |
-| Historical Pattern Extraction | M | Aggregate availability_history into per-campground booking tips via Haiku. 30-day observation minimum. Monthly batch refresh. "Booking Tips" in expanded cards with data freshness indicator. |
-| Notification Quality Feedback Loop | S | Monthly batch correlating notifications with booking clicks. 50-notification minimum. Outputs prompt suggestions for manual review. |
+| Feature | Size | Status | Description |
+|---------|------|--------|-------------|
+| Trip Object | L | DONE | trips + trip_campgrounds tables, CRUD API, SaveToTripButton dropdown, TripsPage + TripDetail pages, 10 trips/user max. |
+| Template Watches | L | DONE | watch_type + search_params columns, expand.py resolves to facility_ids, poll_all integration, 20-campground cap. |
+| Watch Sharing | S | DONE | shared_links table, UUID-based, POST /api/shares, GET /api/shared/{uuid} (no auth), 30-day expiry, revocable, 10/hr rate limit. |
+| Trip Planner → Persistent Itinerary | M | DONE | POST /api/plan/save-trip extracts facility_ids from tool_use results, infers dates, creates Trip. |
+| Onboarding + Profile | S | DONE | 2-step modal (home base + preferred tags), preferred_tags/onboarding_complete columns, toggle switch, home base → drive-from derivation. |
+| Campground Comparison | S | DONE | POST /api/compare (2-3 facility_ids), Haiku narrative, graceful fallback to data-only. |
+| Historical Pattern Extraction | M | DONE | analytics/patterns.py, availability_history aggregation, 30-day min, Haiku tips, booking_tips column, GET /api/campgrounds/{id}/tips. |
+| Notification Quality Feedback Loop | S | DONE | analytics/notification_quality.py, analytics_digests table, monthly stats + Haiku analysis, 50-notification threshold. |
 
 ### Sequencing
 Trip Object (1) is critical path — blocks Watch Sharing (3) and Planner-to-Itinerary (4). Template Watches (2) can parallel with 4. Onboarding (5) and Comparison (6) are independent. Historical Patterns (7) depends on data maturity — start pipeline early. Notification Feedback (8) last.

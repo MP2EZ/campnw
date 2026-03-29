@@ -1,7 +1,7 @@
 # PNW Campsite Tool
 
 ## What This Is
-Personal tool for finding and monitoring campsite availability across the Pacific Northwest (WA, OR, ID). Not a product — built for a single user and friends. The core value: discovery ("what's available this weekend within 3 hours of Seattle?") across multiple booking systems, not just monitoring a single known campground.
+Personal tool for finding and monitoring campsite availability across the western US (WA, OR, ID, MT, WY, NorCal). Not a product — built for a single user and friends. The core value: discovery ("what's available this weekend within 3 hours of Seattle?") across multiple booking systems, not just monitoring a single known campground.
 
 ## Tech Stack
 - **Python 3.12+** — core library, API clients
@@ -386,15 +386,18 @@ Performance:
 - [ ] Brand voice guide (docs/BRAND.md — colors, logo, icons, voice examples, anti-patterns)
 - [ ] Scoping: Anthropic Batch API for `enrich` CLI (50% input savings, bulk submit — defer to v1.2 if v1.15 stays CSS-only)
 
-### v1.2 "Trips + Watches" (~5-7 weeks)
-- [ ] Trip object (trips + trip_campgrounds tables, CRUD API, "Save to trip", aggregated view)
-- [ ] Template watches (search-pattern watches, 20 campground/cycle cap, "Watch this search")
-- [ ] Watch sharing (UUID link, read-only, 30-day expiry, no auth to view)
-- [ ] Trip planner → persistent itinerary ("Save as Trip" from chat tool_use results)
-- [ ] Onboarding + profile (post-signup modal: home base + preferred tags, profile page)
-- [ ] Campground Comparison (select 2-3, inline panel, Haiku narrative + data table)
-- [ ] Historical Pattern Extraction ("Booking Tips" in cards, 30-day min, monthly refresh)
-- [ ] Notification Quality Feedback Loop (monthly batch, 50-notification min)
+### v1.2 "Trips + Watches" — DONE
+- [x] Trip object (trips + trip_campgrounds tables, CRUD API, "Save to trip" on result cards, TripsPage + TripDetail)
+- [x] Template watches (search-pattern watches with dynamic expansion, 20 campground/cycle cap, "Watch this search")
+- [x] Watch sharing (UUID link, read-only, 30-day expiry, revocable, no auth to view, 10/hr rate limit)
+- [x] Trip planner → persistent itinerary ("Save as Trip" from chat tool_use results, facility_id extraction)
+- [x] Onboarding + profile (post-signup 2-step modal: home base + preferred tags, profile preferences form with toggle switch)
+- [x] Campground Comparison (POST /api/compare, 2-3 campgrounds, Haiku narrative + structured data, graceful fallback)
+- [x] Historical Pattern Extraction ("Booking Tips" from availability_history, 30-day min, Haiku tips, GET /api/campgrounds/{id}/tips)
+- [x] Notification Quality Feedback Loop (monthly batch, 50-notification min, analytics_digests table, Haiku analysis)
+- [x] ResultCard extracted from App.tsx into components/ResultCard.tsx
+- [x] Home base → drive-from derivation (profile Drive from removed, fuzzy match to known bases)
+- [x] Copy updated for expanded 6-state coverage (WA, OR, ID, MT, WY, NorCal)
 
 ### v1.3 "Predictions+" (~Q1 2027, needs 9-12 months polling data)
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)
@@ -454,4 +457,4 @@ All frontend styling uses design tokens defined in `web/src/tokens.css`. **Never
 - Some RIDB facilities return 404 on the availability endpoint (scenic byways, areas, corridors) — these aren't reservable campgrounds. Errors are caught and reported gracefully.
 - GoingToCamp resource/site details endpoint returns 404 — site names not available via API. Sites identified by resource ID (e.g., `WA--2147482394`).
 - GoingToCamp map hierarchy must be traversed park-by-park via the `resourceLocationId → childMapId` mapping from `/api/maps` links. Starting from region maps returns ALL parks' sites.
-- Registry has 794 campgrounds: 666 rec.gov + 75 WA State Parks + 53 OR State Parks. Re-seed with `scripts/seed_registry.py`, `scripts/seed_wa_state.py`, and `scripts/seed_or_state.py`
+- Registry has 1,370 campgrounds: 1,242 rec.gov (WA/OR/ID/MT/WY/NorCal) + 75 WA State Parks + 53 OR State Parks. Re-seed with `scripts/seed_registry.py`, `scripts/seed_wa_state.py`, and `scripts/seed_or_state.py`
