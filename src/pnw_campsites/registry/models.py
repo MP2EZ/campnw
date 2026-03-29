@@ -107,6 +107,7 @@ class Campground(BaseModel):
     state: str = ""  # WA, OR, ID
     drive_minutes_from_base: int | None = None  # from Seattle, WA
     tags: list[str] = Field(default_factory=list)  # lakeside, river, kid-friendly, etc.
+    booking_url_slug: str = ""  # URL slug for booking systems (e.g. RA)
     vibe: str = ""  # One-sentence campground character description
     notes: str = ""  # personal notes
     rating: int | None = None  # 1-5 personal rating
