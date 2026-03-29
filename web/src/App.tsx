@@ -454,6 +454,7 @@ function SearchForm({
         type="button"
         className="advanced-toggle"
         onClick={() => setShowAdvanced(!showAdvanced)}
+        aria-expanded={showAdvanced}
       >
         {showAdvanced ? "Fewer filters ▴" : "More filters ▾"}
         {!showAdvanced && state && (
@@ -939,7 +940,6 @@ function ResultCard({
         aria-expanded={expanded}
         type="button"
         ref={headerRef}
-        tabIndex={-1}
       >
         <div>
           <h3>
@@ -1412,7 +1412,7 @@ export default function App() {
 
       {!results && !loading && !error && <FirstVisitState onSearch={handleSearch} />}
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="error-banner" role="alert">{error}</div>}
 
       {loading && (!results || results.results.length === 0) && <ResultsSkeleton />}
 
