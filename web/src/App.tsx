@@ -1269,7 +1269,7 @@ export default function App() {
       <header>
         <div className="header-row">
           <div>
-            <h1><Wordmark /></h1>
+            <h1><Link to="/" className="wordmark-link"><Wordmark /></Link></h1>
             <p className="header-subtitle">Find available campsites across the Pacific Northwest</p>
           </div>
           <div className="header-actions">

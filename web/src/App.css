@@ -241,6 +241,15 @@ header h1 {
   color: var(--accent);
 }
 
+.wordmark-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.wordmark-link:hover {
+  opacity: 0.85;
+}
+
 /* Wordmark sits where h1 was — same vertical rhythm */
 header .wordmark {
   display: block;
