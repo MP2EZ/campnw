@@ -573,9 +573,9 @@ header p {
   border-radius: var(--radius-sm);
   padding: var(--space-3);
   margin-bottom: var(--space-3);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   color: var(--text);
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .search-summary-banner p {
