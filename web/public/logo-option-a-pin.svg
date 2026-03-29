@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Option A: Pin Drop — map pin with tent/tree-shaped head -->
+  <!-- Brand green fill, geometric, reads at 16px as a simple pin shape -->
+  <defs>
+    <style>
+      .pin-fill { fill: #2d5016; }
+      .pin-detail { fill: #f5f5f0; }
+    </style>
+  </defs>
+  <!-- Pin body — teardrop shape -->
+  <path class="pin-fill" d="
+    M256 480
+    C256 480 96 288 96 192
+    C96 103.6 167.6 32 256 32
+    C344.4 32 416 103.6 416 192
+    C416 288 256 480 256 480Z
+  "/>
+  <!-- Tree/tent silhouette inside the pin head -->
+  <path class="pin-detail" d="
+    M256 100
+    L306 200
+    L280 200
+    L320 280
+    L192 280
+    L232 200
+    L206 200
+    Z
+  "/>
+  <!-- Tree trunk -->
+  <rect class="pin-detail" x="244" y="270" width="24" height="30" rx="2"/>
+</svg>

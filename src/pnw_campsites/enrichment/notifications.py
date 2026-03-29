@@ -12,7 +12,8 @@ _logger = logging.getLogger(__name__)
 
 def _fallback_message(campground_name: str, site_count: int) -> tuple[str, int]:
     """Simple fallback when LLM enrichment is unavailable."""
-    return f"{campground_name}: {site_count} site(s) newly available", 2
+    sites = "site" if site_count == 1 else "sites"
+    return f"{site_count} {sites} open at {campground_name}", 2
 
 
 async def enrich_notification(
@@ -40,9 +41,13 @@ async def enrich_notification(
         dates_str += f" (+{len(dates) - 14} more)"
 
     prompt = (
-        "A campground watch alert fired. Generate a 1-2 sentence notification message "
-        "that feels informative and actionable. Include context about timing "
-        "(weekend vs midweek, how soon, holiday proximity).\n\n"
+        "Generate a campsite availability notification. Voice rules:\n"
+        "- Declarative, not interrogative. Lead with the data.\n"
+        "- Always include: campground name, site count, and date context.\n"
+        "- Include timing context: weekend vs midweek, how soon, holiday.\n"
+        "- Never say 'Availability Alert', 'Uh oh!', or 'Great news!'.\n"
+        "- Never use 'snag', 'grab', or 'score'. Use 'book' or 'reserve'.\n"
+        "- 1-2 sentences max. Be specific, not generic.\n\n"
         f"Campground: {campground_name}\n"
         f"Sites available: {site_count}\n"
         f"Dates: {dates_str}\n"

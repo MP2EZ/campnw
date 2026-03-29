@@ -26,11 +26,7 @@ def format_change(change: AvailabilityChange) -> str:
 
 
 def _urgency_prefix(urgency: int) -> str:
-    """Return an emoji prefix based on urgency level."""
-    if urgency >= 3:
-        return "\U0001f525 "  # fire
-    if urgency <= 1:
-        return ""
+    """Return a prefix based on urgency level. No emoji — data speaks."""
     return ""
 
 
@@ -58,9 +54,9 @@ def format_poll_result(result: PollResult) -> str:
             "",
         ]
     else:
+        sites = "site" if len(result.changes) == 1 else "sites"
         lines = [
-            f"New availability at {watch.name}!",
-            f"{len(result.changes)} site(s) with new dates:",
+            f"{len(result.changes)} {sites} open at {watch.name}",
             "",
         ]
 
