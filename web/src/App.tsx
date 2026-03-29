@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } fro
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { getSearchHistory, getRecommendations } from "./api";
 import type {
-  Recommendation, SearchParams, SearchResponse,
+  Recommendation, SearchParams,
   SearchHistoryEntry,
 } from "./api";
 import { WatchPanel } from "./components/WatchPanel";
@@ -17,7 +17,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Wordmark } from "./Wordmark";
 import { useAuth } from "./hooks/useAuth";
 import { useSearch } from "./hooks/useSearch";
-import type { SearchMode, ResultsView } from "./hooks/useSearch";
+import type { SearchMode } from "./hooks/useSearch";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { SearchContext } from "./contexts/SearchContext";
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
@@ -34,7 +34,6 @@ function formatDate(offset: number): string {
   return d.toISOString().split("T")[0];
 }
 
-// SearchMode and ResultsView imported from hooks/useSearch
 
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
