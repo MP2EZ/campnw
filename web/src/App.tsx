@@ -1044,14 +1044,14 @@ export default function App() {
                 <button
                   className={resultsDisplay === "list" ? "active" : ""}
                   aria-pressed={resultsDisplay === "list"}
-                  onClick={() => setResultsDisplay("list")}
+                  onClick={() => { setResultsDisplay("list"); track("map_toggled", { to: "list" }); }}
                 >
                   ≡ List
                 </button>
                 <button
                   className={resultsDisplay === "map" ? "active" : ""}
                   aria-pressed={resultsDisplay === "map"}
-                  onClick={() => setResultsDisplay("map")}
+                  onClick={() => { setResultsDisplay("map"); track("map_toggled", { to: "map" }); }}
                 >
                   ⊞ Map
                 </button>

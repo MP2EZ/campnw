@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { track } from "../api";
 
 const TAG_OPTIONS = [
   "lakeside", "riverside", "beach", "old-growth", "forest", "alpine",
@@ -40,12 +41,14 @@ export function OnboardingModal({ onClose }: { onClose: () => void }) {
       preferred_tags: Array.from(selectedTags),
       onboarding_complete: true,
     });
+    track("onboarding_completed", { tags_selected: selectedTags.size });
     setSaving(false);
     onClose();
   };
 
   const handleSkip = async () => {
     await updateProfile({ onboarding_complete: true });
+    track("onboarding_skipped", { step });
     onClose();
   };
 

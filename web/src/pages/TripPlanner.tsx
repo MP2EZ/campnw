@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
-import { planChatStream } from "../api";
+import { planChatStream, track } from "../api";
 import type { ChatMessage, ToolCall } from "../api";
 
 interface DisplayMessage {
@@ -119,6 +119,7 @@ export default function TripPlanner() {
     setApiMessages(nextApiMessages);
     setInput("");
     setLoading(true);
+    track("plan_message_sent", { message_count: nextApiMessages.length });
     setError(null);
 
     // Add a placeholder assistant message that updates as text streams in

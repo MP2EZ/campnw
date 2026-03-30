@@ -1,6 +1,6 @@
 import { createContext, useContext, useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { getMe, login, signup, logout, updateProfile, type UserData } from "../api";
+import { getMe, login, signup, logout, updateProfile, track, type UserData } from "../api";
 import { createElement } from "react";
 
 interface AuthContextValue {
@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = await login(email, password);
     setUser(u);
     identifyUser(u);
+    track("login", {});
   }, [identifyUser]);
 
   const handleSignup = useCallback(
@@ -55,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = await signup(email, password, displayName);
       setUser(u);
       identifyUser(u);
+      track("signup", {});
     },
     [identifyUser]
   );

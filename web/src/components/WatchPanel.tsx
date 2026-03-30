@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { getWatches, deleteWatch, toggleWatch, createWatch } from "../api";
+import { getWatches, deleteWatch, toggleWatch, createWatch, track } from "../api";
 import type { WatchData, CreateWatchParams } from "../api";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { useAuth } from "../hooks/useAuth";
@@ -213,6 +213,7 @@ export function WatchButton({
         notification_channel: "web_push",
       };
       await createWatch(params);
+      track("watch_created", { facility_id: facilityId });
       setCreated(true);
       onCreated?.();
       if (!subscribed) {
