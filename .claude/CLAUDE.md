@@ -399,6 +399,29 @@ Performance:
 - [x] Home base → drive-from derivation (profile Drive from removed, fuzzy match to known bases)
 - [x] Copy updated for expanded 6-state coverage (WA, OR, ID, MT, WY, NorCal)
 
+### v1.21 "Nav Redesign" — DONE
+- [x] Remove Search/Map/Plan/Trips nav tabs from header
+- [x] Add "Find a Site" / "Plan a Trip" mode tabs on main page (content switches inline)
+- [x] Map becomes List/Map toggle in results toolbar (inline rendering, no /map navigation)
+- [x] Watchlist becomes bell icon in header
+- [x] Trips button in header (auth-gated), removed from user dropdown
+- [x] Source filter buttons remain visible in map view
+- [x] AI search summary: bullet format, accent-border card, brand voice prompt, moved below heatmap
+- [x] Preferences form: toggle switch, removed Drive from (derived from home base)
+- [x] Copy: "weekend" spelled out, "western US" coverage, brand-aligned summary prompt
+- [x] Batch API for enrichment CLI (--batch flag, --batch-id resume)
+- [x] Token limits bumped + sentence-boundary truncation for enrichment output
+
+### v1.22 "Pre-Predictions Polish" (~2-3 weeks)
+- [ ] Dark mode heatmap fix (widen levels 0-1 contrast)
+- [ ] Notification copy audit (brand voice on all watch alerts, 10 real-world scenarios)
+- [ ] Design principles section in BRAND.md (minimalist, data-forward, tranquil, progressive disclosure)
+- [ ] Re-enrich registry via batch API (fix truncated descriptions in prod)
+- [ ] Comparison frontend (CompareBar + ComparePanel inline below results)
+- [ ] Share buttons on watch cards and trip detail
+- [ ] Template watch creation UI ("Watch this search" button on results)
+- [ ] Dashboard hub for returning users (Option C — trips, watches, suggestions on home)
+
 ### v1.3 "Predictions+" (~Q1 2027, needs 9-12 months polling data)
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)
 - [ ] Predictive availability display ("typically frees up X days before" with confidence bands)

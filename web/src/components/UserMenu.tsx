@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { deleteAccount, exportData } from "../api";
 
@@ -62,13 +61,6 @@ export function UserMenu() {
         <div className="user-menu-dropdown">
           {!showPrefs && !showDeleteConfirm && (
             <>
-              <Link
-                to="/trips"
-                className="user-menu-item"
-                onClick={() => setOpen(false)}
-              >
-                My Trips
-              </Link>
               <button
                 className="user-menu-item"
                 onClick={() => setShowPrefs(true)}

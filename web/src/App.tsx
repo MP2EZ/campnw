@@ -796,6 +796,11 @@ export default function App() {
           </div>
           <div className="header-actions">
             <div className="header-secondary">
+              {user && (
+                <Link to="/trips" className="header-btn">
+                  Trips
+                </Link>
+              )}
               <button
                 className="header-btn watch-bell"
                 onClick={() => setWatchPanelOpen(true)}
