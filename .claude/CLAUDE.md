@@ -375,16 +375,16 @@ Performance:
 - [ ] Search Analytics Digest (weekly APScheduler job, analytics_digests table)
 - [ ] Dark mode heatmap fix (widen levels 0-1 contrast) → moved to v1.15
 
-### v1.15 "Brand + Identity" (~2-3 weeks, parallelizable with late v1.1)
-- [ ] Logo mark (Pin Drop vs Window/Ridgeline — prototype both, 16px favicon test decides)
-- [ ] Brand palette formalization (name tokens.css colors, spec Brand Green HSL, resolve WA green collision)
-- [ ] Typography system (Plus Jakarta Sans or DM Sans for headings, system stack for body)
-- [ ] Dark mode heatmap fix (widen levels 0-1 contrast — brand requirement, CSS-only)
-- [ ] OG image template (1200×630 share card: logo + tagline + search context)
-- [ ] Notification copy audit (brand voice on all watch alerts, 10 real-world scenarios)
-- [ ] PWA assets (manifest icons, favicon, apple-touch-icon, splash with final mark)
-- [ ] Brand voice guide (docs/BRAND.md — colors, logo, icons, voice examples, anti-patterns)
-- [ ] Scoping: Anthropic Batch API for `enrich` CLI (50% input savings, bulk submit — defer to v1.2 if v1.15 stays CSS-only)
+### v1.15 "Brand + Identity" — DONE (except 2 deferred items)
+- [x] Logo mark (Pin Drop with tree silhouette, 16px favicon optimized)
+- [x] Brand palette formalization (tokens.css: --brand-green, --brand-cream, source colors)
+- [x] Typography system (Plus Jakarta Sans headings, system stack body)
+- [ ] Dark mode heatmap fix (widen levels 0-1 contrast) — deferred
+- [x] OG image template (1200×630 share card)
+- [ ] Notification copy audit (brand voice on all watch alerts) — deferred
+- [x] PWA assets (manifest icons, favicon, apple-touch-icon, splash)
+- [x] Brand voice guide (docs/BRAND.md — colors, logo, icons, voice examples, anti-patterns)
+- [x] Anthropic Batch API for `enrich` CLI (--batch flag, 50% cost savings)
 
 ### v1.2 "Trips + Watches" — DONE
 - [x] Trip object (trips + trip_campgrounds tables, CRUD API, "Save to trip" on result cards, TripsPage + TripDetail)
@@ -398,6 +398,29 @@ Performance:
 - [x] ResultCard extracted from App.tsx into components/ResultCard.tsx
 - [x] Home base → drive-from derivation (profile Drive from removed, fuzzy match to known bases)
 - [x] Copy updated for expanded 6-state coverage (WA, OR, ID, MT, WY, NorCal)
+
+### v1.21 "Nav Redesign" — DONE
+- [x] Remove Search/Map/Plan/Trips nav tabs from header
+- [x] Add "Find a Site" / "Plan a Trip" mode tabs on main page (content switches inline)
+- [x] Map becomes List/Map toggle in results toolbar (inline rendering, no /map navigation)
+- [x] Watchlist becomes bell icon in header
+- [x] Trips button in header (auth-gated), removed from user dropdown
+- [x] Source filter buttons remain visible in map view
+- [x] AI search summary: bullet format, accent-border card, brand voice prompt, moved below heatmap
+- [x] Preferences form: toggle switch, removed Drive from (derived from home base)
+- [x] Copy: "weekend" spelled out, "western US" coverage, brand-aligned summary prompt
+- [x] Batch API for enrichment CLI (--batch flag, --batch-id resume)
+- [x] Token limits bumped + sentence-boundary truncation for enrichment output
+
+### v1.22 "Pre-Predictions Polish" (~2-3 weeks)
+- [ ] Dark mode heatmap fix (widen levels 0-1 contrast)
+- [ ] Notification copy audit (brand voice on all watch alerts, 10 real-world scenarios)
+- [ ] Design principles section in BRAND.md (minimalist, data-forward, tranquil, progressive disclosure)
+- [ ] Re-enrich registry via batch API (fix truncated descriptions in prod)
+- [ ] Comparison frontend (CompareBar + ComparePanel inline below results)
+- [ ] Share buttons on watch cards and trip detail
+- [ ] Template watch creation UI ("Watch this search" button on results)
+- [ ] Dashboard hub for returning users (Option C — trips, watches, suggestions on home)
 
 ### v1.3 "Predictions+" (~Q1 2027, needs 9-12 months polling data)
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)

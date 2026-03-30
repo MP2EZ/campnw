@@ -20,12 +20,29 @@ declare module "leaflet" {
 const PNW_CENTER: L.LatLngExpression = [47.3, -121.0];
 const DEFAULT_ZOOM = 7;
 
-const PIN_COLORS: Record<string, string> = {
+const PIN_COLOR_TOKENS: Record<string, string> = {
+  recgov: "--src-recgov-border",
+  wa_state: "--src-wa-border",
+  or_state: "--src-or-border",
+  id_state: "--src-id-border",
+};
+
+const PIN_COLOR_FALLBACKS: Record<string, string> = {
   recgov: "#5a8a32",
   wa_state: "#3498b0",
   or_state: "#d4920a",
   id_state: "#7d3cb5",
 };
+
+function getPinColors(): Record<string, string> {
+  const style = getComputedStyle(document.documentElement);
+  const colors: Record<string, string> = {};
+  for (const [key, token] of Object.entries(PIN_COLOR_TOKENS)) {
+    const val = style.getPropertyValue(token).trim();
+    colors[key] = val || PIN_COLOR_FALLBACKS[key];
+  }
+  return colors;
+}
 
 function pinRadius(totalSites: number): number {
   if (totalSites >= 11) return 14;
@@ -94,6 +111,7 @@ export default function MapView() {
   const { filteredResults, loading, searchParams, searchDates } = useSearchContext();
   const location = useLocation();
   const focusId = new URLSearchParams(location.search).get("focus");
+  const pinColors = useMemo(() => getPinColors(), []);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
@@ -139,7 +157,7 @@ export default function MapView() {
     const markers = new Map<string, L.CircleMarker>();
     for (const r of withAvailability) {
       if (!r.latitude || !r.longitude) continue;
-      const color = PIN_COLORS[r.booking_system] || PIN_COLORS.recgov;
+      const color = pinColors[r.booking_system] || pinColors.recgov;
       const marker = L.circleMarker([r.latitude, r.longitude], {
         radius: pinRadius(r.total_available_sites),
         fillColor: color,
@@ -166,7 +184,7 @@ export default function MapView() {
       );
       map.fitBounds(bounds, { padding: [40, 40] });
     }
-  }, [filteredResults, focusId]);
+  }, [filteredResults, focusId, pinColors]);
 
   // Focus on a specific campground when ?focus=ID is in the URL
   // Uses location as dep so re-navigating to the same ID still triggers

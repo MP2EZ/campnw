@@ -24,7 +24,7 @@ export function Wordmark({ size = "md", className }: WordmarkProps) {
         fontSize,
         lineHeight,
         fontFamily: "var(--font-heading)",
-        fontWeight: 700,
+        fontWeight: "var(--weight-bold)" as unknown as number,
         letterSpacing: "0.01em",
         color: "currentColor",
         userSelect: "none",
