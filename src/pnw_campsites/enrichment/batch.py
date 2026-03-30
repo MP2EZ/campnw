@@ -199,7 +199,7 @@ def process_results(
 
     from pnw_campsites.registry.models import BookingSystem
 
-    _SOURCE_MAP = {
+    source_map = {
         "recgov": BookingSystem.RECGOV,
         "wa_state": BookingSystem.WA_STATE,
         "or_state": BookingSystem.OR_STATE,
@@ -234,7 +234,7 @@ def process_results(
             continue
 
         # Find campground in registry with correct booking system
-        booking_system = _SOURCE_MAP.get(source_key, BookingSystem.RECGOV)
+        booking_system = source_map.get(source_key, BookingSystem.RECGOV)
         cg = registry.get_by_facility_id(facility_id, booking_system=booking_system)
         if not cg:
             _logger.warning("Campground not found: %s", custom_id)
