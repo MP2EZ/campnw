@@ -1145,6 +1145,7 @@ export default function App() {
                 compareSelected={compareSet.has(r.facility_id)}
                 onToggleCompare={toggleCompare}
                 compareDisabled={compareSet.size >= 3}
+                onShowMap={() => { setResultsDisplay("map"); track("map_toggled", { to: "map" }); }}
               />
             ))}
           <CompareBar
