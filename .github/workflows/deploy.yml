@@ -48,6 +48,9 @@ jobs:
 
       - name: Build frontend
         working-directory: web
+        env:
+          VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ secrets.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN }}
+          VITE_PUBLIC_POSTHOG_HOST: https://eu.i.posthog.com
         run: |
           npm ci
           npm run build
