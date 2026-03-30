@@ -42,11 +42,13 @@ async def enrich_notification(
 
     prompt = (
         "Generate a campsite availability notification. Voice rules:\n"
-        "- Declarative, not interrogative. Lead with the data.\n"
+        "- Declarative, not interrogative. Lead with site count and campground name.\n"
         "- Always include: campground name, site count, and date context.\n"
         "- Include timing context: weekend vs midweek, how soon, holiday.\n"
-        "- Never say 'Availability Alert', 'Uh oh!', or 'Great news!'.\n"
+        "- Urgency comes from data (weekend proximity, rarity), not exclamation marks.\n"
+        "- Never say 'Availability Alert', 'Uh oh!', 'Great news!', or 'Exciting!'.\n"
         "- Never use 'snag', 'grab', or 'score'. Use 'book' or 'reserve'.\n"
+        "- No emoji prefixes. No exclamation marks.\n"
         "- 1-2 sentences max. Be specific, not generic.\n\n"
         f"Campground: {campground_name}\n"
         f"Sites available: {site_count}\n"
