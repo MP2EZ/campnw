@@ -412,15 +412,15 @@ Performance:
 - [x] Batch API for enrichment CLI (--batch flag, --batch-id resume)
 - [x] Token limits bumped + sentence-boundary truncation for enrichment output
 
-### v1.22 "Pre-Predictions Polish" (~2-3 weeks)
-- [ ] Dark mode heatmap fix (widen levels 0-1 contrast)
-- [ ] Notification copy audit (brand voice on all watch alerts, 10 real-world scenarios)
-- [ ] Design principles section in BRAND.md (minimalist, data-forward, tranquil, progressive disclosure)
-- [ ] Re-enrich registry via batch API (fix truncated descriptions in prod)
-- [ ] Comparison frontend (CompareBar + ComparePanel inline below results)
-- [ ] Share buttons on watch cards and trip detail
-- [ ] Template watch creation UI ("Watch this search" button on results)
-- [ ] Dashboard hub for returning users (Option C — trips, watches, suggestions on home)
+### v1.22 "Pre-Predictions Polish" — DONE (dashboard deferred)
+- [x] Dark mode heatmap fix (--heatmap-1 #1e3a14 → #2a5a1e, 22% lightness gap)
+- [x] Design principles in BRAND.md (minimalist, data-forward, tranquil, progressive disclosure)
+- [x] Notification copy audit (no emoji, no exclamation marks, brand voice tests)
+- [ ] Re-enrich registry via batch API — pending manual run
+- [x] Comparison frontend (CompareBar sticky bottom, ComparePanel with table + narrative, ResultCard checkbox)
+- [x] Share buttons (ShareButton on watch cards + trip detail, clipboard copy + toast)
+- [x] Template watch creation UI ("Watch this search" on SearchSummaryBar, template badge in WatchPanel)
+- [ ] Dashboard hub — deferred to v1.3
 
 ### v1.3 "Predictions+" (~Q1 2027, needs 9-12 months polling data)
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)
