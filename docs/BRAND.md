@@ -7,7 +7,14 @@
 Discovery engine for campsite availability. Not monitoring (Campnab), not listings (Dyrt/Hipcamp). Campable answers "where can I actually go camping this weekend?" across multiple booking systems.
 
 **Tagline:** "Find your weekend."
-**Explanatory:** "Real-time campsite availability across the Pacific Northwest and beyond."
+**Explanatory:** "Real-time campsite availability across the western US."
+
+## Design Principles
+
+- **Minimalist.** Every element earns its pixel. Prefer whitespace over decoration. No gratuitous illustrations or stock photography. If removing something doesn't hurt, remove it.
+- **Data-forward.** Lead with numbers: site counts, dates, drive times. The data IS the experience, not a byproduct of it. Never narrate what the user can see.
+- **Tranquil.** Warm palette, generous spacing, no animation unless it communicates state change. The tool should feel like a calm Saturday morning, not a flash sale.
+- **Progressive disclosure.** Show the essential first (campground name, site count, dates), reveal detail on interaction (site names, loops, booking URLs). Never overwhelm a first-time user.
 
 ## Color Palette
 
