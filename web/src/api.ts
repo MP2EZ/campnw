@@ -283,6 +283,8 @@ export interface WatchData {
   notification_channel: string;
   enabled: boolean;
   created_at: string;
+  watch_type?: string;
+  search_params?: Record<string, unknown> | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -378,13 +380,15 @@ export async function revokeShareLink(uuid: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export interface CreateWatchParams {
-  facility_id: string;
+  facility_id?: string;
   name?: string;
   start_date: string;
   end_date: string;
   min_nights?: number;
   days_of_week?: number[];
   notification_channel?: string;
+  watch_type?: "single" | "template";
+  search_params?: Record<string, unknown>;
 }
 
 const fetchOpts: RequestInit = { credentials: "include" };

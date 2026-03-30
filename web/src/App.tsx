@@ -582,6 +582,8 @@ function SearchSummaryBar({
   dates: { start: string; end: string };
   onEdit: () => void;
 }) {
+  const { user } = useAuth();
+  const [watchSaved, setWatchSaved] = useState(false);
   const parts: string[] = [];
   if (params.state) parts.push(`${STATE_LABELS[params.state] || params.state} parks`);
   parts.push(formatDateRange(dates.start, dates.end));
@@ -589,12 +591,41 @@ function SearchSummaryBar({
   if (params.tags) parts.push(params.tags);
   if (params.name) parts.push(`"${params.name}"`);
 
+  const handleWatchSearch = async () => {
+    const { createWatch } = await import("./api");
+    const searchParams: Record<string, unknown> = {};
+    if (params.state) searchParams.state = params.state;
+    if (params.tags) searchParams.tags = params.tags.split(",");
+    if (params.from_location) searchParams.from_location = params.from_location;
+    if (params.max_drive) searchParams.max_drive = params.max_drive;
+    if (params.name) searchParams.name = params.name;
+    await createWatch({
+      start_date: dates.start,
+      end_date: dates.end,
+      min_nights: params.nights || 2,
+      watch_type: "template",
+      search_params: searchParams,
+      name: parts.join(" · "),
+    });
+    setWatchSaved(true);
+    setTimeout(() => setWatchSaved(false), 3000);
+  };
+
   return (
     <div className="search-summary-bar">
       <p className="search-summary-text">{parts.join(" · ")}</p>
-      <button className="search-summary-edit" onClick={onEdit} type="button">
-        Edit
-      </button>
+      <div className="search-summary-actions">
+        {user && (
+          watchSaved
+            ? <span className="watch-search-saved">Watching</span>
+            : <button className="watch-search-btn" onClick={handleWatchSearch} type="button">
+                Watch this search
+              </button>
+        )}
+        <button className="search-summary-edit" onClick={onEdit} type="button">
+          Edit
+        </button>
+      </div>
     </div>
   );
 }
