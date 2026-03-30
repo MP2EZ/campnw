@@ -37,9 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const identifyUser = useCallback((u: UserData) => {
     import("posthog-js").then(({ default: posthog }) => {
       posthog.identify(String(u.id), {
-        email: u.email,
         display_name: u.display_name,
-        home_base: u.home_base,
       });
     }).catch(() => {});
   }, []);

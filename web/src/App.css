@@ -1908,6 +1908,21 @@ header p {
     color: var(--accent-text);
     border-color: var(--accent-text);
   }
+
+  /* ── v1.2+ components: accent text in dark mode ─── */
+  .compare-table th,
+  .compare-narrative strong,
+  .search-summary-banner strong,
+  .trip-back-link,
+  .trip-edit-btn,
+  .save-to-trip-saved,
+  .save-to-trip-btn:hover,
+  .share-copied,
+  .share-btn:hover,
+  .watch-search-btn:hover,
+  .watch-search-saved {
+    color: var(--accent-text);
+  }
 }
 
 .watch-created {

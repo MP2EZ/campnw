@@ -25,18 +25,32 @@ class CreateShareRequest(BaseModel):
 # Rate limiting — 10 views/hour per UUID
 # ---------------------------------------------------------------------------
 
-_share_view_counts: dict[str, tuple[str, int]] = {}  # uuid -> (hour_key, count)
+_share_view_counts: dict[str, tuple[str, int]] = {}  # key -> (hour_key, count)
 
 
-def _check_share_rate_limit(uuid: str) -> bool:
+def _check_share_rate_limit(uuid: str, client_ip: str) -> bool:
+    """Rate limit both per-UUID (10/hr) and per-IP (30/hr)."""
     hour_key = datetime.now().strftime("%Y-%m-%dT%H")
-    entry = _share_view_counts.get(uuid)
-    if entry is None or entry[0] != hour_key:
+
+    # Per-UUID limit (prevent excessive views of one link)
+    uuid_entry = _share_view_counts.get(uuid)
+    if uuid_entry is None or uuid_entry[0] != hour_key:
         _share_view_counts[uuid] = (hour_key, 1)
-        return True
-    if entry[1] >= 10:
+    elif uuid_entry[1] >= 10:
         return False
-    _share_view_counts[uuid] = (hour_key, entry[1] + 1)
+    else:
+        _share_view_counts[uuid] = (hour_key, uuid_entry[1] + 1)
+
+    # Per-IP limit (prevent UUID enumeration)
+    ip_key = f"ip:{client_ip}"
+    ip_entry = _share_view_counts.get(ip_key)
+    if ip_entry is None or ip_entry[0] != hour_key:
+        _share_view_counts[ip_key] = (hour_key, 1)
+    elif ip_entry[1] >= 30:
+        return False
+    else:
+        _share_view_counts[ip_key] = (hour_key, ip_entry[1] + 1)
+
     return True
 
 
@@ -74,9 +88,11 @@ async def create_share(body: CreateShareRequest, request: Request):
 
 
 @router.get("/api/shared/{uuid}")
-async def view_shared(uuid: str):
+async def view_shared(uuid: str, request: Request):
     """Public endpoint — no auth required."""
-    if not _check_share_rate_limit(uuid):
+    from pnw_campsites.routes.deps import get_client_ip
+
+    if not _check_share_rate_limit(uuid, get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many views")
 
     db = get_watch_db()

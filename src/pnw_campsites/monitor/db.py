@@ -462,15 +462,25 @@ class WatchDB:
         self._conn.commit()
 
     def get_recent_notifications(
-        self, limit: int = 10,
+        self, limit: int = 10, user_id: int | None = None,
     ) -> list[dict]:
-        rows = self._conn.execute(
-            "SELECT n.*, w.name as watch_name"
-            " FROM notification_log n"
-            " LEFT JOIN watches w ON n.watch_id = w.id"
-            " ORDER BY n.sent_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        if user_id is not None:
+            rows = self._conn.execute(
+                "SELECT n.*, w.name as watch_name"
+                " FROM notification_log n"
+                " LEFT JOIN watches w ON n.watch_id = w.id"
+                " WHERE w.user_id = ?"
+                " ORDER BY n.sent_at DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT n.*, w.name as watch_name"
+                " FROM notification_log n"
+                " LEFT JOIN watches w ON n.watch_id = w.id"
+                " ORDER BY n.sent_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
         return [dict(r) for r in rows]
 
     # -------------------------------------------------------------------
@@ -1074,7 +1084,7 @@ class WatchDB:
         if not watch_id and not trip_id:
             raise ValueError("Must specify watch_id or trip_id")
 
-        link_uuid = _uuid.uuid4().hex[:12]
+        link_uuid = _uuid.uuid4().hex
         now = datetime.now()
         expires_at = (now + timedelta(days=expires_days)).isoformat()
 
