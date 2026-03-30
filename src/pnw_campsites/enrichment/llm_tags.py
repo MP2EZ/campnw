@@ -118,7 +118,7 @@ Return ONLY the JSON object, nothing else."""
     try:
         response = await client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=200,
+            max_tokens=300,
             messages=[{"role": "user", "content": prompt}],
         )
 
@@ -168,13 +168,12 @@ async def generate_vibe(
     try:
         response = await client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=100,
+            max_tokens=150,
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text.strip().strip('"').strip("'")
-        # Enforce 80-char limit
-        if len(text) > 80:
-            text = text[:77] + "..."
+        # Truncate at sentence boundary
+        text = _truncate(text, 100)
         return text
     except Exception as e:
         _logger.warning("Vibe generation failed for %s: %s", name, e)
@@ -227,7 +226,7 @@ async def generate_description(
     try:
         response = await client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=400,
+            max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text.strip()

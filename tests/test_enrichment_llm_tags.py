@@ -211,12 +211,12 @@ class TestGenerateVibe:
             )
 
         assert vibe == "Beautiful lakeside campground for families"
-        assert len(vibe) <= 80
+        assert len(vibe) <= 100
 
     @pytest.mark.asyncio
     async def test_generate_vibe_truncates_long_response(self):
-        """Long responses are truncated to 80 chars with ellipsis."""
-        long_text = "A" * 100
+        """Long responses are truncated to 100 chars."""
+        long_text = "A" * 150
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text=long_text)]
 
@@ -237,8 +237,7 @@ class TestGenerateVibe:
                 api_key="test-key",
             )
 
-        assert len(vibe) == 80  # 77 + "..."
-        assert vibe.endswith("...")
+        assert len(vibe) <= 100
 
     @pytest.mark.asyncio
     async def test_generate_vibe_strips_quotes(self):
