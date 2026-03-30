@@ -19,6 +19,56 @@ from pnw_campsites.registry.models import Campground
 
 _logger = logging.getLogger(__name__)
 
+# Old char limits before the bump — used for truncation detection
+_OLD_LIMITS = {"elevator_pitch": 100, "description_rewrite": 250, "best_for": 30, "vibe": 80}
+
+
+def truncation_score(text: str, field: str) -> float:
+    """Score how likely a text field was truncated. Returns 0.0-1.0."""
+    if not text:
+        return 0.0
+
+    score = 0.0
+    old_limit = _OLD_LIMITS.get(field, 250)
+
+    # Signal 1: hits the old char limit exactly (strongest signal)
+    if len(text) == old_limit:
+        score += 0.5
+
+    # Signal 2: ends mid-word (no trailing punctuation or space)
+    if text and text[-1].isalpha() and not text.endswith((".", "!", "?", '"', ")", ",")):
+        score += 0.3
+
+    # Signal 3: ends with "..." (our truncation added this)
+    if text.endswith("..."):
+        score += 0.4
+
+    # Signal 4: no sentence-ending punctuation
+    stripped = text.rstrip()
+    if stripped and stripped[-1] not in ".!?\"')":
+        score += 0.15
+
+    # Signal 5: suspiciously short for the field
+    min_expected = {"elevator_pitch": 40, "description_rewrite": 100, "best_for": 15, "vibe": 30}
+    if len(text) < min_expected.get(field, 30):
+        score += 0.1
+
+    return min(score, 1.0)
+
+
+def campground_truncation_score(cg: Campground) -> float:
+    """Score how likely any of a campground's enrichment fields are truncated."""
+    scores = []
+    if cg.elevator_pitch:
+        scores.append(truncation_score(cg.elevator_pitch, "elevator_pitch"))
+    if cg.description_rewrite:
+        scores.append(truncation_score(cg.description_rewrite, "description_rewrite"))
+    if cg.best_for:
+        scores.append(truncation_score(cg.best_for, "best_for"))
+    if cg.vibe:
+        scores.append(truncation_score(cg.vibe, "vibe"))
+    return max(scores) if scores else 0.0
+
 # ---------------------------------------------------------------------------
 # Prompt builder — single prompt per campground for tags + vibe + description
 # ---------------------------------------------------------------------------
@@ -59,7 +109,7 @@ def build_batch_requests(campgrounds: list[Campground]) -> list[dict]:
     requests = []
     for cg in campgrounds:
         requests.append({
-            "custom_id": f"{cg.booking_system.value}:{cg.facility_id}",
+            "custom_id": f"{cg.booking_system.value}_{cg.facility_id}",
             "params": {
                 "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 500,
@@ -147,10 +197,26 @@ def process_results(
 
     stats = {"succeeded": 0, "errored": 0, "skipped": 0}
 
+    from pnw_campsites.registry.models import BookingSystem
+
+    source_map = {
+        "recgov": BookingSystem.RECGOV,
+        "wa_state": BookingSystem.WA_STATE,
+        "or_state": BookingSystem.OR_STATE,
+        "id_state": BookingSystem.ID_STATE,
+    }
+
     for result in client.messages.batches.results(batch_id):
-        custom_id = result.custom_id  # "recgov:232465"
-        parts = custom_id.split(":", 1)
-        facility_id = parts[1] if len(parts) == 2 else custom_id
+        custom_id = result.custom_id  # "recgov_232465" or "wa_state_-2147483647"
+        # Parse source and facility_id — source keys can contain underscores
+        source_key = "recgov"
+        facility_id = custom_id
+        for key in ("wa_state", "or_state", "id_state", "recgov"):
+            prefix = key + "_"
+            if custom_id.startswith(prefix):
+                source_key = key
+                facility_id = custom_id[len(prefix):]
+                break
 
         if result.result.type != "succeeded":
             _logger.warning(
@@ -167,8 +233,9 @@ def process_results(
             stats["errored"] += 1
             continue
 
-        # Find campground in registry
-        cg = registry.get_by_facility_id(facility_id)
+        # Find campground in registry with correct booking system
+        booking_system = source_map.get(source_key, BookingSystem.RECGOV)
+        cg = registry.get_by_facility_id(facility_id, booking_system=booking_system)
         if not cg:
             _logger.warning("Campground not found: %s", custom_id)
             stats["skipped"] += 1
@@ -224,10 +291,18 @@ async def enrich_registry_batch(
     limit: int = 1370,
     dry_run: bool = False,
     batch_id: str | None = None,
+    force: bool = False,
+    truncated: bool = False,
+    truncated_threshold: float = 0.5,
 ) -> int:
     """Enrich campgrounds via the Batch API.
 
-    If batch_id is provided, skip submission and just poll/process results.
+    Modes:
+    - Default: enrich campgrounds missing tags or elevator_pitch
+    - --force: re-enrich all campgrounds regardless of existing data
+    - --truncated: re-enrich campgrounds with likely-truncated fields
+    - batch_id: skip submission, just poll/process results
+
     Returns count of successfully enriched campgrounds.
     """
     import os
@@ -242,12 +317,44 @@ async def enrich_registry_batch(
     )
 
     if not batch_id:
-        # Find campgrounds needing enrichment
         all_cgs = registry.search(enabled_only=True)
-        candidates = [
-            cg for cg in all_cgs
-            if not cg.tags or not cg.elevator_pitch
-        ][:limit]
+
+        if force:
+            candidates = all_cgs[:limit]
+            _logger.info("Force mode: re-enriching %d campgrounds", len(candidates))
+        elif truncated:
+            scored = []
+            for cg in all_cgs:
+                s = campground_truncation_score(cg)
+                if s >= truncated_threshold:
+                    scored.append((cg, s))
+            scored.sort(key=lambda x: -x[1])
+            candidates = [cg for cg, _ in scored[:limit]]
+            _logger.info(
+                "Truncated mode: %d campgrounds above %.2f threshold (of %d total)",
+                len(candidates), truncated_threshold, len(all_cgs),
+            )
+            if dry_run:
+                for cg, s in scored[:limit]:
+                    best_field = ""
+                    best_score = 0.0
+                    for field in ("elevator_pitch", "description_rewrite", "best_for", "vibe"):
+                        val = getattr(cg, field, "")
+                        if val:
+                            fs = truncation_score(val, field)
+                            if fs > best_score:
+                                best_score = fs
+                                best_field = field
+                    preview = getattr(cg, best_field, "")[-40:] if best_field else ""
+                    _logger.info(
+                        "  %.2f %s — %s: ...%s",
+                        s, cg.name, best_field, preview,
+                    )
+        else:
+            candidates = [
+                cg for cg in all_cgs
+                if not cg.tags or not cg.elevator_pitch
+            ][:limit]
 
         if not candidates:
             _logger.info("No campgrounds need enrichment")

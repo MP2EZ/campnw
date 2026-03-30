@@ -457,6 +457,9 @@ async def cmd_enrich(args: argparse.Namespace) -> None:
             limit=args.limit,
             dry_run=args.dry_run,
             batch_id=getattr(args, "batch_id", None),
+            force=getattr(args, "force", False),
+            truncated=getattr(args, "truncated", False),
+            truncated_threshold=getattr(args, "truncated_threshold", 0.5),
         )
     else:
         from pnw_campsites.enrichment.llm_tags import enrich_registry
@@ -567,6 +570,22 @@ def main() -> None:
         type=str,
         default=None,
         help="Resume polling/processing a previously submitted batch",
+    )
+    p_enrich.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-enrich all campgrounds regardless of existing data",
+    )
+    p_enrich.add_argument(
+        "--truncated",
+        action="store_true",
+        help="Re-enrich campgrounds with likely-truncated descriptions",
+    )
+    p_enrich.add_argument(
+        "--truncated-threshold",
+        type=float,
+        default=0.5,
+        help="Confidence threshold for truncation detection (0.0-1.0, default: 0.5)",
     )
 
     args = parser.parse_args()
