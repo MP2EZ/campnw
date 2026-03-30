@@ -159,7 +159,7 @@ function SearchForm({
   const [mode, setMode] = useState<SearchMode>(initialValues?.mode as SearchMode || "find");
   const [startDate, setStartDate] = useState(initialValues?.start_date || formatDate(14));
   const [endDate, setEndDate] = useState(initialValues?.end_date || formatDate(44));
-  const [state, setState] = useState(initialValues?.state || userDefaults?.state || "WA");
+  const [state, setState] = useState(initialValues?.state || userDefaults?.state || "");
   const [nights, setNights] = useState(initialValues?.nights || userDefaults?.nights || 2);
   const [dayPreset, setDayPreset] = useState(initialValues?.days_of_week || "");
   const [customDays, setCustomDays] = useState<Set<number>>(new Set());
