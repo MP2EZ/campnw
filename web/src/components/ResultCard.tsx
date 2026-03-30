@@ -354,7 +354,7 @@ export function ResultCard({
                 {result.booking_system === "wa_state"
                   ? "GoingToCamp"
                   : "Recreation.gov"}{" "}
-                &nearr;
+                {"\u2197"}
               </a>
               {result.latitude && result.longitude && onShowMap && (
                 <button type="button" className="map-link" onClick={onShowMap}>
