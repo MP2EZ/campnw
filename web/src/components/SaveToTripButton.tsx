@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getTrips, createTrip, addCampgroundToTrip } from "../api";
+import { getTrips, createTrip, addCampgroundToTrip, track } from "../api";
 import type { TripData } from "../api";
 import { useAuth } from "../hooks/useAuth";
 
@@ -28,6 +28,7 @@ export function SaveToTripButton({ facilityId, source, name }: SaveToTripButtonP
   const handleSave = async (tripId: number, tripName: string) => {
     try {
       await addCampgroundToTrip(tripId, facilityId, source, name);
+      track("save_to_trip", { facility_id: facilityId });
       setSaved(tripName);
       setTimeout(() => { setSaved(null); setOpen(false); }, 1500);
     } catch {
