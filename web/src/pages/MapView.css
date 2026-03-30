@@ -120,7 +120,7 @@
   font-weight: var(--weight-bold);
   font-size: var(--text-xs);
   box-shadow: var(--shadow-sm);
-  border: 2px solid rgba(255, 255, 255, 0.7);
+  border: 2px solid var(--text-on-accent);
 }
 
 .map-cluster.cluster-md {

@@ -372,7 +372,8 @@ header p {
 }
 
 .trip-type-btn.active .trip-type-hint {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--text-on-accent);
+  opacity: 0.78;
 }
 
 /* ─── Date quick presets ──────────────────────────────────────────── */
@@ -488,6 +489,7 @@ header p {
   padding: var(--space-1) 0;
   cursor: pointer;
   margin-bottom: var(--space-2);
+  transition: color var(--transition-fast);
 }
 
 .search-btn {
@@ -623,8 +625,7 @@ header p {
   flex-shrink: 0;
   padding: 0;
   line-height: 1;
-  padding: 0;
-  line-height: 1;
+  transition: color var(--transition-fast);
 }
 
 .view-toggle {
@@ -1708,6 +1709,7 @@ header p {
   color: var(--text-light);
   cursor: pointer;
   padding: var(--space-1);
+  transition: color var(--transition-fast);
 }
 
 .watch-loading {
@@ -1820,6 +1822,7 @@ header p {
   font-size: var(--text-body);
   font-weight: var(--weight-medium);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .watch-cta-btn:hover {
@@ -1925,6 +1928,7 @@ header p {
   color: var(--accent);
   cursor: pointer;
   white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .push-opt-in-btn:hover {
@@ -2669,6 +2673,7 @@ a.header-btn {
   white-space: nowrap;
   align-self: flex-end;
   height: 48px;
+  transition: background var(--transition-base);
 }
 
 .chat-send-btn:hover:not(:disabled) {
@@ -2951,7 +2956,7 @@ a.header-btn {
 }
 
 .trip-delete-btn:hover {
-  color: var(--error);
+  color: var(--error-text);
 }
 
 .trips-empty,
@@ -3071,7 +3076,7 @@ a.header-btn {
 }
 
 .trip-remove-btn:hover {
-  color: var(--error);
+  color: var(--error-text);
 }
 
 /* SaveToTripButton */
