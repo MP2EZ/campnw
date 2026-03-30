@@ -10,7 +10,7 @@ set -euo pipefail
 
 APP="campnw"
 LOCAL_DB="data/registry.db"
-REMOTE_DB="/data/registry.db"
+REMOTE_DB="/app/data/registry.db"
 
 if [ ! -f "$LOCAL_DB" ]; then
   echo "Error: $LOCAL_DB not found"
@@ -19,6 +19,9 @@ fi
 
 SIZE=$(du -h "$LOCAL_DB" | cut -f1)
 echo "Uploading $LOCAL_DB ($SIZE) to $APP:$REMOTE_DB..."
+
+# Remove existing file (sftp put won't overwrite)
+fly ssh console -a "$APP" -C "rm -f $REMOTE_DB" 2>/dev/null || true
 
 # Upload via sftp
 echo "put $LOCAL_DB $REMOTE_DB" | fly sftp shell -a "$APP"
