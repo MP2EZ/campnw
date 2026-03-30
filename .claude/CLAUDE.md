@@ -375,16 +375,16 @@ Performance:
 - [ ] Search Analytics Digest (weekly APScheduler job, analytics_digests table)
 - [ ] Dark mode heatmap fix (widen levels 0-1 contrast) → moved to v1.15
 
-### v1.15 "Brand + Identity" (~2-3 weeks, parallelizable with late v1.1)
-- [ ] Logo mark (Pin Drop vs Window/Ridgeline — prototype both, 16px favicon test decides)
-- [ ] Brand palette formalization (name tokens.css colors, spec Brand Green HSL, resolve WA green collision)
-- [ ] Typography system (Plus Jakarta Sans or DM Sans for headings, system stack for body)
-- [ ] Dark mode heatmap fix (widen levels 0-1 contrast — brand requirement, CSS-only)
-- [ ] OG image template (1200×630 share card: logo + tagline + search context)
-- [ ] Notification copy audit (brand voice on all watch alerts, 10 real-world scenarios)
-- [ ] PWA assets (manifest icons, favicon, apple-touch-icon, splash with final mark)
-- [ ] Brand voice guide (docs/BRAND.md — colors, logo, icons, voice examples, anti-patterns)
-- [ ] Scoping: Anthropic Batch API for `enrich` CLI (50% input savings, bulk submit — defer to v1.2 if v1.15 stays CSS-only)
+### v1.15 "Brand + Identity" — DONE (except 2 deferred items)
+- [x] Logo mark (Pin Drop with tree silhouette, 16px favicon optimized)
+- [x] Brand palette formalization (tokens.css: --brand-green, --brand-cream, source colors)
+- [x] Typography system (Plus Jakarta Sans headings, system stack body)
+- [ ] Dark mode heatmap fix (widen levels 0-1 contrast) — deferred
+- [x] OG image template (1200×630 share card)
+- [ ] Notification copy audit (brand voice on all watch alerts) — deferred
+- [x] PWA assets (manifest icons, favicon, apple-touch-icon, splash)
+- [x] Brand voice guide (docs/BRAND.md — colors, logo, icons, voice examples, anti-patterns)
+- [x] Anthropic Batch API for `enrich` CLI (--batch flag, 50% cost savings)
 
 ### v1.2 "Trips + Watches" — DONE
 - [x] Trip object (trips + trip_campgrounds tables, CRUD API, "Save to trip" on result cards, TripsPage + TripDetail)
