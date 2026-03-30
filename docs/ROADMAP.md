@@ -836,6 +836,40 @@ Trip Object (1) is critical path — blocks Watch Sharing (3) and Planner-to-Iti
 
 ---
 
+## v1.21 "Nav Redesign" — DONE
+
+Simplified the top-level navigation from 5 tabs to a two-mode layout with inline map rendering.
+
+| Feature | Status |
+|---------|--------|
+| "Find a Site" / "Plan a Trip" mode tabs on main page | DONE |
+| Inline map (List/Map toggle in results toolbar) | DONE |
+| Watchlist bell icon, Trips header button | DONE |
+| AI search summary: bullet format, brand voice, moved below heatmap | DONE |
+| Preferences: toggle switch, home base → drive-from derivation | DONE |
+| Batch API for enrichment CLI (--batch, --batch-id, --force, --truncated) | DONE |
+| Default state "All" (was WA) | DONE |
+
+---
+
+## v1.22 "Pre-Predictions Polish" — DONE
+
+Frontend for v1.2 backend features + brand polish.
+
+| Feature | Status |
+|---------|--------|
+| Dark mode heatmap fix (level 0-1 contrast) | DONE |
+| Design principles in BRAND.md | DONE |
+| Notification copy audit (brand voice) | DONE |
+| Re-enrich registry (1,294/1,370 via batch API) | DONE |
+| Comparison frontend (CompareBar + ComparePanel + checkbox) | DONE |
+| Share buttons (WatchPanel + TripDetail) | DONE |
+| Template watch UI ("Watch this search" + badge) | DONE |
+| Batch --force/--truncated flags, sync-registry.sh | DONE |
+| Dashboard hub for returning users | Deferred to v1.3 |
+
+---
+
 ## v1.3 "Predictions+" (~Q1 2027, needs 9-12 months of polling data)
 
 ### Theme
