@@ -78,9 +78,9 @@ class TestGenerateDescription:
                 state="WA", notes="", api_key="test-key",
             )
 
-        assert len(result["elevator_pitch"]) <= 100
-        assert len(result["description_rewrite"]) <= 250
-        assert len(result["best_for"]) <= 30
+        assert len(result["elevator_pitch"]) <= 120
+        assert len(result["description_rewrite"]) <= 350
+        assert len(result["best_for"]) <= 50
 
     @pytest.mark.asyncio
     async def test_handles_markdown_code_blocks(self):

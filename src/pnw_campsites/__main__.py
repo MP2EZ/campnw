@@ -449,11 +449,21 @@ async def cmd_enrich(args: argparse.Namespace) -> None:
         print("ERROR: ANTHROPIC_API_KEY not set in .env")
         sys.exit(1)
 
-    from pnw_campsites.enrichment.llm_tags import enrich_registry
+    if getattr(args, "batch", False) or getattr(args, "batch_id", None):
+        from pnw_campsites.enrichment.batch import enrich_registry_batch
 
-    enriched = await enrich_registry(
-        api_key=api_key, limit=args.limit, dry_run=args.dry_run
-    )
+        enriched = await enrich_registry_batch(
+            api_key=api_key,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            batch_id=getattr(args, "batch_id", None),
+        )
+    else:
+        from pnw_campsites.enrichment.llm_tags import enrich_registry
+
+        enriched = await enrich_registry(
+            api_key=api_key, limit=args.limit, dry_run=args.dry_run
+        )
     print(f"Enriched {enriched} campground(s).")
 
 
@@ -546,6 +556,17 @@ def main() -> None:
         "--dry-run",
         action="store_true",
         help="Preview enrichments without saving",
+    )
+    p_enrich.add_argument(
+        "--batch",
+        action="store_true",
+        help="Use Anthropic Batch API (50%% cost savings, async processing)",
+    )
+    p_enrich.add_argument(
+        "--batch-id",
+        type=str,
+        default=None,
+        help="Resume polling/processing a previously submitted batch",
     )
 
     args = parser.parse_args()
