@@ -197,10 +197,26 @@ def process_results(
 
     stats = {"succeeded": 0, "errored": 0, "skipped": 0}
 
+    from pnw_campsites.registry.models import BookingSystem
+
+    _SOURCE_MAP = {
+        "recgov": BookingSystem.RECGOV,
+        "wa_state": BookingSystem.WA_STATE,
+        "or_state": BookingSystem.OR_STATE,
+        "id_state": BookingSystem.ID_STATE,
+    }
+
     for result in client.messages.batches.results(batch_id):
-        custom_id = result.custom_id  # "recgov:232465"
-        parts = custom_id.split("_", 1)
-        facility_id = parts[1] if len(parts) == 2 else custom_id
+        custom_id = result.custom_id  # "recgov_232465" or "wa_state_-2147483647"
+        # Parse source and facility_id — source keys can contain underscores
+        source_key = "recgov"
+        facility_id = custom_id
+        for key in ("wa_state", "or_state", "id_state", "recgov"):
+            prefix = key + "_"
+            if custom_id.startswith(prefix):
+                source_key = key
+                facility_id = custom_id[len(prefix):]
+                break
 
         if result.result.type != "succeeded":
             _logger.warning(
@@ -217,8 +233,9 @@ def process_results(
             stats["errored"] += 1
             continue
 
-        # Find campground in registry
-        cg = registry.get_by_facility_id(facility_id)
+        # Find campground in registry with correct booking system
+        booking_system = _SOURCE_MAP.get(source_key, BookingSystem.RECGOV)
+        cg = registry.get_by_facility_id(facility_id, booking_system=booking_system)
         if not cg:
             _logger.warning("Campground not found: %s", custom_id)
             stats["skipped"] += 1
