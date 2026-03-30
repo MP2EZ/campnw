@@ -20,7 +20,7 @@ async def poll_status(request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
     db = get_watch_db()
     poll_state = get_poll_state()
-    recent = db.get_recent_notifications(limit=10) if db else []
+    recent = db.get_recent_notifications(limit=10, user_id=user_id) if db else []
     # Source active watch count from DB so it's accurate even before first poll
     active_count = len(db.list_watches(enabled_only=True)) if db else 0
     return {

@@ -63,6 +63,7 @@ async def _poll_tranche(tranche: int | None = None) -> None:
     _poll_logger.info("Starting watch poll cycle (%s)", label)
     results = await poll_all(
         _recgov, _goingtocamp, _watch_db, _registry, tranche=tranche,
+        reserveamerica=_reserveamerica,
     )
 
     # Enrich notifications with LLM context (fire-and-forget, 3s timeout)
@@ -308,10 +309,11 @@ async def timing_middleware(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self'; "
+        "script-src 'self' https://*.posthog.com; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' https://*.tile.openstreetmap.org data:; "
-        "connect-src 'self' https://*.tile.openstreetmap.org; "
+        "connect-src 'self' https://*.tile.openstreetmap.org"
+        " https://*.posthog.com https://*.i.posthog.com; "
         "frame-ancestors 'none'"
     )
     return response
