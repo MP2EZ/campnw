@@ -411,15 +411,18 @@ Performance:
 - [x] Copy: "weekend" spelled out, "western US" coverage, brand-aligned summary prompt
 - [x] Batch API for enrichment CLI (--batch flag, --batch-id resume)
 - [x] Token limits bumped + sentence-boundary truncation for enrichment output
+- [x] Default state filter changed from WA to All (6-state coverage)
 
 ### v1.22 "Pre-Predictions Polish" — DONE (dashboard deferred)
 - [x] Dark mode heatmap fix (--heatmap-1 #1e3a14 → #2a5a1e, 22% lightness gap)
 - [x] Design principles in BRAND.md (minimalist, data-forward, tranquil, progressive disclosure)
 - [x] Notification copy audit (no emoji, no exclamation marks, brand voice tests)
-- [ ] Re-enrich registry via batch API — pending manual run
+- [x] Re-enrich registry via batch API (3 passes: 515 + 618 + 161 = 1,294 of 1,370 campgrounds)
 - [x] Comparison frontend (CompareBar sticky bottom, ComparePanel with table + narrative, ResultCard checkbox)
 - [x] Share buttons (ShareButton on watch cards + trip detail, clipboard copy + toast)
 - [x] Template watch creation UI ("Watch this search" on SearchSummaryBar, template badge in WatchPanel)
+- [x] Batch --force and --truncated flags (truncation scoring: old limit, mid-word, ellipsis, short length)
+- [x] sync-registry.sh script (sftp upload to Fly.io + restart)
 - [ ] Dashboard hub — deferred to v1.3
 
 ### v1.3 "Predictions+" (~Q1 2027, needs 9-12 months polling data)
