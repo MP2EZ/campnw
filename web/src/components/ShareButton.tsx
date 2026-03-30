@@ -18,10 +18,6 @@ export function ShareButton({ watchId, tripId }: ShareButtonProps) {
       });
       const url = `${window.location.origin}/shared/${uuid}`;
       await navigator.clipboard.writeText(url);
-      const expiry = new Date(expires_at).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
       setStatus("copied");
       setTimeout(() => setStatus("idle"), 4000);
     } catch {
