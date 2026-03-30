@@ -870,6 +870,60 @@ Frontend for v1.2 backend features + brand polish.
 
 ---
 
+## v1.23 "Analytics" — DONE
+
+PostHog integration replacing the custom `/api/track` endpoint.
+
+| Feature | Status |
+|---------|--------|
+| PostHog JS SDK + `@posthog/react` PostHogProvider | DONE |
+| `track()` → `posthog.capture()`, removed `/api/track` backend | DONE |
+| User identification (posthog.identify on login/signup, reset on logout) | DONE |
+| 17 custom events: search, card_expand, book_click, watch_created, trip_created, compare, share, mode_switched, map_toggled, onboarding, plan_message_sent, signup, login, save_to_trip | DONE |
+| Automatic $pageview + session replay (masked inputs) | DONE |
+| CI deploy: PostHog key as GitHub Actions secret → Vite build env | DONE |
+
+---
+
+## v1.24 "Hardening" (~1-2 days)
+
+Security, a11y, and UX fixes from codebase audit. Ship before any public sharing/marketing.
+
+| Feature | Priority | Source |
+|---------|----------|--------|
+| CSP: add PostHog domains to script-src + connect-src | Critical | SEC-01 |
+| OR State Parks watcher: add OR_STATE branch to _fetch_availability | Critical | TEST-01 |
+| OnboardingModal: focus trap + Escape key handler | Critical | UX-01 |
+| Gate `/api/admin/digest` behind admin check | Warning | SEC-02 |
+| Auth `/api/perf` or restrict to admin | Warning | SEC-03 |
+| Scope `/api/poll-status` notifications to user | Warning | SEC-06 |
+| Shared link UUIDs: full UUID4 (not 12-char truncation) | Warning | SEC-04 |
+| Share rate limit: IP-based, not UUID-keyed | Warning | SEC-08 |
+| Remove PII from PostHog identify (email, home_base) | Warning | SEC-05 |
+| Use Fly-Client-IP instead of X-Forwarded-For | Warning | SEC-10 |
+| Dark mode accent-text overrides for v1.2+ components | Warning | UX-03 |
+| SaveToTripButton: ARIA attributes + Escape handler | Warning | UX-02 |
+| Auth modal max-width → var(--max-w-modal) | Warning | UX-05 |
+| Hardcoded spacing → tokens (1.25rem, 4px, 12px) | Warning | UX-04/06/07 |
+
+---
+
+## v1.25 "Testing" (~2-3 days)
+
+Close major test coverage gaps identified by audit.
+
+| Feature | Priority | Source |
+|---------|----------|--------|
+| Planner agent: chat() + chat_stream() unit tests | Critical | TEST-02/03 |
+| _poll_tranche() integration test | Warning | TEST-04 |
+| batch process_results() test | Warning | TEST-08 |
+| poll_all() with template watch integration | Warning | TEST-10 |
+| useSearch hook tests (SSE, abort, source filter) | Warning | TEST-06 |
+| useAuth hook tests (login/logout/identify) | Warning | TEST-07 |
+| ResultCard, CompareBar, OnboardingModal component tests | Warning | TEST-05 |
+
+---
+
 ## v1.3 "Predictions+" (~Q1 2027, needs 9-12 months of polling data)
 
 ### Theme
