@@ -4,6 +4,7 @@ import type { WatchData, CreateWatchParams } from "../api";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { useAuth } from "../hooks/useAuth";
 import { PollDashboard } from "./PollDashboard";
+import { ShareButton } from "./ShareButton";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -130,7 +131,12 @@ export const WatchPanel = memo(function WatchPanel({
               className={`watch-item ${!w.enabled ? "paused" : ""}`}
             >
               <div className="watch-item-info">
-                <h3>{w.name}</h3>
+                <h3>
+                  {w.name}
+                  {w.watch_type === "template" && (
+                    <span className="watch-template-badge">Search pattern</span>
+                  )}
+                </h3>
                 <p className="watch-dates">
                   {w.start_date} → {w.end_date} · {w.min_nights}n min
                 </p>
@@ -144,6 +150,7 @@ export const WatchPanel = memo(function WatchPanel({
                 )}
               </div>
               <div className="watch-item-actions">
+                {user && <ShareButton watchId={w.id} />}
                 <button
                   className="watch-action-btn"
                   onClick={() => handleToggle(w.id)}

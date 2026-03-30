@@ -4,6 +4,7 @@ import { getTrip, updateTrip, deleteTrip, removeCampgroundFromTrip } from "../ap
 import type { TripData, TripCampground } from "../api";
 import { useAuth } from "../hooks/useAuth";
 import { SOURCE_LABELS } from "../components/ResultCard";
+import { ShareButton } from "../components/ShareButton";
 
 export default function TripDetail() {
   const { tripId } = useParams<{ tripId: string }>();
@@ -98,6 +99,7 @@ export default function TripDetail() {
             >
               Edit
             </button>
+            <ShareButton tripId={trip.id} />
             <button className="trip-delete-btn" onClick={handleDelete} title="Delete trip">
               Delete trip
             </button>

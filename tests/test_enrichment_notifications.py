@@ -264,6 +264,49 @@ class TestEnrichNotification:
         assert urgency == 2
 
     @pytest.mark.asyncio
+    async def test_prompt_includes_brand_voice_rules(self):
+        """Prompt should include all brand voice rules."""
+        mock_response = MagicMock()
+        mock_response.content = [
+            MagicMock(text='{"message": "Test", "urgency": 2}')
+        ]
+
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
+            await enrich_notification(
+                campground_name="Test",
+                site_count=1,
+                dates=["2026-06-10"],
+                api_key="test-key",
+            )
+
+        prompt = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
+        # Brand voice rules
+        assert "No emoji" in prompt
+        assert "exclamation marks" in prompt.lower()
+        assert "snag" in prompt
+        assert "grab" in prompt
+        assert "Declarative" in prompt
+
+    @pytest.mark.asyncio
+    async def test_fallback_message_follows_brand_voice(self):
+        """Fallback message should be declarative and data-forward."""
+        message, urgency = await enrich_notification(
+            campground_name="Ohanapecosh",
+            site_count=3,
+            dates=["2026-06-13", "2026-06-14"],
+            api_key="",
+        )
+
+        assert message == "3 sites open at Ohanapecosh"
+        # No banned patterns
+        assert "!" not in message
+        assert "Great" not in message
+        assert "Alert" not in message
+
+    @pytest.mark.asyncio
     async def test_enrich_notification_many_dates_truncated(self):
         """More than 14 dates shows "+N more" in the prompt."""
         mock_response = MagicMock()

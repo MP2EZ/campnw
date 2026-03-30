@@ -8,6 +8,7 @@ import type {
 import { WatchPanel } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
 import { ResultCard, SOURCE_LABELS } from "./components/ResultCard";
+import { CompareBar } from "./components/CompareBar";
 import { OnboardingModal } from "./components/OnboardingModal";
 const AuthModal = lazy(() => import("./components/AuthModal").then(m => ({ default: m.AuthModal })));
 const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").then(m => ({ default: m.ShortcutHelpModal })));
@@ -581,6 +582,8 @@ function SearchSummaryBar({
   dates: { start: string; end: string };
   onEdit: () => void;
 }) {
+  const { user } = useAuth();
+  const [watchSaved, setWatchSaved] = useState(false);
   const parts: string[] = [];
   if (params.state) parts.push(`${STATE_LABELS[params.state] || params.state} parks`);
   parts.push(formatDateRange(dates.start, dates.end));
@@ -588,12 +591,41 @@ function SearchSummaryBar({
   if (params.tags) parts.push(params.tags);
   if (params.name) parts.push(`"${params.name}"`);
 
+  const handleWatchSearch = async () => {
+    const { createWatch } = await import("./api");
+    const searchParams: Record<string, unknown> = {};
+    if (params.state) searchParams.state = params.state;
+    if (params.tags) searchParams.tags = params.tags.split(",");
+    if (params.from_location) searchParams.from_location = params.from_location;
+    if (params.max_drive) searchParams.max_drive = params.max_drive;
+    if (params.name) searchParams.name = params.name;
+    await createWatch({
+      start_date: dates.start,
+      end_date: dates.end,
+      min_nights: params.nights || 2,
+      watch_type: "template",
+      search_params: searchParams,
+      name: parts.join(" · "),
+    });
+    setWatchSaved(true);
+    setTimeout(() => setWatchSaved(false), 3000);
+  };
+
   return (
     <div className="search-summary-bar">
       <p className="search-summary-text">{parts.join(" · ")}</p>
-      <button className="search-summary-edit" onClick={onEdit} type="button">
-        Edit
-      </button>
+      <div className="search-summary-actions">
+        {user && (
+          watchSaved
+            ? <span className="watch-search-saved">Watching</span>
+            : <button className="watch-search-btn" onClick={handleWatchSearch} type="button">
+                Watch this search
+              </button>
+        )}
+        <button className="search-summary-edit" onClick={onEdit} type="button">
+          Edit
+        </button>
+      </div>
     </div>
   );
 }
@@ -722,6 +754,19 @@ export default function App() {
   const isMap = location.pathname === "/map";
   const [mainMode, setMainMode] = useState<"search" | "plan">("search");
   const [resultsDisplay, setResultsDisplay] = useState<"list" | "map">("list");
+  const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
+
+  const toggleCompare = useCallback((facilityId: string) => {
+    setCompareSet(prev => {
+      const next = new Set(prev);
+      if (next.has(facilityId)) {
+        next.delete(facilityId);
+      } else if (next.size < 3) {
+        next.add(facilityId);
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
@@ -1097,8 +1142,16 @@ export default function App() {
                 searchDates={searchDates || undefined}
                 focused={i === focusedCardIndex}
                 headerRef={(el) => { cardRefs.current[i] = el; }}
+                compareSelected={compareSet.has(r.facility_id)}
+                onToggleCompare={toggleCompare}
+                compareDisabled={compareSet.size >= 3}
               />
             ))}
+          <CompareBar
+            selectedIds={compareSet}
+            onClear={() => setCompareSet(new Set())}
+            searchDates={searchDates || undefined}
+          />
           {withAvailability === 0 && (
             <SmartZeroState
               diagnosis={

@@ -283,6 +283,8 @@ export interface WatchData {
   notification_channel: string;
   enabled: boolean;
   created_at: string;
+  watch_type?: string;
+  search_params?: Record<string, unknown> | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -311,14 +313,82 @@ export interface TripData {
   campgrounds?: TripCampground[];
 }
 
-export interface CreateWatchParams {
+// ---------------------------------------------------------------------------
+// Comparison
+// ---------------------------------------------------------------------------
+
+export interface CompareCampground {
   facility_id: string;
+  name: string;
+  state: string;
+  booking_system: string;
+  tags: string[];
+  vibe: string;
+  elevator_pitch: string;
+  drive_minutes: number | null;
+  total_sites: number | null;
+}
+
+export interface CompareResponse {
+  campgrounds: CompareCampground[];
+  narrative: string | null;
+}
+
+export async function compareCampgrounds(
+  facilityIds: string[],
+  startDate?: string,
+  endDate?: string,
+): Promise<CompareResponse> {
+  const resp = await fetch(`${API_BASE}/api/compare`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      facility_ids: facilityIds,
+      start_date: startDate || "",
+      end_date: endDate || "",
+    }),
+  });
+  return resp.json();
+}
+
+// ---------------------------------------------------------------------------
+// Sharing
+// ---------------------------------------------------------------------------
+
+export async function createShareLink(
+  params: { watch_id?: number; trip_id?: number },
+): Promise<{ uuid: string; expires_at: string }> {
+  const resp = await fetch(`${API_BASE}/api/shares`, {
+    ...fetchOpts,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  return resp.json();
+}
+
+export async function revokeShareLink(uuid: string): Promise<void> {
+  await fetch(`${API_BASE}/api/shares/${uuid}`, {
+    ...fetchOpts,
+    method: "DELETE",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Watches
+// ---------------------------------------------------------------------------
+
+export interface CreateWatchParams {
+  facility_id?: string;
   name?: string;
   start_date: string;
   end_date: string;
   min_nights?: number;
   days_of_week?: number[];
   notification_channel?: string;
+  watch_type?: "single" | "template";
+  search_params?: Record<string, unknown>;
 }
 
 const fetchOpts: RequestInit = { credentials: "include" };
