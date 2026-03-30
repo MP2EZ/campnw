@@ -20,8 +20,10 @@ fi
 SIZE=$(du -h "$LOCAL_DB" | cut -f1)
 echo "Uploading $LOCAL_DB ($SIZE) to $APP:$REMOTE_DB..."
 
-# Remove existing, then upload via sftp
-echo "rm $REMOTE_DB" | fly sftp shell -a "$APP" 2>/dev/null || true
+# Remove existing file (sftp put won't overwrite)
+fly ssh console -a "$APP" -C "rm -f $REMOTE_DB" 2>/dev/null || true
+
+# Upload via sftp
 echo "put $LOCAL_DB $REMOTE_DB" | fly sftp shell -a "$APP"
 
 echo "Upload complete."
