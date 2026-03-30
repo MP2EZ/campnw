@@ -4,6 +4,7 @@ import { visualizer } from 'rollup-plugin-visualizer'
 
 // https://vite.dev/config/
 export default defineConfig({
+  envDir: '..',
   plugins: [
     react(),
     visualizer({ filename: 'stats.html' }),
