@@ -5,14 +5,9 @@ const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 // ---------------------------------------------------------------------------
 
 export function track(event: string, data: Record<string, string | number>) {
-  try {
-    navigator.sendBeacon(
-      `${API_BASE}/api/track`,
-      JSON.stringify({ event, ...data })
-    );
-  } catch {
-    // ignore
-  }
+  import("posthog-js").then(({ default: posthog }) => {
+    posthog.capture(event, data);
+  }).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------

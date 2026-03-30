@@ -425,6 +425,15 @@ Performance:
 - [x] sync-registry.sh script (sftp upload to Fly.io + restart)
 - [ ] Dashboard hub — deferred to v1.3
 
+### v1.23 "Analytics" — DONE
+- [x] PostHog JS SDK (posthog-js, initialized in main.tsx with session replay)
+- [x] track() replaced: posthog.capture() instead of /api/track beacon
+- [x] User identification (posthog.identify on login/signup, reset on logout)
+- [x] New events: search_executed, compare_triggered, share_link_created, trip_created, mode_switched
+- [x] Automatic $pageview on route changes + session replay (masked inputs)
+- [x] Removed /api/track backend endpoint
+- [x] Config: VITE_PUBLIC_POSTHOG_PROJECT_TOKEN + VITE_PUBLIC_POSTHOG_HOST in .env
+
 ### v1.3 "Predictions+" (~Q1 2027, needs 9-12 months polling data)
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)
 - [ ] Predictive availability display ("typically frees up X days before" with confidence bands)
@@ -445,6 +454,8 @@ Full requirements: `docs/REQUIREMENTS-v1.1-v1.2.md` | Full roadmap: `docs/ROADMA
 ## Environment
 - API keys in `.env` (never commit)
 - `RIDB_API_KEY` — Recreation.gov RIDB metadata API
+- `VITE_PUBLIC_POSTHOG_PROJECT_TOKEN` — PostHog project API key (public, baked into frontend build)
+- `VITE_PUBLIC_POSTHOG_HOST` — PostHog API host (default: https://us.i.posthog.com)
 
 ## Code Style
 - Python: type hints, dataclasses/pydantic for models, async where beneficial

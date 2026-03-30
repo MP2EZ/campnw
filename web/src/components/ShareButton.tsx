@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createShareLink } from "../api";
+import { createShareLink, track } from "../api";
 
 interface ShareButtonProps {
   watchId?: number;
@@ -19,6 +19,7 @@ export function ShareButton({ watchId, tripId }: ShareButtonProps) {
       const url = `${window.location.origin}/shared/${uuid}`;
       await navigator.clipboard.writeText(url);
       setStatus("copied");
+      track("share_link_created", { type: watchId ? "watch" : "trip" });
       setTimeout(() => setStatus("idle"), 4000);
     } catch {
       setStatus("idle");

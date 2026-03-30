@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { searchCampsitesStream, saveSearchHistory } from "../api";
+import { searchCampsitesStream, saveSearchHistory, track } from "../api";
 import type {
   CampgroundResult, SearchParams, SearchResponse,
   DiagnosisEvent,
@@ -166,10 +166,16 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       () => {
         setLoading(false);
         searchAbortRef.current = null;
+        const withAvail = streamedResults.filter(
+          (r) => r.total_available_sites > 0,
+        ).length;
+        track("search_executed", {
+          state: params.state || "all",
+          nights: params.nights || 2,
+          result_count: withAvail,
+          total_checked: streamedResults.length,
+        });
         if (user) {
-          const withAvail = streamedResults.filter(
-            (r) => r.total_available_sites > 0,
-          ).length;
           saveSearchHistory(params, withAvail);
         }
       },
