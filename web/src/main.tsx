@@ -2,21 +2,18 @@ import React from 'react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import posthog from 'posthog-js'
+import { PostHogProvider } from '@posthog/react'
 import App from './App.tsx'
 import { AuthProvider } from './hooks/useAuth'
 
-// PostHog analytics
-const phKey = import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN;
-if (phKey) {
-  posthog.init(phKey, {
-    api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
-    capture_pageview: true,
-    capture_pageleave: true,
-    enable_recording_console_log: false,
-    session_recording: { maskAllInputs: true },
-  });
-}
+const posthogOptions = {
+  api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
+  defaults: '2026-01-30',
+  capture_pageview: true,
+  capture_pageleave: true,
+  enable_recording_console_log: false,
+  session_recording: { maskAllInputs: true },
+} as const;
 
 // axe-core accessibility checks in development only
 if (import.meta.env.DEV) {
@@ -27,13 +24,17 @@ if (import.meta.env.DEV) {
   })
 }
 
+const phKey = import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN;
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <PostHogProvider apiKey={phKey} options={posthogOptions}>
+      <BrowserRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </BrowserRouter>
+    </PostHogProvider>
   </StrictMode>,
 )
 
