@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { Link } from "react-router-dom";
 import { track } from "../api";
 import type { SearchResponse, Window } from "../api";
 import { WatchButton } from "./WatchPanel";
@@ -230,6 +229,7 @@ export function ResultCard({
   compareSelected,
   onToggleCompare,
   compareDisabled,
+  onShowMap,
 }: {
   result: SearchResponse["results"][0];
   view: ResultsView;
@@ -239,6 +239,7 @@ export function ResultCard({
   compareSelected?: boolean;
   onToggleCompare?: (facilityId: string) => void;
   compareDisabled?: boolean;
+  onShowMap?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -355,10 +356,10 @@ export function ResultCard({
                   : "Recreation.gov"}{" "}
                 &nearr;
               </a>
-              {result.latitude && result.longitude && (
-                <Link to={`/map?focus=${result.facility_id}`} className="map-link">
+              {result.latitude && result.longitude && onShowMap && (
+                <button type="button" className="map-link" onClick={onShowMap}>
                   See on map
-                </Link>
+                </button>
               )}
               {searchDates && (
                 <WatchButton
