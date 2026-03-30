@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getTrips, createTrip, deleteTrip } from "../api";
+import { getTrips, createTrip, deleteTrip, track } from "../api";
 import type { TripData } from "../api";
 import { useAuth } from "../hooks/useAuth";
 
@@ -30,6 +30,7 @@ export default function TripsPage() {
     setCreating(true);
     const trip = await createTrip(newName.trim());
     setTrips((prev) => [trip, ...prev]);
+    track("trip_created", {});
     setNewName("");
     setCreating(false);
   };

@@ -34,22 +34,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
+  const identifyUser = useCallback((u: UserData) => {
+    import("posthog-js").then(({ default: posthog }) => {
+      posthog.identify(String(u.id), {
+        email: u.email,
+        display_name: u.display_name,
+        home_base: u.home_base,
+      });
+    }).catch(() => {});
+  }, []);
+
   const handleLogin = useCallback(async (email: string, password: string) => {
     const u = await login(email, password);
     setUser(u);
-  }, []);
+    identifyUser(u);
+  }, [identifyUser]);
 
   const handleSignup = useCallback(
     async (email: string, password: string, displayName?: string) => {
       const u = await signup(email, password, displayName);
       setUser(u);
+      identifyUser(u);
     },
-    []
+    [identifyUser]
   );
 
   const handleLogout = useCallback(async () => {
     await logout();
     setUser(null);
+    import("posthog-js").then(({ default: posthog }) => {
+      posthog.reset();
+    }).catch(() => {});
   }, []);
 
   const handleUpdateProfile = useCallback(

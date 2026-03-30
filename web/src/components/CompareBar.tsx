@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { compareCampgrounds } from "../api";
+import { compareCampgrounds, track } from "../api";
 import type { CompareResponse } from "../api";
 
 interface CompareBarProps {
@@ -23,6 +23,7 @@ export function CompareBar({ selectedIds, onClear, searchDates }: CompareBarProp
     );
     setResult(resp);
     setLoading(false);
+    track("compare_triggered", { count: selectedIds.size });
   };
 
   if (result) {

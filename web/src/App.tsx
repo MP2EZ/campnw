@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
-import { getSearchHistory, getRecommendations } from "./api";
+import { getSearchHistory, getRecommendations, track } from "./api";
 import type {
   Recommendation, SearchParams,
   SearchHistoryEntry,
@@ -967,7 +967,7 @@ export default function App() {
               role="tab"
               className={`mode-tab${mainMode === "search" ? " active" : ""}`}
               aria-selected={mainMode === "search"}
-              onClick={() => setMainMode("search")}
+              onClick={() => { setMainMode("search"); track("mode_switched", { to_mode: "search" }); }}
             >
               Find a Site
             </button>
@@ -975,7 +975,7 @@ export default function App() {
               role="tab"
               className={`mode-tab${mainMode === "plan" ? " active" : ""}`}
               aria-selected={mainMode === "plan"}
-              onClick={() => setMainMode("plan")}
+              onClick={() => { setMainMode("plan"); track("mode_switched", { to_mode: "plan" }); }}
             >
               Plan a Trip
             </button>
