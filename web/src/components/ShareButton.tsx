@@ -12,7 +12,7 @@ export function ShareButton({ watchId, tripId }: ShareButtonProps) {
   const handleShare = async () => {
     setStatus("copying");
     try {
-      const { uuid, expires_at } = await createShareLink({
+      const { uuid } = await createShareLink({
         watch_id: watchId,
         trip_id: tripId,
       });
