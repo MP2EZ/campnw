@@ -59,7 +59,7 @@ def build_batch_requests(campgrounds: list[Campground]) -> list[dict]:
     requests = []
     for cg in campgrounds:
         requests.append({
-            "custom_id": f"{cg.booking_system.value}:{cg.facility_id}",
+            "custom_id": f"{cg.booking_system.value}_{cg.facility_id}",
             "params": {
                 "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 500,
@@ -149,7 +149,7 @@ def process_results(
 
     for result in client.messages.batches.results(batch_id):
         custom_id = result.custom_id  # "recgov:232465"
-        parts = custom_id.split(":", 1)
+        parts = custom_id.split("_", 1)
         facility_id = parts[1] if len(parts) == 2 else custom_id
 
         if result.result.type != "succeeded":
