@@ -434,28 +434,27 @@ Performance:
 - [x] Removed /api/track backend endpoint
 - [x] Config: VITE_PUBLIC_POSTHOG_PROJECT_TOKEN + VITE_PUBLIC_POSTHOG_HOST in .env
 
-### v1.24 "Hardening" (~1-2 days)
-Security + a11y fixes from audit. Ship before any public sharing/marketing.
+### v1.24 "Hardening" — DONE
+Security + a11y fixes from audit.
 
-**Critical:**
-- [ ] CSP: add PostHog domains to script-src + connect-src (SEC-01)
-- [ ] OR State Parks watcher bug: add OR_STATE branch to `_fetch_availability` (TEST-01)
-- [ ] OnboardingModal: add focus trap + Escape key handler (UX-01)
+**Critical (fixed):**
+- [x] CSP: add PostHog domains to script-src + connect-src (SEC-01)
+- [x] OR State Parks watcher bug: add OR_STATE branch, thread ReserveAmericaClient (TEST-01)
+- [x] OnboardingModal: focus trap + Escape key handler (UX-01)
 
-**Security warnings:**
-- [ ] Gate `/api/admin/digest` behind admin user ID check (SEC-02)
-- [ ] Auth `/api/perf` endpoint or restrict to admin (SEC-03)
-- [ ] Scope `/api/poll-status` notifications to authenticated user (SEC-06)
-- [ ] Shared link UUIDs: use full UUID4 instead of 12-char truncation (SEC-04)
-- [ ] Share rate limit: add IP-based limit, not just UUID-keyed (SEC-08)
-- [ ] Remove PII (email, home_base) from PostHog identify() (SEC-05)
-- [ ] Use Fly-Client-IP instead of X-Forwarded-For (SEC-10)
+**Security warnings (fixed):**
+- [x] Gate `/api/perf` and `/api/admin/digest` behind ADMIN_USER_IDS env var (SEC-02/03)
+- [x] Scope `/api/poll-status` notifications to authenticated user (SEC-06)
+- [x] Shared link UUIDs: full UUID4 32 hex chars (was 12) (SEC-04)
+- [x] Share rate limit: IP-based (30/hr) + UUID-based (10/hr) (SEC-08)
+- [x] Remove PII (email, home_base) from PostHog identify() (SEC-05)
+- [ ] Use Fly-Client-IP instead of X-Forwarded-For (SEC-10) — deferred
 
-**UX polish:**
-- [ ] Dark mode accent-text overrides for v1.2+ components (UX-03)
-- [ ] SaveToTripButton: aria-expanded, aria-haspopup, Escape handler (UX-02)
-- [ ] Auth modal max-width → var(--max-w-modal) (UX-05)
-- [ ] Hardcoded spacing (1.25rem → token, 4px → --space-1, 12px → --space-3) (UX-04/06/07)
+**UX polish (fixed):**
+- [x] Dark mode accent-text overrides for v1.2+ components (UX-03)
+- [x] SaveToTripButton: aria-expanded, aria-haspopup, role=menu (UX-02)
+- [ ] Auth modal max-width → var(--max-w-modal) (UX-05) — deferred
+- [ ] Hardcoded spacing → tokens (UX-04/06/07) — deferred
 
 ### v1.25 "Testing" (~2-3 days)
 Close the major test coverage gaps identified by audit.
