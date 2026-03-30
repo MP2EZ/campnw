@@ -10,7 +10,7 @@ set -euo pipefail
 
 APP="campnw"
 LOCAL_DB="data/registry.db"
-REMOTE_DB="/data/registry.db"
+REMOTE_DB="/app/data/registry.db"
 
 if [ ! -f "$LOCAL_DB" ]; then
   echo "Error: $LOCAL_DB not found"
