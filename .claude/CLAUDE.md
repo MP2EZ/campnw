@@ -434,6 +434,45 @@ Performance:
 - [x] Removed /api/track backend endpoint
 - [x] Config: VITE_PUBLIC_POSTHOG_PROJECT_TOKEN + VITE_PUBLIC_POSTHOG_HOST in .env
 
+### v1.24 "Hardening" (~1-2 days)
+Security + a11y fixes from audit. Ship before any public sharing/marketing.
+
+**Critical:**
+- [ ] CSP: add PostHog domains to script-src + connect-src (SEC-01)
+- [ ] OR State Parks watcher bug: add OR_STATE branch to `_fetch_availability` (TEST-01)
+- [ ] OnboardingModal: add focus trap + Escape key handler (UX-01)
+
+**Security warnings:**
+- [ ] Gate `/api/admin/digest` behind admin user ID check (SEC-02)
+- [ ] Auth `/api/perf` endpoint or restrict to admin (SEC-03)
+- [ ] Scope `/api/poll-status` notifications to authenticated user (SEC-06)
+- [ ] Shared link UUIDs: use full UUID4 instead of 12-char truncation (SEC-04)
+- [ ] Share rate limit: add IP-based limit, not just UUID-keyed (SEC-08)
+- [ ] Remove PII (email, home_base) from PostHog identify() (SEC-05)
+- [ ] Use Fly-Client-IP instead of X-Forwarded-For (SEC-10)
+
+**UX polish:**
+- [ ] Dark mode accent-text overrides for v1.2+ components (UX-03)
+- [ ] SaveToTripButton: aria-expanded, aria-haspopup, Escape handler (UX-02)
+- [ ] Auth modal max-width → var(--max-w-modal) (UX-05)
+- [ ] Hardcoded spacing (1.25rem → token, 4px → --space-1, 12px → --space-3) (UX-04/06/07)
+
+### v1.25 "Testing" (~2-3 days)
+Close the major test coverage gaps identified by audit.
+
+**Critical:**
+- [ ] Planner agent: unit tests for chat() and chat_stream() with mocked Anthropic (TEST-02/03)
+
+**Backend gaps:**
+- [ ] _poll_tranche() integration test (TEST-04)
+- [ ] batch process_results() test (TEST-08)
+- [ ] poll_all() with template watch integration test (TEST-10)
+
+**Frontend gaps:**
+- [ ] useSearch hook tests (SSE, abort, source filter) (TEST-06)
+- [ ] useAuth hook tests (login/logout/identify flows) (TEST-07)
+- [ ] ResultCard, CompareBar, OnboardingModal component tests (TEST-05)
+
 ### v1.3 "Predictions+" (~Q1 2027, needs 9-12 months polling data)
 - [ ] Statistical prediction model (time-series on polling history + booking window detection)
 - [ ] Predictive availability display ("typically frees up X days before" with confidence bands)
