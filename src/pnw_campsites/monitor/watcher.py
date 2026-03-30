@@ -10,6 +10,7 @@ from datetime import date, datetime
 from pnw_campsites.monitor.db import Snapshot, Watch, WatchDB
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
+from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import (
     AvailabilityStatus,
@@ -57,6 +58,7 @@ async def _fetch_availability(
     recgov: RecGovClient | None,
     goingtocamp: GoingToCampClient | None,
     watch_db: WatchDB,
+    reserveamerica: ReserveAmericaClient | None = None,
 ) -> CampgroundAvailability:
     """Fetch availability from the right provider, using cache."""
     source = booking_system.value
@@ -75,6 +77,12 @@ async def _fetch_availability(
             raise RuntimeError("GoingToCamp client not available")
         avail = await goingtocamp.get_availability(
             int(facility_id), start, end,
+        )
+    elif booking_system == BookingSystem.OR_STATE:
+        if not reserveamerica:
+            raise RuntimeError("ReserveAmerica client not available")
+        avail = await reserveamerica.get_availability(
+            facility_id, start, end,
         )
     else:
         if not recgov:
@@ -97,6 +105,7 @@ async def poll_watch(
     goingtocamp: GoingToCampClient | None,
     watch_db: WatchDB,
     registry: CampgroundRegistry | None = None,
+    reserveamerica: ReserveAmericaClient | None = None,
 ) -> PollResult:
     """Poll a single watch: fetch availability, diff, store snapshot."""
     result = PollResult(watch=watch)
@@ -115,6 +124,7 @@ async def poll_watch(
         availability = await _fetch_availability(
             watch.facility_id, start, end,
             booking_system, recgov, goingtocamp, watch_db,
+            reserveamerica=reserveamerica,
         )
 
         # Build current snapshot: site_id -> [available dates]
@@ -207,6 +217,7 @@ async def poll_all(
     watch_db: WatchDB,
     registry: CampgroundRegistry | None = None,
     tranche: int | None = None,
+    reserveamerica: ReserveAmericaClient | None = None,
 ) -> list[PollResult]:
     """Poll all enabled watches, grouping by facility to minimize API calls.
 
@@ -254,6 +265,7 @@ async def poll_all(
         for watch in facility_watches:
             result = await poll_watch(
                 watch, recgov, goingtocamp, watch_db, registry,
+                reserveamerica=reserveamerica,
             )
             results.append(result)
 

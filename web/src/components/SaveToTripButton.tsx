@@ -60,11 +60,13 @@ export function SaveToTripButton({ facilityId, source, name }: SaveToTripButtonP
         onClick={() => setOpen(!open)}
         type="button"
         title="Save to trip"
+        aria-expanded={open}
+        aria-haspopup="true"
       >
         + Trip
       </button>
       {open && (
-        <div className="save-to-trip-dropdown">
+        <div className="save-to-trip-dropdown" role="menu">
           {trips.length > 0 && (
             <ul className="save-to-trip-list">
               {trips.map((t) => (
