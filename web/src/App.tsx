@@ -719,10 +719,9 @@ export default function App() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
 
-  const isSearch = location.pathname === "/";
-  const isPlan = location.pathname === "/plan";
   const isMap = location.pathname === "/map";
-  const isTrips = location.pathname.startsWith("/trips");
+  const [mainMode, setMainMode] = useState<"search" | "plan">("search");
+  const [resultsDisplay, setResultsDisplay] = useState<"list" | "map">("list");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
@@ -778,7 +777,7 @@ export default function App() {
     { key: "j", handler: () => navigateCard(1), description: "Next result" },
     { key: "k", handler: () => navigateCard(-1), description: "Previous result" },
     { key: "w", handler: () => setWatchPanelOpen(true), description: "Open watchlist" },
-    { key: "m", handler: () => { const target = isMap ? "/" : "/map"; navigate(target); setLiveAnnouncement(target === "/map" ? "Switched to map view" : "Switched to list view"); }, description: "Toggle map/list" },
+    { key: "m", handler: () => { setResultsDisplay(d => { const next = d === "list" ? "map" : "list"; setLiveAnnouncement(next === "map" ? "Switched to map view" : "Switched to list view"); return next; }); }, description: "Toggle map/list" },
     { key: "?", handler: () => setHelpModalOpen(true), description: "Show shortcuts" },
   ], [navigateCard, navigate, isMap]);
 
@@ -796,43 +795,14 @@ export default function App() {
             <p className="header-subtitle">Find available campsites across the western US</p>
           </div>
           <div className="header-actions">
-            <nav className="header-nav" aria-label="Main navigation">
-              <Link
-                to="/"
-                className={`header-btn${isSearch ? " active" : ""}`}
-                aria-current={isSearch ? "page" : undefined}
-              >
-                Search
-              </Link>
-              <Link
-                to="/map"
-                className={`header-btn${isMap ? " active" : ""}`}
-                aria-current={isMap ? "page" : undefined}
-              >
-                Map
-              </Link>
-              <Link
-                to="/plan"
-                className={`header-btn${isPlan ? " active" : ""}`}
-                aria-current={isPlan ? "page" : undefined}
-              >
-                Plan
-              </Link>
-              <Link
-                to="/trips"
-                className={`header-btn${isTrips ? " active" : ""}`}
-                aria-current={isTrips ? "page" : undefined}
-              >
-                Trips
-              </Link>
-            </nav>
             <div className="header-secondary">
               <button
-                className="header-btn"
+                className="header-btn watch-bell"
                 onClick={() => setWatchPanelOpen(true)}
                 title="Watchlist"
+                aria-label="Watchlist"
               >
-                Watchlist
+                🔔
               </button>
               <button
                 className="header-btn theme-toggle"
@@ -863,6 +833,27 @@ export default function App() {
               </button>
               {mobileMenuOpen && (
                 <div className="mobile-menu">
+                  <button
+                    className="header-btn"
+                    onClick={() => { setMainMode("plan"); navigate("/"); setMobileMenuOpen(false); }}
+                  >
+                    Plan a Trip
+                  </button>
+                  {user && (
+                    <Link
+                      to="/trips"
+                      className="header-btn"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      My Trips
+                    </Link>
+                  )}
+                  <button
+                    className="header-btn"
+                    onClick={() => { setWatchPanelOpen(true); setMobileMenuOpen(false); }}
+                  >
+                    Watchlist
+                  </button>
                   {user ? (
                     <UserMenu />
                   ) : (
@@ -873,12 +864,6 @@ export default function App() {
                       Sign in
                     </button>
                   )}
-                  <button
-                    className="header-btn"
-                    onClick={() => { setWatchPanelOpen(true); setMobileMenuOpen(false); }}
-                  >
-                    Watchlist
-                  </button>
                   <button
                     className="header-btn theme-toggle"
                     onClick={() => { setDarkMode(!darkMode); setMobileMenuOpen(false); }}
@@ -927,6 +912,31 @@ export default function App() {
         <Route path="/trips/:tripId" element={<TripDetail />} />
         <Route path="/" element={
           <main id="main-content">
+          <div className="mode-tabs" role="tablist" aria-label="Discovery mode">
+            <button
+              role="tab"
+              className={`mode-tab${mainMode === "search" ? " active" : ""}`}
+              aria-selected={mainMode === "search"}
+              onClick={() => setMainMode("search")}
+            >
+              Find a Site
+            </button>
+            <button
+              role="tab"
+              className={`mode-tab${mainMode === "plan" ? " active" : ""}`}
+              aria-selected={mainMode === "plan"}
+              onClick={() => setMainMode("plan")}
+            >
+              Plan a Trip
+            </button>
+          </div>
+
+          {mainMode === "plan" ? (
+            <Suspense fallback={<div className="loading-page">Loading planner...</div>}>
+              <TripPlanner />
+            </Suspense>
+          ) : (
+          <>
           {formCollapsed && activeSearchParams && searchDates ? (
             <SearchSummaryBar
               params={activeSearchParams}
@@ -963,37 +973,41 @@ export default function App() {
               Checked {Math.min(results.campgrounds_checked, maxResults)} campgrounds —{" "}
               {withAvailability} with availability
             </p>
-            <div className="view-toggle">
-              <button
-                className={resultsView === "dates" ? "active" : ""}
-                onClick={() => setResultsView("dates")}
-                aria-pressed={resultsView === "dates"}
-              >
-                By date
-              </button>
-              <button
-                className={resultsView === "sites" ? "active" : ""}
-                onClick={() => setResultsView("sites")}
-                aria-pressed={resultsView === "sites"}
-              >
-                By site
-              </button>
+            <div className="results-toolbar-right">
+              <div className="view-toggle">
+                <button
+                  className={resultsView === "dates" ? "active" : ""}
+                  onClick={() => setResultsView("dates")}
+                  aria-pressed={resultsView === "dates"}
+                >
+                  By date
+                </button>
+                <button
+                  className={resultsView === "sites" ? "active" : ""}
+                  onClick={() => setResultsView("sites")}
+                  aria-pressed={resultsView === "sites"}
+                >
+                  By site
+                </button>
+              </div>
+              <div className="view-toggle map-toggle">
+                <button
+                  className={resultsDisplay === "list" ? "active" : ""}
+                  aria-pressed={resultsDisplay === "list"}
+                  onClick={() => setResultsDisplay("list")}
+                >
+                  ≡ List
+                </button>
+                <button
+                  className={resultsDisplay === "map" ? "active" : ""}
+                  aria-pressed={resultsDisplay === "map"}
+                  onClick={() => setResultsDisplay("map")}
+                >
+                  ⊞ Map
+                </button>
+              </div>
             </div>
           </div>
-          {searchSummary && (
-            <div className="search-summary-banner" role="status">
-              <p>{searchSummary}</p>
-              <button
-                type="button"
-                className="summary-dismiss"
-                onClick={() => setSearchSummary(null)}
-                aria-label="Dismiss summary"
-              >
-                ×
-              </button>
-            </div>
-          )}
-          {/* Source filter — client-side, instant toggle */}
           {resultSources.size > 1 && (
           <div className="source-toggle" role="group" aria-label="Filter by source">
             {[...resultSources].map((src) => {
@@ -1012,6 +1026,14 @@ export default function App() {
             })}
           </div>
           )}
+          {resultsDisplay === "map" ? (
+            <div className="inline-map">
+              <Suspense fallback={<div className="loading-page">Loading map...</div>}>
+                <MapView />
+              </Suspense>
+            </div>
+          ) : (
+          <>
           {searchDates && withAvailability > 0 && (
             <CalendarHeatMap
               results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}
@@ -1032,6 +1054,33 @@ export default function App() {
               site data is limited — names, types, and capacity aren't available
               from their booking system. Check GoingToCamp for full details.
             </p>
+          )}
+          {searchSummary && (
+            <div className="search-summary-banner" role="status">
+              <div className="summary-content" dangerouslySetInnerHTML={{
+                __html: (() => {
+                  const lines = searchSummary.trim().split("\n").filter(l => l.trim());
+                  const hasBullets = lines.some(l => l.trim().startsWith("- "));
+                  if (hasBullets) {
+                    const items = lines
+                      .filter(l => l.trim().startsWith("- "))
+                      .map(l => l.trim().replace(/^- /, "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"))
+                      .map(l => `<li>${l}</li>`)
+                      .join("");
+                    return `<ul>${items}</ul>`;
+                  }
+                  return searchSummary.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+                })()
+              }} />
+              <button
+                type="button"
+                className="summary-dismiss"
+                onClick={() => setSearchSummary(null)}
+                aria-label="Dismiss summary"
+              >
+                ×
+              </button>
+            </div>
           )}
           {filteredResults
             .filter((r) => r.total_available_sites > 0)
@@ -1066,9 +1115,13 @@ export default function App() {
               onSearch={handleSearch}
             />
           )}
+          </>
+          )}
         </div>
         );
       })()}
+      </>
+      )}
       </main>
         } />
       </Routes>

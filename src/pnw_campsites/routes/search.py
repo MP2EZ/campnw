@@ -158,14 +158,16 @@ async def _generate_search_summary(
     date_str = f"{query.start_date} to {query.end_date}"
 
     prompt = (
-        "Summarize these campsite search results in 1-2 sentences. "
-        "Highlight: total availability, closest/best options, date patterns "
-        "(weekday vs weekend), or standout features.\n\n"
+        "Summarize these campsite search results as 2-3 bullet points.\n\n"
+        "Format each as: - **Campground Name** — one key fact or recommendation\n\n"
+        "First bullet: top pick and why (distance, features, availability).\n"
+        "Second bullet: a runner-up or useful alternative.\n"
+        "Optional third: a pattern or tip (e.g. 'weekdays have more openings').\n\n"
         f"Search: {state_str}, {date_str}, "
         f"{query.min_consecutive_nights} nights\n"
-        f"Results ({len(results_data)} campgrounds with availability):\n"
+        f"Results ({len(results_data)} campgrounds):\n"
         f"{compact}\n\n"
-        "Be specific and concise. Reference campground names. No preamble."
+        "Voice: declarative, specific, data-forward. No filler, no sign-off."
     )
 
     try:
