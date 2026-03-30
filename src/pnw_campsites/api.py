@@ -151,7 +151,9 @@ async def _poll_tranche(tranche: int | None = None) -> None:
             except Exception:
                 pass
 
-    _poll_state["last_poll"] = datetime.now(UTC).isoformat()
+    now = datetime.now(UTC)
+    _poll_state["last_poll"] = now.isoformat()
+    _poll_state["next_poll"] = (now + timedelta(minutes=15)).isoformat()
     _poll_state["last_changes"] = total_changes
     _poll_state["last_errors"] = total_errors
     _poll_state["active_watches"] = len(results)
