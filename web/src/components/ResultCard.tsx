@@ -227,12 +227,18 @@ export function ResultCard({
   searchDates,
   focused,
   headerRef,
+  compareSelected,
+  onToggleCompare,
+  compareDisabled,
 }: {
   result: SearchResponse["results"][0];
   view: ResultsView;
   searchDates?: { start: string; end: string };
   focused?: boolean;
   headerRef?: (el: HTMLButtonElement | null) => void;
+  compareSelected?: boolean;
+  onToggleCompare?: (facilityId: string) => void;
+  compareDisabled?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -304,7 +310,21 @@ export function ResultCard({
             <p className="result-pitch">{result.elevator_pitch}</p>
           )}
         </div>
-        <span className="expand-icon" aria-hidden="true">{expanded ? "\u2212" : "+"}</span>
+        <div className="card-actions">
+          {onToggleCompare && (
+            <button
+              className={`compare-check${compareSelected ? " selected" : ""}`}
+              onClick={(e) => { e.stopPropagation(); onToggleCompare(result.facility_id); }}
+              disabled={compareDisabled && !compareSelected}
+              title={compareSelected ? "Remove from comparison" : "Add to comparison"}
+              aria-label={compareSelected ? "Remove from comparison" : "Add to comparison"}
+              type="button"
+            >
+              {compareSelected ? "\u2713" : "vs"}
+            </button>
+          )}
+          <span className="expand-icon" aria-hidden="true">{expanded ? "\u2212" : "+"}</span>
+        </div>
       </button>
 
       <div className={`card-body${expanded ? " card-body-open" : ""}`}>
