@@ -885,26 +885,25 @@ PostHog integration replacing the custom `/api/track` endpoint.
 
 ---
 
-## v1.24 "Hardening" (~1-2 days)
+## v1.24 "Hardening" — DONE
 
-Security, a11y, and UX fixes from codebase audit. Ship before any public sharing/marketing.
+Security, a11y, and UX fixes from codebase audit.
 
-| Feature | Priority | Source |
-|---------|----------|--------|
-| CSP: add PostHog domains to script-src + connect-src | Critical | SEC-01 |
-| OR State Parks watcher: add OR_STATE branch to _fetch_availability | Critical | TEST-01 |
-| OnboardingModal: focus trap + Escape key handler | Critical | UX-01 |
-| Gate `/api/admin/digest` behind admin check | Warning | SEC-02 |
-| Auth `/api/perf` or restrict to admin | Warning | SEC-03 |
-| Scope `/api/poll-status` notifications to user | Warning | SEC-06 |
-| Shared link UUIDs: full UUID4 (not 12-char truncation) | Warning | SEC-04 |
-| Share rate limit: IP-based, not UUID-keyed | Warning | SEC-08 |
-| Remove PII from PostHog identify (email, home_base) | Warning | SEC-05 |
-| Use Fly-Client-IP instead of X-Forwarded-For | Warning | SEC-10 |
-| Dark mode accent-text overrides for v1.2+ components | Warning | UX-03 |
-| SaveToTripButton: ARIA attributes + Escape handler | Warning | UX-02 |
-| Auth modal max-width → var(--max-w-modal) | Warning | UX-05 |
-| Hardcoded spacing → tokens (1.25rem, 4px, 12px) | Warning | UX-04/06/07 |
+| Feature | Status | Source |
+|---------|--------|--------|
+| CSP: add PostHog domains to script-src + connect-src | DONE | SEC-01 |
+| OR State Parks watcher: add OR_STATE branch, thread ReserveAmericaClient | DONE | TEST-01 |
+| OnboardingModal: focus trap + Escape key handler | DONE | UX-01 |
+| Gate `/api/perf` and `/api/admin/digest` behind ADMIN_USER_IDS | DONE | SEC-02/03 |
+| Scope `/api/poll-status` notifications to authenticated user | DONE | SEC-06 |
+| Shared link UUIDs: full UUID4 32 hex chars (was 12) | DONE | SEC-04 |
+| Share rate limit: IP-based (30/hr) + UUID-based (10/hr) | DONE | SEC-08 |
+| Remove PII (email, home_base) from PostHog identify | DONE | SEC-05 |
+| Dark mode accent-text overrides for v1.2+ components | DONE | UX-03 |
+| SaveToTripButton: aria-expanded, aria-haspopup, role=menu | DONE | UX-02 |
+| Use Fly-Client-IP instead of X-Forwarded-For | Deferred | SEC-10 |
+| Auth modal max-width → var(--max-w-modal) | Deferred | UX-05 |
+| Hardcoded spacing → tokens (1.25rem, 4px, 12px) | Deferred | UX-04/06/07 |
 
 ---
 
