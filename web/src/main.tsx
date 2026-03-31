@@ -7,13 +7,13 @@ import App from './App.tsx'
 import { AuthProvider } from './hooks/useAuth'
 
 const posthogOptions = {
-  api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
-  defaults: '2026-01-30',
+  api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com",
+  ui_host: "https://eu.posthog.com",
   capture_pageview: true,
   capture_pageleave: true,
   enable_recording_console_log: false,
   session_recording: { maskAllInputs: true },
-} as const;
+};
 
 // axe-core accessibility checks in development only
 if (import.meta.env.DEV) {
