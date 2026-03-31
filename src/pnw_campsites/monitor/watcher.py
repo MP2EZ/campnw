@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -205,8 +206,8 @@ async def poll_watch(
         )
 
     except Exception as e:
-        result.error = str(e)
-        _logger.warning("Poll failed for watch %s: %s", watch.id, e)
+        result.error = repr(e)
+        _logger.warning("Poll failed for watch %s: %r", watch.id, e)
 
     return result
 
@@ -263,10 +264,17 @@ async def poll_all(
     results: list[PollResult] = []
     for _facility_id, facility_watches in by_facility.items():
         for watch in facility_watches:
-            result = await poll_watch(
-                watch, recgov, goingtocamp, watch_db, registry,
-                reserveamerica=reserveamerica,
-            )
+            try:
+                result = await asyncio.wait_for(
+                    poll_watch(
+                        watch, recgov, goingtocamp, watch_db, registry,
+                        reserveamerica=reserveamerica,
+                    ),
+                    timeout=15.0,
+                )
+            except TimeoutError:
+                result = PollResult(watch=watch, error="Poll timed out (15s)")
+                _logger.warning("Poll timed out for watch %s (%s)", watch.id, watch.name)
             results.append(result)
 
     return results
