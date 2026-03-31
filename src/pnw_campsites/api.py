@@ -309,8 +309,9 @@ async def timing_middleware(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' https://*.posthog.com; "
-        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' https://*.posthog.com https://*.i.posthog.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' https://*.tile.openstreetmap.org data:; "
         "connect-src 'self' https://*.tile.openstreetmap.org"
         " https://*.posthog.com https://*.i.posthog.com; "
