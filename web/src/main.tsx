@@ -9,6 +9,7 @@ import { AuthProvider } from './hooks/useAuth'
 const posthogOptions = {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com",
   ui_host: "https://eu.posthog.com",
+  person_profiles: "always" as const,
   capture_pageview: true,
   capture_pageleave: true,
   enable_recording_console_log: false,
