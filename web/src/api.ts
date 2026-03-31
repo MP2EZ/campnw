@@ -6,7 +6,7 @@ const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
 export function track(event: string, data: Record<string, string | number>) {
   // posthog is initialized via HTML snippet in index.html
-  const ph = (window as Record<string, unknown>).posthog as
+  const ph = (window as unknown as Record<string, unknown>).posthog as
     | { capture: (event: string, data: Record<string, string | number>) => void }
     | undefined;
   ph?.capture(event, data);
