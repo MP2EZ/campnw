@@ -680,7 +680,7 @@ The capstone. Oregon State Parks via ReserveAmerica completes tri-state coverage
 
 ---
 
-## v1.1 "Better Search + Coverage" (~3-4 weeks)
+## v1.1 "Better Search + Coverage" — DONE
 
 ### Theme
 Find campsites faster, across more of the northwest, with better data. Natural language search is the headline feature. Registry expansion and quality improvements make every search better. AI summarization and recommendation reasons add intelligence to results. Polling data continues accumulating toward v1.3 predictions.
@@ -907,7 +907,7 @@ Security, a11y, and UX fixes from codebase audit.
 
 ---
 
-## v1.25 "Testing" (~2-3 days)
+## v1.25 "Testing" — DONE
 
 Close major test coverage gaps identified by audit.
 
