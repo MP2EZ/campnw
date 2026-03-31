@@ -11,8 +11,10 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -309,12 +311,11 @@ async def timing_middleware(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' https://*.posthog.com https://*.i.posthog.com; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' https://*.tile.openstreetmap.org data:; "
-        "connect-src 'self' https://*.tile.openstreetmap.org"
-        " https://*.posthog.com https://*.i.posthog.com; "
+        "connect-src 'self' https://*.tile.openstreetmap.org; "
         "frame-ancestors 'none'"
     )
     return response
@@ -351,6 +352,48 @@ app.include_router(poll_router)
 # Re-export for test compatibility
 from pnw_campsites.routes.auth import _auth_rate_limit  # noqa: E402, F401
 from pnw_campsites.routes.deps import SESSION_COOKIE  # noqa: E402, F401
+
+# ---------------------------------------------------------------------------
+# PostHog reverse proxy — avoids ad blockers
+# ---------------------------------------------------------------------------
+
+_posthog_host = "https://eu.i.posthog.com"
+_posthog_asset_host = "https://eu-assets.i.posthog.com"
+
+
+@app.api_route("/ingest/{path:path}", methods=["GET", "POST", "OPTIONS"])
+async def posthog_proxy(request: Request, path: str):
+    """Proxy PostHog requests through our domain to bypass ad blockers."""
+    # Static assets (array.full.js, recorder, etc.) come from the asset host
+    if path.startswith("static/") or path.startswith("array/"):
+        target = f"{_posthog_asset_host}/{path}"
+    else:
+        target = f"{_posthog_host}/{path}"
+
+    headers = {
+        k: v for k, v in request.headers.items()
+        if k.lower() not in ("host", "connection", "content-length")
+    }
+    body = await request.body()
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.request(
+            method=request.method,
+            url=target,
+            headers=headers,
+            content=body,
+            params=dict(request.query_params),
+        )
+
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        headers={
+            k: v for k, v in resp.headers.items()
+            if k.lower() not in ("transfer-encoding", "content-encoding", "connection")
+        },
+    )
+
 
 # ---------------------------------------------------------------------------
 # Static file serving (production — serves React build from /static)
