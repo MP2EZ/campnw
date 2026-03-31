@@ -5,10 +5,11 @@ const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 // ---------------------------------------------------------------------------
 
 export function track(event: string, data: Record<string, string | number>) {
-  // posthog-js is a singleton — initialized by PostHogProvider in main.tsx
-  import("posthog-js").then(({ default: posthog }) => {
-    posthog.capture(event, data);
-  }).catch(() => {});
+  // posthog is initialized via HTML snippet in index.html
+  const ph = (window as Record<string, unknown>).posthog as
+    | { capture: (event: string, data: Record<string, string | number>) => void }
+    | undefined;
+  ph?.capture(event, data);
 }
 
 // ---------------------------------------------------------------------------
