@@ -29,7 +29,7 @@ v1.1    [SHIPPED]  Better Search       — NL search, registry expansion (MT/WY/
 v1.15   ------->   Brand + Identity    — Logo, palette, voice, og:image, notification copy
 v1.2    [SHIPPED]  Trips + Watches     — Trip object, template watches, sharing, onboarding
 v1.26   [SHIPPED]  Hardening           — History compaction, DB backup, SEC-10, re-enrichment
-v1.27   ------->   Filter UX           — Source filter toggle-to-isolate, deferred UX polish
+v1.27   ------->   UX Polish           — Source filters, heatmap redesign, icon audit, token cleanup
 v1.3    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -949,16 +949,20 @@ Operational stability. The availability_history table hit 9.37M rows in 2.5 days
 
 ---
 
-## v1.27 "Filter UX"
+## v1.27 "UX Polish"
 
 ### Theme
-Small but high-impact interaction fix. The source filter buttons (Rec.gov, WA Parks, OR Parks) currently use multi-select toggle behavior — clicking one deselects it while keeping others active. Users expect the opposite: clicking a source should isolate to that source only. Also bundle any deferred UX polish items.
+Interaction fixes and visual polish across the app. The source filters need a behavior flip, the heatmap grid needs a design pass for readability and mobile, and scattered UX debt gets closed.
 
 ### Features
 
 | Feature | Size | Description |
 |---------|------|-------------|
 | Source filter toggle-to-isolate | S | Click a source button to show only that source. Click again to reset to all. Shift+click for additive multi-select. |
+| Heatmap color ramp | S | Refine green scale for better differentiation across availability levels |
+| Heatmap mobile layout | S | Responsive grid that works on small screens without horizontal scroll or unreadable cells |
+| Heatmap labeling | S | Improve date/axis labels for clarity (month headers, day-of-week, site count context) |
+| Icon audit | XS | Review and improve icons across the app for consistency and clarity |
 | Auth modal max-width | XS | UX-05: use `var(--max-w-modal)` instead of hardcoded value |
 | Hardcoded spacing → tokens | XS | UX-04/06/07: replace remaining hardcoded spacing with design tokens |
 
@@ -967,8 +971,8 @@ Small but high-impact interaction fix. The source filter buttons (Rec.gov, WA Pa
 
 ### Quality Bar
 - Source filters feel intuitive on first click (no explanation needed)
+- Heatmap readable on 375px-wide screen
 - All existing tests pass
-- No regressions in multi-source search results
 
 ---
 
