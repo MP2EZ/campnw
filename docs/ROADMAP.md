@@ -29,6 +29,7 @@ v1.1    [SHIPPED]  Better Search       — NL search, registry expansion (MT/WY/
 v1.15   ------->   Brand + Identity    — Logo, palette, voice, og:image, notification copy
 v1.2    [SHIPPED]  Trips + Watches     — Trip object, template watches, sharing, onboarding
 v1.26   [SHIPPED]  Hardening           — History compaction, DB backup, SEC-10, re-enrichment
+v1.27   ------->   Filter UX           — Source filter toggle-to-isolate, deferred UX polish
 v1.3    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -945,6 +946,29 @@ Operational stability. The availability_history table hit 9.37M rows in 2.5 days
 - Compaction on a small Fly VM (256MB) can't handle bulk SQL over 9M+ rows — downloaded locally, compacted, re-uploaded.
 - The prod DB had corruption (btreeInitPage errors, rowid out of order) likely from the volume filling to 100%. Rebuilt via table-by-table Python copy.
 - `availability_cache` was lost during rebuild (ephemeral, repopulates on next poll cycle).
+
+---
+
+## v1.27 "Filter UX"
+
+### Theme
+Small but high-impact interaction fix. The source filter buttons (Rec.gov, WA Parks, OR Parks) currently use multi-select toggle behavior — clicking one deselects it while keeping others active. Users expect the opposite: clicking a source should isolate to that source only. Also bundle any deferred UX polish items.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Source filter toggle-to-isolate | S | Click a source button to show only that source. Click again to reset to all. Shift+click for additive multi-select. |
+| Auth modal max-width | XS | UX-05: use `var(--max-w-modal)` instead of hardcoded value |
+| Hardcoded spacing → tokens | XS | UX-04/06/07: replace remaining hardcoded spacing with design tokens |
+
+### Dependencies
+- v1.26 shipped
+
+### Quality Bar
+- Source filters feel intuitive on first click (no explanation needed)
+- All existing tests pass
+- No regressions in multi-source search results
 
 ---
 
