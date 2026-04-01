@@ -13,7 +13,6 @@ web/*.ts
 web/*.js
 web/*.html
 tests
-scripts
 *.md
 data/*.db-shm
 data/*.db-wal
