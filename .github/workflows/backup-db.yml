@@ -1,0 +1,36 @@
+name: Backup Production DB
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"  # Weekly, Monday 8am UTC
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Download production DBs
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          mkdir -p backups
+          flyctl ssh sftp get /app/data/watches.db backups/watches-$(date +%Y%m%d).db
+          flyctl ssh sftp get /app/data/registry.db backups/registry-$(date +%Y%m%d).db
+
+      - name: Verify DB integrity
+        run: |
+          for db in backups/*.db; do
+            echo "Checking $db..."
+            sqlite3 "$db" "PRAGMA integrity_check;" | head -1
+          done
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backups/
+          retention-days: 90

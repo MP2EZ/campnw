@@ -100,7 +100,10 @@ def get_session_token(request: Request, response: Response) -> str:
 
 
 def get_client_ip(request: Request) -> str:
-    """Extract real client IP, preferring X-Forwarded-For behind a proxy."""
+    """Extract real client IP, preferring Fly-Client-IP on Fly.io."""
+    fly_ip = request.headers.get("Fly-Client-IP")
+    if fly_ip:
+        return fly_ip.strip()
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
