@@ -11,8 +11,8 @@ import sqlite3
 
 
 def compact(db_path: str, *, drop_old: bool = False) -> None:
-    conn = sqlite3.connect(db_path)
-    # WAL mode for better concurrent read/write performance
+    conn = sqlite3.connect(db_path, timeout=120)
+    # WAL mode allows concurrent reads during write
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
 
