@@ -241,6 +241,31 @@ class WatchDB:
             );
             CREATE INDEX IF NOT EXISTS idx_avail_hist_lookup
                 ON availability_history(campground_id, date);
+            CREATE INDEX IF NOT EXISTS idx_avail_hist_observed
+                ON availability_history(observed_at);
+            CREATE TABLE IF NOT EXISTS status_transitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campground_id TEXT NOT NULL,
+                site_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                old_status TEXT NOT NULL,
+                new_status TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'recgov',
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_transitions_lookup
+                ON status_transitions(campground_id, date);
+            CREATE TABLE IF NOT EXISTS availability_daily (
+                campground_id TEXT NOT NULL,
+                site_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'recgov',
+                first_seen TEXT NOT NULL,
+                last_seen TEXT NOT NULL,
+                observation_count INTEGER DEFAULT 1,
+                PRIMARY KEY (campground_id, site_id, date)
+            );
             CREATE TABLE IF NOT EXISTS notification_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 watch_id INTEGER REFERENCES watches(id)
@@ -427,21 +452,52 @@ class WatchDB:
         records: list[tuple[str, str, str]],
         source: str = "recgov",
     ) -> None:
-        """Batch-insert availability observations.
+        """Record availability, storing only status changes.
 
+        Updates availability_daily (upsert) and writes to
+        status_transitions only when status actually changed.
         records: list of (site_id, date, status) tuples.
         """
         now = datetime.now().isoformat()
-        self._conn.executemany(
-            "INSERT INTO availability_history"
-            " (campground_id, site_id, date, status, source,"
-            " observed_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                (campground_id, sid, dt, st, source, now)
-                for sid, dt, st in records
-            ],
-        )
+
+        for sid, dt, status in records:
+            # Upsert daily rollup
+            existing = self._conn.execute(
+                "SELECT status FROM availability_daily"
+                " WHERE campground_id=? AND site_id=? AND date=?",
+                (campground_id, sid, dt),
+            ).fetchone()
+
+            old_status = existing[0] if existing else ""
+
+            if existing:
+                self._conn.execute(
+                    "UPDATE availability_daily"
+                    " SET status=?, last_seen=?,"
+                    " observation_count=observation_count+1"
+                    " WHERE campground_id=? AND site_id=? AND date=?",
+                    (status, now, campground_id, sid, dt),
+                )
+            else:
+                self._conn.execute(
+                    "INSERT INTO availability_daily"
+                    " (campground_id, site_id, date, status, source,"
+                    "  first_seen, last_seen, observation_count)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+                    (campground_id, sid, dt, status, source, now, now),
+                )
+
+            # Record transition only if status changed
+            if status != old_status:
+                self._conn.execute(
+                    "INSERT INTO status_transitions"
+                    " (campground_id, site_id, date, old_status,"
+                    "  new_status, source, observed_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (campground_id, sid, dt, old_status, status,
+                     source, now),
+                )
+
         self._conn.commit()
 
     # -------------------------------------------------------------------

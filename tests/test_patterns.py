@@ -17,20 +17,20 @@ from pnw_campsites.analytics.patterns import (
 
 
 def _seed_history(watch_db, campground_id: str = "232465", days: int = 40):
-    """Seed synthetic availability_history data."""
+    """Seed synthetic availability_daily data."""
     base = date(2026, 1, 1)
     records = []
     for d in range(days):
         dt = base + timedelta(days=d)
-        # Use the observation date = the data date (simulates daily polling)
         observed = (datetime(2026, 1, 1) + timedelta(days=d)).isoformat()
         # Weekdays more available, weekends mostly reserved
         status = "Available" if dt.weekday() < 5 else "Reserved"
-        records.append((campground_id, "site-1", dt.isoformat(), status, "recgov", observed))
+        records.append((campground_id, "site-1", dt.isoformat(), status, "recgov", observed, observed, 1))
     watch_db._conn.executemany(
-        "INSERT INTO availability_history"
-        " (campground_id, site_id, date, status, source, observed_at)"
-        " VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO availability_daily"
+        " (campground_id, site_id, date, status, source,"
+        "  first_seen, last_seen, observation_count)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         records,
     )
     watch_db._conn.commit()

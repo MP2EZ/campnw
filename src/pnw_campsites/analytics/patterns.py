@@ -19,12 +19,13 @@ MIN_OBSERVATION_DAYS = 30
 def get_availability_summary(
     db: WatchDB, campground_id: str,
 ) -> dict | None:
-    """Aggregate availability_history into per-campground stats.
+    """Aggregate availability_daily into per-campground stats.
 
     Returns None if fewer than MIN_OBSERVATION_DAYS of data.
     """
     rows = db._conn.execute(
-        "SELECT date, status, observed_at FROM availability_history"
+        "SELECT date, status, last_seen AS observed_at"
+        " FROM availability_daily"
         " WHERE campground_id=? ORDER BY date",
         (campground_id,),
     ).fetchall()
@@ -131,7 +132,7 @@ async def refresh_all_tips(db: WatchDB, registry) -> int:
     """
     # Get campgrounds with availability history
     rows = db._conn.execute(
-        "SELECT DISTINCT campground_id FROM availability_history"
+        "SELECT DISTINCT campground_id FROM availability_daily"
     ).fetchall()
 
     updated = 0
