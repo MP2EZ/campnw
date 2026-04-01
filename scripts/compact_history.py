@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Compact availability_history into daily rollups + transitions.
+"""Compact availability_history into daily rollups.
 
 Run on production: fly ssh console -C "python3 /app/scripts/compact_history.py"
 
-Safe to run multiple times — uses ON CONFLICT for daily rollups.
+Processes in batches of campground_ids to avoid OOM on small VMs.
+Safe to run multiple times — uses ON CONFLICT upsert.
 """
 
 import argparse
@@ -12,7 +13,6 @@ import sqlite3
 
 def compact(db_path: str, *, drop_old: bool = False) -> None:
     conn = sqlite3.connect(db_path, timeout=120)
-    # WAL mode allows concurrent reads during write
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
 
@@ -27,57 +27,50 @@ def compact(db_path: str, *, drop_old: bool = False) -> None:
         conn.close()
         return
 
-    # Step 1: Daily rollups — simple GROUP BY, no correlated subquery
-    # Use MAX(observed_at) to get the latest status via a trick:
-    # SQLite's MAX() on observed_at makes the row with max observed_at
-    # the "winning" row, so we concat status with observed_at to pick
-    # the latest. Simpler: just use MAX(observed_at) for last_seen
-    # and grab any status — the live system will overwrite with correct
-    # status on next poll anyway.
-    print("Step 1: Building daily rollups...", flush=True)
-    conn.execute("""
-        INSERT INTO availability_daily
-            (campground_id, site_id, date, status, source,
-             first_seen, last_seen, observation_count)
-        SELECT
-            campground_id, site_id, date,
-            status,
-            source,
-            MIN(observed_at),
-            MAX(observed_at),
-            COUNT(*)
-        FROM availability_history
-        GROUP BY campground_id, site_id, date
-        ON CONFLICT(campground_id, site_id, date) DO UPDATE SET
-            last_seen = MAX(availability_daily.last_seen, excluded.last_seen),
-            observation_count = availability_daily.observation_count + excluded.observation_count
-    """)
-    conn.commit()
+    # Get distinct campground_ids to process in batches
+    cg_ids = [r[0] for r in conn.execute(
+        "SELECT DISTINCT campground_id FROM availability_history"
+    ).fetchall()]
+    print(f"Processing {len(cg_ids)} campgrounds...", flush=True)
+
+    for i, cg_id in enumerate(cg_ids):
+        conn.execute("""
+            INSERT INTO availability_daily
+                (campground_id, site_id, date, status, source,
+                 first_seen, last_seen, observation_count)
+            SELECT
+                campground_id, site_id, date,
+                status, source,
+                MIN(observed_at), MAX(observed_at), COUNT(*)
+            FROM availability_history
+            WHERE campground_id = ?
+            GROUP BY campground_id, site_id, date
+            ON CONFLICT(campground_id, site_id, date) DO UPDATE SET
+                last_seen = MAX(availability_daily.last_seen, excluded.last_seen),
+                observation_count = availability_daily.observation_count + excluded.observation_count
+        """, (cg_id,))
+        conn.commit()
+
+        if (i + 1) % 10 == 0 or i + 1 == len(cg_ids):
+            print(f"  {i + 1}/{len(cg_ids)} campgrounds", flush=True)
 
     daily_count = conn.execute(
         "SELECT COUNT(*) FROM availability_daily"
     ).fetchone()[0]
-    print(f"  Daily rollup rows: {daily_count:,}", flush=True)
-
-    # Step 2: Skip transitions from historical data — the live system
-    # is already recording them going forward. Historical transitions
-    # from bulk data aren't reliable (polling gaps, restarts, etc.)
-    print("Step 2: Skipping historical transitions (live system handles this).",
-          flush=True)
+    print(f"Daily rollup rows: {daily_count:,}", flush=True)
 
     trans_count = conn.execute(
         "SELECT COUNT(*) FROM status_transitions"
     ).fetchone()[0]
-    print(f"  Existing transition rows (from live polling): {trans_count:,}",
-          flush=True)
+    print(f"Transition rows (from live polling): {trans_count:,}", flush=True)
 
     if drop_old:
-        print("Step 3: Dropping old availability_history rows...", flush=True)
+        print("Dropping old availability_history rows...", flush=True)
         conn.execute("DELETE FROM availability_history")
-        print("  VACUUMing...", flush=True)
-        conn.execute("VACUUM")
         conn.commit()
-        print("  Done.", flush=True)
+        print("VACUUMing...", flush=True)
+        conn.execute("VACUUM")
+        print("Done.", flush=True)
     else:
         print("\nRun with --drop-old to remove the raw history after"
               " verifying rollups look correct.", flush=True)
