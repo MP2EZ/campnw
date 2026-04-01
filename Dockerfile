@@ -13,6 +13,9 @@ COPY data/ data-seed/
 # Frontend pre-built by GitHub Actions
 COPY web/dist/ static/
 
+# Operations scripts (compaction, etc.)
+COPY scripts/ scripts/
+
 # Startup script: copy seed data into volume if missing, then run server
 COPY start.sh .
 RUN chmod +x start.sh
