@@ -28,7 +28,7 @@ v1.0    [SHIPPED]  campnw 1.0          — OR State Parks, recs, collapsible for
 v1.1    [SHIPPED]  Better Search       — NL search, registry expansion (MT/WY/NorCal), AI summaries
 v1.15   ------->   Brand + Identity    — Logo, palette, voice, og:image, notification copy
 v1.2    [SHIPPED]  Trips + Watches     — Trip object, template watches, sharing, onboarding
-v1.26   ------->   Hardening           — History compaction, DB backup, SEC-10, re-enrichment
+v1.26   [SHIPPED]  Hardening           — History compaction, DB backup, SEC-10, re-enrichment
 v1.3    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -924,33 +924,27 @@ Close major test coverage gaps identified by audit.
 
 ---
 
-## v1.26 "Hardening"
+## v1.26 "Hardening" [SHIPPED 2026-03-31]
 
 ### Theme
-Operational stability. The availability_history table hit 9.2M rows in 2.5 days (377 MB/day), filling the 1GB Fly volume to 100%. Fix the storage model, add backups, close deferred security and enrichment gaps before the long data-collection runway to v1.3.
+Operational stability. The availability_history table hit 9.37M rows in 2.5 days (377 MB/day), filling the 1GB Fly volume to 100%. Fixed the storage model, added backups, closed deferred security and enrichment gaps before the long data-collection runway to v1.3.
 
-### Features
+### What Shipped
 
-| Feature | Size | Description |
-|---------|------|-------------|
-| Expand Fly volume | XS | Extend from 1GB to 3GB — immediate relief |
-| Change-detection history recording | M | Replace blind INSERT-every-observation with upsert to `availability_daily` + `status_transitions` (only on change). Drops storage from ~377 MB/day to ~5-20 MB/day. |
-| Compact existing history | S | One-off script to roll up 9.2M raw rows into daily rollups, then VACUUM to reclaim ~900MB |
-| Update patterns.py | S | Point analytics at `availability_daily` instead of raw `availability_history` |
-| SEC-10: Fly-Client-IP | XS | Use `Fly-Client-IP` header instead of spoofable `X-Forwarded-For` for rate limiting |
-| Weekly DB backup | S | GitHub Actions workflow: `fly sftp get` both DBs, integrity check, upload as artifact (90-day retention) |
-| Registry re-enrichment | XS | Run `enrich` CLI to close ~450 tag gaps across CA/MT/WY/ID |
+| Feature | Description |
+|---------|-------------|
+| Fly volume 1GB → 3GB | Immediate relief, now at ~1% usage |
+| Change-detection recording | `record_availability_history` rewrites to upsert `availability_daily` (one row per site/date) + `status_transitions` (only on change). Storage dropped from ~377 MB/day to negligible. |
+| History compaction | 9.37M raw rows compacted into 57K daily rollups. DB rebuilt from 1.3GB to 34MB. Old `availability_history` table emptied. |
+| patterns.py migration | Analytics reads from `availability_daily` instead of raw history. `refresh_all_tips` also updated. |
+| SEC-10: Fly-Client-IP | `get_client_ip` prefers `Fly-Client-IP` header over spoofable `X-Forwarded-For` |
+| Weekly DB backup | GitHub Actions workflow: `fly sftp get` both DBs, integrity check, upload as artifact (90-day retention) |
+| Registry re-enrichment | 50 campgrounds enriched (remainder lacked sufficient description data for tag extraction) |
 
-### Dependencies
-- v1.25 shipped
-
-### Quality Bar
-- Disk usage stays under 50% of volume after compaction
-- All existing tests pass with new recording logic
-- Backup workflow runs successfully on first trigger
-
-### Key Risk
-Compaction script on a 948MB SQLite file on a small Fly VM — must process in batches to avoid OOM. Script uses 50K-row batches with commits between.
+### Lessons Learned
+- Compaction on a small Fly VM (256MB) can't handle bulk SQL over 9M+ rows — downloaded locally, compacted, re-uploaded.
+- The prod DB had corruption (btreeInitPage errors, rowid out of order) likely from the volume filling to 100%. Rebuilt via table-by-table Python copy.
+- `availability_cache` was lost during rebuild (ephemeral, repopulates on next poll cycle).
 
 ---
 
