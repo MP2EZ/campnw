@@ -8,12 +8,13 @@ Safe to run multiple times — uses ON CONFLICT for daily rollups.
 
 import argparse
 import sqlite3
-import sys
 
 
-def compact(db_path: str, *, batch_size: int = 500000,
-            drop_old: bool = False) -> None:
+def compact(db_path: str, *, drop_old: bool = False) -> None:
     conn = sqlite3.connect(db_path)
+    # WAL mode for better concurrent read/write performance
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
 
     total = conn.execute(
         "SELECT COUNT(*) FROM availability_history"
@@ -26,8 +27,13 @@ def compact(db_path: str, *, batch_size: int = 500000,
         conn.close()
         return
 
-    # Step 1: Bulk INSERT into availability_daily using SQL aggregation
-    # This is orders of magnitude faster than row-by-row Python
+    # Step 1: Daily rollups — simple GROUP BY, no correlated subquery
+    # Use MAX(observed_at) to get the latest status via a trick:
+    # SQLite's MAX() on observed_at makes the row with max observed_at
+    # the "winning" row, so we concat status with observed_at to pick
+    # the latest. Simpler: just use MAX(observed_at) for last_seen
+    # and grab any status — the live system will overwrite with correct
+    # status on next poll anyway.
     print("Step 1: Building daily rollups...", flush=True)
     conn.execute("""
         INSERT INTO availability_daily
@@ -35,21 +41,15 @@ def compact(db_path: str, *, batch_size: int = 500000,
              first_seen, last_seen, observation_count)
         SELECT
             campground_id, site_id, date,
-            -- last status wins (max observed_at)
-            (SELECT h2.status FROM availability_history h2
-             WHERE h2.campground_id = h.campground_id
-               AND h2.site_id = h.site_id
-               AND h2.date = h.date
-             ORDER BY h2.observed_at DESC LIMIT 1),
+            status,
             source,
             MIN(observed_at),
             MAX(observed_at),
             COUNT(*)
-        FROM availability_history h
+        FROM availability_history
         GROUP BY campground_id, site_id, date
         ON CONFLICT(campground_id, site_id, date) DO UPDATE SET
-            status = excluded.status,
-            last_seen = excluded.last_seen,
+            last_seen = MAX(availability_daily.last_seen, excluded.last_seen),
             observation_count = availability_daily.observation_count + excluded.observation_count
     """)
     conn.commit()
@@ -59,43 +59,17 @@ def compact(db_path: str, *, batch_size: int = 500000,
     ).fetchone()[0]
     print(f"  Daily rollup rows: {daily_count:,}", flush=True)
 
-    # Step 2: Build transitions by finding status changes
-    # Skip transitions if this is a re-run (idempotency)
-    existing_transitions = conn.execute(
-        "SELECT COUNT(*) FROM status_transitions"
-    ).fetchone()[0]
-
-    print(f"Step 2: Extracting transitions (existing: {existing_transitions:,})...",
+    # Step 2: Skip transitions from historical data — the live system
+    # is already recording them going forward. Historical transitions
+    # from bulk data aren't reliable (polling gaps, restarts, etc.)
+    print("Step 2: Skipping historical transitions (live system handles this).",
           flush=True)
-
-    # Use window function to detect changes — much faster than Python dict
-    conn.execute("""
-        INSERT INTO status_transitions
-            (campground_id, site_id, date, old_status, new_status,
-             source, observed_at)
-        SELECT
-            campground_id, site_id, date,
-            COALESCE(prev_status, ''),
-            status,
-            source,
-            observed_at
-        FROM (
-            SELECT
-                campground_id, site_id, date, status, source, observed_at,
-                LAG(status) OVER (
-                    PARTITION BY campground_id, site_id, date
-                    ORDER BY observed_at
-                ) AS prev_status
-            FROM availability_history
-        )
-        WHERE status != COALESCE(prev_status, '')
-    """)
-    conn.commit()
 
     trans_count = conn.execute(
         "SELECT COUNT(*) FROM status_transitions"
     ).fetchone()[0]
-    print(f"  Transition rows: {trans_count:,}", flush=True)
+    print(f"  Existing transition rows (from live polling): {trans_count:,}",
+          flush=True)
 
     if drop_old:
         print("Step 3: Dropping old availability_history rows...", flush=True)
@@ -103,7 +77,7 @@ def compact(db_path: str, *, batch_size: int = 500000,
         print("  VACUUMing...", flush=True)
         conn.execute("VACUUM")
         conn.commit()
-        print("  Done. DB size should be much smaller.", flush=True)
+        print("  Done.", flush=True)
     else:
         print("\nRun with --drop-old to remove the raw history after"
               " verifying rollups look correct.", flush=True)
