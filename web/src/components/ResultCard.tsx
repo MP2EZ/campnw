@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { track } from "../api";
+import { IconMinus, IconPlus } from "../icons";
 import type { SearchResponse, Window } from "../api";
 import { WatchButton } from "./WatchPanel";
 import { SaveToTripButton } from "./SaveToTripButton";
@@ -324,7 +325,7 @@ export function ResultCard({
               {compareSelected ? "\u2713" : "vs"}
             </button>
           )}
-          <span className="expand-icon" aria-hidden="true">{expanded ? "\u2212" : "+"}</span>
+          <span className="expand-icon" aria-hidden="true">{expanded ? <IconMinus className="icon-sm" /> : <IconPlus className="icon-sm" />}</span>
         </div>
       </button>
 

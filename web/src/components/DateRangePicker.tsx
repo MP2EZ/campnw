@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { track } from "../api";
+import { IconChevronLeft, IconChevronRight, IconChevronUp, IconChevronDown, IconCalendar } from "../icons";
 
 interface Props {
   startDate: string;
@@ -97,14 +98,36 @@ const MonthGrid = memo(function MonthGrid({
     <div className="drp-month">
       <div className="drp-month-header">
         {showNav ? (
-          <button type="button" className="drp-nav" onClick={prevMonth} aria-label="Previous month">◀</button>
+          <button type="button" className="drp-nav" onClick={prevMonth} aria-label="Previous month"><IconChevronLeft className="icon-sm" /></button>
         ) : <span />}
         <span className="drp-month-title">{MONTH_NAMES[month]} {year}</span>
         {!showNav ? (
-          <button type="button" className="drp-nav" onClick={nextMonth} aria-label="Next month">▶</button>
+          <button type="button" className="drp-nav" onClick={nextMonth} aria-label="Next month"><IconChevronRight className="icon-sm" /></button>
         ) : <span />}
       </div>
-      <div className="drp-grid">
+      <div className="drp-grid" role="grid" onKeyDown={(e) => {
+        const target = e.target as HTMLElement;
+        if (!target.classList.contains("drp-day") || target.classList.contains("drp-empty")) return;
+        const grid = target.closest(".drp-grid");
+        if (!grid) return;
+        const buttons = Array.from(grid.querySelectorAll<HTMLButtonElement>("button.drp-day:not(:disabled)"));
+        const idx = buttons.indexOf(target as HTMLButtonElement);
+        if (idx < 0) return;
+        let next = -1;
+        switch (e.key) {
+          case "ArrowRight": next = idx + 1; break;
+          case "ArrowLeft": next = idx - 1; break;
+          case "ArrowDown": next = idx + 7; break;
+          case "ArrowUp": next = idx - 7; break;
+          case "Home": next = 0; break;
+          case "End": next = buttons.length - 1; break;
+          default: return;
+        }
+        if (next >= 0 && next < buttons.length) {
+          e.preventDefault();
+          buttons[next].focus();
+        }
+      }}>
         {DOW_HEADERS.map((d, i) => (
           <span key={`dow-${i}`} className="drp-dow">{d}</span>
         ))}
@@ -295,17 +318,12 @@ export const DateRangePicker = memo(function DateRangePicker({
         aria-expanded={isOpen}
         aria-label={`${label}: ${formatRange(startDate, endDate)}`}
       >
-        <svg className="drp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-          <rect x="3" y="4" width="18" height="18" rx="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
+        <IconCalendar className="drp-icon" />
         <div className="drp-text">
           <span className="drp-label">{label}</span>
           <span className="drp-value">{formatRange(startDate, endDate)}</span>
         </div>
-        <span className="drp-arrow" aria-hidden="true">{isOpen ? "▴" : "▾"}</span>
+        <span className="drp-arrow" aria-hidden="true">{isOpen ? <IconChevronUp className="icon-sm" /> : <IconChevronDown className="icon-sm" />}</span>
       </div>
 
       {isOpen && (

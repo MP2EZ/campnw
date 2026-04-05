@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { getWatches, deleteWatch, toggleWatch, createWatch, track } from "../api";
+import { IconPause, IconPlay, IconClose } from "../icons";
 import type { WatchData, CreateWatchParams } from "../api";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { useAuth } from "../hooks/useAuth";
@@ -102,7 +103,7 @@ export const WatchPanel = memo(function WatchPanel({
         <div className="watch-panel-header">
           <h2 id="watch-panel-title">Watchlist</h2>
           <button className="watch-close" onClick={onClose} ref={closeRef} aria-label="Close watchlist">
-            &times;
+            <IconClose className="icon-sm" />
           </button>
         </div>
 
@@ -158,7 +159,7 @@ export const WatchPanel = memo(function WatchPanel({
                   title={w.enabled ? "Pause" : "Resume"}
                   aria-label={w.enabled ? `Pause watch for ${w.name}` : `Resume watch for ${w.name}`}
                 >
-                  {w.enabled ? "⏸" : "▶"}
+                  {w.enabled ? <IconPause className="icon-sm" /> : <IconPlay className="icon-sm" />}
                 </button>
                 <button
                   className="watch-action-btn watch-delete"
@@ -166,7 +167,7 @@ export const WatchPanel = memo(function WatchPanel({
                   title="Delete"
                   aria-label={`Delete watch for ${w.name}`}
                 >
-                  ×
+                  <IconClose className="icon-sm" />
                 </button>
               </div>
             </div>

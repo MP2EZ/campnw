@@ -18,6 +18,7 @@ import { UserMenu } from "./components/UserMenu";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Wordmark } from "./Wordmark";
+import { IconSun, IconMoon, IconClose, IconChevronUp, IconChevronDown, IconList, IconGrid, IconSearch } from "./icons";
 import { useAuth } from "./hooks/useAuth";
 import { useSearch } from "./hooks/useSearch";
 import type { SearchMode } from "./hooks/useSearch";
@@ -420,7 +421,7 @@ function SearchForm({
         onClick={() => setShowAdvanced(!showAdvanced)}
         aria-expanded={showAdvanced}
       >
-        {showAdvanced ? "Fewer filters ▴" : "More filters ▾"}
+        {showAdvanced ? <>Fewer filters <IconChevronUp className="icon-sm" /></> : <>More filters <IconChevronDown className="icon-sm" /></>}
         {!showAdvanced && state && (
           <span className="filter-pills">
             <span className="filter-pill">{state}</span>
@@ -817,7 +818,7 @@ export default function App() {
                 onClick={() => { setDarkMode(!darkMode); track("dark_mode_toggled", { to: darkMode ? "light" : "dark" }); }}
                 aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
               >
-                {darkMode ? "☀" : "☾"}
+                {darkMode ? <IconSun className="icon" /> : <IconMoon className="icon" />}
               </button>
               {user ? (
                 <UserMenu />
@@ -877,7 +878,7 @@ export default function App() {
                     onClick={() => { setDarkMode(!darkMode); setMobileMenuOpen(false); }}
                     aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
                   >
-                    {darkMode ? "☀ Light" : "☾ Dark"}
+                    {darkMode ? <><IconSun className="icon" /> Light</> : <><IconMoon className="icon" /> Dark</>}
                   </button>
                 </div>
               )}
@@ -947,7 +948,7 @@ export default function App() {
           <>
           <div className="nl-search-section">
             <div className="nl-search-row">
-              <svg className="nl-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <IconSearch className="nl-search-icon" />
               <input
                 type="text"
                 className="nl-search-input"
@@ -1029,14 +1030,14 @@ export default function App() {
                   aria-pressed={resultsDisplay === "list"}
                   onClick={() => { setResultsDisplay("list"); track("map_toggled", { to: "list" }); }}
                 >
-                  ≡ List
+                  <IconList className="icon-sm" /> List
                 </button>
                 <button
                   className={resultsDisplay === "map" ? "active" : ""}
                   aria-pressed={resultsDisplay === "map"}
                   onClick={() => { setResultsDisplay("map"); track("map_toggled", { to: "map" }); }}
                 >
-                  ⊞ Map
+                  <IconGrid className="icon-sm" /> Map
                 </button>
               </div>
             </div>
@@ -1100,7 +1101,7 @@ export default function App() {
                 onClick={() => { setSearchSummary(null); track("summary_dismissed", {}); }}
                 aria-label="Dismiss summary"
               >
-                ×
+                <IconClose className="icon-sm" />
               </button>
             </div>
           )}
