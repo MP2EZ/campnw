@@ -29,8 +29,9 @@ v1.1    [SHIPPED]  Better Search       — NL search, registry expansion (MT/WY/
 v1.15   ------->   Brand + Identity    — Logo, palette, voice, og:image, notification copy
 v1.2    [SHIPPED]  Trips + Watches     — Trip object, template watches, sharing, onboarding
 v1.26   [SHIPPED]  Hardening           — History compaction, DB backup, SEC-10, re-enrichment
-v1.27   ------->   UX Polish           — Source filters, heatmap redesign, icon audit, token cleanup
-v1.28   ------->   Watch Reliability   — Watch source persistence, Fly memory scaling
+v1.27   [SHIPPED]  UX Polish           — Blue heatmap, teal WA, date picker, NL search, icons, filters
+v1.28   [SHIPPED]  Watch Reliability   — Watch source persistence, N+1 fix, SSE batching, perf
+v1.29   ------->   Value Review        — Brand identity, registry refresh, booking validation, LLM analytics
 v1.3    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -950,67 +951,72 @@ Operational stability. The availability_history table hit 9.37M rows in 2.5 days
 
 ---
 
-## v1.27 "UX Polish"
+## v1.27 "UX Polish" [SHIPPED 2026-04-04]
 
-### Theme
-Palette refinement, interaction fixes, and visual polish. The heatmap moves from green (which collides with accent, badges, and chips) to a blue ramp. WA Parks shifts from blue to deep teal to free up the blue. Source filter behavior gets a click-to-isolate flip. Badge contrast gets fixed for WCAG AA compliance.
+### What Shipped
 
-### Features
+| Feature | Description |
+|---------|-------------|
+| Heatmap → blue ramp | Replaced green with blue (#eef1f5 → #1a5278). Moved tokens from App.css to tokens.css. |
+| WA Parks → deep teal | Shifted from blue (#2a7a9a) to deep teal (#1a7068). CVD-safe under deuteranopia. |
+| Badge contrast (WCAG AA) | Rec.gov #5a8a32 → #4f7d2c, OR Parks #b8860b → #9a7509. Both now pass 4.5:1. |
+| Source filter isolate | Click from all-on isolates; click another adds; remove-last resets to all. |
+| Heatmap day labels | All 7 rows labeled (Su–Sa). Day filter dimming with `filter: saturate(0.3) opacity(0.55)`. |
+| NL search placement | Moved above form with search icon + "or search by filters" divider. |
+| Watchlist text | Replaced bell emoji with "Watchlist" text button. |
+| Font normalization | `font: inherit` on all form elements. |
+| Date range picker | Unified popover calendar with mode-aware labels ("Search between" / "Check in – out"). |
+| Icon library | 15 SVG components in `icons.tsx`, replaced all emoji/symbols. |
+| Heatmap mobile | Sticky day labels on scroll, wrapping header. |
+| Keyboard nav | Arrow keys in calendar grid, Home/End, `role="grid"`. |
+| XSS fix | Replaced `dangerouslySetInnerHTML` with safe `renderMarkdown()` JSX. |
+| MonthGrid perf | Extracted as memo child, pre-computed aria-labels. |
+| PostHog events | 29 tracked events covering all user interactions. |
+| Tests | 158 frontend tests (up from 141). |
 
-| Feature | Size | Description |
-|---------|------|-------------|
-| Heatmap → blue ramp | S | Replace green heatmap with blue (#eef1f5 → #1a5278 light, #1e1d1a → #5898c0 dark). Eliminates green-on-green collision with UI chrome. |
-| WA Parks → deep teal | S | Shift WA source colors from blue (#2a7a9a) to deep teal (#1a7068) across toggle, badge, border, and map pin tokens. |
-| Badge contrast fixes | XS | Darken Rec.gov green (#5a8a32 → ~#4f7d2c) and OR Parks gold for WCAG AA white-text contrast (currently 4.10:1 and 3.25:1, need 4.5:1). |
-| Dark heatmap L0 visibility | XS | Bump dark mode empty cell (#1e1d1a) to ~#2a2924 so zero-availability is visible against card bg (#21211e). |
-| Source filter toggle-to-isolate | S | Click a source button → show only that source. Click again → reset to all. Shift+click for additive multi-select. |
-| Heatmap mobile layout | S | Responsive grid that works on small screens without horizontal scroll or unreadable cells |
-| Heatmap labeling | S | Improve date/axis labels for clarity (month headers, day-of-week, site count context) |
-| Icon audit | XS | Review and improve icons across the app for consistency and clarity |
-| Hardcoded spacing → tokens | XS | UX-04/06/07: replace remaining hardcoded spacing with design tokens |
-
-### Dependencies
-- v1.26 shipped
-
-### Design Reference
-- Color exploration mockup: `docs/v1.27-color-exploration.html`
-
-### Quality Bar
-- Source filters feel intuitive on first click (no explanation needed)
-- Heatmap readable on 375px-wide screen
-- All source badge buttons pass WCAG AA (4.5:1) for white text
-- All source colors distinguishable under deuteranopia simulation
-- All existing tests pass
+### Design References
+- `docs/v1.27-color-exploration.html`, `docs/v1.27-heatmap-labels.html`
+- `docs/v1.27-nl-search-placement.html`, `docs/v1.27-date-range-picker.html`
+- `docs/v1.27-date-labeling.html`
 
 ---
 
-## v1.28 "Watch Reliability"
+## v1.28 "Watch Reliability" [SHIPPED 2026-04-05]
+
+### What Shipped
+
+| Fix | Description |
+|-----|-------------|
+| `booking_system` column on watches | Added column + migration + self-heal on first poll. WA/OR state park watches now poll via correct provider. |
+| Batched `record_availability_history` | Replaced N+1 (9K-18K queries per campground) with 3 queries (1 SELECT + 2 executemany). Primary OOM fix. |
+| Persistent PostHog httpx client | Was creating new client per request; now initialized in lifespan. |
+| Parallel watch polling | Sequential → `asyncio.gather` with semaphore(3). 5 watches: 75s → ~25s. |
+| RAF-throttled SSE re-renders | 20 setState calls per search → ~2-3 batched via requestAnimationFrame. |
+| Lazy-loaded CalendarHeatMap | Code-splits to 3.76KB chunk, loads on demand. Main bundle 289KB → 286KB. |
+| Fly VM scaled to 512MB | Done 2026-04-04. Still under Fly's $5 waiver threshold ($0/mo). |
+
+---
+
+## v1.29 "Value Review"
 
 ### Theme
-The watch poller silently fails for non-rec.gov watches because the booking system is never persisted — it's re-derived at poll time via a registry lookup that breaks for state park IDs. Fix the data model so watches are self-describing, and right-size the Fly VM so the app stops OOMing.
+Review deferred items for value/effort before the v1.3 data collection runway. Also instrument LLM analytics via PostHog for the AI summary and trip planner features.
 
-### Bugs
+### Items to Evaluate
 
-| Issue | Severity | Description |
-|-------|----------|-------------|
-| Watches missing `booking_system` | HIGH | Watches table has no `source`/`booking_system` column. Poller falls back to rec.gov when `registry.get_by_facility_id()` fails for state park IDs, sending GoingToCamp facility IDs to recreation.gov (instant 404). All WA/OR state park watches are silently broken. |
-| Fly VM OOM at 256MB | MEDIUM | `campnw` crashes under normal load (FastAPI + APScheduler + curl_cffi + httpx). Python baseline + native TLS libs exceed 256MB during poll bursts. |
+| Item | Size | Description | Value | Effort |
+|------|------|-------------|-------|--------|
+| PostHog LLM analytics | S | Instrument Anthropic calls (AI summaries, trip planner) with PostHog's `posthog.ai.anthropic` wrapper. Track token usage, latency, costs per generation. | HIGH — visibility into LLM spend and performance | LOW — wrap existing `anthropic.AsyncAnthropic` with PostHog wrapper |
+| Brand + Identity (v1.15) | L | Logo, palette refinement, voice guidelines, og:image, notification copy. Currently using text wordmark and functional design. | MEDIUM — polish for sharing/social, but tool works fine without it | HIGH — design work, asset creation, cross-cutting CSS |
+| Automated registry refresh | M | Monthly RIDB re-seed, quarterly GoingToCamp re-seed. Currently manual scripts. | MEDIUM — prevents stale campground data | MEDIUM — cron job + diff logic to avoid overwriting enrichment |
+| Booking link validation | S | Verify that generated booking URLs actually resolve. Some RIDB facilities return 404. | LOW — edge case, users can navigate manually | LOW — batch URL check script |
+| Itinerary card view | L | Visual itinerary cards for trips, shareable as image/link. | LOW — nice-to-have for sharing, not core discovery | HIGH — new component, image generation, sharing infra |
 
-### Fixes
-
-| Fix | Size | Description |
-|-----|------|-------------|
-| Add `booking_system` column to watches | S | Add column to watches table. Populate at watch creation from registry lookup or `--source` flag. Migration backfills existing watches from registry. |
-| Use stored `booking_system` in poller | XS | `poll_watch()` reads `watch.booking_system` directly instead of re-deriving from registry. Remove fallback-to-RECGOV default. |
-| ~~Scale Fly VM to 512MB~~ | XS | DONE (2026-04-04). Scaled to 512MB — still under Fly's $5 waiver threshold, so $0/mo. |
+### Recommendation
+Ship PostHog LLM analytics (clear value, low effort). Defer the rest until after v1.3 unless there's a specific need.
 
 ### Dependencies
-- v1.27 shipped
-
-### Quality Bar
-- WA/OR state park watches poll successfully via correct provider
-- No OOM crashes under normal polling load (10 watches, 2 tranches)
-- Existing watches migrated without manual intervention
+- v1.28 shipped
 
 ---
 
