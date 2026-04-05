@@ -134,6 +134,10 @@ body {
   line-height: var(--leading-normal);
 }
 
+input, select, textarea, button {
+  font: inherit;
+}
+
 h1, h2, h3, .result-header h3, .search-summary-text {
   font-family: var(--font-heading);
 }
