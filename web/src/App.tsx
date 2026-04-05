@@ -1089,6 +1089,7 @@ export default function App() {
               results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}
               startDate={searchDates.start}
               endDate={searchDates.end}
+              daysOfWeek={activeSearchParams?.days_of_week || undefined}
             />
           )}
           {results.warnings?.length > 0 && (

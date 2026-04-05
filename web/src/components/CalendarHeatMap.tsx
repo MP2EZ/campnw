@@ -5,9 +5,31 @@ interface Props {
   results: SearchResponse;
   startDate: string;
   endDate: string;
+  /** Active day-of-week filter — preset name or comma-separated day numbers (0=Sun). */
+  daysOfWeek?: string;
 }
 
-const DOW_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+const DOW_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const DOW_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Resolve a day filter string into a Set of JS day-of-week indices (0=Sun).
+ *  The API uses Python convention (0=Mon), so we convert: (apiDay + 1) % 7. */
+function resolveActiveDays(daysOfWeek?: string): Set<number> | null {
+  if (!daysOfWeek) return null;
+  // Comma-separated day numbers in API convention (0=Mon, 6=Sun)
+  const apiNums = daysOfWeek.split(",").map(Number).filter((n) => n >= 0 && n <= 6);
+  if (apiNums.length === 0 || apiNums.length === 7) return null;
+  // Convert to JS convention (0=Sun)
+  return new Set(apiNums.map((d) => (d + 1) % 7));
+}
+
+/** Format active days as a readable label for the context tag. */
+function formatDayLabel(activeDays: Set<number>): string {
+  const sorted = [...activeDays].sort((a, b) => a - b);
+  const names = sorted.map((d) => DOW_FULL[d].slice(0, 3));
+  if (names.length <= 3) return names.join(", ");
+  return `${names[0]}–${names[names.length - 1]}`;
+}
 
 function computeDensity(
   results: SearchResponse,
@@ -120,7 +142,7 @@ function densityLevel(count: number, max: number): number {
   return 4;
 }
 
-export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDate, endDate }: Props) {
+export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDate, endDate, daysOfWeek }: Props) {
   const density = useMemo(
     () => computeDensity(results, startDate, endDate),
     [results, startDate, endDate]
@@ -137,6 +159,8 @@ export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDat
     return max;
   }, [density]);
 
+  const activeDays = useMemo(() => resolveActiveDays(daysOfWeek), [daysOfWeek]);
+
   if (results.results.length === 0 || weeks.length === 0) return null;
 
   // Build a lookup: weekIdx -> dow -> day data
@@ -148,16 +172,27 @@ export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDat
     }
   }
 
+  const ariaLabel = activeDays
+    ? `Availability density, showing ${formatDayLabel(activeDays)}`
+    : "Availability density";
+
   return (
-    <div className="heatmap" role="group" aria-label="Availability density">
+    <div className="heatmap" role="group" aria-label={ariaLabel}>
       <div className="heatmap-header-row">
         <span className="heatmap-title">Site Availability</span>
-        <div className="heatmap-legend">
-          <span className="heatmap-legend-label">0 sites</span>
-          {[0, 1, 2, 3, 4].map((level) => (
-            <span key={level} className={`heatmap-swatch density-${level}`} />
-          ))}
-          <span className="heatmap-legend-label">{maxCount}+ sites</span>
+        <div className="heatmap-header-right">
+          {activeDays && (
+            <span className="heatmap-day-filter-tag">
+              Showing: {formatDayLabel(activeDays)}
+            </span>
+          )}
+          <div className="heatmap-legend">
+            <span className="heatmap-legend-label">0 sites</span>
+            {[0, 1, 2, 3, 4].map((level) => (
+              <span key={level} className={`heatmap-swatch density-${level}`} />
+            ))}
+            <span className="heatmap-legend-label">{maxCount}+ sites</span>
+          </div>
         </div>
       </div>
 
@@ -179,36 +214,40 @@ export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDat
           ))}
 
           {/* Day rows */}
-          {DOW_LABELS.map((label, dow) => (
-            <>
-              <span
-                key={`dl-${dow}`}
-                className={`heatmap-dow ${dow === 0 || dow === 5 || dow === 6 ? "weekend" : ""}`}
-              >
-                {dow % 2 === 1 ? label : ""}
-              </span>
-              {weeks.map((w) => {
-                const day = grid.get(`${w.weekIdx}-${dow}`);
-                if (!day) {
+          {DOW_LABELS.map((label, dow) => {
+            const isDimmed = activeDays !== null && !activeDays.has(dow);
+            const isWeekend = dow === 0 || dow === 5 || dow === 6;
+            return (
+              <div key={`row-${dow}`} className="heatmap-row" style={{ display: "contents" }}>
+                <span
+                  className={`heatmap-dow${isWeekend ? " weekend" : ""}${isDimmed ? " dimmed" : ""}`}
+                  aria-label={DOW_FULL[dow]}
+                >
+                  {label}
+                </span>
+                {weeks.map((w) => {
+                  const day = grid.get(`${w.weekIdx}-${dow}`);
+                  if (!day) {
+                    return (
+                      <span
+                        key={`e-${w.weekIdx}-${dow}`}
+                        className={`heatmap-cell empty${isDimmed ? " dimmed" : ""}`}
+                      />
+                    );
+                  }
+                  const level = densityLevel(day.count, maxCount);
                   return (
                     <span
-                      key={`e-${w.weekIdx}-${dow}`}
-                      className="heatmap-cell empty"
+                      key={`c-${w.weekIdx}-${dow}`}
+                      className={`heatmap-cell density-${level}${isWeekend ? " weekend-cell" : ""}${isDimmed ? " dimmed" : ""}`}
+                      aria-label={`${day.label}: ${day.count} sites available`}
+                      title={`${day.label}: ${day.count} sites`}
                     />
                   );
-                }
-                const level = densityLevel(day.count, maxCount);
-                return (
-                  <span
-                    key={`c-${w.weekIdx}-${dow}`}
-                    className={`heatmap-cell density-${level} ${dow === 0 || dow === 5 || dow === 6 ? "weekend-cell" : ""}`}
-                    aria-label={`${day.label}: ${day.count} sites available`}
-                    title={`${day.label}: ${day.count} sites`}
-                  />
-                );
-              })}
-            </>
-          ))}
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
