@@ -333,6 +333,7 @@ function SearchForm({
                   setActiveDatePreset(null);
                   const range = monthSetToDateRange(next);
                   if (range) { setStartDate(range.start); setEndDate(range.end); }
+                  track("date_preset_clicked", { preset: m.label });
                 }}
               >
                 {m.label}
@@ -471,6 +472,7 @@ function SearchForm({
               if (next.has(tag)) next.delete(tag);
               else next.add(tag);
               setSelectedTags(next);
+              track("tag_filter_changed", { tag, action: next.has(tag) ? "add" : "remove" });
             }}
           >
             {tag}
@@ -603,7 +605,7 @@ function FirstVisitState({ onSearch }: { onSearch: (params: SearchParams, mode: 
           <button
             key={s.label}
             className="suggestion-chip"
-            onClick={() => onSearch({ ...s.params, start_date: s.params.start_date, end_date: s.params.end_date } as SearchParams, "find")}
+            onClick={() => { track("recommendation_clicked", { label: s.label }); onSearch({ ...s.params, start_date: s.params.start_date, end_date: s.params.end_date } as SearchParams, "find"); }}
           >
             {s.label}
           </button>
@@ -1093,7 +1095,7 @@ export default function App() {
               <button
                 type="button"
                 className="summary-dismiss"
-                onClick={() => setSearchSummary(null)}
+                onClick={() => { setSearchSummary(null); track("summary_dismissed", {}); }}
                 aria-label="Dismiss summary"
               >
                 ×
