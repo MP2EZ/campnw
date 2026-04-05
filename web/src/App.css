@@ -949,50 +949,44 @@ header p {
 }
 
 .nl-search-section {
-  margin-bottom: var(--space-2);
+  margin-bottom: 0;
 }
 
 .nl-search-row {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.nl-search-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.nl-search-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .nl-search-input {
   flex: 1;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  background: var(--bg);
+  border: none;
+  background: none;
+  font-size: var(--text-base);
   color: var(--text);
-  transition: border-color var(--transition-fast);
-}
-
-.nl-search-input:focus {
-  border-color: var(--accent);
   outline: none;
 }
 
 .nl-search-input::placeholder {
   color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.nl-search-btn {
-  padding: var(--space-2) var(--space-4);
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border: none;
-  border-radius: var(--radius-sm);
   font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.nl-search-btn:hover {
-  opacity: 0.9;
 }
 
 .nl-divider {
@@ -2862,11 +2856,6 @@ a.header-btn {
 }
 
 /* ─── Watch Bell ──────────────────────────────────────────────────── */
-
-.watch-bell {
-  font-size: var(--text-base);
-  position: relative;
-}
 
 /* ─── Results Toolbar ─────────────────────────────────────────────── */
 

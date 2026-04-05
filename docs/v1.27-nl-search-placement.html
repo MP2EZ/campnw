@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v1.27 NL Search Placement</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #333; padding: 2rem; max-width: 960px; margin: 0 auto; }
+  h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; color: #555; }
+  .section-divider { border: none; border-top: 1px solid #ddd; margin: 2.5rem 0; }
+  .compare-label { font-size: 0.75rem; font-weight: 600; color: #888; margin-bottom: 0.75rem; text-align: center; }
+
+  /* Shared app chrome */
+  .app-frame { background: #f5f5f0; border: 1px solid #ddd; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
+  .app-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; }
+  .app-logo { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.5rem; font-weight: 700; color: #2d5016; }
+  .app-logo-sub { font-size: 0.7rem; color: #888; margin-top: 0.15rem; }
+  .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+  .header-btn { padding: 0.35rem 0.75rem; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-size: 0.8rem; color: #555; cursor: pointer; }
+
+  .tabs { display: flex; gap: 1.5rem; padding: 0 1.5rem; border-bottom: 2px solid #e8e6e0; }
+  .tab { padding: 0.5rem 0; font-size: 0.85rem; color: #888; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .tab.active { color: #2d5016; border-bottom-color: #2d5016; font-weight: 600; }
+
+  .form-card { background: #fff; border: 1px solid #e0ddd5; border-radius: 10px; margin: 1rem 1.5rem; padding: 1rem; }
+
+  /* NL search styles */
+  .nl-search { display: flex; align-items: center; gap: 0.5rem; position: relative; }
+  .nl-search svg { width: 16px; height: 16px; color: #aaa; flex-shrink: 0; }
+  .nl-input { flex: 1; border: none; background: none; font-size: 0.85rem; color: #333; outline: none; }
+  .nl-input::placeholder { color: #aaa; }
+
+  /* Mode toggle */
+  .mode-toggle { display: flex; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-bottom: 0.75rem; }
+  .mode-btn { flex: 1; padding: 0.5rem; text-align: center; font-size: 0.8rem; font-weight: 600; background: #fff; border: none; color: #888; cursor: pointer; }
+  .mode-btn.active { background: #f5f5f0; color: #333; }
+
+  /* Day presets */
+  .day-presets { display: flex; gap: 0.35rem; margin-bottom: 0.75rem; }
+  .day-btn { flex: 1; padding: 0.4rem; text-align: center; font-size: 0.75rem; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; }
+  .day-btn.active { background: #2d5016; color: #fff; border-color: #2d5016; }
+  .day-btn .sub { font-size: 0.6rem; color: #aaa; display: block; }
+  .day-btn.active .sub { color: rgba(255,255,255,0.7); }
+
+  /* Form fields placeholder */
+  .form-fields { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .form-field { flex: 1; min-width: 120px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.75rem; color: #888; background: #fafaf5; }
+  .search-btn { width: 100%; padding: 0.65rem; background: #2d5016; color: #fff; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-top: 0.75rem; cursor: pointer; }
+
+  .note { font-size: 0.85rem; color: #666; line-height: 1.6; padding: 0.75rem 1rem; background: #fff; border-radius: 8px; border-left: 3px solid #3c7ea8; margin-top: 0.75rem; }
+</style>
+</head>
+<body>
+
+<h1>NL Search Placement</h1>
+<p class="subtitle">Where should the natural language search bar live?</p>
+
+<hr class="section-divider">
+
+<h2>Current — inside the form card (reads as a label)</h2>
+<div class="compare-label">NL search blends with the form — looks like help text</div>
+<div class="app-frame">
+  <div class="app-header">
+    <div>
+      <div class="app-logo">campable</div>
+      <div class="app-logo-sub">Find available campsites across the western US</div>
+    </div>
+    <div class="header-actions">
+      <span class="header-btn">Trips</span>
+      <span class="header-btn">Watchlist</span>
+      <span class="header-btn">☽</span>
+      <span class="header-btn">Sign in</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <span class="tab active">Find a Site</span>
+    <span class="tab">Plan a Trip</span>
+  </div>
+  <div class="form-card">
+    <div style="padding: 0.5rem 0.75rem; border: 1px solid #e8e6e0; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.8rem; color: #aaa;">
+      Quick search: dog-friendly lakeside spot near Portland this weekend
+    </div>
+    <div class="mode-toggle">
+      <button class="mode-btn active">Find a date</button>
+      <button class="mode-btn">Exact dates</button>
+    </div>
+    <div class="day-presets">
+      <button class="day-btn active">Any</button>
+      <button class="day-btn">Weekend<span class="sub">F–Su</span></button>
+      <button class="day-btn">Long weekend<span class="sub">Th–Su</span></button>
+      <button class="day-btn">Weekdays</button>
+      <button class="day-btn">Custom</button>
+    </div>
+    <div class="form-fields">
+      <div class="form-field">From: 04/19/2026</div>
+      <div class="form-field">Through: 05/19/2026</div>
+      <div class="form-field" style="min-width:60px; flex:0.3">Nights: 2</div>
+    </div>
+    <div class="form-fields" style="margin-top:0.5rem">
+      <div class="form-field">Drive from: Seattle</div>
+      <div class="form-field">Max drive time: Any</div>
+    </div>
+    <button class="search-btn">Search</button>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Option B — between tabs and form (standalone search bar)</h2>
+<div class="compare-label">Pulled out of the form. Search icon. Reads as its own thing.</div>
+<div class="app-frame">
+  <div class="app-header">
+    <div>
+      <div class="app-logo">campable</div>
+      <div class="app-logo-sub">Find available campsites across the western US</div>
+    </div>
+    <div class="header-actions">
+      <span class="header-btn">Trips</span>
+      <span class="header-btn">Watchlist</span>
+      <span class="header-btn">☽</span>
+      <span class="header-btn">Sign in</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <span class="tab active">Find a Site</span>
+    <span class="tab">Plan a Trip</span>
+  </div>
+  <div style="padding: 0.75rem 1.5rem 0;">
+    <div class="nl-search" style="padding: 0.6rem 0.75rem; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input class="nl-input" type="text" placeholder='Try "pet-friendly near Portland, July weekend"' />
+    </div>
+  </div>
+  <div class="form-card">
+    <div class="mode-toggle">
+      <button class="mode-btn active">Find a date</button>
+      <button class="mode-btn">Exact dates</button>
+    </div>
+    <div class="day-presets">
+      <button class="day-btn active">Any</button>
+      <button class="day-btn">Weekend<span class="sub">F–Su</span></button>
+      <button class="day-btn">Long weekend<span class="sub">Th–Su</span></button>
+      <button class="day-btn">Weekdays</button>
+      <button class="day-btn">Custom</button>
+    </div>
+    <div class="form-fields">
+      <div class="form-field">From: 04/19/2026</div>
+      <div class="form-field">Through: 05/19/2026</div>
+      <div class="form-field" style="min-width:60px; flex:0.3">Nights: 2</div>
+    </div>
+    <div class="form-fields" style="margin-top:0.5rem">
+      <div class="form-field">Drive from: Seattle</div>
+      <div class="form-field">Max drive time: Any</div>
+    </div>
+    <button class="search-btn">Search</button>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Option B2 — same but with "or search by filters" divider</h2>
+<div class="compare-label">Explicit "or" separates the two search paths</div>
+<div class="app-frame">
+  <div class="app-header">
+    <div>
+      <div class="app-logo">campable</div>
+      <div class="app-logo-sub">Find available campsites across the western US</div>
+    </div>
+    <div class="header-actions">
+      <span class="header-btn">Trips</span>
+      <span class="header-btn">Watchlist</span>
+      <span class="header-btn">☽</span>
+      <span class="header-btn">Sign in</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <span class="tab active">Find a Site</span>
+    <span class="tab">Plan a Trip</span>
+  </div>
+  <div style="padding: 0.75rem 1.5rem 0;">
+    <div class="nl-search" style="padding: 0.6rem 0.75rem; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input class="nl-input" type="text" placeholder='Try "pet-friendly near Portland, July weekend"' />
+    </div>
+    <div style="display:flex; align-items:center; gap:0.75rem; margin: 0.6rem 0 -0.25rem; padding: 0 0.5rem;">
+      <div style="flex:1; height:1px; background:#ddd"></div>
+      <span style="font-size:0.7rem; color:#aaa; text-transform:uppercase; letter-spacing:0.05em">or search by filters</span>
+      <div style="flex:1; height:1px; background:#ddd"></div>
+    </div>
+  </div>
+  <div class="form-card">
+    <div class="mode-toggle">
+      <button class="mode-btn active">Find a date</button>
+      <button class="mode-btn">Exact dates</button>
+    </div>
+    <div class="day-presets">
+      <button class="day-btn active">Any</button>
+      <button class="day-btn">Weekend<span class="sub">F–Su</span></button>
+      <button class="day-btn">Long weekend<span class="sub">Th–Su</span></button>
+      <button class="day-btn">Weekdays</button>
+      <button class="day-btn">Custom</button>
+    </div>
+    <div class="form-fields">
+      <div class="form-field">From: 04/19/2026</div>
+      <div class="form-field">Through: 05/19/2026</div>
+      <div class="form-field" style="min-width:60px; flex:0.3">Nights: 2</div>
+    </div>
+    <div class="form-fields" style="margin-top:0.5rem">
+      <div class="form-field">Drive from: Seattle</div>
+      <div class="form-field">Max drive time: Any</div>
+    </div>
+    <button class="search-btn">Search</button>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Option B3 — search bar with visible submit button</h2>
+<div class="compare-label">Magnifying glass button on the right makes it unmistakably actionable</div>
+<div class="app-frame">
+  <div class="app-header">
+    <div>
+      <div class="app-logo">campable</div>
+      <div class="app-logo-sub">Find available campsites across the western US</div>
+    </div>
+    <div class="header-actions">
+      <span class="header-btn">Trips</span>
+      <span class="header-btn">Watchlist</span>
+      <span class="header-btn">☽</span>
+      <span class="header-btn">Sign in</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <span class="tab active">Find a Site</span>
+    <span class="tab">Plan a Trip</span>
+  </div>
+  <div style="padding: 0.75rem 1.5rem 0;">
+    <div class="nl-search" style="padding: 0.4rem 0.4rem 0.4rem 0.75rem; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2" style="width:16px;height:16px"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input class="nl-input" type="text" placeholder='Try "pet-friendly near Portland, July weekend"' style="flex:1" />
+      <button style="padding: 0.4rem 0.75rem; background: #2d5016; color: #fff; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.3rem;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        Search
+      </button>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.75rem; margin: 0.6rem 0 -0.25rem; padding: 0 0.5rem;">
+      <div style="flex:1; height:1px; background:#ddd"></div>
+      <span style="font-size:0.7rem; color:#aaa; text-transform:uppercase; letter-spacing:0.05em">or use filters</span>
+      <div style="flex:1; height:1px; background:#ddd"></div>
+    </div>
+  </div>
+  <div class="form-card">
+    <div class="mode-toggle">
+      <button class="mode-btn active">Find a date</button>
+      <button class="mode-btn">Exact dates</button>
+    </div>
+    <div class="day-presets">
+      <button class="day-btn active">Any</button>
+      <button class="day-btn">Weekend<span class="sub">F–Su</span></button>
+      <button class="day-btn">Long weekend<span class="sub">Th–Su</span></button>
+      <button class="day-btn">Weekdays</button>
+      <button class="day-btn">Custom</button>
+    </div>
+    <div class="form-fields">
+      <div class="form-field">From: 04/19/2026</div>
+      <div class="form-field">Through: 05/19/2026</div>
+      <div class="form-field" style="min-width:60px; flex:0.3">Nights: 2</div>
+    </div>
+    <div class="form-fields" style="margin-top:0.5rem">
+      <div class="form-field">Drive from: Seattle</div>
+      <div class="form-field">Max drive time: Any</div>
+    </div>
+    <button class="search-btn">Search</button>
+  </div>
+</div>
+
+<div class="note" style="margin-top:1.5rem">
+  All options: watchlist bell replaced with "Watchlist" text to match "Trips" pattern.
+</div>
+
+</body>
+</html>

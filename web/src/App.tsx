@@ -171,7 +171,6 @@ function SearchForm({
   const [maxDrive, setMaxDrive] = useState(initialValues?.max_drive ? String(initialValues.max_drive) : "");
   const [limit, setLimit] = useState(initialValues?.limit || 20);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [nlQuery, setNlQuery] = useState("");
   const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const quickPresets = useMemo(() => getQuickPresets(), []);
@@ -241,44 +240,6 @@ function SearchForm({
 
   return (
     <form onSubmit={handleSubmit} className="search-form">
-      {/* Natural language quick search */}
-      <div className="nl-search-section">
-        <div className="nl-search-row">
-          <input
-            type="text"
-            className="nl-search-input"
-            placeholder="Quick search: dog-friendly lakeside spot near Portland this weekend"
-            value={nlQuery}
-            onChange={(e) => setNlQuery(e.target.value)}
-            aria-label="Quick search in plain language"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && nlQuery.trim()) {
-                e.preventDefault();
-                onSearch(
-                  { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
-                  "find",
-                );
-                setNlQuery("");
-              }
-            }}
-          />
-          {nlQuery.trim() && (
-            <button
-              type="button"
-              className="nl-search-btn"
-              onClick={() => {
-                onSearch(
-                  { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
-                  "find",
-                );
-                setNlQuery("");
-              }}
-            >
-              Go
-            </button>
-          )}
-        </div>
-      </div>
       <div className="mode-toggle">
         <button
           type="button"
@@ -755,6 +716,7 @@ export default function App() {
   const [mainMode, setMainMode] = useState<"search" | "plan">("search");
   const [resultsDisplay, setResultsDisplay] = useState<"list" | "map">("list");
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
+  const [nlQuery, setNlQuery] = useState("");
 
   const toggleCompare = useCallback((facilityId: string) => {
     setCompareSet(prev => {
@@ -847,12 +809,10 @@ export default function App() {
                 </Link>
               )}
               <button
-                className="header-btn watch-bell"
+                className="header-btn"
                 onClick={() => setWatchPanelOpen(true)}
-                title="Watchlist"
-                aria-label="Watchlist"
               >
-                🔔
+                Watchlist
               </button>
               <button
                 className="header-btn theme-toggle"
@@ -987,6 +947,30 @@ export default function App() {
             </Suspense>
           ) : (
           <>
+          <div className="nl-search-section">
+            <div className="nl-search-row">
+              <svg className="nl-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input
+                type="text"
+                className="nl-search-input"
+                placeholder={'Try "pet-friendly near Portland, July weekend"'}
+                value={nlQuery}
+                onChange={(e) => setNlQuery(e.target.value)}
+                aria-label="Search in plain language"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && nlQuery.trim()) {
+                    e.preventDefault();
+                    handleSearch(
+                      { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
+                      "find",
+                    );
+                    setNlQuery("");
+                  }
+                }}
+              />
+            </div>
+            <div className="nl-divider" aria-hidden="true">or search by filters</div>
+          </div>
           {formCollapsed && activeSearchParams && searchDates ? (
             <SearchSummaryBar
               params={activeSearchParams}
