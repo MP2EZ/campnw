@@ -31,17 +31,24 @@
   --src-recgov-badge-bg: #e8f0e0;
   --src-recgov-badge-text: var(--accent);
   --src-recgov-border: #5a8a32;
-  --src-recgov-toggle: #5a8a32;
+  --src-recgov-toggle: #4f7d2c;     /* darkened from #5a8a32 for WCAG AA */
 
-  --src-wa-badge-bg: #deeef5;
-  --src-wa-badge-text: #1a5276;
-  --src-wa-border: #3498b0;
-  --src-wa-toggle: #2a7a9a;
+  --src-wa-badge-bg: #e0f0ec;
+  --src-wa-badge-text: #14584a;
+  --src-wa-border: #1a8a7a;
+  --src-wa-toggle: #1a7068;         /* deep teal (was blue #2a7a9a) */
 
   --src-or-badge-bg: #fef3e0;
   --src-or-badge-text: #7d5a1a;
   --src-or-border: #d4920a;
-  --src-or-toggle: #b8860b;
+  --src-or-toggle: #9a7509;         /* darkened from #b8860b for WCAG AA */
+
+  /* ── Heatmap (blue ramp) ─────────────────────────────────────── */
+  --heatmap-0: #eef1f5;
+  --heatmap-1: #c0d4e4;
+  --heatmap-2: #78a8c8;
+  --heatmap-3: #3c7ea8;
+  --heatmap-4: #1a5278;
 
   --src-id-badge-bg: #eee5f5;
   --src-id-badge-text: #5b2d7a;
@@ -120,10 +127,10 @@
   --src-recgov-border: #5a8a38;
   --src-recgov-toggle: #3a6a22;
 
-  --src-wa-badge-bg: #162030;
-  --src-wa-badge-text: #60a0c8;
-  --src-wa-border: #3a88a8;
-  --src-wa-toggle: #1a5a7a;
+  --src-wa-badge-bg: #142820;
+  --src-wa-badge-text: #50a898;
+  --src-wa-border: #1a7868;
+  --src-wa-toggle: #145850;         /* deep teal dark */
 
   --src-or-badge-bg: #2a2010;
   --src-or-badge-text: #c89050;
@@ -136,6 +143,13 @@
 
   /* ── Semantic colors ──────────────────────────────────────────── */
   --text-on-accent: #fff;
+
+  /* ── Heatmap (blue ramp — warm-adjusted for dark bg) ──────────── */
+  --heatmap-0: #2a2924;
+  --heatmap-1: #1e2d38;
+  --heatmap-2: #264a62;
+  --heatmap-3: #3a6a8e;
+  --heatmap-4: #5898c0;
 
   /* ── Shadows (darker for contrast on dark surfaces) ──────────── */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);

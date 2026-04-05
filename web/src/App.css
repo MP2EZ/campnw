@@ -23,11 +23,6 @@
   --error-bg: #fee;
   --error-border: #e99;
   --error-text: #933;
-  --heatmap-0: #f0f0e8;
-  --heatmap-1: #d4e8c0;
-  --heatmap-2: #a0d070;
-  --heatmap-3: #6aaa40;
-  --heatmap-4: #3a7a20;
 }
 
 [data-theme="dark"] {
@@ -70,12 +65,6 @@
   --error-bg: #281818;
   --error-border: #4a2828;
   --error-text: #d07070;
-  /* Heat map — single-hue dark green, widened luminance steps */
-  --heatmap-0: #1a1a16;
-  --heatmap-1: #2a5a1e;
-  --heatmap-2: #2d6a1e;
-  --heatmap-3: #4a9a30;
-  --heatmap-4: #6abf48;
 }
 
 /* ─── Skip link (WCAG 2.4.1) ──────────────────────────────────────── */

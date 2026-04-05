@@ -151,7 +151,7 @@ describe("useSearch", () => {
     expect(result.current.loading).toBe(false);
   });
 
-  test("toggleSource removes and adds sources, keeps at least 1", async () => {
+  test("toggleSource: first click isolates, then clicks toggle on/off", async () => {
     const { result } = renderHook(() => useSearch(null));
 
     await act(async () => {
@@ -161,29 +161,31 @@ describe("useSearch", () => {
       );
     });
 
-    // Simulate two sources arriving
     act(() => {
       capturedOnResult?.(MOCK_RESULT);
       capturedOnResult?.(MOCK_OR_RESULT);
       capturedOnDone?.();
     });
 
-    // Both sources should be active initially
+    // Both sources active initially (default)
     expect(result.current.sourceFilter.has("recgov")).toBe(true);
     expect(result.current.sourceFilter.has("or_state")).toBe(true);
 
-    // Toggle off recgov
+    // First click from "all on" isolates to that source
     act(() => result.current.toggleSource("recgov"));
-    expect(result.current.sourceFilter.has("recgov")).toBe(false);
-    expect(result.current.sourceFilter.has("or_state")).toBe(true);
+    expect(result.current.sourceFilter.has("recgov")).toBe(true);
+    expect(result.current.sourceFilter.has("or_state")).toBe(false);
 
-    // Can't toggle off the last remaining source
+    // Click another to add it (now both on again)
     act(() => result.current.toggleSource("or_state"));
+    expect(result.current.sourceFilter.has("recgov")).toBe(true);
     expect(result.current.sourceFilter.has("or_state")).toBe(true);
 
-    // Toggle recgov back on
-    act(() => result.current.toggleSource("recgov"));
+    // Isolate again, then toggle the last one off — resets to all
+    act(() => result.current.toggleSource("recgov")); // isolate to recgov
+    act(() => result.current.toggleSource("recgov")); // remove last → reset
     expect(result.current.sourceFilter.has("recgov")).toBe(true);
+    expect(result.current.sourceFilter.has("or_state")).toBe(true);
   });
 
   test("filteredResults respects source filter", async () => {
@@ -204,10 +206,10 @@ describe("useSearch", () => {
 
     expect(result.current.filteredResults).toHaveLength(2);
 
-    // Filter to only or_state
+    // Click isolates to recgov only
     act(() => result.current.toggleSource("recgov"));
     expect(result.current.filteredResults).toHaveLength(1);
-    expect(result.current.filteredResults[0].name).toBe("Cape Lookout");
+    expect(result.current.filteredResults[0].name).toBe("Ohanapecosh");
   });
 
   test("formCollapsed is set to true after search", async () => {

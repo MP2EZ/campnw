@@ -1002,7 +1002,7 @@ The watch poller silently fails for non-rec.gov watches because the booking syst
 |-----|------|-------------|
 | Add `booking_system` column to watches | S | Add column to watches table. Populate at watch creation from registry lookup or `--source` flag. Migration backfills existing watches from registry. |
 | Use stored `booking_system` in poller | XS | `poll_watch()` reads `watch.booking_system` directly instead of re-deriving from registry. Remove fallback-to-RECGOV default. |
-| Scale Fly VM to 512MB | XS | `fly scale memory 512 -a campnw`. ~$2.50/mo increase. |
+| ~~Scale Fly VM to 512MB~~ | XS | DONE (2026-04-04). Scaled to 512MB — still under Fly's $5 waiver threshold, so $0/mo. |
 
 ### Dependencies
 - v1.27 shipped
