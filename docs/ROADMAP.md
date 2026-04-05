@@ -30,6 +30,7 @@ v1.15   ------->   Brand + Identity    — Logo, palette, voice, og:image, notif
 v1.2    [SHIPPED]  Trips + Watches     — Trip object, template watches, sharing, onboarding
 v1.26   [SHIPPED]  Hardening           — History compaction, DB backup, SEC-10, re-enrichment
 v1.27   ------->   UX Polish           — Source filters, heatmap redesign, icon audit, token cleanup
+v1.28   ------->   Watch Reliability   — Watch source persistence, Fly memory scaling
 v1.3    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -952,27 +953,64 @@ Operational stability. The availability_history table hit 9.37M rows in 2.5 days
 ## v1.27 "UX Polish"
 
 ### Theme
-Interaction fixes and visual polish across the app. The source filters need a behavior flip, the heatmap grid needs a design pass for readability and mobile, and scattered UX debt gets closed.
+Palette refinement, interaction fixes, and visual polish. The heatmap moves from green (which collides with accent, badges, and chips) to a blue ramp. WA Parks shifts from blue to deep teal to free up the blue. Source filter behavior gets a click-to-isolate flip. Badge contrast gets fixed for WCAG AA compliance.
 
 ### Features
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| Source filter toggle-to-isolate | S | Click a source button to show only that source. Click again to reset to all. Shift+click for additive multi-select. |
-| Heatmap color ramp | S | Refine green scale for better differentiation across availability levels |
+| Heatmap → blue ramp | S | Replace green heatmap with blue (#eef1f5 → #1a5278 light, #1e1d1a → #5898c0 dark). Eliminates green-on-green collision with UI chrome. |
+| WA Parks → deep teal | S | Shift WA source colors from blue (#2a7a9a) to deep teal (#1a7068) across toggle, badge, border, and map pin tokens. |
+| Badge contrast fixes | XS | Darken Rec.gov green (#5a8a32 → ~#4f7d2c) and OR Parks gold for WCAG AA white-text contrast (currently 4.10:1 and 3.25:1, need 4.5:1). |
+| Dark heatmap L0 visibility | XS | Bump dark mode empty cell (#1e1d1a) to ~#2a2924 so zero-availability is visible against card bg (#21211e). |
+| Source filter toggle-to-isolate | S | Click a source button → show only that source. Click again → reset to all. Shift+click for additive multi-select. |
 | Heatmap mobile layout | S | Responsive grid that works on small screens without horizontal scroll or unreadable cells |
 | Heatmap labeling | S | Improve date/axis labels for clarity (month headers, day-of-week, site count context) |
 | Icon audit | XS | Review and improve icons across the app for consistency and clarity |
-| Auth modal max-width | XS | UX-05: use `var(--max-w-modal)` instead of hardcoded value |
 | Hardcoded spacing → tokens | XS | UX-04/06/07: replace remaining hardcoded spacing with design tokens |
 
 ### Dependencies
 - v1.26 shipped
 
+### Design Reference
+- Color exploration mockup: `docs/v1.27-color-exploration.html`
+
 ### Quality Bar
 - Source filters feel intuitive on first click (no explanation needed)
 - Heatmap readable on 375px-wide screen
+- All source badge buttons pass WCAG AA (4.5:1) for white text
+- All source colors distinguishable under deuteranopia simulation
 - All existing tests pass
+
+---
+
+## v1.28 "Watch Reliability"
+
+### Theme
+The watch poller silently fails for non-rec.gov watches because the booking system is never persisted — it's re-derived at poll time via a registry lookup that breaks for state park IDs. Fix the data model so watches are self-describing, and right-size the Fly VM so the app stops OOMing.
+
+### Bugs
+
+| Issue | Severity | Description |
+|-------|----------|-------------|
+| Watches missing `booking_system` | HIGH | Watches table has no `source`/`booking_system` column. Poller falls back to rec.gov when `registry.get_by_facility_id()` fails for state park IDs, sending GoingToCamp facility IDs to recreation.gov (instant 404). All WA/OR state park watches are silently broken. |
+| Fly VM OOM at 256MB | MEDIUM | `campnw` crashes under normal load (FastAPI + APScheduler + curl_cffi + httpx). Python baseline + native TLS libs exceed 256MB during poll bursts. |
+
+### Fixes
+
+| Fix | Size | Description |
+|-----|------|-------------|
+| Add `booking_system` column to watches | S | Add column to watches table. Populate at watch creation from registry lookup or `--source` flag. Migration backfills existing watches from registry. |
+| Use stored `booking_system` in poller | XS | `poll_watch()` reads `watch.booking_system` directly instead of re-deriving from registry. Remove fallback-to-RECGOV default. |
+| Scale Fly VM to 512MB | XS | `fly scale memory 512 -a campnw`. ~$2.50/mo increase. |
+
+### Dependencies
+- v1.27 shipped
+
+### Quality Bar
+- WA/OR state park watches poll successfully via correct provider
+- No OOM crashes under normal polling load (10 watches, 2 tranches)
+- Existing watches migrated without manual intervention
 
 ---
 

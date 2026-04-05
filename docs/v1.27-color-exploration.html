@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v1.27 Final — Blue Heatmap + Deep Teal WA Parks</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #333; padding: 2rem; max-width: 960px; margin: 0 auto; }
+  h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; color: #555; }
+  .section-divider { border: none; border-top: 1px solid #ddd; margin: 2rem 0; }
+
+  .ramp { display: flex; gap: 4px; margin-bottom: 0.5rem; }
+  .ramp-cell { flex: 1; height: 44px; border-radius: 6px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px; }
+  .ramp-cell span { font-size: 0.6rem; }
+  .ramp-labels { display: flex; gap: 4px; margin-bottom: 1rem; }
+  .ramp-labels div { flex: 1; text-align: center; font-size: 0.65rem; color: #aaa; }
+
+  /* Palette strip */
+  .palette-strip { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
+  .palette-item { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+  .palette-item .swatch { width: 48px; height: 48px; border-radius: 8px; border: 1px solid #ddd; }
+  .palette-item span { font-size: 0.65rem; color: #888; }
+  .palette-item .new { color: #1a7068; font-weight: 600; }
+  .palette-divider { width: 1px; height: 48px; background: #ddd; margin: 0 0.25rem; }
+
+  /* App sim */
+  .app-sim { border: 1px solid #ddd; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .app-sim.light { background: #f5f5f0; }
+  .app-sim.dark { background: #171714; border-color: #38382e; }
+  .app-sim.dark .sim-title { color: #deded8; }
+  .app-sim.dark .sim-heatmap { background: #21211e; border-color: #38382e; }
+  .app-sim.dark .hm-title { color: #9a9a90; }
+  .app-sim.dark .hm-legend span { color: #8a8a80; }
+  .app-sim.dark .hm-dow { color: #8a8a80; }
+  .app-sim.dark .hm-month { color: #9a9a90; }
+
+  .sim-title { font-size: 0.85rem; color: #555; margin-bottom: 0.75rem; }
+  .source-btns { display: flex; gap: 0.35rem; margin-bottom: 1rem; }
+  .source-btn { flex: 1; padding: 0.5rem; border-radius: 6px; color: #fff; font-weight: 600; font-size: 0.8rem; text-align: center; border: none; }
+
+  .sim-heatmap { background: #fff; border: 1px solid #e0ddd5; border-radius: 10px; padding: 1rem; }
+  .hm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+  .hm-title { font-size: 0.8rem; font-weight: 600; color: #888; }
+  .hm-legend { display: flex; align-items: center; gap: 3px; }
+  .hm-legend span { font-size: 0.6rem; color: #888; }
+  .hm-legend-swatch { width: 12px; height: 12px; border-radius: 2px; }
+
+  .hm-grid { display: grid; gap: 3px; }
+  .hm-cell { border-radius: 3px; min-height: 18px; }
+  .hm-dow { font-size: 0.5rem; color: #aaa; display: flex; align-items: center; justify-content: center; }
+  .hm-month { font-size: 0.55rem; font-weight: 600; color: #888; display: flex; align-items: flex-end; }
+
+  .compare-row { display: flex; gap: 1.5rem; }
+  .compare-col { flex: 1; }
+  .compare-label { font-size: 0.75rem; font-weight: 600; color: #888; margin-bottom: 0.5rem; text-align: center; }
+
+  .token-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 1rem; }
+  .token-table th { text-align: left; padding: 0.4rem 0.75rem; border-bottom: 2px solid #ddd; color: #555; font-weight: 600; }
+  .token-table td { padding: 0.4rem 0.75rem; border-bottom: 1px solid #eee; }
+  .token-table .swatch-sm { display: inline-block; width: 16px; height: 16px; border-radius: 3px; vertical-align: middle; margin-right: 0.5rem; border: 1px solid #ddd; }
+  .token-table code { font-size: 0.75rem; background: #f0ede8; padding: 0.1rem 0.3rem; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Final Direction — Blue Heatmap + Deep Teal WA</h1>
+<p class="subtitle">Deep Teal C (#1a7068) for WA Parks. Blue ramp for heatmap. Warm-adjusted dark mode.</p>
+
+<h2>Updated palette</h2>
+<div class="palette-strip">
+  <div class="palette-item"><div class="swatch" style="background:#5a8a32"></div><span>Rec.gov</span><span>green</span></div>
+  <div class="palette-divider"></div>
+  <div class="palette-item"><div class="swatch" style="background:#1a7068"></div><span>WA Parks</span><span class="new">deep teal</span></div>
+  <div class="palette-divider"></div>
+  <div class="palette-item"><div class="swatch" style="background:#b8860b"></div><span>OR Parks</span><span>gold</span></div>
+  <div class="palette-divider"></div>
+  <div class="palette-item"><div class="swatch" style="background:#7d3cb5"></div><span>ID Parks</span><span>purple</span></div>
+  <div class="palette-divider"></div>
+  <div class="palette-item"><div class="swatch" style="background:#1a5278"></div><span>Heatmap</span><span class="new">blue</span></div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Heatmap ramp — light mode</h2>
+<div class="ramp">
+  <div class="ramp-cell" style="background:#eef1f5"><span style="color:#999">#eef1f5</span></div>
+  <div class="ramp-cell" style="background:#c0d4e4"><span style="color:#666">#c0d4e4</span></div>
+  <div class="ramp-cell" style="background:#78a8c8"><span style="color:#fff">#78a8c8</span></div>
+  <div class="ramp-cell" style="background:#3c7ea8"><span style="color:#fff">#3c7ea8</span></div>
+  <div class="ramp-cell" style="background:#1a5278"><span style="color:#fff">#1a5278</span></div>
+</div>
+<div class="ramp-labels">
+  <div>0 sites</div><div>few</div><div>some</div><div>good</div><div>many</div>
+</div>
+
+<h2>Heatmap ramp — dark mode (warm-adjusted)</h2>
+<div class="ramp" style="background:#171714; padding:8px; border-radius:8px;">
+  <div class="ramp-cell" style="background:#1e1d1a; border:1px solid #2a2a24"><span style="color:#666">#1e1d1a</span></div>
+  <div class="ramp-cell" style="background:#1e2d38; border:1px solid #2a2a24"><span style="color:#888">#1e2d38</span></div>
+  <div class="ramp-cell" style="background:#264a62"><span style="color:#ccc">#264a62</span></div>
+  <div class="ramp-cell" style="background:#3a6a8e"><span style="color:#fff">#3a6a8e</span></div>
+  <div class="ramp-cell" style="background:#5898c0"><span style="color:#fff">#5898c0</span></div>
+</div>
+<div class="ramp-labels">
+  <div>0 sites</div><div>few</div><div>some</div><div>good</div><div>many</div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Light mode — in context</h2>
+<div class="app-sim light">
+  <div class="sim-title">Checked 20 campgrounds — 16 with availability</div>
+  <div class="source-btns">
+    <div class="source-btn" style="background:#5a8a32">Rec.gov (3)</div>
+    <div class="source-btn" style="background:#1a7068">WA Parks (9)</div>
+    <div class="source-btn" style="background:#b8860b">OR Parks (4)</div>
+  </div>
+  <div class="sim-heatmap">
+    <div class="hm-header">
+      <span class="hm-title">Site Availability</span>
+      <div class="hm-legend">
+        <span>0 sites</span>
+        <div class="hm-legend-swatch" style="background:#eef1f5"></div>
+        <div class="hm-legend-swatch" style="background:#c0d4e4"></div>
+        <div class="hm-legend-swatch" style="background:#78a8c8"></div>
+        <div class="hm-legend-swatch" style="background:#3c7ea8"></div>
+        <div class="hm-legend-swatch" style="background:#1a5278"></div>
+        <span>94+ sites</span>
+      </div>
+    </div>
+    <div class="hm-grid" id="light-grid" style="grid-template-columns: 18px repeat(9, 1fr); grid-template-rows: 14px repeat(7, 18px);"></div>
+  </div>
+</div>
+
+<h2>Dark mode — in context</h2>
+<div class="app-sim dark">
+  <div class="sim-title">Checked 20 campgrounds — 16 with availability</div>
+  <div class="source-btns">
+    <div class="source-btn" style="background:#145850">Rec.gov (3)</div>
+    <div class="source-btn" style="background:#145850">WA Parks (9)</div>
+    <div class="source-btn" style="background:#8a6a08">OR Parks (4)</div>
+  </div>
+  <div class="sim-heatmap">
+    <div class="hm-header">
+      <span class="hm-title">Site Availability</span>
+      <div class="hm-legend">
+        <span>0 sites</span>
+        <div class="hm-legend-swatch" style="background:#1e1d1a; border:1px solid #38382e"></div>
+        <div class="hm-legend-swatch" style="background:#1e2d38; border:1px solid #38382e"></div>
+        <div class="hm-legend-swatch" style="background:#264a62"></div>
+        <div class="hm-legend-swatch" style="background:#3a6a8e"></div>
+        <div class="hm-legend-swatch" style="background:#5898c0"></div>
+        <span>94+ sites</span>
+      </div>
+    </div>
+    <div class="hm-grid" id="dark-grid" style="grid-template-columns: 18px repeat(9, 1fr); grid-template-rows: 14px repeat(7, 18px);"></div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Before / After</h2>
+<div class="compare-row">
+  <div class="compare-col">
+    <div class="compare-label">Before — green heatmap, blue WA</div>
+    <div class="source-btns" style="margin-bottom:0.5rem">
+      <div class="source-btn" style="background:#5a8a32; font-size:0.7rem; padding:0.3rem">Rec.gov</div>
+      <div class="source-btn" style="background:#2a7a9a; font-size:0.7rem; padding:0.3rem">WA Parks</div>
+      <div class="source-btn" style="background:#b8860b; font-size:0.7rem; padding:0.3rem">OR Parks</div>
+    </div>
+    <div class="sim-heatmap">
+      <div class="hm-grid" id="before-grid" style="grid-template-columns: 18px repeat(9, 1fr); grid-template-rows: 14px repeat(7, 18px);"></div>
+    </div>
+  </div>
+  <div class="compare-col">
+    <div class="compare-label">After — blue heatmap, deep teal WA</div>
+    <div class="source-btns" style="margin-bottom:0.5rem">
+      <div class="source-btn" style="background:#5a8a32; font-size:0.7rem; padding:0.3rem">Rec.gov</div>
+      <div class="source-btn" style="background:#1a7068; font-size:0.7rem; padding:0.3rem">WA Parks</div>
+      <div class="source-btn" style="background:#b8860b; font-size:0.7rem; padding:0.3rem">OR Parks</div>
+    </div>
+    <div class="sim-heatmap">
+      <div class="hm-grid" id="after-grid" style="grid-template-columns: 18px repeat(9, 1fr); grid-template-rows: 14px repeat(7, 18px);"></div>
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Token spec</h2>
+<table class="token-table">
+  <tr><th>Token</th><th>Light</th><th>Dark</th><th>Notes</th></tr>
+  <tr>
+    <td><code>--heatmap-0</code></td>
+    <td><span class="swatch-sm" style="background:#eef1f5"></span>#eef1f5</td>
+    <td><span class="swatch-sm" style="background:#1e1d1a"></span>#1e1d1a</td>
+    <td>Empty — near background</td>
+  </tr>
+  <tr>
+    <td><code>--heatmap-1</code></td>
+    <td><span class="swatch-sm" style="background:#c0d4e4"></span>#c0d4e4</td>
+    <td><span class="swatch-sm" style="background:#1e2d38"></span>#1e2d38</td>
+    <td>Few sites</td>
+  </tr>
+  <tr>
+    <td><code>--heatmap-2</code></td>
+    <td><span class="swatch-sm" style="background:#78a8c8"></span>#78a8c8</td>
+    <td><span class="swatch-sm" style="background:#264a62"></span>#264a62</td>
+    <td>Some sites</td>
+  </tr>
+  <tr>
+    <td><code>--heatmap-3</code></td>
+    <td><span class="swatch-sm" style="background:#3c7ea8"></span>#3c7ea8</td>
+    <td><span class="swatch-sm" style="background:#3a6a8e"></span>#3a6a8e</td>
+    <td>Good availability</td>
+  </tr>
+  <tr>
+    <td><code>--heatmap-4</code></td>
+    <td><span class="swatch-sm" style="background:#1a5278"></span>#1a5278</td>
+    <td><span class="swatch-sm" style="background:#5898c0"></span>#5898c0</td>
+    <td>Many sites</td>
+  </tr>
+  <tr><td colspan="4" style="padding-top:1rem; font-weight:600; color:#555">WA Parks source colors</td></tr>
+  <tr>
+    <td><code>--src-wa-toggle</code></td>
+    <td><span class="swatch-sm" style="background:#1a7068"></span>#1a7068</td>
+    <td><span class="swatch-sm" style="background:#145850"></span>#145850</td>
+    <td>Badge / toggle button</td>
+  </tr>
+  <tr>
+    <td><code>--src-wa-border</code></td>
+    <td><span class="swatch-sm" style="background:#1a8a7a"></span>#1a8a7a</td>
+    <td><span class="swatch-sm" style="background:#1a7868"></span>#1a7868</td>
+    <td>Result card left border</td>
+  </tr>
+  <tr>
+    <td><code>--src-wa-badge-bg</code></td>
+    <td><span class="swatch-sm" style="background:#e0f0ec"></span>#e0f0ec</td>
+    <td><span class="swatch-sm" style="background:#142820"></span>#142820</td>
+    <td>Badge background</td>
+  </tr>
+  <tr>
+    <td><code>--src-wa-badge-text</code></td>
+    <td><span class="swatch-sm" style="background:#14584a"></span>#14584a</td>
+    <td><span class="swatch-sm" style="background:#50a898"></span>#50a898</td>
+    <td>Badge text</td>
+  </tr>
+</table>
+
+<script>
+const blueLight = ['#eef1f5','#c0d4e4','#78a8c8','#3c7ea8','#1a5278'];
+const blueDark =  ['#1e1d1a','#1e2d38','#264a62','#3a6a8e','#5898c0'];
+const greenLight = ['#f0f0e8','#d4e8c0','#a0d070','#6aaa40','#3a7a20'];
+
+const DOW = ['S','M','T','W','T','F','S'];
+const MONTHS = ['','Apr','','','May','','','','Jun'];
+
+const pattern = [
+  [4,4,3,4,4,2,1,3,4],
+  [4,3,3,4,4,1,0,4,3],
+  [3,3,2,3,3,1,0,3,2],
+  [4,4,3,4,4,2,1,3,3],
+  [3,3,2,3,3,1,0,2,2],
+  [4,4,3,4,4,2,1,4,4],
+  [3,2,2,3,3,1,0,3,2],
+];
+
+function buildGrid(id, colors) {
+  const grid = document.getElementById(id);
+  const corner = document.createElement('div');
+  corner.className = 'hm-dow';
+  grid.appendChild(corner);
+  for (const m of MONTHS) {
+    const label = document.createElement('div');
+    label.className = 'hm-month';
+    label.textContent = m;
+    grid.appendChild(label);
+  }
+  for (let row = 0; row < 7; row++) {
+    const dowLabel = document.createElement('div');
+    dowLabel.className = 'hm-dow';
+    dowLabel.textContent = DOW[row];
+    grid.appendChild(dowLabel);
+    for (let col = 0; col < 9; col++) {
+      const cell = document.createElement('div');
+      cell.className = 'hm-cell';
+      cell.style.background = colors[pattern[row][col]];
+      grid.appendChild(cell);
+    }
+  }
+}
+
+buildGrid('light-grid', blueLight);
+buildGrid('dark-grid', blueDark);
+buildGrid('before-grid', greenLight);
+buildGrid('after-grid', blueLight);
+</script>
+</body>
+</html>
