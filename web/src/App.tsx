@@ -7,6 +7,7 @@ import type {
 } from "./api";
 import { WatchPanel } from "./components/WatchPanel";
 import { CalendarHeatMap } from "./components/CalendarHeatMap";
+import { DateRangePicker } from "./components/DateRangePicker";
 import { ResultCard, SOURCE_LABELS } from "./components/ResultCard";
 import { CompareBar } from "./components/CompareBar";
 import { OnboardingModal } from "./components/OnboardingModal";
@@ -340,28 +341,21 @@ function SearchForm({
       </div>
 
       {/* Dates + nights */}
-      <div className={mode === "find" ? "form-row form-row-3" : "form-row"}>
-        <label>
-          {mode === "find" ? "From" : "Check in"}
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => { setStartDate(e.target.value); setActiveDatePreset(null); setSelectedMonths(new Set()); }}
-            required
-          />
-        </label>
-        <label>
-          {mode === "find" ? "Through" : "Check out"}
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => { setEndDate(e.target.value); setActiveDatePreset(null); setSelectedMonths(new Set()); }}
-            required
-          />
-        </label>
+      <div className={mode === "find" ? "form-row form-row-2" : "form-row"}>
+        <DateRangePicker
+          startDate={startDate}
+          endDate={endDate}
+          onChange={(s, e) => {
+            setStartDate(s);
+            setEndDate(e);
+            setActiveDatePreset(null);
+            setSelectedMonths(new Set());
+          }}
+          mode={mode}
+        />
         {mode === "find" && (
           <label>
-            Nights
+            Min. nights
             <input
               type="number"
               value={nights}

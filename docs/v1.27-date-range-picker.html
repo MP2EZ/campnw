@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v1.27 Date Range Picker</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #333; padding: 2rem; max-width: 960px; margin: 0 auto; }
+  h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; color: #555; }
+  .section-divider { border: none; border-top: 1px solid #ddd; margin: 2.5rem 0; }
+  .compare-label { font-size: 0.75rem; font-weight: 600; color: #888; margin-bottom: 0.75rem; text-align: center; }
+
+  /* App chrome */
+  .app-frame { background: #f5f5f0; border: 1px solid #ddd; border-radius: 12px; overflow: visible; margin-bottom: 1.5rem; position: relative; }
+  .tabs { display: flex; gap: 1.5rem; padding: 0.75rem 1.5rem 0; border-bottom: 2px solid #e8e6e0; }
+  .tab { padding: 0.5rem 0; font-size: 0.85rem; color: #888; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .tab.active { color: #2d5016; border-bottom-color: #2d5016; font-weight: 600; }
+
+  /* NL search */
+  .nl-bar { padding: 0.75rem 1.5rem 0; }
+  .nl-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
+  .nl-row svg { width: 16px; height: 16px; color: #aaa; flex-shrink: 0; }
+  .nl-row span { color: #aaa; font-size: 0.85rem; }
+  .nl-divider { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1.5rem; font-size: 0.7rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em; }
+  .nl-divider::before, .nl-divider::after { content: ""; flex: 1; height: 1px; background: #ddd; }
+
+  .form-card { background: #fff; border: 1px solid #e0ddd5; border-radius: 10px; margin: 0 1.5rem 1.5rem; padding: 1rem; }
+
+  .mode-toggle { display: flex; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-bottom: 0.75rem; }
+  .mode-btn { flex: 1; padding: 0.5rem; text-align: center; font-size: 0.8rem; font-weight: 600; background: #fff; border: none; color: #888; cursor: pointer; }
+  .mode-btn.active { background: #f5f5f0; color: #333; }
+
+  .day-presets { display: flex; gap: 0.35rem; margin-bottom: 0.75rem; }
+  .day-btn { flex: 1; padding: 0.4rem; text-align: center; font-size: 0.75rem; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; cursor: pointer; }
+  .day-btn.active { background: #2d5016; color: #fff; border-color: #2d5016; }
+  .day-btn .sub { font-size: 0.6rem; color: #aaa; display: block; }
+  .day-btn.active .sub { color: rgba(255,255,255,0.7); }
+
+  .quick-presets { display: flex; gap: 0.35rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  .quick-pill { padding: 0.3rem 0.6rem; font-size: 0.7rem; border: 1px solid #ddd; border-radius: 999px; background: #fff; color: #555; cursor: pointer; }
+
+  .form-fields { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .form-field { flex: 1; min-width: 120px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.8rem; color: #555; background: #fafaf5; }
+  .search-btn { width: 100%; padding: 0.65rem; background: #2d5016; color: #fff; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-top: 0.75rem; cursor: pointer; }
+
+  /* Date range field */
+  .date-range-field { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 6px; background: #fafaf5; cursor: pointer; margin-bottom: 0.75rem; transition: border-color 0.15s; position: relative; }
+  .date-range-field:hover { border-color: #999; }
+  .date-range-field.open { border-color: #2d5016; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+  .date-range-field svg { width: 18px; height: 18px; color: #888; flex-shrink: 0; }
+  .date-range-text { flex: 1; font-size: 0.85rem; color: #333; }
+  .date-range-text .label { font-size: 0.65rem; color: #aaa; display: block; margin-bottom: 0.1rem; }
+  .date-range-arrow { color: #aaa; font-size: 0.8rem; }
+  .date-range-sep { color: #ccc; }
+
+  /* Calendar popover */
+  .calendar-popover { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; background: #fff; border: 1px solid #ddd; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 1rem; z-index: 100; display: none; }
+  .calendar-popover.open { display: block; }
+
+  .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+  .cal-nav { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 0.25rem 0.5rem; cursor: pointer; font-size: 0.8rem; color: #555; }
+  .cal-nav:hover { background: #f5f5f0; }
+
+  .cal-months { display: flex; gap: 1.5rem; }
+  .cal-month { flex: 1; }
+  .cal-month-title { font-size: 0.85rem; font-weight: 600; text-align: center; margin-bottom: 0.5rem; color: #333; }
+
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-dow { font-size: 0.65rem; color: #aaa; text-align: center; padding: 0.25rem 0; font-weight: 600; }
+  .cal-day { font-size: 0.8rem; text-align: center; padding: 0.4rem 0; border-radius: 6px; cursor: pointer; color: #333; }
+  .cal-day:hover { background: #f0f0e8; }
+  .cal-day.empty { cursor: default; }
+  .cal-day.empty:hover { background: none; }
+  .cal-day.past { color: #ccc; cursor: default; }
+  .cal-day.past:hover { background: none; }
+  .cal-day.start { background: #2d5016; color: #fff; border-radius: 6px 0 0 6px; }
+  .cal-day.end { background: #2d5016; color: #fff; border-radius: 0 6px 6px 0; }
+  .cal-day.in-range { background: #e8f0e0; color: #2d5016; border-radius: 0; }
+  .cal-day.single { background: #2d5016; color: #fff; border-radius: 6px; }
+
+  .cal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #eee; }
+  .cal-footer-btn { padding: 0.35rem 0.75rem; font-size: 0.75rem; border-radius: 6px; cursor: pointer; border: 1px solid #ddd; background: #fff; color: #555; }
+  .cal-footer-btn.primary { background: #2d5016; color: #fff; border-color: #2d5016; }
+
+  .note { font-size: 0.85rem; color: #666; line-height: 1.6; padding: 0.75rem 1rem; background: #fff; border-radius: 8px; border-left: 3px solid #3c7ea8; margin-top: 0.75rem; }
+
+  /* Responsive mock */
+  .mobile-frame { max-width: 375px; margin: 0 auto; }
+  .mobile-frame .cal-months { flex-direction: column; gap: 1rem; }
+</style>
+</head>
+<body>
+
+<h1>Date Range Picker — Popover Calendar</h1>
+<p class="subtitle">One unified "Dates" field. Click to open two-month calendar. Pick start, pick end, done.</p>
+
+<hr class="section-divider">
+
+<h2>Closed state — unified date field</h2>
+<div class="compare-label">Replaces the two separate From / Through inputs</div>
+<div class="app-frame">
+  <div class="tabs">
+    <span class="tab active">Find a Site</span>
+    <span class="tab">Plan a Trip</span>
+  </div>
+  <div class="nl-bar">
+    <div class="nl-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <span>Try "pet-friendly near Portland, July weekend"</span>
+    </div>
+  </div>
+  <div class="nl-divider">or search by filters</div>
+  <div class="form-card">
+    <div class="mode-toggle">
+      <button class="mode-btn active">Find a date</button>
+      <button class="mode-btn">Exact dates</button>
+    </div>
+    <div class="day-presets">
+      <button class="day-btn active">Any</button>
+      <button class="day-btn">Weekend<span class="sub">F–Su</span></button>
+      <button class="day-btn">Long weekend<span class="sub">Th–Su</span></button>
+      <button class="day-btn">Weekdays</button>
+      <button class="day-btn">Custom</button>
+    </div>
+    <div class="quick-presets">
+      <span class="quick-pill">This weekend</span>
+      <span class="quick-pill">Next weekend</span>
+      <span class="quick-pill">Next 30 days</span>
+      <span class="quick-pill">May</span>
+      <span class="quick-pill">Jun</span>
+      <span class="quick-pill">Jul</span>
+      <span class="quick-pill">Aug</span>
+      <span class="quick-pill">Sep</span>
+      <span class="quick-pill">Oct</span>
+    </div>
+
+    <div class="date-range-field" style="position:relative;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <div class="date-range-text">
+        <span class="label">Dates</span>
+        Apr 19 <span class="date-range-sep">–</span> May 19
+      </div>
+      <span class="date-range-arrow">▾</span>
+    </div>
+
+    <div class="form-fields">
+      <div class="form-field" style="flex:0.4">Nights: 2</div>
+      <div class="form-field">Drive from: Seattle</div>
+      <div class="form-field">Max drive: Any</div>
+    </div>
+    <button class="search-btn">Search</button>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Open state — calendar popover with range selected</h2>
+<div class="compare-label">Click start date, click end date. Range highlights between.</div>
+<div class="app-frame" style="min-height: 480px;">
+  <div class="tabs">
+    <span class="tab active">Find a Site</span>
+    <span class="tab">Plan a Trip</span>
+  </div>
+  <div class="nl-bar">
+    <div class="nl-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <span>Try "pet-friendly near Portland, July weekend"</span>
+    </div>
+  </div>
+  <div class="nl-divider">or search by filters</div>
+  <div class="form-card" style="overflow:visible;">
+    <div class="mode-toggle">
+      <button class="mode-btn active">Find a date</button>
+      <button class="mode-btn">Exact dates</button>
+    </div>
+    <div class="day-presets">
+      <button class="day-btn active">Any</button>
+      <button class="day-btn">Weekend<span class="sub">F–Su</span></button>
+      <button class="day-btn">Long weekend<span class="sub">Th–Su</span></button>
+      <button class="day-btn">Weekdays</button>
+      <button class="day-btn">Custom</button>
+    </div>
+    <div class="quick-presets">
+      <span class="quick-pill">This weekend</span>
+      <span class="quick-pill">Next weekend</span>
+      <span class="quick-pill">Next 30 days</span>
+      <span class="quick-pill">May</span>
+      <span class="quick-pill">Jun</span>
+      <span class="quick-pill">Jul</span>
+      <span class="quick-pill">Aug</span>
+      <span class="quick-pill">Sep</span>
+      <span class="quick-pill">Oct</span>
+    </div>
+
+    <div class="date-range-field open" style="position:relative;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <div class="date-range-text">
+        <span class="label">Dates</span>
+        Jun 13 <span class="date-range-sep">–</span> Jun 22
+      </div>
+      <span class="date-range-arrow">▴</span>
+
+      <div class="calendar-popover open">
+        <div class="cal-months" id="cal-months">
+        </div>
+        <div class="cal-footer">
+          <button class="cal-footer-btn">Clear</button>
+          <button class="cal-footer-btn primary">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-fields">
+      <div class="form-field" style="flex:0.4">Nights: 2</div>
+      <div class="form-field">Drive from: Seattle</div>
+      <div class="form-field">Max drive: Any</div>
+    </div>
+    <button class="search-btn">Search</button>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Mobile — single month with swipe</h2>
+<div class="compare-label">375px viewport — one month at a time, arrows to navigate</div>
+<div class="mobile-frame">
+  <div class="app-frame" style="min-height: 420px;">
+    <div class="form-card" style="overflow:visible; margin: 0.75rem;">
+      <div class="date-range-field open" style="position:relative;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <div class="date-range-text">
+          <span class="label">Dates</span>
+          Jun 13 <span class="date-range-sep">–</span> Jun 22
+        </div>
+        <span class="date-range-arrow">▴</span>
+
+        <div class="calendar-popover open">
+          <div class="cal-months" id="cal-mobile">
+          </div>
+          <div class="cal-footer">
+            <button class="cal-footer-btn">Clear</button>
+            <button class="cal-footer-btn primary">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note" style="margin-top:2rem;">
+  <strong>How it works:</strong><br>
+  1. User clicks the "Dates" field → calendar pops down<br>
+  2. Click a start date → it highlights as the start<br>
+  3. Hover shows preview range → click end date → range fills in<br>
+  4. Click "Done" or click outside to close<br>
+  5. Quick presets (This weekend, Jun, etc.) auto-set the range and close the calendar<br>
+  6. "Nights" stays as a separate field — in "Find a date" mode it's editable, in "Exact dates" mode it auto-calculates from the range
+</div>
+
+<script>
+const DOW = ['S','M','T','W','T','F','S'];
+
+function getMonthDays(year, month) {
+  const first = new Date(year, month, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days = [];
+  for (let i = 0; i < startDow; i++) days.push(null);
+  for (let d = 1; d <= daysInMonth; d++) days.push(d);
+  return days;
+}
+
+function renderMonth(container, year, month, rangeStart, rangeEnd, showNav) {
+  const monthEl = document.createElement('div');
+  monthEl.className = 'cal-month';
+
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  if (showNav) {
+    const header = document.createElement('div');
+    header.className = 'cal-header';
+    header.innerHTML = `
+      <button class="cal-nav">◀</button>
+      <span class="cal-month-title">${names[month]} ${year}</span>
+      <button class="cal-nav">▶</button>
+    `;
+    monthEl.appendChild(header);
+  } else {
+    const title = document.createElement('div');
+    title.className = 'cal-month-title';
+    title.textContent = `${names[month]} ${year}`;
+    monthEl.appendChild(title);
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'cal-grid';
+
+  for (const d of DOW) {
+    const dow = document.createElement('div');
+    dow.className = 'cal-dow';
+    dow.textContent = d;
+    grid.appendChild(dow);
+  }
+
+  const days = getMonthDays(year, month);
+  for (const d of days) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if (d === null) {
+      cell.className += ' empty';
+    } else {
+      cell.textContent = d;
+      const date = new Date(year, month, d);
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      if (date < today) {
+        cell.className += ' past';
+      } else if (rangeStart && rangeEnd) {
+        const start = new Date(rangeStart);
+        const end = new Date(rangeEnd);
+        if (date.getTime() === start.getTime()) {
+          cell.className += ' start';
+        } else if (date.getTime() === end.getTime()) {
+          cell.className += ' end';
+        } else if (date > start && date < end) {
+          cell.className += ' in-range';
+        }
+      }
+    }
+    grid.appendChild(cell);
+  }
+
+  monthEl.appendChild(grid);
+  container.appendChild(monthEl);
+}
+
+// Desktop: two months, Jun-Jul with Jun 13-22 selected
+const desktop = document.getElementById('cal-months');
+renderMonth(desktop, 2026, 5, '2026-06-13', '2026-06-22', false); // June
+renderMonth(desktop, 2026, 6, '2026-06-13', '2026-06-22', false); // July
+
+// Mobile: just June with nav arrows
+const mobile = document.getElementById('cal-mobile');
+renderMonth(mobile, 2026, 5, '2026-06-13', '2026-06-22', true);
+</script>
+</body>
+</html>

@@ -75,7 +75,7 @@ describe('App Component', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
     renderApp()
 
-    const searchButton = screen.getByRole('button', { name: /Search/ })
+    const searchButton = screen.getByRole('button', { name: /^Search$/ })
     expect(searchButton).toBeInTheDocument()
     expect(searchButton).not.toBeDisabled()
   })
