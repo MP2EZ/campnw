@@ -164,13 +164,16 @@ export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDat
   if (results.results.length === 0 || weeks.length === 0) return null;
 
   // Build a lookup: weekIdx -> dow -> day data
-  const grid: Map<string, { count: number; label: string; date: string }> =
-    new Map();
-  for (const week of weeks) {
-    for (const day of week.days) {
-      grid.set(`${week.weekIdx}-${day.dow}`, day);
+  const grid = useMemo(() => {
+    const g: Map<string, { count: number; label: string; date: string }> =
+      new Map();
+    for (const week of weeks) {
+      for (const day of week.days) {
+        g.set(`${week.weekIdx}-${day.dow}`, day);
+      }
     }
-  }
+    return g;
+  }, [weeks]);
 
   const ariaLabel = activeDays
     ? `Availability density, showing ${formatDayLabel(activeDays)}`

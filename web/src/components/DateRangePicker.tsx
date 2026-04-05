@@ -1,10 +1,27 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { track } from "../api";
 
 interface Props {
   startDate: string;
   endDate: string;
   onChange: (start: string, end: string) => void;
   mode: "find" | "exact";
+}
+
+interface MonthGridProps {
+  year: number;
+  month: number;
+  showNav: boolean;
+  prevMonth: () => void;
+  nextMonth: () => void;
+  renderStart: Date | null;
+  renderEnd: Date | null;
+  hoverDate: Date | null;
+  selecting: "start" | "done";
+  tempStart: Date | null;
+  today: Date;
+  handleDayClick: (d: Date) => void;
+  setHoverDate: (d: Date) => void;
 }
 
 const MONTH_NAMES = [
@@ -54,6 +71,84 @@ function isSameDay(a: Date, b: Date): boolean {
 function isBetween(d: Date, start: Date, end: Date): boolean {
   return d > start && d < end;
 }
+
+const MonthGrid = memo(function MonthGrid({
+  year, month, showNav, prevMonth, nextMonth,
+  renderStart, renderEnd, hoverDate, selecting, tempStart, today,
+  handleDayClick, setHoverDate,
+}: MonthGridProps) {
+  const days = useMemo(() => getMonthDays(year, month), [year, month]);
+
+  const ariaLabels = useMemo(() => {
+    const labels: string[] = [];
+    for (const day of days) {
+      if (day) {
+        labels.push(day.toLocaleDateString("en-US", {
+          weekday: "long", month: "long", day: "numeric", year: "numeric",
+        }));
+      } else {
+        labels.push("");
+      }
+    }
+    return labels;
+  }, [days]);
+
+  return (
+    <div className="drp-month">
+      <div className="drp-month-header">
+        {showNav ? (
+          <button type="button" className="drp-nav" onClick={prevMonth} aria-label="Previous month">◀</button>
+        ) : <span />}
+        <span className="drp-month-title">{MONTH_NAMES[month]} {year}</span>
+        {!showNav ? (
+          <button type="button" className="drp-nav" onClick={nextMonth} aria-label="Next month">▶</button>
+        ) : <span />}
+      </div>
+      <div className="drp-grid">
+        {DOW_HEADERS.map((d, i) => (
+          <span key={`dow-${i}`} className="drp-dow">{d}</span>
+        ))}
+        {days.map((day, i) => {
+          if (!day) return <span key={`empty-${i}`} className="drp-day drp-empty" />;
+
+          const isPast = day < today;
+          const isStart = renderStart && isSameDay(day, renderStart);
+          const isEnd = renderEnd && isSameDay(day, renderEnd);
+          const inRange = renderStart && renderEnd && isBetween(day, renderStart, renderEnd);
+          const isToday = isSameDay(day, today);
+          const isPreview = selecting === "start" && hoverDate && tempStart
+            && isBetween(day,
+              hoverDate < tempStart ? hoverDate : tempStart,
+              hoverDate < tempStart ? tempStart : hoverDate,
+            );
+
+          let cls = "drp-day";
+          if (isPast) cls += " past";
+          if (isToday) cls += " today";
+          if (isStart && isEnd) cls += " single";
+          else if (isStart) cls += " start";
+          else if (isEnd) cls += " end";
+          else if (inRange) cls += " in-range";
+          else if (isPreview) cls += " preview";
+
+          return (
+            <button
+              key={`day-${i}`}
+              type="button"
+              className={cls}
+              disabled={isPast}
+              onClick={() => handleDayClick(day)}
+              onMouseEnter={() => selecting === "start" && setHoverDate(day)}
+              aria-label={ariaLabels[i]}
+            >
+              {day.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
 
 export const DateRangePicker = memo(function DateRangePicker({
   startDate, endDate, onChange, mode,
@@ -150,7 +245,11 @@ export const DateRangePicker = memo(function DateRangePicker({
       let s = tempStart;
       let e = d;
       if (e < s) { [s, e] = [e, s]; }
-      onChange(toDateKey(s), toDateKey(e));
+      const startKey = toDateKey(s);
+      const endKey = toDateKey(e);
+      const rangeDays = Math.round((e.getTime() - s.getTime()) / 86400000);
+      onChange(startKey, endKey);
+      track("date_range_selected", { start: startKey, end: endKey, range_days: rangeDays });
       setSelecting("done");
       setTempStart(null);
       setHoverDate(null);
@@ -181,64 +280,7 @@ export const DateRangePicker = memo(function DateRangePicker({
   const renderStart = rangeEnd && rangeEnd < rangeStart ? rangeEnd : rangeStart;
   const renderEnd = rangeEnd && rangeEnd < rangeStart ? rangeStart : rangeEnd;
 
-  function renderMonth(year: number, month: number, showNav: boolean) {
-    const days = getMonthDays(year, month);
-    return (
-      <div className="drp-month">
-        <div className="drp-month-header">
-          {showNav ? (
-            <button type="button" className="drp-nav" onClick={prevMonth} aria-label="Previous month">◀</button>
-          ) : <span />}
-          <span className="drp-month-title">{MONTH_NAMES[month]} {year}</span>
-          {!showNav ? (
-            <button type="button" className="drp-nav" onClick={nextMonth} aria-label="Next month">▶</button>
-          ) : <span />}
-        </div>
-        <div className="drp-grid">
-          {DOW_HEADERS.map((d, i) => (
-            <span key={`dow-${i}`} className="drp-dow">{d}</span>
-          ))}
-          {days.map((day, i) => {
-            if (!day) return <span key={`empty-${i}`} className="drp-day drp-empty" />;
-
-            const isPast = day < today;
-            const isStart = renderStart && isSameDay(day, renderStart);
-            const isEnd = renderEnd && isSameDay(day, renderEnd);
-            const inRange = renderStart && renderEnd && isBetween(day, renderStart, renderEnd);
-            const isToday = isSameDay(day, today);
-            const isPreview = selecting === "start" && hoverDate && tempStart
-              && isBetween(day,
-                hoverDate < tempStart ? hoverDate : tempStart,
-                hoverDate < tempStart ? tempStart : hoverDate,
-              );
-
-            let cls = "drp-day";
-            if (isPast) cls += " past";
-            if (isToday) cls += " today";
-            if (isStart && isEnd) cls += " single";
-            else if (isStart) cls += " start";
-            else if (isEnd) cls += " end";
-            else if (inRange) cls += " in-range";
-            else if (isPreview) cls += " preview";
-
-            return (
-              <button
-                key={`day-${i}`}
-                type="button"
-                className={cls}
-                disabled={isPast}
-                onClick={() => handleDayClick(day)}
-                onMouseEnter={() => selecting === "start" && setHoverDate(day)}
-                aria-label={day.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-              >
-                {day.getDate()}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
+  const handleHoverDate = useCallback((d: Date) => setHoverDate(d), []);
 
   const label = mode === "find" ? "Search between" : "Check in – out";
 
@@ -269,8 +311,22 @@ export const DateRangePicker = memo(function DateRangePicker({
       {isOpen && (
         <div className="drp-popover">
           <div className="drp-months">
-            {renderMonth(viewYear, viewMonth, true)}
-            {renderMonth(month2Year, month2Month, false)}
+            <MonthGrid
+              year={viewYear} month={viewMonth} showNav={true}
+              prevMonth={prevMonth} nextMonth={nextMonth}
+              renderStart={renderStart} renderEnd={renderEnd}
+              hoverDate={hoverDate} selecting={selecting}
+              tempStart={tempStart} today={today}
+              handleDayClick={handleDayClick} setHoverDate={handleHoverDate}
+            />
+            <MonthGrid
+              year={month2Year} month={month2Month} showNav={false}
+              prevMonth={prevMonth} nextMonth={nextMonth}
+              renderStart={renderStart} renderEnd={renderEnd}
+              hoverDate={hoverDate} selecting={selecting}
+              tempStart={tempStart} today={today}
+              handleDayClick={handleDayClick} setHoverDate={handleHoverDate}
+            />
           </div>
           {selecting === "start" && (
             <div className="drp-hint">Click an end date</div>

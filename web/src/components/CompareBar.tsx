@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { compareCampgrounds, track } from "../api";
+import { renderMarkdown } from "../renderMarkdown";
 import type { CompareResponse } from "../api";
 
 interface CompareBarProps {
@@ -85,9 +86,7 @@ export function CompareBar({ selectedIds, onClear, searchDates }: CompareBarProp
         </div>
         {result.narrative && (
           <div className="compare-narrative">
-            <p dangerouslySetInnerHTML={{
-              __html: result.narrative.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"),
-            }} />
+            <p>{renderMarkdown(result.narrative)}</p>
           </div>
         )}
       </div>

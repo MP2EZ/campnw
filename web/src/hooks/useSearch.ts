@@ -100,20 +100,24 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     setSourceFilter((prev) => {
       const allActive = prev.size === resultSources.size;
       if (allActive) {
-        // From default "all on" state: isolate to clicked source
+        track("source_filter_changed", { source: src, action: "isolate", active_count: 1 });
         return new Set([src]);
       }
-      // Already filtering: toggle this source on/off
       const next = new Set(prev);
       if (next.has(src)) {
         next.delete(src);
       } else {
         next.add(src);
       }
-      // If empty or back to all, reset to full set
       if (next.size === 0 || next.size === resultSources.size) {
+        track("source_filter_changed", { source: src, action: "reset", active_count: resultSources.size });
         return new Set(resultSources);
       }
+      track("source_filter_changed", {
+        source: src,
+        action: prev.has(src) ? "remove" : "add",
+        active_count: next.size,
+      });
       return next;
     });
   }, [resultSources]);

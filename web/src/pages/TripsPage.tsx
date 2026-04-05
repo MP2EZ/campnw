@@ -38,6 +38,7 @@ export default function TripsPage() {
   const handleDelete = async (tripId: number) => {
     await deleteTrip(tripId);
     setTrips((prev) => prev.filter((t) => t.id !== tripId));
+    track("trip_deleted", { trip_id: tripId });
   };
 
   if (!user) {

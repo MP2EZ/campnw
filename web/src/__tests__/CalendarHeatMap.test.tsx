@@ -307,6 +307,205 @@ describe('CalendarHeatMap Component', () => {
     expect(cellsWithLabels.length).toBeGreaterThanOrEqual(5)
   })
 
+  test('all 7 day labels render', () => {
+    const response: SearchResponse = {
+      campgrounds_checked: 1,
+      campgrounds_with_availability: 1,
+      results: [
+        {
+          facility_id: '232465',
+          name: 'Test Campground',
+          state: 'WA',
+          booking_system: 'recgov',
+          latitude: 47.5,
+          longitude: -121.5,
+          total_available_sites: 1,
+          fcfs_sites: 0,
+          tags: [],
+          estimated_drive_minutes: null,
+          availability_url: null,
+          windows: [
+            {
+              campsite_id: '001',
+              site_name: 'A1',
+              loop: 'Loop A',
+              campsite_type: 'tent',
+              start_date: '2026-06-15',
+              end_date: '2026-06-15',
+              nights: 1,
+              max_people: 4,
+              is_fcfs: false,
+              booking_url: null,
+            },
+          ],
+          error: null,
+        },
+      ],
+      warnings: [],
+    }
+
+    render(
+      <CalendarHeatMap
+        results={response}
+        startDate="2026-06-01"
+        endDate="2026-06-30"
+      />
+    )
+
+    for (const label of ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']) {
+      expect(screen.getByText(label)).toBeInTheDocument()
+    }
+  })
+
+  test('shows day filter tag when daysOfWeek is set', () => {
+    const response: SearchResponse = {
+      campgrounds_checked: 1,
+      campgrounds_with_availability: 1,
+      results: [
+        {
+          facility_id: '232465',
+          name: 'Test Campground',
+          state: 'WA',
+          booking_system: 'recgov',
+          latitude: 47.5,
+          longitude: -121.5,
+          total_available_sites: 1,
+          fcfs_sites: 0,
+          tags: [],
+          estimated_drive_minutes: null,
+          availability_url: null,
+          windows: [
+            {
+              campsite_id: '001',
+              site_name: 'A1',
+              loop: 'Loop A',
+              campsite_type: 'tent',
+              start_date: '2026-06-15',
+              end_date: '2026-06-15',
+              nights: 1,
+              max_people: 4,
+              is_fcfs: false,
+              booking_url: null,
+            },
+          ],
+          error: null,
+        },
+      ],
+      warnings: [],
+    }
+
+    render(
+      <CalendarHeatMap
+        results={response}
+        startDate="2026-06-01"
+        endDate="2026-06-30"
+        daysOfWeek="4,5,6"
+      />
+    )
+
+    expect(screen.getByText(/Showing:/)).toBeInTheDocument()
+    expect(screen.getByText(/Sun, Fri, Sat/)).toBeInTheDocument()
+  })
+
+  test('does not show day filter tag without daysOfWeek', () => {
+    const response: SearchResponse = {
+      campgrounds_checked: 1,
+      campgrounds_with_availability: 1,
+      results: [
+        {
+          facility_id: '232465',
+          name: 'Test Campground',
+          state: 'WA',
+          booking_system: 'recgov',
+          latitude: 47.5,
+          longitude: -121.5,
+          total_available_sites: 1,
+          fcfs_sites: 0,
+          tags: [],
+          estimated_drive_minutes: null,
+          availability_url: null,
+          windows: [
+            {
+              campsite_id: '001',
+              site_name: 'A1',
+              loop: 'Loop A',
+              campsite_type: 'tent',
+              start_date: '2026-06-15',
+              end_date: '2026-06-15',
+              nights: 1,
+              max_people: 4,
+              is_fcfs: false,
+              booking_url: null,
+            },
+          ],
+          error: null,
+        },
+      ],
+      warnings: [],
+    }
+
+    render(
+      <CalendarHeatMap
+        results={response}
+        startDate="2026-06-01"
+        endDate="2026-06-30"
+      />
+    )
+
+    expect(screen.queryByText(/Showing:/)).not.toBeInTheDocument()
+  })
+
+  test('aria-label includes filter context when daysOfWeek is set', () => {
+    const response: SearchResponse = {
+      campgrounds_checked: 1,
+      campgrounds_with_availability: 1,
+      results: [
+        {
+          facility_id: '232465',
+          name: 'Test Campground',
+          state: 'WA',
+          booking_system: 'recgov',
+          latitude: 47.5,
+          longitude: -121.5,
+          total_available_sites: 1,
+          fcfs_sites: 0,
+          tags: [],
+          estimated_drive_minutes: null,
+          availability_url: null,
+          windows: [
+            {
+              campsite_id: '001',
+              site_name: 'A1',
+              loop: 'Loop A',
+              campsite_type: 'tent',
+              start_date: '2026-06-15',
+              end_date: '2026-06-15',
+              nights: 1,
+              max_people: 4,
+              is_fcfs: false,
+              booking_url: null,
+            },
+          ],
+          error: null,
+        },
+      ],
+      warnings: [],
+    }
+
+    render(
+      <CalendarHeatMap
+        results={response}
+        startDate="2026-06-01"
+        endDate="2026-06-30"
+        daysOfWeek="4,5,6"
+      />
+    )
+
+    expect(
+      screen.getByRole('group', { name: 'Availability density, showing Sun, Fri, Sat' })
+    ).toBeInTheDocument()
+  })
+
   test('renders month labels', () => {
     const response: SearchResponse = {
       campgrounds_checked: 1,

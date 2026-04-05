@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { getSearchHistory, getRecommendations, track } from "./api";
+import { renderMarkdown } from "./renderMarkdown";
 import type {
   Recommendation, SearchParams,
   SearchHistoryEntry,
@@ -245,7 +246,7 @@ function SearchForm({
         <button
           type="button"
           className={mode === "find" ? "active" : ""}
-          onClick={() => setMode("find")}
+          onClick={() => { setMode("find"); track("search_mode_changed", { mode: "find" }); }}
           aria-pressed={mode === "find"}
         >
           Find a date
@@ -253,7 +254,7 @@ function SearchForm({
         <button
           type="button"
           className={mode === "exact" ? "active" : ""}
-          onClick={() => setMode("exact")}
+          onClick={() => { setMode("exact"); track("search_mode_changed", { mode: "exact" }); }}
           aria-pressed={mode === "exact"}
         >
           Exact dates
@@ -274,7 +275,7 @@ function SearchForm({
                   type="button"
                   className={`trip-type-btn ${dayPreset === val ? "active" : ""}`}
                   aria-pressed={dayPreset === val}
-                  onClick={() => setDayPreset(val)}
+                  onClick={() => { setDayPreset(val); track("day_filter_changed", { preset: label }); }}
                 >
                   {label}
                   {hint && <span className="trip-type-hint">{hint}</span>}
@@ -284,7 +285,7 @@ function SearchForm({
               type="button"
               className={`trip-type-btn ${dayPreset === "custom" ? "active" : ""}`}
               aria-pressed={dayPreset === "custom"}
-              onClick={() => setDayPreset("custom")}
+              onClick={() => { setDayPreset("custom"); track("day_filter_changed", { preset: "custom" }); }}
             >
               Custom
             </button>
@@ -309,6 +310,7 @@ function SearchForm({
                 setEndDate(p.end);
                 setActiveDatePreset(p.label);
                 setSelectedMonths(new Set());
+                track("date_preset_clicked", { preset: p.label });
               }}
             >
               {p.label}
@@ -804,13 +806,13 @@ export default function App() {
               )}
               <button
                 className="header-btn"
-                onClick={() => setWatchPanelOpen(true)}
+                onClick={() => { setWatchPanelOpen(true); track("watchlist_opened", {}); }}
               >
                 Watchlist
               </button>
               <button
                 className="header-btn theme-toggle"
-                onClick={() => setDarkMode(!darkMode)}
+                onClick={() => { setDarkMode(!darkMode); track("dark_mode_toggled", { to: darkMode ? "light" : "dark" }); }}
                 aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
               >
                 {darkMode ? "☀" : "☾"}
@@ -954,6 +956,7 @@ export default function App() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && nlQuery.trim()) {
                     e.preventDefault();
+                    track("nl_search_submitted", { query_length: nlQuery.trim().length });
                     handleSearch(
                       { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
                       "find",
@@ -1005,14 +1008,14 @@ export default function App() {
               <div className="view-toggle">
                 <button
                   className={resultsView === "dates" ? "active" : ""}
-                  onClick={() => setResultsView("dates")}
+                  onClick={() => { setResultsView("dates"); track("results_view_changed", { view: "dates" }); }}
                   aria-pressed={resultsView === "dates"}
                 >
                   By date
                 </button>
                 <button
                   className={resultsView === "sites" ? "active" : ""}
-                  onClick={() => setResultsView("sites")}
+                  onClick={() => { setResultsView("sites"); track("results_view_changed", { view: "sites" }); }}
                   aria-pressed={resultsView === "sites"}
                 >
                   By site
@@ -1086,21 +1089,7 @@ export default function App() {
           )}
           {searchSummary && (
             <div className="search-summary-banner" role="status">
-              <div className="summary-content" dangerouslySetInnerHTML={{
-                __html: (() => {
-                  const lines = searchSummary.trim().split("\n").filter(l => l.trim());
-                  const hasBullets = lines.some(l => l.trim().startsWith("- "));
-                  if (hasBullets) {
-                    const items = lines
-                      .filter(l => l.trim().startsWith("- "))
-                      .map(l => l.trim().replace(/^- /, "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"))
-                      .map(l => `<li>${l}</li>`)
-                      .join("");
-                    return `<ul>${items}</ul>`;
-                  }
-                  return searchSummary.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-                })()
-              }} />
+              <div className="summary-content">{renderMarkdown(searchSummary)}</div>
               <button
                 type="button"
                 className="summary-dismiss"

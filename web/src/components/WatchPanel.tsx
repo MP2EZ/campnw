@@ -40,6 +40,7 @@ export const WatchPanel = memo(function WatchPanel({
   const handleDelete = async (id: number) => {
     await deleteWatch(id);
     setWatches((prev) => prev.filter((w) => w.id !== id));
+    track("watch_removed", { watch_id: id });
   };
 
   const handleToggle = async (id: number) => {
