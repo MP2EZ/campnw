@@ -157,6 +157,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     window.history.replaceState(null, "", url.toString());
 
     const streamedResults: CampgroundResult[] = [];
+    let rafId: number | null = null;
     setResults({
       campgrounds_checked: 0,
       campgrounds_with_availability: 0,
@@ -168,21 +169,36 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       searchParams,
       (result) => {
         streamedResults.push(result);
-        setResults({
-          campgrounds_checked: streamedResults.length,
-          campgrounds_with_availability: streamedResults.filter(
-            (r) => r.total_available_sites > 0,
-          ).length,
-          results: [...streamedResults],
-          warnings: [],
-        });
+        if (!rafId) {
+          rafId = requestAnimationFrame(() => {
+            rafId = null;
+            setResults({
+              campgrounds_checked: streamedResults.length,
+              campgrounds_with_availability: streamedResults.filter(
+                (r) => r.total_available_sites > 0,
+              ).length,
+              results: [...streamedResults],
+              warnings: [],
+            });
+          });
+        }
       },
       () => {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
         setLoading(false);
         searchAbortRef.current = null;
         const withAvail = streamedResults.filter(
           (r) => r.total_available_sites > 0,
         ).length;
+        setResults({
+          campgrounds_checked: streamedResults.length,
+          campgrounds_with_availability: withAvail,
+          results: [...streamedResults],
+          warnings: [],
+        });
         track("search_executed", {
           state: params.state || "all",
           nights: params.nights || 2,

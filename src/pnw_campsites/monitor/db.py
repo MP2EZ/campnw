@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS watches (
     session_token TEXT DEFAULT '',  -- anonymous ownership token
     user_id INTEGER,
     enabled INTEGER DEFAULT 1,
-    created_at TEXT
+    created_at TEXT,
+    booking_system TEXT NOT NULL DEFAULT 'recgov'
 );
 
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -57,6 +58,7 @@ class Watch:
     notification_channel: str = ""  # ntfy, pushover, web_push, or ""
     enabled: bool = True
     created_at: str = ""
+    booking_system: str = "recgov"
     trip_id: int | None = None
     watch_type: str = "single"  # "single" or "template"
     search_params: str = ""  # JSON search pattern for template watches
@@ -351,6 +353,12 @@ class WatchDB:
             self._conn.execute(
                 "ALTER TABLE watches ADD COLUMN trip_id INTEGER"
             )
+        # v1.28: booking_system on watches
+        if "booking_system" not in watch_cols2:
+            self._conn.execute(
+                "ALTER TABLE watches ADD COLUMN"
+                " booking_system TEXT NOT NULL DEFAULT 'recgov'"
+            )
         # v1.2: shared links
         self._conn.executescript("""\
             CREATE TABLE IF NOT EXISTS shared_links (
@@ -452,51 +460,58 @@ class WatchDB:
         records: list[tuple[str, str, str]],
         source: str = "recgov",
     ) -> None:
-        """Record availability, storing only status changes.
+        """Record availability with batched upserts and transition detection.
 
-        Updates availability_daily (upsert) and writes to
-        status_transitions only when status actually changed.
+        1. Fetch existing statuses in one query
+        2. Detect transitions by comparing old vs new
+        3. Batch insert transitions
+        4. Batch upsert daily records
         records: list of (site_id, date, status) tuples.
         """
         now = datetime.now().isoformat()
 
+        # 1. Fetch existing statuses for this campground
+        existing: dict[tuple[str, str], str] = {}
+        for row in self._conn.execute(
+            "SELECT site_id, date, status FROM availability_daily"
+            " WHERE campground_id=?",
+            (campground_id,),
+        ).fetchall():
+            existing[(row[0], row[1])] = row[2]
+
+        # 2. Detect transitions
+        transitions = []
         for sid, dt, status in records:
-            # Upsert daily rollup
-            existing = self._conn.execute(
-                "SELECT status FROM availability_daily"
-                " WHERE campground_id=? AND site_id=? AND date=?",
-                (campground_id, sid, dt),
-            ).fetchone()
-
-            old_status = existing[0] if existing else ""
-
-            if existing:
-                self._conn.execute(
-                    "UPDATE availability_daily"
-                    " SET status=?, last_seen=?,"
-                    " observation_count=observation_count+1"
-                    " WHERE campground_id=? AND site_id=? AND date=?",
-                    (status, now, campground_id, sid, dt),
-                )
-            else:
-                self._conn.execute(
-                    "INSERT INTO availability_daily"
-                    " (campground_id, site_id, date, status, source,"
-                    "  first_seen, last_seen, observation_count)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
-                    (campground_id, sid, dt, status, source, now, now),
+            old = existing.get((sid, dt), "")
+            if status != old:
+                transitions.append(
+                    (campground_id, sid, dt, old, status, source, now)
                 )
 
-            # Record transition only if status changed
-            if status != old_status:
-                self._conn.execute(
-                    "INSERT INTO status_transitions"
-                    " (campground_id, site_id, date, old_status,"
-                    "  new_status, source, observed_at)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (campground_id, sid, dt, old_status, status,
-                     source, now),
-                )
+        # 3. Batch insert transitions
+        if transitions:
+            self._conn.executemany(
+                "INSERT INTO status_transitions"
+                " (campground_id, site_id, date, old_status,"
+                "  new_status, source, observed_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                transitions,
+            )
+
+        # 4. Batch upsert daily records
+        self._conn.executemany(
+            "INSERT INTO availability_daily"
+            " (campground_id, site_id, date, status, source,"
+            "  first_seen, last_seen, observation_count)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, 1)"
+            " ON CONFLICT(campground_id, site_id, date) DO UPDATE SET"
+            " status=excluded.status, last_seen=excluded.last_seen,"
+            " observation_count=observation_count+1",
+            [
+                (campground_id, sid, dt, st, source, now, now)
+                for sid, dt, st in records
+            ],
+        )
 
         self._conn.commit()
 
@@ -840,8 +855,8 @@ class WatchDB:
                 (facility_id, name, start_date, end_date, min_nights,
                  days_of_week, notify_topic, notification_channel,
                  session_token, user_id, enabled, created_at,
-                 watch_type, search_params)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 booking_system, watch_type, search_params)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 watch.facility_id,
@@ -856,6 +871,7 @@ class WatchDB:
                 watch.user_id,
                 int(watch.enabled),
                 now,
+                watch.booking_system,
                 watch.watch_type,
                 watch.search_params,
             ),
@@ -903,6 +919,16 @@ class WatchDB:
             (session_token,),
         ).fetchall()
         return [self._row_to_watch(r) for r in rows]
+
+    def update_watch_booking_system(
+        self, watch_id: int, booking_system: str,
+    ) -> None:
+        """Update the booking_system for a watch (self-heal migration)."""
+        self._conn.execute(
+            "UPDATE watches SET booking_system=? WHERE id=?",
+            (booking_system, watch_id),
+        )
+        self._conn.commit()
 
     def toggle_enabled(self, watch_id: int, session_token: str = "") -> bool:
         """Toggle a watch's enabled state. Returns new state."""

@@ -31,6 +31,10 @@ vi.mock("../api", () => ({
 // Stub window methods used by useSearch
 Object.defineProperty(window, "scrollTo", { value: vi.fn() });
 
+// Make requestAnimationFrame synchronous so RAF-throttled state updates flush immediately
+vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 0; });
+vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
 const MOCK_RESULT: CampgroundResult = {
   facility_id: "232465",
   name: "Ohanapecosh",

@@ -7,7 +7,7 @@ import type {
   SearchHistoryEntry,
 } from "./api";
 import { WatchPanel } from "./components/WatchPanel";
-import { CalendarHeatMap } from "./components/CalendarHeatMap";
+const CalendarHeatMap = lazy(() => import("./components/CalendarHeatMap").then(m => ({ default: m.CalendarHeatMap })));
 import { DateRangePicker } from "./components/DateRangePicker";
 import { ResultCard, SOURCE_LABELS } from "./components/ResultCard";
 import { CompareBar } from "./components/CompareBar";
@@ -1068,12 +1068,14 @@ export default function App() {
           ) : (
           <>
           {searchDates && withAvailability > 0 && (
-            <CalendarHeatMap
-              results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}
-              startDate={searchDates.start}
-              endDate={searchDates.end}
-              daysOfWeek={activeSearchParams?.days_of_week || undefined}
-            />
+            <Suspense fallback={null}>
+              <CalendarHeatMap
+                results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}
+                startDate={searchDates.start}
+                endDate={searchDates.end}
+                daysOfWeek={activeSearchParams?.days_of_week || undefined}
+              />
+            </Suspense>
           )}
           {results.warnings?.length > 0 && (
             <div className="warning-banner">

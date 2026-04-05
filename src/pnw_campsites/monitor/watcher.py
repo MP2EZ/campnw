@@ -115,12 +115,15 @@ async def poll_watch(
         start = date.fromisoformat(watch.start_date)
         end = date.fromisoformat(watch.end_date)
 
-        # Determine booking system from registry or default to recgov
-        booking_system = BookingSystem.RECGOV
-        if registry:
+        # Use stored booking system; self-heal from registry if needed
+        booking_system = BookingSystem(watch.booking_system)
+        if booking_system == BookingSystem.RECGOV and registry:
             cg = registry.get_by_facility_id(watch.facility_id)
-            if cg:
+            if cg and cg.booking_system != BookingSystem.RECGOV:
                 booking_system = cg.booking_system
+                watch_db.update_watch_booking_system(
+                    watch.id, booking_system.value,
+                )
 
         availability = await _fetch_availability(
             watch.facility_id, start, end,
@@ -261,11 +264,13 @@ async def poll_all(
     for watch in expanded:
         by_facility[watch.facility_id].append(watch)
 
-    results: list[PollResult] = []
-    for _facility_id, facility_watches in by_facility.items():
-        for watch in facility_watches:
+    # Poll facilities concurrently (max 3 in parallel)
+    sem = asyncio.Semaphore(3)
+
+    async def poll_limited(watch: Watch) -> PollResult:
+        async with sem:
             try:
-                result = await asyncio.wait_for(
+                return await asyncio.wait_for(
                     poll_watch(
                         watch, recgov, goingtocamp, watch_db, registry,
                         reserveamerica=reserveamerica,
@@ -273,8 +278,12 @@ async def poll_all(
                     timeout=15.0,
                 )
             except TimeoutError:
-                result = PollResult(watch=watch, error="Poll timed out (15s)")
                 _logger.warning("Poll timed out for watch %s (%s)", watch.id, watch.name)
-            results.append(result)
+                return PollResult(watch=watch, error="Poll timed out (15s)")
 
-    return results
+    all_watches = [w for ws in by_facility.values() for w in ws]
+    results = await asyncio.gather(
+        *[poll_limited(w) for w in all_watches],
+    )
+
+    return list(results)

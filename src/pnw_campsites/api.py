@@ -34,6 +34,7 @@ _goingtocamp: GoingToCampClient | None = None
 _reserveamerica: ReserveAmericaClient | None = None
 _engine: SearchEngine | None = None
 _watch_db: WatchDB | None = None
+_posthog_client: httpx.AsyncClient | None = None
 _poll_state: dict = {
     "last_poll": None,
     "next_poll": None,
@@ -167,7 +168,7 @@ async def _poll_tranche(tranche: int | None = None) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _registry, _recgov, _goingtocamp, _reserveamerica, _engine, _watch_db
+    global _registry, _recgov, _goingtocamp, _reserveamerica, _engine, _watch_db, _posthog_client
     load_dotenv()
 
     _registry = CampgroundRegistry()
@@ -255,7 +256,12 @@ async def lifespan(app: FastAPI):
         )
         _poll_logger.info("Watch poller started (2 tranches, 15-min interval, 7.5-min offset)")
 
+    _posthog_client = httpx.AsyncClient(timeout=10.0)
+
     yield
+
+    if _posthog_client:
+        await _posthog_client.aclose()
 
     if scheduler:
         scheduler.shutdown(wait=False)
@@ -375,14 +381,15 @@ async def posthog_proxy(request: Request, path: str):
     }
     body = await request.body()
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.request(
-            method=request.method,
-            url=target,
-            headers=headers,
-            content=body,
-            params=dict(request.query_params),
-        )
+    if not _posthog_client:
+        return Response(status_code=503)
+    resp = await _posthog_client.request(
+        method=request.method,
+        url=target,
+        headers=headers,
+        content=body,
+        params=dict(request.query_params),
+    )
 
     return Response(
         content=resp.content,
