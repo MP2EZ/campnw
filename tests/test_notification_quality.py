@@ -100,7 +100,7 @@ class TestGenerateReport:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             result = await generate_quality_report(watch_db, "2026-03")
         assert result is not None

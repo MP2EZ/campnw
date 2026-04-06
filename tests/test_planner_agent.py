@@ -133,7 +133,7 @@ class TestChat:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)
 
-        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
+        with patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client):
             result = await chat(
                 [{"role": "user", "content": "find camping"}],
                 engine=MagicMock(),
@@ -167,7 +167,7 @@ class TestChat:
         mock_tool_result = json.dumps({"found": 2, "total_checked": 10, "campgrounds": []})
 
         with (
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
             patch("pnw_campsites.planner.agent.execute_tool", AsyncMock(return_value=mock_tool_result)),
         ):
             result = await chat(
@@ -211,7 +211,7 @@ class TestChat:
         mock_tool_result = json.dumps({"found": 0, "total_checked": 0, "campgrounds": []})
 
         with (
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
             patch("pnw_campsites.planner.agent.execute_tool", AsyncMock(return_value=mock_tool_result)),
         ):
             result = await chat(
@@ -238,7 +238,7 @@ class TestChat:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=weird_response)
 
-        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
+        with patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client):
             result = await chat(
                 [{"role": "user", "content": "hello"}],
                 engine=MagicMock(),
@@ -285,7 +285,7 @@ class TestChatStream:
         mock_client.messages.stream = MagicMock(return_value=mock_stream_ctx)
 
         events = []
-        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
+        with patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client):
             async for event_json in chat_stream(
                 [{"role": "user", "content": "hello"}],
                 engine=MagicMock(),
@@ -313,7 +313,7 @@ class TestChatStream:
         mock_client.messages.stream = MagicMock(return_value=mock_stream_ctx)
 
         events = []
-        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
+        with patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client):
             async for event_json in chat_stream(
                 [{"role": "user", "content": "hello"}],
                 engine=MagicMock(),

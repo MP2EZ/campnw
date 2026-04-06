@@ -123,9 +123,14 @@ def build_batch_requests(campgrounds: list[Campground]) -> list[dict]:
 
 def submit_batch(api_key: str, campgrounds: list[Campground]) -> str:
     """Submit a batch of enrichment requests. Returns batch_id."""
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
-    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import Anthropic
+        client = Anthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except ImportError:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
     requests = build_batch_requests(campgrounds)
 
     _logger.info("Submitting batch of %d requests...", len(requests))
@@ -142,9 +147,14 @@ def submit_batch(api_key: str, campgrounds: list[Campground]) -> str:
 
 def poll_batch(api_key: str, batch_id: str, poll_interval: int = 10) -> dict:
     """Poll until batch completes. Returns the batch object as dict."""
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
-    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import Anthropic
+        client = Anthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except ImportError:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
 
     while True:
         batch = client.messages.batches.retrieve(batch_id)
@@ -191,9 +201,14 @@ def process_results(
     dry_run: bool = False,
 ) -> dict:
     """Process batch results and write to registry. Returns stats."""
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
-    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import Anthropic
+        client = Anthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except ImportError:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
 
     stats = {"succeeded": 0, "errored": 0, "skipped": 0}
 

@@ -91,7 +91,7 @@ class TestExtractBookingTips:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             tips = await extract_booking_tips(watch_db, "232465", "Ohanapecosh")
         assert len(tips) == 2
@@ -109,7 +109,7 @@ class TestExtractBookingTips:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             tips = await extract_booking_tips(watch_db, "232465")
         assert len(tips[0]) <= 200

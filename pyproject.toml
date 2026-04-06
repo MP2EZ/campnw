@@ -26,6 +26,7 @@ api = [
     "apscheduler==3.11.2",
     "pywebpush==2.3.0",
     "anthropic==0.86.0",
+    "posthog>=3.0",
 ]
 notify = [
     "ntfy-wrapper>=0.2",

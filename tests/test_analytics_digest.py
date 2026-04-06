@@ -259,7 +259,7 @@ class TestGenerateWeeklyDigest:
         mock_response.content = [MagicMock(text="- Users mostly search WA\n- Consider adding more tags")]
 
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-            with patch("anthropic.AsyncAnthropic") as mock_cls:
+            with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
                 mock_client = AsyncMock()
                 mock_cls.return_value = mock_client
                 mock_client.messages.create.return_value = mock_response
@@ -278,7 +278,7 @@ class TestGenerateWeeklyDigest:
         ]
         db = _create_mock_db(searches)
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.side_effect = Exception("API down")

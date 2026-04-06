@@ -32,7 +32,7 @@ class TestGenerateDescription:
             })
         )]
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -68,7 +68,7 @@ class TestGenerateDescription:
             })
         )]
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -90,7 +90,7 @@ class TestGenerateDescription:
             text='```json\n{"elevator_pitch": "Great camp.", "description_rewrite": "Nice place.", "best_for": "everyone"}\n```'
         )]
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -105,7 +105,7 @@ class TestGenerateDescription:
     @pytest.mark.asyncio
     async def test_returns_empty_on_api_error(self):
         """Should return empty dict on API failure."""
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.side_effect = Exception("API error")
@@ -123,7 +123,7 @@ class TestGenerateDescription:
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Not valid JSON at all")]
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -143,7 +143,7 @@ class TestGenerateDescription:
             text='{"elevator_pitch": "Nice camp."}'
         )]
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -165,7 +165,7 @@ class TestGenerateDescription:
             text='{"elevator_pitch": "x", "description_rewrite": "y", "best_for": "z"}'
         )]
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response

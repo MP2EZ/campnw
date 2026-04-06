@@ -97,12 +97,17 @@ async def extract_tags(
     api_key: str,
 ) -> list[str]:
     """Extract structured tags from a campground description using Claude."""
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
     if not description or len(description.strip()) < 20:
         return []
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except (ImportError, ValueError):
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=api_key)
 
     prompt = f"""Extract campground attribute tags from this description.
 
@@ -136,7 +141,7 @@ Return ONLY the JSON object, nothing else."""
                 result = TagExtractionResult.model_validate_json(json_str.strip())
                 return result.tags
             return []
-    except anthropic.APIError as e:
+    except Exception as e:
         _logger.warning("Anthropic API error for %s: %s", name, e)
         return []
 
@@ -149,9 +154,14 @@ async def generate_vibe(
     api_key: str,
 ) -> str:
     """Generate a one-sentence campground character description."""
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except (ImportError, ValueError):
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=api_key)
 
     size_hint = f" It has {site_count} sites." if site_count else ""
     tag_hint = f" Tags: {', '.join(tags)}." if tags else ""
@@ -194,9 +204,14 @@ async def generate_description(
     Returns dict with keys: elevator_pitch, description_rewrite, best_for.
     Empty dict on failure.
     """
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except (ImportError, ValueError):
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=api_key)
 
     tag_str = ", ".join(tags) if tags else "none"
     size_str = f"{total_sites} sites" if total_sites else "unknown size"

@@ -42,9 +42,14 @@ async def _enhance_rec_reasons(
     if not api_key:
         return None
 
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except (ImportError, ValueError):
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=api_key)
 
     top_tags = sorted(
         affinities["tags"].items(), key=lambda x: -x[1],

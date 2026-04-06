@@ -37,7 +37,8 @@ EXCLUDE_PATTERNS = re.compile(
     lookout(?:\s*tower)?|cabin(?:\s*rental)?|guard\s*station|
     day\s*use|trailhead|boat\s*ramp|parking|dock|marina|
     office|headquarters|warehouse|storage|
-    scenic\s*byway|highway|parkway|greenway|
+    scenic\s*byway|scenic\s*area|corridor|highway|parkway|greenway|
+    interpretive|heritage\s*site|
     ohv\s*area|grassland|
     \bsr\s*\d|\bus\s*highway)\b
     """,

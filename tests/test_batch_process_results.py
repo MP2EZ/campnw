@@ -62,7 +62,7 @@ def _mock_registry(campground=None):
 class TestProcessResultsSuccess:
     """Successful enrichment writes tags + descriptions to registry."""
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_recgov_enrichment(self, mock_anthropic_cls):
         cg = make_campground(id=1, facility_id="232465", booking_system=BookingSystem.RECGOV, tags=["forest"])
         registry = _mock_registry(cg)
@@ -81,7 +81,7 @@ class TestProcessResultsSuccess:
         registry.update_vibe.assert_called_once_with(1, "Quiet lakeside retreat for families.")
         registry.update_description.assert_called_once()
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_tags_merged_with_existing(self, mock_anthropic_cls):
         """New tags are merged with existing, deduped."""
         cg = make_campground(id=1, tags=["forest", "lakeside"])
@@ -103,7 +103,7 @@ class TestProcessResultsSuccess:
         assert "fishing" in merged_tags
         assert len(merged_tags) == len(set(merged_tags))  # no dupes
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_multiple_results(self, mock_anthropic_cls):
         cg = make_campground(id=1)
         registry = _mock_registry(cg)
@@ -127,7 +127,7 @@ class TestProcessResultsSuccess:
 class TestCustomIdParsing:
     """custom_id format: {source}_{facility_id} correctly maps to BookingSystem."""
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_wa_state_source(self, mock_anthropic_cls):
         cg = make_campground(id=2, facility_id="-2147483647", booking_system=BookingSystem.WA_STATE)
         registry = _mock_registry(cg)
@@ -143,7 +143,7 @@ class TestCustomIdParsing:
         assert stats["succeeded"] == 1
         registry.get_by_facility_id.assert_called_once_with("-2147483647", booking_system=BookingSystem.WA_STATE)
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_or_state_source(self, mock_anthropic_cls):
         cg = make_campground(id=3, facility_id="409402", booking_system=BookingSystem.OR_STATE)
         registry = _mock_registry(cg)
@@ -159,7 +159,7 @@ class TestCustomIdParsing:
         assert stats["succeeded"] == 1
         registry.get_by_facility_id.assert_called_once_with("409402", booking_system=BookingSystem.OR_STATE)
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_id_state_source(self, mock_anthropic_cls):
         cg = make_campground(id=4, facility_id="12345", booking_system=BookingSystem.ID_STATE)
         registry = _mock_registry(cg)
@@ -184,7 +184,7 @@ class TestCustomIdParsing:
 class TestProcessResultsErrors:
     """Error and edge cases increment the right counter."""
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_errored_result_type(self, mock_anthropic_cls):
         registry = _mock_registry()
 
@@ -200,7 +200,7 @@ class TestProcessResultsErrors:
         assert stats["succeeded"] == 0
         registry.get_by_facility_id.assert_not_called()
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_invalid_json_response(self, mock_anthropic_cls):
         registry = _mock_registry()
 
@@ -215,7 +215,7 @@ class TestProcessResultsErrors:
         assert stats["errored"] == 1
         assert stats["succeeded"] == 0
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_campground_not_found_skipped(self, mock_anthropic_cls):
         registry = _mock_registry(None)  # returns None for all lookups
 
@@ -230,7 +230,7 @@ class TestProcessResultsErrors:
         assert stats["skipped"] == 1
         assert stats["succeeded"] == 0
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_mixed_results(self, mock_anthropic_cls):
         """One succeeded, one errored, one skipped."""
         cg = make_campground(id=1)
@@ -259,7 +259,7 @@ class TestProcessResultsErrors:
 class TestDryRun:
     """dry_run=True should not call any registry write methods."""
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_dry_run_no_writes(self, mock_anthropic_cls):
         cg = make_campground(id=1)
         registry = _mock_registry(cg)
@@ -286,7 +286,7 @@ class TestDryRun:
 class TestTagValidation:
     """Invalid tags filtered, renamed tags mapped correctly."""
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_invalid_tags_filtered(self, mock_anthropic_cls):
         cg = make_campground(id=1, tags=[])
         registry = _mock_registry(cg)
@@ -305,7 +305,7 @@ class TestTagValidation:
         assert "lakeside" in written_tags
         assert "swimming" in written_tags
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_renamed_tags_mapped(self, mock_anthropic_cls):
         """oceanfront -> beach, horse-camp -> equestrian."""
         cg = make_campground(id=1, tags=[])
@@ -326,7 +326,7 @@ class TestTagValidation:
         assert "oceanfront" not in written_tags
         assert "horse-camp" not in written_tags
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_removed_tags_dropped(self, mock_anthropic_cls):
         """scenic and glacier are dropped entirely."""
         cg = make_campground(id=1, tags=[])
@@ -346,7 +346,7 @@ class TestTagValidation:
         assert "glacier" not in written_tags
         assert "lakeside" in written_tags
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_empty_tags_no_update(self, mock_anthropic_cls):
         """If all tags are invalid, update_tags is not called."""
         cg = make_campground(id=1, tags=[])
@@ -371,7 +371,7 @@ class TestTagValidation:
 class TestDescriptionTruncation:
     """Long descriptions are truncated to their field limits."""
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_long_vibe_truncated(self, mock_anthropic_cls):
         cg = make_campground(id=1)
         registry = _mock_registry(cg)
@@ -389,7 +389,7 @@ class TestDescriptionTruncation:
         vibe_written = registry.update_vibe.call_args[0][1]
         assert len(vibe_written) <= 100
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_long_elevator_pitch_truncated(self, mock_anthropic_cls):
         cg = make_campground(id=1)
         registry = _mock_registry(cg)
@@ -408,7 +408,7 @@ class TestDescriptionTruncation:
         # _truncate may add "..." suffix, so allow small overshoot
         assert len(pitch_written) <= 125
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_long_description_rewrite_truncated(self, mock_anthropic_cls):
         cg = make_campground(id=1)
         registry = _mock_registry(cg)
@@ -426,7 +426,7 @@ class TestDescriptionTruncation:
         desc_written = registry.update_description.call_args[0][2]
         assert len(desc_written) <= 355
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_long_best_for_truncated(self, mock_anthropic_cls):
         cg = make_campground(id=1)
         registry = _mock_registry(cg)
@@ -453,7 +453,7 @@ class TestDescriptionTruncation:
 class TestJsonParsing:
     """Markdown-fenced JSON and edge cases."""
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_markdown_fenced_json(self, mock_anthropic_cls):
         cg = make_campground(id=1)
         registry = _mock_registry(cg)
@@ -469,7 +469,7 @@ class TestJsonParsing:
         stats = process_results("fake-key", "batch_123", registry)
         assert stats["succeeded"] == 1
 
-    @patch("anthropic.Anthropic")
+    @patch("posthog.ai.anthropic.Anthropic")
     def test_empty_batch(self, mock_anthropic_cls):
         registry = _mock_registry()
 

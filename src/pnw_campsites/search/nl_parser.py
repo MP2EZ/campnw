@@ -130,10 +130,15 @@ async def parse_natural_query(
     Returns a dict of parsed params (only keys that were extracted).
     On failure, returns {"name_like": query} as fallback.
     """
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
     today = today or date.today()
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except ImportError:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=api_key)
 
     try:
         response = await client.messages.create(

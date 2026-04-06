@@ -127,7 +127,7 @@ class TestParseNaturalQuery:
             "tags": ["lakeside"],
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -149,7 +149,7 @@ class TestParseNaturalQuery:
             "end_date": "2026-05-11",
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -169,7 +169,7 @@ class TestParseNaturalQuery:
             "end_date": "2026-05-11",
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -189,7 +189,7 @@ class TestParseNaturalQuery:
             "end_date": "2026-06-30",
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -211,7 +211,7 @@ class TestParseNaturalQuery:
             "end_date": "2026-07-06",
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -235,7 +235,7 @@ class TestParseNaturalQuery:
             "end_date": "2026-05-11",
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -257,7 +257,7 @@ class TestParseNaturalQuery:
             "end_date": "2026-06-30",
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -278,7 +278,7 @@ class TestParseNaturalQuery:
             "end_date": "2026-05-11",
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -301,7 +301,7 @@ class TestParseNaturalQuery:
             "from_location": "",
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -318,7 +318,7 @@ class TestParseNaturalQuery:
     @pytest.mark.asyncio
     async def test_fallback_on_api_error(self):
         """API failure should fall back to name_like."""
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.side_effect = Exception("API down")
@@ -339,7 +339,7 @@ class TestParseNaturalQuery:
         response = MagicMock()
         response.content = [text_block]
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = response
@@ -355,7 +355,7 @@ class TestParseNaturalQuery:
         """Should use Haiku, not Sonnet."""
         mock_response = _mock_tool_response({"start_date": "2026-06-01", "end_date": "2026-06-30"})
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -370,7 +370,7 @@ class TestParseNaturalQuery:
         """Should use tool_choice to force set_search_params."""
         mock_response = _mock_tool_response({"start_date": "2026-06-01", "end_date": "2026-06-30"})
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -386,7 +386,7 @@ class TestParseNaturalQuery:
         """System prompt should include today's date."""
         mock_response = _mock_tool_response({"start_date": "2026-06-01", "end_date": "2026-06-30"})
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -407,7 +407,7 @@ class TestParseNaturalQuery:
             "end_date": "2026-07-14",
         })
 
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
+        with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
             mock_client = AsyncMock()
             mock_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response

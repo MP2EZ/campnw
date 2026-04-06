@@ -38,6 +38,14 @@ RESPONSE STYLE:
 - Keep it tight — 1-2 lines per campground.
 - Bullet lists: max 4 items. Combine related things. Avoid long enumerated lists.
 - For trip plans: use short paragraphs, not a bullet per activity.
+- When recommending campgrounds, ALSO include a JSON block at the END of your response
+  wrapped in ```itinerary fences. This is used to render visual cards. Format:
+  ```itinerary
+  [{{"name": "Campground Name", "facility_id": "232465", "booking_system": "recgov",
+    "dates": "Jun 15-17", "nights": 2, "drive_minutes": 57,
+    "sites_available": 4, "booking_url": "https://...", "tags": ["lakeside"]}}]
+  ```
+  Only include this for campgrounds from tool results. Never fabricate IDs.
 
 TOOLS:
 - search_campgrounds: main search. Always set from_location (default: seattle).
@@ -68,7 +76,7 @@ async def chat(
     """
     from datetime import date as _date
 
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
     today = _date.today()
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
@@ -76,7 +84,12 @@ async def chat(
         weekday=today.strftime("%A"),
     )
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except ImportError:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=api_key)
     tool_call_log: list[dict] = []
     current_messages = list(messages)
 
@@ -164,7 +177,7 @@ async def chat_stream(
     """
     from datetime import date as _date
 
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
     today = _date.today()
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
@@ -172,7 +185,12 @@ async def chat_stream(
         weekday=today.strftime("%A"),
     )
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except ImportError:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=api_key)
     tool_call_log: list[dict] = []
     current_messages = list(messages)
     final_text = ""

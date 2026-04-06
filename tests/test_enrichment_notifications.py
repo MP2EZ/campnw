@@ -274,7 +274,7 @@ class TestEnrichNotification:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)
 
-        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
+        with patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client):
             await enrich_notification(
                 campground_name="Test",
                 site_count=1,

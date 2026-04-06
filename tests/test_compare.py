@@ -79,7 +79,7 @@ class TestCompare:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             result = await _generate_narrative(
                 [{"name": "A", "state": "WA", "tags": [], "vibe": "", "drive_minutes": 60, "total_sites": 20}],

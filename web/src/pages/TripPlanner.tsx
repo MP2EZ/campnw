@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { planChatStream, track } from "../api";
 import type { ChatMessage, ToolCall } from "../api";
+import { ItineraryCard, parseItinerary } from "../components/ItineraryCard";
 
 interface DisplayMessage {
   role: "user" | "assistant";
@@ -43,17 +44,28 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
         {isUser ? (
           message.content
         ) : (
-          <Markdown
-            components={{
-              a: ({ href, children }) => (
-                <a href={href} target="_blank" rel="noopener">
-                  {children}
-                </a>
-              ),
-            }}
-          >
-            {message.content}
-          </Markdown>
+          <>
+            <Markdown
+              components={{
+                a: ({ href, children }) => (
+                  <a href={href} target="_blank" rel="noopener">
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {message.content.replace(/```itinerary\s*\n[\s\S]*?```/g, "").trim()}
+            </Markdown>
+            {(() => {
+              const legs = parseItinerary(message.content);
+              if (!legs) return null;
+              return (
+                <div className="itinerary-cards">
+                  {legs.map((leg, i) => <ItineraryCard key={leg.facility_id} leg={leg} index={i} />)}
+                </div>
+              );
+            })()}
+          </>
         )}
       </div>
     </div>

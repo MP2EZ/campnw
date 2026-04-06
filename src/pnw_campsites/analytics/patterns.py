@@ -93,9 +93,14 @@ async def extract_booking_tips(
             return [f"Weekday availability is higher — {best_day[0]}s have the most openings."]
         return []
 
-    import anthropic
+    from pnw_campsites.posthog_client import get_posthog_client
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    try:
+        from posthog.ai.anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
+    except ImportError:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=api_key)
 
     prompt = (
         f"Generate 2-4 concise booking tips for {campground_name or campground_id} "

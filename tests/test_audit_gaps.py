@@ -614,7 +614,7 @@ class TestGenerateSearchSummary:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             result = await _generate_search_summary(
                 [{"name": "Lake Easton", "windows": 5}], query,
@@ -639,7 +639,7 @@ class TestGenerateSearchSummary:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             result = await _generate_search_summary(
                 [{"name": "Test"}], query,
@@ -666,7 +666,7 @@ class TestGenerateSearchSummary:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             await _generate_search_summary(results, query)
 
@@ -871,7 +871,7 @@ class TestEnhanceRecReasons:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             reasons = await _enhance_rec_reasons(results, affinities)
 
@@ -894,7 +894,7 @@ class TestEnhanceRecReasons:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             result = await _enhance_rec_reasons(results, affinities)
 
@@ -921,7 +921,7 @@ class TestEnhanceRecReasons:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             result = await _enhance_rec_reasons(results, affinities)
 
@@ -945,7 +945,7 @@ class TestEnhanceRecReasons:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             reasons = await _enhance_rec_reasons(results, affinities)
 
@@ -970,7 +970,7 @@ class TestEnhanceRecReasons:
 
         with (
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             reasons = await _enhance_rec_reasons(results, affinities)
 
