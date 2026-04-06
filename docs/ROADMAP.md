@@ -31,7 +31,7 @@ v1.2    [SHIPPED]  Trips + Watches     — Trip object, template watches, sharin
 v1.26   [SHIPPED]  Hardening           — History compaction, DB backup, SEC-10, re-enrichment
 v1.27   [SHIPPED]  UX Polish           — Blue heatmap, teal WA, date picker, NL search, icons, filters
 v1.28   [SHIPPED]  Watch Reliability   — Watch source persistence, N+1 fix, SSE batching, perf
-v1.29   ------->   Value Review        — Brand identity, registry refresh, booking validation, LLM analytics
+v1.29   ------->   Brand + Polish       — Brand identity, registry cleanup, itinerary cards, LLM analytics
 v1.3    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -997,26 +997,28 @@ Operational stability. The availability_history table hit 9.37M rows in 2.5 days
 
 ---
 
-## v1.29 "Value Review"
+## v1.29 "Brand + Polish"
 
 ### Theme
-Review deferred items for value/effort before the v1.3 data collection runway. Also instrument LLM analytics via PostHog for the AI summary and trip planner features.
+Prepare campable for broader marketing. Establish visual brand identity, clean up the registry to remove non-campground facilities, add LLM analytics for cost/performance visibility, and build itinerary cards for the trip planner.
 
-### Items to Evaluate
+### Features
 
-| Item | Size | Description | Value | Effort |
-|------|------|-------------|-------|--------|
-| PostHog LLM analytics | S | Instrument Anthropic calls (AI summaries, trip planner) with PostHog's `posthog.ai.anthropic` wrapper. Track token usage, latency, costs per generation. | HIGH — visibility into LLM spend and performance | LOW — wrap existing `anthropic.AsyncAnthropic` with PostHog wrapper |
-| Brand + Identity (v1.15) | L | Logo, palette refinement, voice guidelines, og:image, notification copy. Currently using text wordmark and functional design. | MEDIUM — polish for sharing/social, but tool works fine without it | HIGH — design work, asset creation, cross-cutting CSS |
-| Automated registry refresh | M | Monthly RIDB re-seed, quarterly GoingToCamp re-seed. Currently manual scripts. | MEDIUM — prevents stale campground data | MEDIUM — cron job + diff logic to avoid overwriting enrichment |
-| Booking link validation | S | Verify that generated booking URLs actually resolve. Some RIDB facilities return 404. | LOW — edge case, users can navigate manually | LOW — batch URL check script |
-| Itinerary card view | L | Visual itinerary cards for trips, shareable as image/link. | LOW — nice-to-have for sharing, not core discovery | HIGH — new component, image generation, sharing infra |
-
-### Recommendation
-Ship PostHog LLM analytics (clear value, low effort). Defer the rest until after v1.3 unless there's a specific need.
+| Feature | Size | Description |
+|---------|------|-------------|
+| PostHog LLM analytics | S | Wrap existing `anthropic.AsyncAnthropic` calls (AI summaries, trip planner) with PostHog's `posthog.ai.anthropic` wrapper. Tracks token usage, latency, cost per generation. Captures `$ai_generation` events automatically. |
+| Registry cleanup | S | Remove non-campground RIDB facilities from registry (scenic corridors, byways, day-use-only areas, visitor centers). Currently ~5-10 bad entries showing as broken results. One-off script + ongoing seed filter. |
+| Brand + Identity | L | Logo design, og:image for social sharing, notification copy polish. Build on the existing green/cream palette. The text wordmark stays — focus on a logomark/icon that works as favicon, og:image, and app icon. |
+| Itinerary card view | L | Day-by-day visual cards for trip planner output. Each card shows campground name, drive time from previous stop, availability status, booking link. Replaces plain-text trip planner responses with a visual timeline. Shareable via existing shared links infrastructure. |
 
 ### Dependencies
 - v1.28 shipped
+
+### Quality Bar
+- LLM analytics: `$ai_generation` events visible in PostHog LLM Analytics dashboard
+- Registry: zero non-campground facilities returned in search results
+- Brand: og:image renders correctly on Twitter/iMessage/Slack link previews
+- Itinerary: trip planner output renders as visual cards with booking links
 
 ---
 
