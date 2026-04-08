@@ -1,7 +1,7 @@
-# Campable Roadmap: v0.2.1 to v1.2
+# Campable Roadmap: v0.2.1 to v2.0
 
-**Last updated:** March 2026
-**Current version:** v1.0 (deployed at campable.co)
+**Last updated:** April 2026
+**Current version:** v1.29 in progress (deployed at campable.co)
 
 ---
 
@@ -31,11 +31,13 @@ v1.2    [SHIPPED]  Trips + Watches     — Trip object, template watches, sharin
 v1.26   [SHIPPED]  Hardening           — History compaction, DB backup, SEC-10, re-enrichment
 v1.27   [SHIPPED]  UX Polish           — Blue heatmap, teal WA, date picker, NL search, icons, filters
 v1.28   [SHIPPED]  Watch Reliability   — Watch source persistence, N+1 fix, SSE batching, perf
-v1.29   ------->   Brand + Polish       — Brand identity, registry cleanup, itinerary cards, LLM analytics
-v1.3    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
+v1.29   [SHIPPED]  Brand + Polish       — Madrona logo, og:image, LLM analytics, registry cleanup, itinerary cards
+v1.3    ------->   SEO + Discoverability — Campground profile pages, sitemap, structured data, Cloudflare
+v1.4    ------->   Monetization Launch  — Pro tier gate, payment, freemium conversion flows
+v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
-Each milestone is a shippable increment with clear user value. Predictions+ deferred to v1.1 — data collection running since v0.5, quality improves with time.
+Each milestone is a shippable increment with clear user value. v1.3–v1.4 transition campable from personal tool to public product. v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -687,7 +689,7 @@ The capstone. Oregon State Parks via ReserveAmerica completes tri-state coverage
 ## v1.1 "Better Search + Coverage" — DONE
 
 ### Theme
-Find campsites faster, across more of the northwest, with better data. Natural language search is the headline feature. Registry expansion and quality improvements make every search better. AI summarization and recommendation reasons add intelligence to results. Polling data continues accumulating toward v1.3 predictions.
+Find campsites faster, across more of the northwest, with better data. Natural language search is the headline feature. Registry expansion and quality improvements make every search better. AI summarization and recommendation reasons add intelligence to results. Polling data continues accumulating toward v2.0 predictions.
 
 ### Features
 
@@ -870,7 +872,7 @@ Frontend for v1.2 backend features + brand polish.
 | Share buttons (WatchPanel + TripDetail) | DONE |
 | Template watch UI ("Watch this search" + badge) | DONE |
 | Batch --force/--truncated flags, sync-registry.sh | DONE |
-| Dashboard hub for returning users | Deferred to v1.3 |
+| Dashboard hub for returning users | Deferred |
 
 ---
 
@@ -930,7 +932,7 @@ Close major test coverage gaps identified by audit.
 ## v1.26 "Hardening" [SHIPPED 2026-03-31]
 
 ### Theme
-Operational stability. The availability_history table hit 9.37M rows in 2.5 days (377 MB/day), filling the 1GB Fly volume to 100%. Fixed the storage model, added backups, closed deferred security and enrichment gaps before the long data-collection runway to v1.3.
+Operational stability. The availability_history table hit 9.37M rows in 2.5 days (377 MB/day), filling the 1GB Fly volume to 100%. Fixed the storage model, added backups, closed deferred security and enrichment gaps before the long data-collection runway to v2.0.
 
 ### What Shipped
 
@@ -1022,10 +1024,79 @@ Prepare campable for broader marketing. Establish visual brand identity, clean u
 
 ---
 
-## v1.3 "Predictions+" (~Q1 2027, needs 9-12 months of polling data)
+## v1.3 "SEO & Discoverability"
 
 ### Theme
-The intelligence layer. By Q1 2027, there will be 9-12 months of polling data. v1.2's historical pattern extraction has validated data quality. The statistical model, anomaly detection, and post-mortems all ship together because they share the same data pipeline.
+Make campable findable. Server-rendered campground profile pages turn the 1,370-entry registry into 1,370+ indexable pages targeting long-tail search queries. Jinja2 templates served directly from FastAPI — no framework migration, no second runtime. This is the top-of-funnel for the freemium model: organic search → free search/discovery → pro conversion.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Campground profile pages | L | `/campgrounds/{state}/{slug}` — Jinja2 SSR with registry data: name, tags, drive time, source, booking link, nearby campgrounds. JSON-LD structured data (`schema.org/Campground`). |
+| State index pages | M | `/campgrounds/{state}` — all campgrounds in a state, grouped/filterable. |
+| Tag landing pages | M | `/tags/{tag}` — campgrounds filtered by enriched tags (lakeside, river, old-growth, kid-friendly). |
+| "This weekend" page | M | `/this-weekend` — auto-updated availability landing page. Highest-intent search query. Cached availability, refreshed every 30 min. |
+| Sitemap + robots.txt | S | Auto-generated `sitemap.xml` from registry. Submit to Google Search Console. |
+| Per-route meta tags | S | Unique `<title>`, `<meta description>`, og tags per SPA route via react-helmet-async. |
+| og:image fix | XS | Fix SVG→PNG mismatch. Generate a real PNG for social previews. |
+| Cloudflare CDN | S | Free tier in front of Fly.io. Cache SEO pages, serve static assets from edge. |
+| Registry slug column | S | URL-safe slug generated from campground name. Migration + seed script update. |
+
+### Architecture Decision
+Jinja2 templates in FastAPI, not a Next.js migration. The Python backend already has direct SQLite access to all registry data. Adding a second runtime (Node.js) for SSR introduces deployment complexity, proxy layers, and memory pressure on a single Fly machine — all to render HTML from data that's already in the Python process. SEO pages are database queries rendered as semantic HTML with proper meta tags. FastAPI + Jinja2 does this natively.
+
+The React SPA continues to handle all interactive features (search, map, watch, trips, planner) unchanged.
+
+### Dependencies
+- v1.29 shipped
+
+### Quality Bar
+- All SEO pages pass Lighthouse SEO audit (green)
+- Structured data validates in Google Rich Results Test
+- Profile pages load under 500ms (server render + Cloudflare cache)
+- Visual consistency with SPA (shared CSS tokens)
+- All templates meet WCAG 2.1 AA
+
+### Key Risk
+Thin content — campground profiles with just registry metadata may not rank. Enriched descriptions, tags, and drive times help, but richer content (availability snippets, seasonal tips) may be needed based on Search Console data.
+
+---
+
+## v1.4 "Monetization Launch"
+
+### Theme
+Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates the pro features (watches, alerts, trips) behind a subscription and builds the conversion flows that move free users to paid. The billing infrastructure from v0.95 is already built — this is about activating it for real.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Freemium gate activation | M | Enable the free/pro tier split. Free: search, discovery, campground profiles. Pro: watches (>3), alerts, trip planner, sharing. |
+| Landing page | M | SEO-optimized homepage explaining what campable does, why it's different (multi-source aggregation), and the free → pro value ladder. |
+| Upgrade flows from SEO pages | S | "Check Live Availability" and "Set up Alerts" CTAs on campground profiles that lead into the app (and prompt upgrade if needed). |
+| Conversion analytics | S | PostHog funnel: SEO page → search → watch creation → upgrade. Measure what's working. |
+| Pricing page | S | Clear free vs. pro comparison. Accessible, both themes. |
+
+### Dependencies
+- v1.3 shipped (organic traffic flowing)
+- v0.95 billing infrastructure (already built)
+
+### Quality Bar
+- Upgrade flows never block free tier functionality
+- Payment flow works on mobile
+- Pricing page passes WCAG 2.1 AA
+- Conversion funnel instrumented in PostHog
+
+### Key Risk
+Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates.
+
+---
+
+## v2.0 "Predictions+" (~Q1 2027, needs 9-12 months of polling data)
+
+### Theme
+The intelligence layer. By Q1 2027, there will be 9-12 months of polling data. v1.2's historical pattern extraction has validated data quality. The statistical model, anomaly detection, and post-mortems all ship together because they share the same data pipeline. This is the premium differentiator that justifies ongoing Pro subscriptions.
 
 ### Features
 
@@ -1070,7 +1141,9 @@ Data quality and sample size for less-popular campgrounds. v1.2's pattern extrac
 | v1.0 | Full WCAG 2.1 AA audit. CI expanded to block Level AA failures. |
 | v1.1 | NL search input accessible (label, aria-live for parsed interpretation). Summarizer card keyboard-dismissible. |
 | v1.2 | Trip views meet Level AA. Shared link views accessible without auth. Comparison panel keyboard-navigable. |
-| v1.3 | Prediction displays pass contrast on both themes. Confidence indicators accessible. |
+| v1.3 | SEO templates meet Level AA. Campground profiles have proper heading hierarchy and landmarks. |
+| v1.4 | Pricing page and upgrade flows pass Level AA. Payment flow accessible on mobile. |
+| v2.0 | Prediction displays pass contrast on both themes. Confidence indicators accessible. |
 
 The principle: fix accessibility at build time, not in a batch audit. Color contrast and semantic HTML are cheapest when designed from the start.
 
@@ -1096,10 +1169,12 @@ The principle: fix accessibility at build time, not in a batch audit. Color cont
 | v1.0 | P95 search under 4 seconds. Lighthouse performance, accessibility, best practices all green. |
 | v1.1 | NL search parsing under 1.5s P95. Summarizer under 2s P95. No regression on main bundle size. |
 | v1.2 | Trip views load under 1s. Template watch polling stays within API rate budgets. |
-| v1.3 | Prediction queries add <200ms to page load. |
+| v1.3 | SEO pages load under 500ms. Cloudflare cache hit ratio >80% for profile pages. |
+| v1.4 | Upgrade flows add no latency to free tier. Landing page Lighthouse performance green. |
+| v2.0 | Prediction queries add <200ms to page load. |
 
-### Data Collection (start at v0.5, use at v1.3)
-The `availability_history` table ships silently in v0.5 alongside background polling. Every poll cycle writes a row. v1.2's Historical Pattern Extraction (C2) validates data quality at ~6 months. By v1.3 (~Q1 2027), there should be 9–12 months of data — strictly better for prediction quality than the original v0.9 target.
+### Data Collection (start at v0.5, use at v2.0)
+The `availability_history` table ships silently in v0.5 alongside background polling. Every poll cycle writes a row. v1.2's Historical Pattern Extraction (C2) validates data quality at ~6 months. By v2.0 (~Q1 2027), there should be 9–12 months of data — strictly better for prediction quality than the original v0.9 target.
 
 ### Registry Maintenance
 The campground registry is a living dataset. Automated monthly re-seeding from RIDB and quarterly refresh from GoingToCamp should be set up in v0.5. Drift detection (campgrounds that consistently 404) should flag entries for manual review.
@@ -1135,7 +1210,7 @@ Current GitHub Actions CI/CD deploys to Fly.io on push to main. Key additions:
 
 ---
 
-## What's Explicitly Post-v1.3
+## What's Explicitly Post-v2.0
 
 - **Idaho State Parks** (Brandt/Idaho Time at getoutside.idaho.gov — behind AWS WAF with mandatory visual CAPTCHA, would need paid CAPTCHA-solving service; ~20 state parks, low demand. Probed March 2026.)
 - **BC Parks (Canada)** (revisit based on demand signals from B1 analytics digest)
@@ -1148,7 +1223,7 @@ Current GitHub Actions CI/CD deploys to Fly.io on push to main. Key additions:
 
 ## AI Feature Backlog (Evaluated)
 
-Features brainstormed and scored during the March 2026 AI feature review. Re-evaluated post-v1.0 and slotted into v1.1-v1.3 where appropriate. See also: `docs/AI-OPPORTUNITIES-2026-03-28.md` for the full analysis and `docs/REQUIREMENTS-v1.1-v1.2.md` for detailed acceptance criteria.
+Features brainstormed and scored during the March 2026 AI feature review. Re-evaluated post-v1.0 and slotted into v1.1-v2.0 where appropriate. See also: `docs/AI-OPPORTUNITIES-2026-03-28.md` for the full analysis and `docs/REQUIREMENTS-v1.1-v1.2.md` for detailed acceptance criteria.
 
 ### Scheduled
 
@@ -1163,16 +1238,16 @@ Features brainstormed and scored during the March 2026 AI feature review. Re-eva
 | Campground Comparison | v1.2 | A3 |
 | Historical Pattern Extraction | v1.2 | C2 |
 | Notification Quality Feedback Loop | v1.2 | B2 |
-| Anomaly Narrator | v1.3 | B3 |
-| "Why Did I Miss It?" Post-Mortem | v1.3 | A4 |
+| Anomaly Narrator | v2.0 | B3 |
+| "Why Did I Miss It?" Post-Mortem | v2.0 | A4 |
 
 ### Deferred (revisit when conditions change)
 
 | Feature | Description | Why Not Now |
 |---------|-------------|-------------|
-| **Shoulder season finder** | Identify "best value" booking windows per campground from multi-season availability data. | Needs 12+ months of polling data. Revisit after v1.3 prediction model ships. |
+| **Shoulder season finder** | Identify "best value" booking windows per campground from multi-season availability data. | Needs 12+ months of polling data. Revisit after v2.0 prediction model ships. |
 | **Trip compatibility scorer** | Score campgrounds on fit for a specific trip. | Largely redundant with trip planner conversational reasoning. |
-| **Availability narrative digest** | Weekly "campsite weather report" email. | Engagement pattern doesn't match episodic tool usage. Anomaly alerts (v1.3) fire at the right moment instead. |
+| **Availability narrative digest** | Weekly "campsite weather report" email. | Engagement pattern doesn't match episodic tool usage. Anomaly alerts (v2.0) fire at the right moment instead. |
 | **Watch drift detection** | Detect when search behavior has drifted from watch parameters. | Needs meaningful search volume. Revisit if user base grows. |
 
 ### Skipped (not worth building)
@@ -1213,7 +1288,7 @@ Features brainstormed and scored during the March 2026 AI feature review. Re-eva
 | Split v1.0 into v0.96/v0.97/v1.0 | Three focused releases of 2-4 weeks each beat one 10-week monolith. Each is independently shippable. Single developer context means serial focus is faster than context-switching. Registry first (map needs lat/lng), map+shortcuts together (shared keyboard model), recommendations last (capstone on top of both). | Ship as one v1.0 — rejected because 10+ weeks of mixed work with no intermediate ship points. |
 | Defer Predictions+ to v1.1 | Data collection running since v0.5. Every month of deferral improves prediction quality. No v1.0 feature depends on predictions. Avoids interleaving statistical modeling with geographic visualization. | Ship v0.9 before v1.0 — rejected because it delays v1.0 by 4-6 weeks and predictions improve with more data. Interleave between v0.96/v0.97 — rejected because it splits focus across unrelated domains. |
 | Personalized recommendations in v1.0, not deferred | Recommendations make v1.0 feel like a product milestone rather than "map + shortcuts." Without it, v1.0 is indistinguishable from v0.97. Scope must be tight: query over search history with tag/region affinity, not a recommendation engine. | Defer to v1.1 — considered but v1.0 needs a capstone beyond polish. |
-| Restructure post-v1.0 into v1.1/v1.2/v1.3 | Predictions+ needs 9-12 months of polling data (collection started March 2026). Jumping straight to predictions leaves a ~9-month gap. v1.1 (AI search + registry quality) and v1.2 (trips + watches) fill the gap with user value while data matures. | Ship nothing, wait for data — rejected because momentum matters for personal projects and registry quality improvements have immediate payoff. |
+| Restructure post-v1.0 into v1.1/v1.2/v2.0 | Predictions+ needs 9-12 months of polling data (collection started March 2026). Jumping straight to predictions leaves a ~9-month gap. v1.1 (AI search + registry quality) and v1.2 (trips + watches) fill the gap with user value while data matures. v1.3/v1.4 added April 2026 to transition from personal tool to public product (SEO + monetization). | Ship nothing, wait for data — rejected because momentum matters for personal projects and registry quality improvements have immediate payoff. |
 | NL search in v1.1, reversing v0.6 deferral | Originally scored "low innovation/low impact" in March 2026 AI review. Re-evaluated: trip planner proves the Haiku tool_use pattern works, structured form has grown to 8+ fields, and NL input is the highest-impact single UX feature. Product review confirmed: if you only ship one thing post-v1.0, it should be this. | Keep deferred — rejected because the pattern is proven and the form complexity has increased. |
 | Registry expansion to MT/WY/NorCal | All use existing RIDB provider — it's a seed script update, not new infrastructure. Broadens discovery for road trips beyond the PNW triangle. Low effort, high coverage payoff. | BC Parks — considered but different country, different booking system, lower demand. Idaho state parks — CAPTCHA-blocked. |
-| Trip Object as v1.2 headline | Trips are the connective tissue between search, watches, and the planner. Without them, these features are independent tools. With them, there's a workflow: search → save to trip → watch → get alerted → book. Template watches and watch sharing both build on the trip concept. | Trips in v1.1 — rejected because NL search + registry quality is the right first move. Trips in v1.3 — rejected because watches are the Pro feature and need strengthening before predictions. |
+| Trip Object as v1.2 headline | Trips are the connective tissue between search, watches, and the planner. Without them, these features are independent tools. With them, there's a workflow: search → save to trip → watch → get alerted → book. Template watches and watch sharing both build on the trip concept. | Trips in v1.1 — rejected because NL search + registry quality is the right first move. Trips in v2.0 — rejected because watches are the Pro feature and need strengthening before predictions. |
