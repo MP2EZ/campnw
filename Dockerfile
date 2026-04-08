@@ -13,9 +13,6 @@ COPY data/ data-seed/
 # Frontend pre-built by GitHub Actions
 COPY web/dist/ static/
 
-# Copy design tokens into SEO static dir for server-rendered pages
-COPY web/src/tokens.css src/pnw_campsites/seo-static/tokens.css
-
 # Operations scripts (compaction, etc.)
 COPY scripts/ scripts/
 
