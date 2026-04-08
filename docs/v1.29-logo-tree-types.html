@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logo — Tree Type Exploration</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #333; padding: 2rem; max-width: 960px; margin: 0 auto; }
+  h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; color: #555; }
+  .section-divider { border: none; border-top: 1px solid #ddd; margin: 2.5rem 0; }
+
+  .logo-row { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+  .logo-card { background: #fff; border: 2px solid #ddd; border-radius: 12px; padding: 1.25rem; text-align: center; flex: 1; min-width: 140px; }
+  .logo-card h3 { font-size: 0.75rem; color: #888; margin-bottom: 0.75rem; }
+  .logo-card svg { width: 90px; height: 90px; margin-bottom: 0.75rem; display: block; margin-left: auto; margin-right: auto; }
+  .logo-card p { font-size: 0.65rem; color: #aaa; line-height: 1.4; }
+
+  .sizes-row { display: flex; gap: 1.5rem; align-items: flex-end; flex-wrap: wrap; margin: 1rem 0; }
+  .size-item { text-align: center; }
+  .size-item span { display: block; font-size: 0.6rem; color: #aaa; margin-top: 0.25rem; }
+
+  .header-sim { display: flex; align-items: center; gap: 0.5rem; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 0.75rem 1rem; margin: 0.5rem 0; }
+  .header-sim svg { width: 28px; height: 28px; flex-shrink: 0; }
+  .header-sim .wm { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.2rem; font-weight: 700; color: #2d5016; }
+</style>
+</head>
+<body>
+
+<h1>Tree Type Exploration</h1>
+<p class="subtitle">Beyond the classic layered evergreen — what PNW tree silhouettes work inside a pin?</p>
+
+<div class="logo-row">
+  <div class="logo-card">
+    <h3>Layered Fir (C6)</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <polygon fill="#f5f5f0" points="256,90 284,148 228,148"/>
+      <polygon fill="#f5f5f0" points="256,128 306,210 206,210"/>
+      <polygon fill="#f5f5f0" points="256,185 326,275 186,275"/>
+      <rect fill="#f5f5f0" x="244" y="268" width="24" height="26" rx="3"/>
+    </svg>
+    <p>Classic PNW evergreen. Safe, recognizable.</p>
+  </div>
+
+  <div class="logo-card">
+    <h3>Sitka Spruce</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <!-- Narrow pointed spruce with stepped branches -->
+      <polygon fill="#f5f5f0" points="256,80 270,130 245,130"/>
+      <polygon fill="#f5f5f0" points="256,115 278,165 234,165"/>
+      <polygon fill="#f5f5f0" points="256,150 288,205 224,205"/>
+      <polygon fill="#f5f5f0" points="256,190 298,245 214,245"/>
+      <polygon fill="#f5f5f0" points="256,230 305,278 207,278"/>
+      <rect fill="#f5f5f0" x="246" y="272" width="20" height="24" rx="2"/>
+    </svg>
+    <p>Taller, more tiers. Coastal PNW feel. Detailed.</p>
+  </div>
+
+  <div class="logo-card">
+    <h3>Western Red Cedar</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <!-- Wide base, drooping branch tips (angles down at edges) -->
+      <polygon fill="#f5f5f0" points="256,85 272,130 240,130"/>
+      <polygon fill="#f5f5f0" points="256,115 290,175 222,175 210,185 302,185"/>
+      <polygon fill="#f5f5f0" points="256,165 310,235 202,235 186,250 326,250"/>
+      <rect fill="#f5f5f0" x="244" y="244" width="24" height="30" rx="3"/>
+    </svg>
+    <p>Drooping tips suggest cedar. Distinctive but complex.</p>
+  </div>
+
+  <div class="logo-card">
+    <h3>Lodgepole Pine</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <!-- Tall bare trunk with small canopy cluster at top -->
+      <circle fill="#f5f5f0" cx="256" cy="130" r="45"/>
+      <rect fill="#f5f5f0" x="248" y="170" width="16" height="110" rx="3"/>
+    </svg>
+    <p>Tall trunk, compact canopy. Very different silhouette.</p>
+  </div>
+</div>
+
+<div class="logo-row" style="margin-top:1.25rem">
+  <div class="logo-card">
+    <h3>Campsite Fir</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <!-- Tall tree with visible trunk and canopy in upper portion -->
+      <polygon fill="#f5f5f0" points="256,80 290,150 222,150"/>
+      <polygon fill="#f5f5f0" points="256,130 300,205 212,205"/>
+      <rect fill="#f5f5f0" x="248" y="198" width="16" height="80" rx="3"/>
+    </svg>
+    <p>Canopy up top, exposed trunk. What you see at camp.</p>
+  </div>
+
+  <div class="logo-card">
+    <h3>Madrona (attempt)</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <!-- Curved trunk with rounded organic canopy -->
+      <path fill="#f5f5f0" d="M240,280 Q230,220 220,180 Q210,140 240,120 Q260,108 280,130 Q310,160 290,200 Q280,230 290,250 Q295,270 280,280 Z"/>
+      <ellipse fill="#f5f5f0" cx="255" cy="115" rx="45" ry="35"/>
+    </svg>
+    <p>Organic curve + round canopy. Beautiful tree, tricky as an icon.</p>
+  </div>
+
+  <div class="logo-card">
+    <h3>Two Pines</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <!-- Two trees of different heights — suggests a forest -->
+      <polygon fill="#f5f5f0" points="230,100 260,180 200,180"/>
+      <polygon fill="#f5f5f0" points="230,160 268,225 192,225"/>
+      <rect fill="#f5f5f0" x="222" y="218" width="16" height="24" rx="2"/>
+      <polygon fill="#f5f5f0" points="285,130 310,200 260,200"/>
+      <polygon fill="#f5f5f0" points="285,180 318,250 252,250"/>
+      <rect fill="#f5f5f0" x="278" y="244" width="14" height="22" rx="2"/>
+    </svg>
+    <p>Forest scene — two different-height trees. More depth.</p>
+  </div>
+
+  <div class="logo-card">
+    <h3>Tent + Tree</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <!-- Small tree + tent together -->
+      <polygon fill="#f5f5f0" points="210,100 240,170 180,170"/>
+      <polygon fill="#f5f5f0" points="210,150 248,210 172,210"/>
+      <rect fill="#f5f5f0" x="202" y="205" width="16" height="20" rx="2"/>
+      <!-- Simple tent shape -->
+      <polygon fill="#f5f5f0" points="290,230 330,270 250,270"/>
+      <line stroke="#2d5016" stroke-width="4" x1="290" y1="230" x2="290" y2="270"/>
+    </svg>
+    <p>Campsite scene — tree + tent. Tells the whole story.</p>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Favicon test — 32px</h2>
+<div class="sizes-row">
+  <div class="size-item"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><polygon fill="#f5f5f0" points="256,90 284,148 228,148"/><polygon fill="#f5f5f0" points="256,128 306,210 206,210"/><polygon fill="#f5f5f0" points="256,185 326,275 186,275"/><rect fill="#f5f5f0" x="244" y="268" width="24" height="26" rx="3"/></svg><span>Fir</span></div>
+  <div class="size-item"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><polygon fill="#f5f5f0" points="256,80 270,130 245,130"/><polygon fill="#f5f5f0" points="256,115 278,165 234,165"/><polygon fill="#f5f5f0" points="256,150 288,205 224,205"/><polygon fill="#f5f5f0" points="256,190 298,245 214,245"/><polygon fill="#f5f5f0" points="256,230 305,278 207,278"/><rect fill="#f5f5f0" x="246" y="272" width="20" height="24" rx="2"/></svg><span>Spruce</span></div>
+  <div class="size-item"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><circle fill="#f5f5f0" cx="256" cy="130" r="45"/><rect fill="#f5f5f0" x="248" y="170" width="16" height="110" rx="3"/></svg><span>Lodgepole</span></div>
+  <div class="size-item"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><polygon fill="#f5f5f0" points="256,80 290,150 222,150"/><polygon fill="#f5f5f0" points="256,130 300,205 212,205"/><rect fill="#f5f5f0" x="248" y="198" width="16" height="80" rx="3"/></svg><span>Campsite</span></div>
+  <div class="size-item"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><polygon fill="#f5f5f0" points="230,100 260,180 200,180"/><polygon fill="#f5f5f0" points="230,160 268,225 192,225"/><rect fill="#f5f5f0" x="222" y="218" width="16" height="24" rx="2"/><polygon fill="#f5f5f0" points="285,130 310,200 260,200"/><polygon fill="#f5f5f0" points="285,180 318,250 252,250"/><rect fill="#f5f5f0" x="278" y="244" width="14" height="22" rx="2"/></svg><span>Two Pines</span></div>
+  <div class="size-item"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><polygon fill="#f5f5f0" points="210,100 240,170 180,170"/><polygon fill="#f5f5f0" points="210,150 248,210 172,210"/><rect fill="#f5f5f0" x="202" y="205" width="16" height="20" rx="2"/><polygon fill="#f5f5f0" points="290,230 330,270 250,270"/><line stroke="#2d5016" stroke-width="4" x1="290" y1="230" x2="290" y2="270"/></svg><span>Tent+Tree</span></div>
+</div>
+
+<hr class="section-divider">
+
+<h2>With wordmark</h2>
+<div style="display:flex; flex-direction:column; gap:0.75rem">
+  <div class="header-sim"><svg viewBox="0 0 512 512" width="28" height="28"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><polygon fill="#f5f5f0" points="256,90 284,148 228,148"/><polygon fill="#f5f5f0" points="256,128 306,210 206,210"/><polygon fill="#f5f5f0" points="256,185 326,275 186,275"/><rect fill="#f5f5f0" x="244" y="268" width="24" height="26" rx="3"/></svg><span class="wm">campable</span> <span style="color:#aaa;font-size:0.7rem;margin-left:auto">Layered Fir</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512" width="28" height="28"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><polygon fill="#f5f5f0" points="256,80 270,130 245,130"/><polygon fill="#f5f5f0" points="256,115 278,165 234,165"/><polygon fill="#f5f5f0" points="256,150 288,205 224,205"/><polygon fill="#f5f5f0" points="256,190 298,245 214,245"/><polygon fill="#f5f5f0" points="256,230 305,278 207,278"/><rect fill="#f5f5f0" x="246" y="272" width="20" height="24" rx="2"/></svg><span class="wm">campable</span> <span style="color:#aaa;font-size:0.7rem;margin-left:auto">Sitka Spruce</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512" width="28" height="28"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><circle fill="#f5f5f0" cx="256" cy="130" r="45"/><rect fill="#f5f5f0" x="248" y="170" width="16" height="110" rx="3"/></svg><span class="wm">campable</span> <span style="color:#aaa;font-size:0.7rem;margin-left:auto">Lodgepole</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512" width="28" height="28"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><polygon fill="#f5f5f0" points="230,100 260,180 200,180"/><polygon fill="#f5f5f0" points="230,160 268,225 192,225"/><rect fill="#f5f5f0" x="222" y="218" width="16" height="24" rx="2"/><polygon fill="#f5f5f0" points="285,130 310,200 260,200"/><polygon fill="#f5f5f0" points="285,180 318,250 252,250"/><rect fill="#f5f5f0" x="278" y="244" width="14" height="22" rx="2"/></svg><span class="wm">campable</span> <span style="color:#aaa;font-size:0.7rem;margin-left:auto">Two Pines</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512" width="28" height="28"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><polygon fill="#f5f5f0" points="210,100 240,170 180,170"/><polygon fill="#f5f5f0" points="210,150 248,210 172,210"/><rect fill="#f5f5f0" x="202" y="205" width="16" height="20" rx="2"/><polygon fill="#f5f5f0" points="290,230 330,270 250,270"/><line stroke="#2d5016" stroke-width="4" x1="290" y1="230" x2="290" y2="270"/></svg><span class="wm">campable</span> <span style="color:#aaa;font-size:0.7rem;margin-left:auto">Tent + Tree</span></div>
+</div>
+
+</body>
+</html>

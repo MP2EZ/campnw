@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LF9 — Centering</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #333; padding: 2rem; max-width: 800px; margin: 0 auto; }
+  h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; color: #555; }
+  .section-divider { border: none; border-top: 1px solid #ddd; margin: 2.5rem 0; }
+  .row { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin: 1.5rem 0; }
+  .item { text-align: center; }
+  .item span { display: block; font-size: 0.7rem; color: #888; margin-top: 0.5rem; }
+  .header-sim { display: flex; align-items: center; gap: 0.5rem; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 0.6rem 0.75rem; margin: 0.5rem 0; }
+  .header-sim svg { width: 28px; height: 28px; flex-shrink: 0; }
+  .wm { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.15rem; font-weight: 700; color: #2d5016; }
+  .lbl { color: #aaa; font-size: 0.6rem; margin-left: auto; }
+  .dark-row { background: #171714; padding: 1.5rem; border-radius: 8px; display: flex; gap: 2.5rem; justify-content: center; margin: 1rem 0; }
+  .dark-row .item span { color: #8a8a80; }
+</style>
+</head>
+<body>
+
+<h1>LF9 — Centering the Tree</h1>
+<p class="subtitle">Moving the tree down to sit centered in the pin's visual mass (the circle, not the point).</p>
+
+<h2>Large — before vs centered options</h2>
+<div class="row">
+  <div class="item">
+    <svg viewBox="0 0 512 512" width="150" height="150">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,278 C252,242 238,208 240,182 C242,165 236,152 234,145"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,182 C218,155 200,135 185,118"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,168 C268,140 290,120 308,105"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,158 C244,132 250,118 254,105"/>
+      <path fill="#f5f5f0" d="M168,115 Q172,92 188,80 Q204,70 222,66 Q240,56 258,62 Q272,52 290,60 Q306,52 320,66 Q334,58 342,78 Q348,98 336,116 Q342,130 324,134 Q306,142 288,134 Q270,142 252,136 Q234,142 218,136 Q200,136 186,126 Q172,122 168,115Z"/>
+    </svg>
+    <span>Original LF9 (sits high)</span>
+  </div>
+
+  <div class="item">
+    <svg viewBox="0 0 512 512" width="150" height="150">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,295 C252,259 238,225 240,199 C242,182 236,169 234,162"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,199 C218,172 200,152 185,135"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,185 C268,157 290,137 308,122"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,175 C244,149 250,135 254,122"/>
+      <path fill="#f5f5f0" d="M168,132 Q172,109 188,97 Q204,87 222,83 Q240,73 258,79 Q272,69 290,77 Q306,69 320,83 Q334,75 342,95 Q348,115 336,133 Q342,147 324,151 Q306,159 288,151 Q270,159 252,153 Q234,159 218,153 Q200,153 186,143 Q172,139 168,132Z"/>
+    </svg>
+    <span>+17px down (centered in circle)</span>
+  </div>
+
+  <div class="item">
+    <svg viewBox="0 0 512 512" width="150" height="150">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,305 C252,269 238,235 240,209 C242,192 236,179 234,172"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,209 C218,182 200,162 185,145"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,195 C268,167 290,147 308,132"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,185 C244,159 250,145 254,132"/>
+      <path fill="#f5f5f0" d="M168,142 Q172,119 188,107 Q204,97 222,93 Q240,83 258,89 Q272,79 290,87 Q306,79 320,93 Q334,85 342,105 Q348,125 336,143 Q342,157 324,161 Q306,169 288,161 Q270,169 252,163 Q234,169 218,163 Q200,163 186,153 Q172,149 168,142Z"/>
+    </svg>
+    <span>+27px down</span>
+  </div>
+
+  <div class="item">
+    <svg viewBox="0 0 512 512" width="150" height="150">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M253,318 C247,282 233,248 235,222 C237,205 231,192 229,185"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M233,222 C213,195 195,175 180,158"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M235,208 C263,180 285,160 303,145"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M232,198 C239,172 245,158 249,145"/>
+      <path fill="#f5f5f0" d="M163,155 Q167,132 183,120 Q199,110 217,106 Q235,96 253,102 Q267,92 285,100 Q301,92 315,106 Q329,98 337,118 Q343,138 331,156 Q337,170 319,174 Q301,182 283,174 Q265,182 247,176 Q229,182 213,176 Q195,176 181,166 Q167,162 163,155Z"/>
+    </svg>
+    <span>+40px down (trunk deep into point)</span>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Favicon — 32px</h2>
+<div class="row">
+  <div class="item"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,278 C252,242 238,208 240,182 C242,165 236,152 234,145"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,182 C218,155 200,135 185,118"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,168 C268,140 290,120 308,105"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,158 C244,132 250,118 254,105"/><path fill="#f5f5f0" d="M168,115 Q172,92 188,80 Q204,70 222,66 Q240,56 258,62 Q272,52 290,60 Q306,52 320,66 Q334,58 342,78 Q348,98 336,116 Q342,130 324,134 Q306,142 288,134 Q270,142 252,136 Q234,142 218,136 Q200,136 186,126 Q172,122 168,115Z"/></svg><span>Original</span></div>
+  <div class="item"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,295 C252,259 238,225 240,199 C242,182 236,169 234,162"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,199 C218,172 200,152 185,135"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,185 C268,157 290,137 308,122"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,175 C244,149 250,135 254,122"/><path fill="#f5f5f0" d="M168,132 Q172,109 188,97 Q204,87 222,83 Q240,73 258,79 Q272,69 290,77 Q306,69 320,83 Q334,75 342,95 Q348,115 336,133 Q342,147 324,151 Q306,159 288,151 Q270,159 252,153 Q234,159 218,153 Q200,153 186,143 Q172,139 168,132Z"/></svg><span>+17 centered</span></div>
+  <div class="item"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,305 C252,269 238,235 240,209 C242,192 236,179 234,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,209 C218,182 200,162 185,145"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,195 C268,167 290,147 308,132"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,185 C244,159 250,145 254,132"/><path fill="#f5f5f0" d="M168,142 Q172,119 188,107 Q204,97 222,93 Q240,83 258,89 Q272,79 290,87 Q306,79 320,93 Q334,85 342,105 Q348,125 336,143 Q342,157 324,161 Q306,169 288,161 Q270,169 252,163 Q234,169 218,163 Q200,163 186,153 Q172,149 168,142Z"/></svg><span>+27 lower</span></div>
+  <div class="item"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M253,318 C247,282 233,248 235,222 C237,205 231,192 229,185"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M233,222 C213,195 195,175 180,158"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M235,208 C263,180 285,160 303,145"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M232,198 C239,172 245,158 249,145"/><path fill="#f5f5f0" d="M163,155 Q167,132 183,120 Q199,110 217,106 Q235,96 253,102 Q267,92 285,100 Q301,92 315,106 Q329,98 337,118 Q343,138 331,156 Q337,170 319,174 Q301,182 283,174 Q265,182 247,176 Q229,182 213,176 Q195,176 181,166 Q167,162 163,155Z"/></svg><span>+40</span></div>
+  <div class="item"><svg viewBox="0 0 512 512" width="16" height="16"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M253,318 C247,282 233,248 235,222 C237,205 231,192 229,185"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M233,222 C213,195 195,175 180,158"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M235,208 C263,180 285,160 303,145"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M232,198 C239,172 245,158 249,145"/><path fill="#f5f5f0" d="M163,155 Q167,132 183,120 Q199,110 217,106 Q235,96 253,102 Q267,92 285,100 Q301,92 315,106 Q329,98 337,118 Q343,138 331,156 Q337,170 319,174 Q301,182 283,174 Q265,182 247,176 Q229,182 213,176 Q195,176 181,166 Q167,162 163,155Z"/></svg><span>16px +40</span></div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Dark mode</h2>
+<div class="dark-row">
+  <div class="item"><svg viewBox="0 0 512 512" width="100" height="100"><path fill="#3a6a28" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,295 C252,259 238,225 240,199 C242,182 236,169 234,162"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,199 C218,172 200,152 185,135"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,185 C268,157 290,137 308,122"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,175 C244,149 250,135 254,122"/><path fill="#f5f5f0" d="M168,132 Q172,109 188,97 Q204,87 222,83 Q240,73 258,79 Q272,69 290,77 Q306,69 320,83 Q334,75 342,95 Q348,115 336,133 Q342,147 324,151 Q306,159 288,151 Q270,159 252,153 Q234,159 218,153 Q200,153 186,143 Q172,139 168,132Z"/></svg><span>+17 centered</span></div>
+  <div class="item"><svg viewBox="0 0 512 512" width="100" height="100"><path fill="#3a6a28" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,305 C252,269 238,235 240,209 C242,192 236,179 234,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,209 C218,182 200,162 185,145"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,195 C268,167 290,147 308,132"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,185 C244,159 250,145 254,132"/><path fill="#f5f5f0" d="M168,142 Q172,119 188,107 Q204,97 222,93 Q240,83 258,89 Q272,79 290,87 Q306,79 320,93 Q334,85 342,105 Q348,125 336,143 Q342,157 324,161 Q306,169 288,161 Q270,169 252,163 Q234,169 218,163 Q200,163 186,153 Q172,149 168,142Z"/></svg><span>+27</span></div>
+  <div class="item"><svg viewBox="0 0 512 512" width="100" height="100"><path fill="#3a6a28" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M253,318 C247,282 233,248 235,222 C237,205 231,192 229,185"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M233,222 C213,195 195,175 180,158"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M235,208 C263,180 285,160 303,145"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M232,198 C239,172 245,158 249,145"/><path fill="#f5f5f0" d="M163,155 Q167,132 183,120 Q199,110 217,106 Q235,96 253,102 Q267,92 285,100 Q301,92 315,106 Q329,98 337,118 Q343,138 331,156 Q337,170 319,174 Q301,182 283,174 Q265,182 247,176 Q229,182 213,176 Q195,176 181,166 Q167,162 163,155Z"/></svg><span>+40</span></div>
+</div>
+
+<hr class="section-divider">
+
+<h2>With wordmark</h2>
+<div style="max-width:400px">
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,278 C252,242 238,208 240,182 C242,165 236,152 234,145"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,182 C218,155 200,135 185,118"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,168 C268,140 290,120 308,105"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,158 C244,132 250,118 254,105"/><path fill="#f5f5f0" d="M168,115 Q172,92 188,80 Q204,70 222,66 Q240,56 258,62 Q272,52 290,60 Q306,52 320,66 Q334,58 342,78 Q348,98 336,116 Q342,130 324,134 Q306,142 288,134 Q270,142 252,136 Q234,142 218,136 Q200,136 186,126 Q172,122 168,115Z"/></svg><span class="wm">campable</span><span class="lbl">Original</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,295 C252,259 238,225 240,199 C242,182 236,169 234,162"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,199 C218,172 200,152 185,135"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,185 C268,157 290,137 308,122"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,175 C244,149 250,135 254,122"/><path fill="#f5f5f0" d="M168,132 Q172,109 188,97 Q204,87 222,83 Q240,73 258,79 Q272,69 290,77 Q306,69 320,83 Q334,75 342,95 Q348,115 336,133 Q342,147 324,151 Q306,159 288,151 Q270,159 252,153 Q234,159 218,153 Q200,153 186,143 Q172,139 168,132Z"/></svg><span class="wm">campable</span><span class="lbl">+17 centered ★</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,305 C252,269 238,235 240,209 C242,192 236,179 234,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,209 C218,182 200,162 185,145"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,195 C268,167 290,147 308,132"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,185 C244,159 250,145 254,132"/><path fill="#f5f5f0" d="M168,142 Q172,119 188,107 Q204,97 222,93 Q240,83 258,89 Q272,79 290,87 Q306,79 320,93 Q334,85 342,105 Q348,125 336,143 Q342,157 324,161 Q306,169 288,161 Q270,169 252,163 Q234,169 218,163 Q200,163 186,153 Q172,149 168,142Z"/></svg><span class="wm">campable</span><span class="lbl">+27</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M253,318 C247,282 233,248 235,222 C237,205 231,192 229,185"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M233,222 C213,195 195,175 180,158"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M235,208 C263,180 285,160 303,145"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M232,198 C239,172 245,158 249,145"/><path fill="#f5f5f0" d="M163,155 Q167,132 183,120 Q199,110 217,106 Q235,96 253,102 Q267,92 285,100 Q301,92 315,106 Q329,98 337,118 Q343,138 331,156 Q337,170 319,174 Q301,182 283,174 Q265,182 247,176 Q229,182 213,176 Q195,176 181,166 Q167,162 163,155Z"/></svg><span class="wm">campable</span><span class="lbl">+40 ★</span></div>
+</div>
+
+</body>
+</html>

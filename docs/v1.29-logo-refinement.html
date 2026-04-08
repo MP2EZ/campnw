@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Madrona — Lower Branches</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #333; padding: 2rem; max-width: 960px; margin: 0 auto; }
+  h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; color: #555; }
+  .section-divider { border: none; border-top: 1px solid #ddd; margin: 2.5rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+  .card { background: #fff; border: 2px solid #ddd; border-radius: 10px; padding: 1.5rem; text-align: center; }
+  .card.ref { opacity: 0.5; border-color: #ccc; }
+  .card h3 { font-size: 0.75rem; color: #888; margin-bottom: 0.75rem; }
+  .card svg { width: 120px; height: 120px; display: block; margin: 0 auto 0.75rem; }
+  .card p { font-size: 0.65rem; color: #aaa; line-height: 1.4; }
+  .sizes { display: flex; gap: 1.5rem; align-items: flex-end; flex-wrap: wrap; margin: 1rem 0; }
+  .sizes .s { text-align: center; }
+  .sizes .s span { display: block; font-size: 0.6rem; color: #aaa; margin-top: 0.25rem; }
+  .header-sim { display: flex; align-items: center; gap: 0.5rem; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 0.6rem 0.75rem; margin: 0.4rem 0; }
+  .header-sim svg { width: 28px; height: 28px; flex-shrink: 0; }
+  .wm { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.15rem; font-weight: 700; color: #2d5016; }
+  .lbl { color: #aaa; font-size: 0.6rem; margin-left: auto; }
+  .dark-row { background: #171714; padding: 1.5rem; border-radius: 8px; display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin: 1rem 0; }
+  .dark-row svg { width: 90px; height: 90px; }
+  .dark-row .s { text-align: center; }
+  .dark-row .s span { display: block; font-size: 0.6rem; color: #8a8a80; margin-top: 0.25rem; }
+</style>
+</head>
+<body>
+
+<h1>Scalloped 3-Branch — Lower Branches</h1>
+<p class="subtitle">OV4/5/6 but with the branch fork moved down to show more branch length between trunk and canopy — like M15a and SC-R3.</p>
+
+<h2>References</h2>
+<div class="grid">
+  <div class="card ref">
+    <h3>OV4 (branches too short)</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 Q245,230 240,195 Q235,170 240,150"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,150 Q222,128 205,112"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,150 Q262,122 282,105"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,150 Q245,125 248,108"/>
+      <path fill="#f5f5f0" d="M182,115 Q185,98 198,88 Q208,78 222,75 Q232,66 245,70 Q255,62 268,68 Q280,60 294,72 Q306,65 316,80 Q325,96 315,112 Q320,124 305,128 Q290,134 275,128 Q260,136 245,130 Q228,136 215,130 Q200,130 190,122 Q182,120 182,115Z"/>
+    </svg>
+    <p>Previous — fork point high, short branches</p>
+  </div>
+  <div class="card ref">
+    <h3>M15a (good branch length)</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C250,240 238,205 242,170 C246,140 236,118 232,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,170 Q268,148 285,120"/>
+      <path fill="#f5f5f0" d="M190,108 Q205,72 235,82 Q255,68 280,78 Q300,92 292,112 Q280,125 262,122 Q240,128 222,122 Q202,118 194,112Z"/>
+      <circle fill="#f5f5f0" cx="288" cy="112" r="18"/>
+    </svg>
+    <p>Reference — fork at 170, branches reach far</p>
+  </div>
+  <div class="card ref">
+    <h3>SC-R3 (good branch length)</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,140 236,118 232,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,168 Q268,148 288,130"/>
+      <path fill="#f5f5f0" d="M192,122 C190,108 198,92 212,85 C224,78 236,74 250,78 C260,70 274,68 286,76 C298,70 310,82 315,96 C320,110 312,124 300,130 C288,136 274,134 264,128 C252,136 238,136 226,132 C212,132 200,128 194,124Z"/>
+    </svg>
+    <p>Reference — fork at 168, long branch sweep</p>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Low-fork scalloped — 9 variations</h2>
+
+<div class="grid">
+  <div class="card">
+    <h3>LF1 — Tight, symmetric</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q218,145 198,122"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q268,140 292,115"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,172 Q246,140 250,115"/>
+      <path fill="#f5f5f0" d="M180,118 Q184,100 196,90 Q208,80 222,76 Q234,66 248,70 Q258,62 270,68 Q282,60 296,72 Q308,64 318,80 Q326,96 318,112 Q324,124 308,128 Q292,135 278,128 Q262,136 248,130 Q232,136 218,130 Q202,130 192,122 Q182,122 180,118Z"/>
+    </svg>
+    <p>Fork at 172. Balanced, compact canopy.</p>
+  </div>
+
+  <div class="card">
+    <h3>LF2 — Wide, symmetric</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q212,140 190,118"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q275,135 300,110"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,172 Q248,138 252,112"/>
+      <path fill="#f5f5f0" d="M172,115 Q176,95 190,84 Q204,74 220,70 Q235,60 250,65 Q262,55 278,62 Q292,54 308,66 Q322,58 332,76 Q340,94 330,112 Q336,126 318,130 Q300,138 284,130 Q266,138 248,132 Q230,138 214,132 Q196,132 184,122 Q174,120 172,115Z"/>
+    </svg>
+    <p>Fork at 172. Wider spread, bigger canopy.</p>
+  </div>
+
+  <div class="card">
+    <h3>LF3 — Asymmetric lean</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M252,278 C245,238 234,200 238,172"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 Q214,142 195,118"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 Q272,135 302,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,172 Q248,138 255,112"/>
+      <path fill="#f5f5f0" d="M176,115 Q180,95 194,84 Q208,74 224,70 Q238,60 254,65 Q268,55 284,62 Q298,54 312,66 Q326,58 334,78 Q340,96 330,114 Q336,126 320,130 Q302,138 286,130 Q268,138 252,132 Q234,138 218,132 Q200,132 188,122 Q178,120 176,115Z"/>
+    </svg>
+    <p>Trunk leans slightly left, canopy reaches right.</p>
+  </div>
+</div>
+
+<div class="grid" style="margin-top:1.5rem">
+  <div class="card">
+    <h3>LF4 — Deeper fork, S-curve trunk</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,278 C252,240 238,205 240,180 C242,162 238,150 236,145"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M236,180 Q212,150 192,125"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,165 Q270,135 298,110"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,155 Q245,128 250,108"/>
+      <path fill="#f5f5f0" d="M175,120 Q180,98 194,86 Q208,76 224,72 Q238,62 254,67 Q266,57 282,64 Q296,56 310,68 Q324,60 332,80 Q338,98 328,115 Q334,128 318,132 Q300,140 284,132 Q266,140 250,134 Q234,140 218,134 Q200,134 188,124 Q178,122 175,120Z"/>
+    </svg>
+    <p>Fork at 180. Even more trunk showing. S-curve.</p>
+  </div>
+
+  <div class="card">
+    <h3>LF5 — Two branches only</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,172 Q214,140 192,115"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,172 Q272,135 300,108"/>
+      <path fill="#f5f5f0" d="M172,112 Q178,92 192,82 Q206,72 222,68 Q238,58 254,64 Q268,54 284,62 Q298,54 312,68 Q326,60 334,78 Q340,96 330,114 Q336,128 318,132 Q300,138 284,130 Q268,138 250,132 Q234,138 218,132 Q200,132 186,122 Q174,118 172,112Z"/>
+    </svg>
+    <p>Just two branches (no center). Simpler, bolder Y-shape.</p>
+  </div>
+
+  <div class="card">
+    <h3>LF6 — Tight canopy, long branches</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C248,238 236,200 240,175"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,175 Q215,145 195,120"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,175 Q268,140 295,112"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M240,175 Q248,142 252,115"/>
+      <path fill="#f5f5f0" d="M185,116 Q188,100 200,92 Q210,82 224,80 Q236,72 248,75 Q258,68 268,72 Q280,64 292,74 Q304,68 312,82 Q318,96 310,110 Q316,122 302,126 Q288,132 275,126 Q262,132 248,128 Q234,132 222,128 Q208,128 198,120 Q188,120 185,116Z"/>
+    </svg>
+    <p>Smaller canopy, thinner branches — most branch visible.</p>
+  </div>
+</div>
+
+<div class="grid" style="margin-top:1.5rem">
+  <div class="card">
+    <h3>LF7 — LF2 + softer scallops</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q212,140 190,118"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q275,135 300,110"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,172 Q248,138 252,112"/>
+      <path fill="#f5f5f0" d="M174,114 C172,98 182,82 198,74 C212,68 228,64 244,68 C256,58 272,56 286,64 C298,56 314,64 324,80 C332,96 326,114 314,124 C304,132 290,132 278,126 C264,134 248,134 234,130 C218,134 202,130 190,122 C178,120 174,118 174,114Z"/>
+    </svg>
+    <p>Wide spread, smooth rounded scallops.</p>
+  </div>
+
+  <div class="card">
+    <h3>LF8 — LF3 + curved branches</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M252,278 C245,238 234,200 238,172"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 C222,152 208,138 195,120"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 C262,148 280,130 298,112"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,172 C244,148 250,130 254,115"/>
+      <path fill="#f5f5f0" d="M176,116 Q180,96 194,85 Q208,75 224,72 Q238,62 254,66 Q268,56 284,64 Q298,56 312,68 Q326,60 334,80 Q340,98 328,116 Q334,128 318,132 Q300,140 284,132 Q266,140 250,134 Q234,140 218,134 Q200,134 188,124 Q178,122 176,116Z"/>
+    </svg>
+    <p>Asymmetric with curved (not straight) branches.</p>
+  </div>
+
+  <div class="card">
+    <h3>LF9 — LF4 + deep S, wide scallop</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,278 C252,242 238,208 240,182 C242,165 236,152 234,145"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,182 C218,155 200,135 185,118"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,168 C268,140 290,120 308,105"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,158 C244,132 250,118 254,105"/>
+      <path fill="#f5f5f0" d="M168,115 Q172,92 188,80 Q204,70 222,66 Q240,56 258,62 Q272,52 290,60 Q306,52 320,66 Q334,58 342,78 Q348,98 336,116 Q342,130 324,134 Q306,142 288,134 Q270,142 252,136 Q234,142 218,136 Q200,136 186,126 Q172,122 168,115Z"/>
+    </svg>
+    <p>Deepest fork, most trunk + branch visible. Wide scallop.</p>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Favicon — 32px</h2>
+<div class="sizes">
+  <div class="s"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q218,145 198,122"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q268,140 292,115"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,172 Q246,140 250,115"/><path fill="#f5f5f0" d="M180,118 Q184,100 196,90 Q208,80 222,76 Q234,66 248,70 Q258,62 270,68 Q282,60 296,72 Q308,64 318,80 Q326,96 318,112 Q324,124 308,128 Q292,135 278,128 Q262,136 248,130 Q232,136 218,130 Q202,130 192,122 Q182,122 180,118Z"/></svg><span>LF1</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q212,140 190,118"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q275,135 300,110"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,172 Q248,138 252,112"/><path fill="#f5f5f0" d="M172,115 Q176,95 190,84 Q204,74 220,70 Q235,60 250,65 Q262,55 278,62 Q292,54 308,66 Q322,58 332,76 Q340,94 330,112 Q336,126 318,130 Q300,138 284,130 Q266,138 248,132 Q230,138 214,132 Q196,132 184,122 Q174,120 172,115Z"/></svg><span>LF2</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M252,278 C245,238 234,200 238,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 Q214,142 195,118"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 Q272,135 302,108"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,172 Q248,138 255,112"/><path fill="#f5f5f0" d="M176,115 Q180,95 194,84 Q208,74 224,70 Q238,60 254,65 Q268,55 284,62 Q298,54 312,66 Q326,58 334,78 Q340,96 330,114 Q336,126 320,130 Q302,138 286,130 Q268,138 252,132 Q234,138 218,132 Q200,132 188,122 Q178,120 176,115Z"/></svg><span>LF3</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,172 Q214,140 192,115"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,172 Q272,135 300,108"/><path fill="#f5f5f0" d="M172,112 Q178,92 192,82 Q206,72 222,68 Q238,58 254,64 Q268,54 284,62 Q298,54 312,68 Q326,60 334,78 Q340,96 330,114 Q336,128 318,132 Q300,138 284,130 Q268,138 250,132 Q234,138 218,132 Q200,132 186,122 Q174,118 172,112Z"/></svg><span>LF5</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q212,140 190,118"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q275,135 300,110"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,172 Q248,138 252,112"/><path fill="#f5f5f0" d="M174,114 C172,98 182,82 198,74 C212,68 228,64 244,68 C256,58 272,56 286,64 C298,56 314,64 324,80 C332,96 326,114 314,124 C304,132 290,132 278,126 C264,134 248,134 234,130 C218,134 202,130 190,122 C178,120 174,118 174,114Z"/></svg><span>LF7</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="36" height="36"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M252,278 C245,238 234,200 238,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 C222,152 208,138 195,120"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 C262,148 280,130 298,112"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,172 C244,148 250,130 254,115"/><path fill="#f5f5f0" d="M176,116 Q180,96 194,85 Q208,75 224,72 Q238,62 254,66 Q268,56 284,64 Q298,56 312,68 Q326,60 334,80 Q340,98 328,116 Q334,128 318,132 Q300,140 284,132 Q266,140 250,134 Q234,140 218,134 Q200,134 188,124 Q178,122 176,116Z"/></svg><span>LF8</span></div>
+</div>
+
+<hr class="section-divider">
+
+<h2>With wordmark</h2>
+<div style="display:flex; flex-direction:column; gap:0.4rem; max-width:420px">
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q212,140 190,118"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q275,135 300,110"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,172 Q248,138 252,112"/><path fill="#f5f5f0" d="M172,115 Q176,95 190,84 Q204,74 220,70 Q235,60 250,65 Q262,55 278,62 Q292,54 308,66 Q322,58 332,76 Q340,94 330,112 Q336,126 318,130 Q300,138 284,130 Q266,138 248,132 Q230,138 214,132 Q196,132 184,122 Q174,120 172,115Z"/></svg><span class="wm">campable</span><span class="lbl">LF2 wide</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M252,278 C245,238 234,200 238,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 Q214,142 195,118"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 Q272,135 302,108"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,172 Q248,138 255,112"/><path fill="#f5f5f0" d="M176,115 Q180,95 194,84 Q208,74 224,70 Q238,60 254,65 Q268,55 284,62 Q298,54 312,66 Q326,58 334,78 Q340,96 330,114 Q336,126 320,130 Q302,138 286,130 Q268,138 252,132 Q234,138 218,132 Q200,132 188,122 Q178,120 176,115Z"/></svg><span class="wm">campable</span><span class="lbl">LF3 asym</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,172 Q214,140 192,115"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,172 Q272,135 300,108"/><path fill="#f5f5f0" d="M172,112 Q178,92 192,82 Q206,72 222,68 Q238,58 254,64 Q268,54 284,62 Q298,54 312,68 Q326,60 334,78 Q340,96 330,114 Q336,128 318,132 Q300,138 284,130 Q268,138 250,132 Q234,138 218,132 Q200,132 186,122 Q174,118 172,112Z"/></svg><span class="wm">campable</span><span class="lbl">LF5 two-branch</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,238 236,200 240,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q212,140 190,118"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,172 Q275,135 300,110"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,172 Q248,138 252,112"/><path fill="#f5f5f0" d="M174,114 C172,98 182,82 198,74 C212,68 228,64 244,68 C256,58 272,56 286,64 C298,56 314,64 324,80 C332,96 326,114 314,124 C304,132 290,132 278,126 C264,134 248,134 234,130 C218,134 202,130 190,122 C178,120 174,118 174,114Z"/></svg><span class="wm">campable</span><span class="lbl">LF7 soft scallop</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M252,278 C245,238 234,200 238,172"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 C222,152 208,138 195,120"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,172 C262,148 280,130 298,112"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,172 C244,148 250,130 254,115"/><path fill="#f5f5f0" d="M176,116 Q180,96 194,85 Q208,75 224,72 Q238,62 254,66 Q268,56 284,64 Q298,56 312,68 Q326,60 334,80 Q340,98 328,116 Q334,128 318,132 Q300,140 284,132 Q266,140 250,134 Q234,140 218,134 Q200,134 188,124 Q178,122 176,116Z"/></svg><span class="wm">campable</span><span class="lbl">LF8 curved asym</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M258,278 C252,242 238,208 240,182 C242,165 236,152 234,145"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,182 C218,155 200,135 185,118"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M240,168 C268,140 290,120 308,105"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M237,158 C244,132 250,118 254,105"/><path fill="#f5f5f0" d="M168,115 Q172,92 188,80 Q204,70 222,66 Q240,56 258,62 Q272,52 290,60 Q306,52 320,66 Q334,58 342,78 Q348,98 336,116 Q342,130 324,134 Q306,142 288,134 Q270,142 252,136 Q234,142 218,136 Q200,136 186,126 Q172,122 168,115Z"/></svg><span class="wm">campable</span><span class="lbl">LF9 deep S wide</span></div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Madrona — Round 2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #333; padding: 2rem; max-width: 1100px; margin: 0 auto; }
+  h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; color: #555; }
+  .section-divider { border: none; border-top: 1px solid #ddd; margin: 2.5rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+  .card { background: #fff; border: 2px solid #ddd; border-radius: 10px; padding: 1rem; text-align: center; }
+  .card.kept { border-color: #2d5016; background: #f9fcf7; }
+  .card h3 { font-size: 0.7rem; color: #888; margin-bottom: 0.5rem; }
+  .card.kept h3 { color: #2d5016; }
+  .card svg { width: 80px; height: 80px; display: block; margin: 0 auto 0.5rem; }
+  .card p { font-size: 0.6rem; color: #aaa; line-height: 1.3; }
+  .sizes { display: flex; gap: 1.5rem; align-items: flex-end; flex-wrap: wrap; margin: 1rem 0; }
+  .sizes .s { text-align: center; }
+  .sizes .s span { display: block; font-size: 0.6rem; color: #aaa; margin-top: 0.25rem; }
+  .header-sim { display: flex; align-items: center; gap: 0.5rem; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 0.6rem 0.75rem; margin: 0.4rem 0; }
+  .header-sim svg { width: 26px; height: 26px; flex-shrink: 0; }
+  .wm { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.1rem; font-weight: 700; color: #2d5016; }
+  .lbl { color: #aaa; font-size: 0.65rem; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<h1>Madrona — Round 2</h1>
+<p class="subtitle">Building on M4 (minimal stroke), M7 (graceful), M14 (open branches), M15 (refined). Green border = kept from round 1.</p>
+
+<div class="grid">
+
+  <!-- KEPT: M4 — Minimal stroke -->
+  <div class="card kept">
+    <h3>M4 — Minimal stroke</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M260,275 C250,230 235,200 240,160 C245,130 230,110 230,100"/>
+      <path fill="#f5f5f0" d="M180,120 Q200,70 240,85 Q280,65 300,110 Q310,140 270,145 Q240,150 210,140 Q180,135 180,120Z"/>
+    </svg>
+    <p>Thin trunk, organic canopy blob</p>
+  </div>
+
+  <!-- M4a — Thinner trunk, rounder canopy -->
+  <div class="card">
+    <h3>M4a — Softer canopy</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M258,275 C248,235 238,200 242,165 C246,138 234,118 232,105"/>
+      <ellipse fill="#f5f5f0" cx="240" cy="105" rx="55" ry="40"/>
+    </svg>
+    <p>Thinner trunk, simple ellipse canopy</p>
+  </div>
+
+  <!-- M4b — Trunk with slight fork hint -->
+  <div class="card">
+    <h3>M4b — Fork hint</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="11" stroke-linecap="round" d="M258,275 C250,235 238,200 242,165 C246,140 236,120 232,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,155 Q262,140 278,125"/>
+      <path fill="#f5f5f0" d="M185,110 Q205,68 240,80 Q268,65 298,88 Q312,115 290,128 Q265,138 238,135 Q210,132 192,122 Q182,118 185,110Z"/>
+    </svg>
+    <p>M4 + one side branch visible</p>
+  </div>
+
+  <!-- KEPT: M7 — Graceful -->
+  <div class="card kept">
+    <h3>M7 — Graceful</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="16" stroke-linecap="round" d="M260,278 C255,240 240,200 245,165 C250,135 240,115 235,105"/>
+      <path fill="#f5f5f0" d="M190,105 Q210,65 245,80 Q270,60 300,85 Q315,110 290,125 Q260,135 230,130 Q200,125 190,105Z"/>
+    </svg>
+    <p>Elegant trunk curve, cloud canopy</p>
+  </div>
+
+  <!-- M7a — More pronounced S-curve -->
+  <div class="card">
+    <h3>M7a — Deep S-curve</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="15" stroke-linecap="round" d="M265,278 C260,245 240,210 230,180 C220,155 235,130 248,115 C255,108 248,100 240,98"/>
+      <path fill="#f5f5f0" d="M188,100 Q205,60 240,75 Q265,58 295,78 Q315,100 295,118 Q270,130 245,128 Q215,128 198,118 Q185,112 188,100Z"/>
+    </svg>
+    <p>Deeper curve, trunk winds more</p>
+  </div>
+
+  <!-- M7b — Tighter canopy, longer trunk -->
+  <div class="card">
+    <h3>M7b — Long trunk</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M260,280 C256,250 248,215 244,185 C240,155 245,130 240,110 C237,100 235,92 238,88"/>
+      <path fill="#f5f5f0" d="M198,92 Q215,62 242,72 Q262,58 285,75 Q302,95 285,110 Q265,118 245,115 Q225,115 210,108 Q196,102 198,92Z"/>
+    </svg>
+    <p>More trunk visible, compact canopy up top</p>
+  </div>
+
+  <!-- M7c — Asymmetric canopy, leaning -->
+  <div class="card">
+    <h3>M7c — Asymmetric</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,278 C252,240 238,205 242,170 C246,140 238,120 235,108"/>
+      <path fill="#f5f5f0" d="M195,108 Q210,72 240,82 Q258,68 282,75 Q310,88 315,112 Q310,130 285,128 Q258,130 238,132 Q215,130 200,120 Q190,115 195,108Z"/>
+    </svg>
+    <p>Canopy extends further right — wind-shaped</p>
+  </div>
+
+  <!-- KEPT: M14 — Open canopy/branches -->
+  <div class="card kept">
+    <h3>M14 — Open branches</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M255,278 Q245,230 240,195 Q235,170 240,150"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,150 Q225,130 205,115"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,150 Q260,125 280,110"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M205,115 Q190,100 185,90"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M280,110 Q295,95 305,88"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,150 Q248,125 252,105"/>
+    </svg>
+    <p>Pure branches — most tree-like</p>
+  </div>
+
+  <!-- M14a — Branches + small leaf hints -->
+  <div class="card">
+    <h3>M14a — Leaf tips</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 Q245,230 240,195 Q235,170 240,150"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,150 Q222,128 205,112"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,150 Q262,125 282,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M205,112 Q190,98 182,88"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M282,108 Q298,94 308,85"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M240,150 Q248,122 250,100"/>
+      <circle fill="#f5f5f0" cx="182" cy="85" r="12"/>
+      <circle fill="#f5f5f0" cx="308" cy="82" r="12"/>
+      <circle fill="#f5f5f0" cx="250" cy="95" r="14"/>
+    </svg>
+    <p>Branch ends with small canopy dots</p>
+  </div>
+
+  <!-- M14b — Fewer branches, bolder -->
+  <div class="card">
+    <h3>M14b — Bold branch</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="16" stroke-linecap="round" d="M255,278 Q242,225 238,185 Q234,155 242,135"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M242,135 Q218,110 195,95"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M242,135 Q272,105 300,92"/>
+    </svg>
+    <p>Just trunk + two bold branches. Minimal.</p>
+  </div>
+
+  <!-- KEPT: M15 — Refined graceful -->
+  <div class="card kept">
+    <h3>M15 — Refined</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M258,278 C252,240 238,200 242,165 C246,135 236,115 232,105"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,165 Q265,150 280,135"/>
+      <path fill="#f5f5f0" d="M192,108 Q208,72 238,82 Q260,68 285,82 Q308,98 295,118 Q278,132 258,128 Q235,132 218,125 Q198,120 192,108Z"/>
+    </svg>
+    <p>Thin trunk, side branch, cloud canopy</p>
+  </div>
+
+  <!-- M15a — Side branch goes up -->
+  <div class="card">
+    <h3>M15a — Upward branch</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C250,240 238,205 242,170 C246,140 236,118 232,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,170 Q268,148 285,120"/>
+      <path fill="#f5f5f0" d="M190,108 Q205,72 235,82 Q255,68 280,78 Q300,92 292,112 Q280,125 262,122 Q240,128 222,122 Q202,118 194,112Z"/>
+      <circle fill="#f5f5f0" cx="288" cy="112" r="18"/>
+    </svg>
+    <p>Side branch reaches into its own canopy cluster</p>
+  </div>
+
+  <!-- M15b — Two side branches -->
+  <div class="card">
+    <h3>M15b — Two branches</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,205 242,170 C246,140 238,118 234,105"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M242,175 Q268,158 282,140"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M242,200 Q218,188 205,170"/>
+      <path fill="#f5f5f0" d="M192,105 Q208,70 238,80 Q260,65 285,80 Q305,96 292,115 Q275,128 255,125 Q232,128 215,120 Q198,115 192,105Z"/>
+    </svg>
+    <p>Branch on each side — balanced but organic</p>
+  </div>
+
+  <!-- M15c — Looser canopy shape -->
+  <div class="card">
+    <h3>M15c — Loose canopy</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M258,278 C252,240 238,200 242,165 C246,135 236,115 232,105"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,165 Q265,150 280,135"/>
+      <path fill="#f5f5f0" d="M185,115 Q195,82 220,78 Q240,70 258,72 Q278,68 298,82 Q315,100 305,118 Q295,132 275,130 Q260,138 240,135 Q218,135 202,125 Q188,120 185,115Z"/>
+    </svg>
+    <p>Wider, more irregular canopy edge</p>
+  </div>
+
+  <!-- M-hybrid — M14 branches + M7 canopy -->
+  <div class="card">
+    <h3>M-hybrid — Best of both</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M256,278 C250,240 238,205 242,170 C246,142 238,122 234,110"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M242,165 Q265,148 282,130"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,142 Q218,128 202,118"/>
+      <path fill="#f5f5f0" d="M188,108 Q198,75 228,82 Q250,65 278,78 Q302,92 298,112 Q288,128 268,125 Q248,132 228,128 Q208,125 195,118 Q186,114 188,108Z"/>
+    </svg>
+    <p>Visible branches + filled canopy above</p>
+  </div>
+
+</div>
+
+<hr class="section-divider">
+
+<h2>Favicon — 32px</h2>
+<div class="sizes">
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M260,275 C250,230 235,200 240,160 C245,130 230,110 230,100"/><path fill="#f5f5f0" d="M180,120 Q200,70 240,85 Q280,65 300,110 Q310,140 270,145 Q240,150 210,140 Q180,135 180,120Z"/></svg><span>M4</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="11" stroke-linecap="round" d="M258,275 C248,235 238,200 242,165 C246,140 236,120 232,108"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,155 Q262,140 278,125"/><path fill="#f5f5f0" d="M185,110 Q205,68 240,80 Q268,65 298,88 Q312,115 290,128 Q265,138 238,135 Q210,132 192,122 Q182,118 185,110Z"/></svg><span>M4b</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="16" stroke-linecap="round" d="M260,278 C255,240 240,200 245,165 C250,135 240,115 235,105"/><path fill="#f5f5f0" d="M190,105 Q210,65 245,80 Q270,60 300,85 Q315,110 290,125 Q260,135 230,130 Q200,125 190,105Z"/></svg><span>M7</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="15" stroke-linecap="round" d="M265,278 C260,245 240,210 230,180 C220,155 235,130 248,115 C255,108 248,100 240,98"/><path fill="#f5f5f0" d="M188,100 Q205,60 240,75 Q265,58 295,78 Q315,100 295,118 Q270,130 245,128 Q215,128 198,118 Q185,112 188,100Z"/></svg><span>M7a</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M255,278 Q245,230 240,195 Q235,170 240,150"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,150 Q225,130 205,115"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,150 Q260,125 280,110"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M205,115 Q190,100 185,90"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M280,110 Q295,95 305,88"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,150 Q248,125 252,105"/></svg><span>M14</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="16" stroke-linecap="round" d="M255,278 Q242,225 238,185 Q234,155 242,135"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M242,135 Q218,110 195,95"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M242,135 Q272,105 300,92"/></svg><span>M14b</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M258,278 C252,240 238,200 242,165 C246,135 236,115 232,105"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,165 Q265,150 280,135"/><path fill="#f5f5f0" d="M192,108 Q208,72 238,82 Q260,68 285,82 Q308,98 295,118 Q278,132 258,128 Q235,132 218,125 Q198,120 192,108Z"/></svg><span>M15</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M256,278 C250,240 238,205 242,170 C246,142 238,122 234,110"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M242,165 Q265,148 282,130"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,142 Q218,128 202,118"/><path fill="#f5f5f0" d="M188,108 Q198,75 228,82 Q250,65 278,78 Q302,92 298,112 Q288,128 268,125 Q248,132 228,128 Q208,125 195,118 Q186,114 188,108Z"/></svg><span>Hybrid</span></div>
+</div>
+
+<hr class="section-divider">
+
+<h2>With wordmark</h2>
+<div style="display:flex; flex-direction:column; gap:0.5rem; max-width:420px">
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="11" stroke-linecap="round" d="M258,275 C248,235 238,200 242,165 C246,140 236,120 232,108"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,155 Q262,140 278,125"/><path fill="#f5f5f0" d="M185,110 Q205,68 240,80 Q268,65 298,88 Q312,115 290,128 Q265,138 238,135 Q210,132 192,122 Q182,118 185,110Z"/></svg><span class="wm">campable</span><span class="lbl">M4b Fork hint</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="15" stroke-linecap="round" d="M265,278 C260,245 240,210 230,180 C220,155 235,130 248,115 C255,108 248,100 240,98"/><path fill="#f5f5f0" d="M188,100 Q205,60 240,75 Q265,58 295,78 Q315,100 295,118 Q270,130 245,128 Q215,128 198,118 Q185,112 188,100Z"/></svg><span class="wm">campable</span><span class="lbl">M7a Deep S</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="16" stroke-linecap="round" d="M255,278 Q242,225 238,185 Q234,155 242,135"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M242,135 Q218,110 195,95"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M242,135 Q272,105 300,92"/></svg><span class="wm">campable</span><span class="lbl">M14b Bold branch</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C250,240 238,205 242,170 C246,140 238,118 234,105"/><path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M242,175 Q268,158 282,140"/><path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M242,200 Q218,188 205,170"/><path fill="#f5f5f0" d="M192,105 Q208,70 238,80 Q260,65 285,80 Q305,96 292,115 Q275,128 255,125 Q232,128 215,120 Q198,115 192,105Z"/></svg><span class="wm">campable</span><span class="lbl">M15b Two branches</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M256,278 C250,240 238,205 242,170 C246,142 238,122 234,110"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M242,165 Q265,148 282,130"/><path fill="none" stroke="#f5f5f0" stroke-width="9" stroke-linecap="round" d="M238,142 Q218,128 202,118"/><path fill="#f5f5f0" d="M188,108 Q198,75 228,82 Q250,65 278,78 Q302,92 298,112 Q288,128 268,125 Q248,132 228,128 Q208,125 195,118 Q186,114 188,108Z"/></svg><span class="wm">campable</span><span class="lbl">Hybrid</span></div>
+</div>
+
+</body>
+</html>

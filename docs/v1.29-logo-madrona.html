@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logo — Madrona Exploration</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #333; padding: 2rem; max-width: 1100px; margin: 0 auto; }
+  h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; color: #555; }
+  .section-divider { border: none; border-top: 1px solid #ddd; margin: 2.5rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+  .card { background: #fff; border: 2px solid #ddd; border-radius: 10px; padding: 1rem; text-align: center; }
+  .card h3 { font-size: 0.7rem; color: #888; margin-bottom: 0.5rem; }
+  .card svg { width: 80px; height: 80px; display: block; margin: 0 auto 0.5rem; }
+  .card p { font-size: 0.6rem; color: #aaa; line-height: 1.3; }
+  .sizes { display: flex; gap: 1.5rem; align-items: flex-end; flex-wrap: wrap; margin: 1rem 0; }
+  .sizes .s { text-align: center; }
+  .sizes .s span { display: block; font-size: 0.6rem; color: #aaa; margin-top: 0.25rem; }
+  .header-sim { display: flex; align-items: center; gap: 0.5rem; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 0.6rem 0.75rem; margin: 0.4rem 0; }
+  .header-sim svg { width: 26px; height: 26px; flex-shrink: 0; }
+  .wm { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.1rem; font-weight: 700; color: #2d5016; }
+  .lbl { color: #aaa; font-size: 0.65rem; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<h1>Madrona — 15 Approaches</h1>
+<p class="subtitle">The key features: sinuous curved trunk, broad rounded canopy, forking branches, distinctive lean.</p>
+
+<div class="grid">
+
+  <!-- 1: Simple S-curve trunk + circle canopy -->
+  <div class="card">
+    <h3>M1 — S-curve + circle</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="#f5f5f0" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M256,280 Q240,230 250,190 Q260,150 245,130"/>
+      <circle fill="#f5f5f0" cx="240" cy="120" r="48"/>
+    </svg>
+    <p>Simplest — curved trunk, round canopy</p>
+  </div>
+
+  <!-- 2: Leaning trunk + offset canopy -->
+  <div class="card">
+    <h3>M2 — Lean + offset</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="16" stroke-linecap="round" d="M265,280 Q255,220 235,180 Q220,150 230,125"/>
+      <ellipse fill="#f5f5f0" cx="235" cy="115" rx="55" ry="38"/>
+    </svg>
+    <p>Leaning left, wide canopy</p>
+  </div>
+
+  <!-- 3: Forking trunk -->
+  <div class="card">
+    <h3>M3 — Fork</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,275 Q248,220 240,185"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M240,185 Q225,155 215,125"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M240,185 Q260,155 275,130"/>
+      <circle fill="#f5f5f0" cx="210" cy="115" r="32"/>
+      <circle fill="#f5f5f0" cx="278" cy="120" r="30"/>
+    </svg>
+    <p>Forking trunk, two canopy lobes</p>
+  </div>
+
+  <!-- 4: Minimal curved line + blob -->
+  <div class="card">
+    <h3>M4 — Minimal stroke</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M260,275 C250,230 235,200 240,160 C245,130 230,110 230,100"/>
+      <path fill="#f5f5f0" d="M180,120 Q200,70 240,85 Q280,65 300,110 Q310,140 270,145 Q240,150 210,140 Q180,135 180,120Z"/>
+    </svg>
+    <p>Thin trunk line, organic canopy shape</p>
+  </div>
+
+  <!-- 5: Bold silhouette -->
+  <div class="card">
+    <h3>M5 — Bold silhouette</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="#f5f5f0" d="M250,280 Q240,240 235,210 Q228,180 235,160 Q240,140 230,120 Q220,100 230,85 Q245,70 265,80 Q285,70 300,90 Q310,110 295,125 Q305,140 295,160 Q290,175 280,185 Q275,210 270,240 Q268,260 265,280 Z"/>
+    </svg>
+    <p>Single filled shape — tree as solid form</p>
+  </div>
+
+  <!-- 6: Windswept -->
+  <div class="card">
+    <h3>M6 — Windswept</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M250,278 Q235,230 230,190 Q225,160 240,140"/>
+      <path fill="#f5f5f0" d="M200,135 Q215,90 255,100 Q290,85 320,115 Q305,145 270,140 Q240,150 210,145 Z"/>
+    </svg>
+    <p>Canopy blown to one side, coastal feel</p>
+  </div>
+
+  <!-- 7: Graceful curves -->
+  <div class="card">
+    <h3>M7 — Graceful</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="16" stroke-linecap="round" d="M260,278 C255,240 240,200 245,165 C250,135 240,115 235,105"/>
+      <path fill="#f5f5f0" d="M190,105 Q210,65 245,80 Q270,60 300,85 Q315,110 290,125 Q260,135 230,130 Q200,125 190,105Z"/>
+    </svg>
+    <p>Elegant trunk curve, cloud-like canopy</p>
+  </div>
+
+  <!-- 8: Multi-branch -->
+  <div class="card">
+    <h3>M8 — Branches</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,275 Q245,230 240,195"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,195 Q225,165 210,145"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,195 Q255,160 270,140"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M270,140 Q290,120 300,105"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M210,145 Q195,125 190,110"/>
+      <circle fill="#f5f5f0" cx="190" cy="105" r="22"/>
+      <circle fill="#f5f5f0" cx="300" cy="100" r="22"/>
+      <circle fill="#f5f5f0" cx="248" cy="108" r="26"/>
+    </svg>
+    <p>Visible branch structure with canopy clusters</p>
+  </div>
+
+  <!-- 9: Abstract curves -->
+  <div class="card">
+    <h3>M9 — Abstract</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="#f5f5f0" d="M252,280 C248,250 238,215 240,185 C242,160 232,140 225,125 C218,110 225,90 245,88 C265,86 275,95 280,110 C285,125 278,145 272,165 C266,185 268,220 264,250 C262,265 258,275 252,280Z"/>
+    </svg>
+    <p>Single flowing shape — trunk and canopy merge</p>
+  </div>
+
+  <!-- 10: Twisted double trunk -->
+  <div class="card">
+    <h3>M10 — Double trunk</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M248,278 Q235,230 230,195 Q222,160 215,130"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M262,278 Q268,230 272,195 Q278,160 285,135"/>
+      <circle fill="#f5f5f0" cx="210" cy="118" r="28"/>
+      <circle fill="#f5f5f0" cx="290" cy="122" r="26"/>
+      <ellipse fill="#f5f5f0" cx="252" cy="105" rx="30" ry="24"/>
+    </svg>
+    <p>Two trunks diverging, connected canopy</p>
+  </div>
+
+  <!-- 11: Thick curved trunk, small canopy -->
+  <div class="card">
+    <h3>M11 — Trunk-forward</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="#f5f5f0" d="M268,280 Q260,250 250,215 Q238,180 240,155 Q242,130 235,115 Q230,105 240,100 L248,98 Q255,105 250,120 Q248,140 255,165 Q262,190 270,225 Q275,255 278,280 Z"/>
+      <ellipse fill="#f5f5f0" cx="238" cy="95" rx="42" ry="30"/>
+    </svg>
+    <p>Emphasizes the distinctive trunk</p>
+  </div>
+
+  <!-- 12: Geometric interpretation -->
+  <div class="card">
+    <h3>M12 — Geometric</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="#f5f5f0" d="M248,278 L242,200 L225,150 L200,110 L220,90 L250,100 L280,85 L305,105 L285,140 L268,195 L264,278 Z"/>
+    </svg>
+    <p>Angular/faceted — geometric madrona</p>
+  </div>
+
+  <!-- 13: Reaching right -->
+  <div class="card">
+    <h3>M13 — Reaching</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M240,278 Q230,235 225,200 Q220,170 230,150 Q245,130 265,120 Q285,110 295,100"/>
+      <ellipse fill="#f5f5f0" cx="280" cy="100" rx="45" ry="35"/>
+    </svg>
+    <p>Trunk curves then reaches — dynamic energy</p>
+  </div>
+
+  <!-- 14: Negative space canopy -->
+  <div class="card">
+    <h3>M14 — Open canopy</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M255,278 Q245,230 240,195 Q235,170 240,150"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,150 Q225,130 205,115"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,150 Q260,125 280,110"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M205,115 Q190,100 185,90"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M280,110 Q295,95 305,88"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M240,150 Q248,125 252,105"/>
+    </svg>
+    <p>Just branches — no filled canopy, most tree-like</p>
+  </div>
+
+  <!-- 15: Refined M7 with thinner trunk -->
+  <div class="card">
+    <h3>M15 — Refined graceful</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M258,278 C252,240 238,200 242,165 C246,135 236,115 232,105"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,165 Q265,150 280,135"/>
+      <path fill="#f5f5f0" d="M192,108 Q208,72 238,82 Q260,68 285,82 Q308,98 295,118 Q278,132 258,128 Q235,132 218,125 Q198,120 192,108Z"/>
+    </svg>
+    <p>Thin trunk, side branch, refined canopy</p>
+  </div>
+
+</div>
+
+<hr class="section-divider">
+
+<h2>Favicon test — 32px</h2>
+<div class="sizes">
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M256,280 Q240,230 250,190 Q260,150 245,130"/><circle fill="#f5f5f0" cx="240" cy="120" r="48"/></svg><span>M1</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,275 Q248,220 240,185"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M240,185 Q225,155 215,125"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M240,185 Q260,155 275,130"/><circle fill="#f5f5f0" cx="210" cy="115" r="32"/><circle fill="#f5f5f0" cx="278" cy="120" r="30"/></svg><span>M3</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="#f5f5f0" d="M252,280 C248,250 238,215 240,185 C242,160 232,140 225,125 C218,110 225,90 245,88 C265,86 275,95 280,110 C285,125 278,145 272,165 C266,185 268,220 264,250 C262,265 258,275 252,280Z"/></svg><span>M5</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="16" stroke-linecap="round" d="M260,278 C255,240 240,200 245,165 C250,135 240,115 235,105"/><path fill="#f5f5f0" d="M190,105 Q210,65 245,80 Q270,60 300,85 Q315,110 290,125 Q260,135 230,130 Q200,125 190,105Z"/></svg><span>M7</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,275 Q245,230 240,195"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,195 Q225,165 210,145"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,195 Q255,160 270,140"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M270,140 Q290,120 300,105"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M210,145 Q195,125 190,110"/><circle fill="#f5f5f0" cx="190" cy="105" r="22"/><circle fill="#f5f5f0" cx="300" cy="100" r="22"/><circle fill="#f5f5f0" cx="248" cy="108" r="26"/></svg><span>M8</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M240,278 Q230,235 225,200 Q220,170 230,150 Q245,130 265,120 Q285,110 295,100"/><ellipse fill="#f5f5f0" cx="280" cy="100" rx="45" ry="35"/></svg><span>M13</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M258,278 C252,240 238,200 242,165 C246,135 236,115 232,105"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,165 Q265,150 280,135"/><path fill="#f5f5f0" d="M192,108 Q208,72 238,82 Q260,68 285,82 Q308,98 295,118 Q278,132 258,128 Q235,132 218,125 Q198,120 192,108Z"/></svg><span>M15</span></div>
+</div>
+
+<hr class="section-divider">
+
+<h2>With wordmark — top picks</h2>
+<div style="display:flex; flex-direction:column; gap:0.5rem; max-width:400px">
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,275 Q248,220 240,185"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M240,185 Q225,155 215,125"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M240,185 Q260,155 275,130"/><circle fill="#f5f5f0" cx="210" cy="115" r="32"/><circle fill="#f5f5f0" cx="278" cy="120" r="30"/></svg><span class="wm">campable</span><span class="lbl">M3 Fork</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="16" stroke-linecap="round" d="M260,278 C255,240 240,200 245,165 C250,135 240,115 235,105"/><path fill="#f5f5f0" d="M190,105 Q210,65 245,80 Q270,60 300,85 Q315,110 290,125 Q260,135 230,130 Q200,125 190,105Z"/></svg><span class="wm">campable</span><span class="lbl">M7 Graceful</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,275 Q245,230 240,195"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,195 Q225,165 210,145"/><path fill="none" stroke="#f5f5f0" stroke-width="10" stroke-linecap="round" d="M240,195 Q255,160 270,140"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M270,140 Q290,120 300,105"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M210,145 Q195,125 190,110"/><circle fill="#f5f5f0" cx="190" cy="105" r="22"/><circle fill="#f5f5f0" cx="300" cy="100" r="22"/><circle fill="#f5f5f0" cx="248" cy="108" r="26"/></svg><span class="wm">campable</span><span class="lbl">M8 Branches</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M258,278 C252,240 238,200 242,165 C246,135 236,115 232,105"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,165 Q265,150 280,135"/><path fill="#f5f5f0" d="M192,108 Q208,72 238,82 Q260,68 285,82 Q308,98 295,118 Q278,132 258,128 Q235,132 218,125 Q198,120 192,108Z"/></svg><span class="wm">campable</span><span class="lbl">M15 Refined</span></div>
+</div>
+
+</body>
+</html>

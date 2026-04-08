@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Madrona — Round 3 (Canopy Shapes)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #333; padding: 2rem; max-width: 1100px; margin: 0 auto; }
+  h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; color: #555; }
+  .section-divider { border: none; border-top: 1px solid #ddd; margin: 2.5rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+  .card { background: #fff; border: 2px solid #ddd; border-radius: 10px; padding: 1rem; text-align: center; }
+  .card h3 { font-size: 0.7rem; color: #888; margin-bottom: 0.5rem; }
+  .card svg { width: 90px; height: 90px; display: block; margin: 0 auto 0.5rem; }
+  .card p { font-size: 0.6rem; color: #aaa; line-height: 1.3; }
+  .sizes { display: flex; gap: 1.5rem; align-items: flex-end; flex-wrap: wrap; margin: 1rem 0; }
+  .sizes .s { text-align: center; }
+  .sizes .s span { display: block; font-size: 0.6rem; color: #aaa; margin-top: 0.25rem; }
+  .header-sim { display: flex; align-items: center; gap: 0.5rem; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 0.6rem 0.75rem; margin: 0.4rem 0; }
+  .header-sim svg { width: 26px; height: 26px; flex-shrink: 0; }
+  .wm { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.1rem; font-weight: 700; color: #2d5016; }
+  .lbl { color: #aaa; font-size: 0.65rem; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<h1>Madrona — Round 3</h1>
+<p class="subtitle">Exploring canopy shapes: overlapping circles, scalloped edges, organic blobs, negative space, multi-lobe. All built on the trunk styles you liked.</p>
+
+<h2>Overlapping circles canopy</h2>
+<div class="grid">
+
+  <!-- OC1: M7-style trunk + overlapping circles canopy -->
+  <div class="card">
+    <h3>OC1 — Bumpy crown</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,278 C252,240 238,200 242,168 C246,140 236,118 232,108"/>
+      <circle fill="#f5f5f0" cx="220" cy="105" r="28"/>
+      <circle fill="#f5f5f0" cx="248" cy="88" r="30"/>
+      <circle fill="#f5f5f0" cx="278" cy="98" r="26"/>
+      <circle fill="#f5f5f0" cx="235" cy="120" r="22"/>
+      <circle fill="#f5f5f0" cx="265" cy="115" r="24"/>
+    </svg>
+    <p>Multiple circles = irregular lumpy canopy edge</p>
+  </div>
+
+  <!-- OC2: M15-style + overlapping circles + side branch -->
+  <div class="card">
+    <h3>OC2 — Branch + lumps</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,140 236,118 232,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,168 Q268,150 285,132"/>
+      <circle fill="#f5f5f0" cx="215" cy="108" r="26"/>
+      <circle fill="#f5f5f0" cx="242" cy="90" r="28"/>
+      <circle fill="#f5f5f0" cx="268" cy="100" r="24"/>
+      <circle fill="#f5f5f0" cx="290" cy="120" r="20"/>
+    </svg>
+    <p>Side branch visible, canopy clusters above</p>
+  </div>
+
+  <!-- OC3: M4-style + three big overlapping circles -->
+  <div class="card">
+    <h3>OC3 — Three lobes</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="11" stroke-linecap="round" d="M258,275 C248,235 238,200 242,165 C246,140 236,118 232,108"/>
+      <circle fill="#f5f5f0" cx="210" cy="108" r="32"/>
+      <circle fill="#f5f5f0" cx="250" cy="88" r="34"/>
+      <circle fill="#f5f5f0" cx="285" cy="105" r="28"/>
+    </svg>
+    <p>Three distinct lobes — reads as "tree canopy" instantly</p>
+  </div>
+
+  <!-- OC4: asymmetric circles, windswept -->
+  <div class="card">
+    <h3>OC4 — Windswept lobes</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M250,278 C244,240 232,205 238,170 C242,142 234,120 230,108"/>
+      <circle fill="#f5f5f0" cx="225" cy="105" r="25"/>
+      <circle fill="#f5f5f0" cx="258" cy="88" r="30"/>
+      <circle fill="#f5f5f0" cx="295" cy="95" r="28"/>
+      <circle fill="#f5f5f0" cx="310" cy="115" r="18"/>
+    </svg>
+    <p>Canopy weight shifted right — wind effect</p>
+  </div>
+
+  <!-- OC5: small scattered circles -->
+  <div class="card">
+    <h3>OC5 — Scattered</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,205 242,168 C246,140 236,118 232,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,168 Q265,150 282,135"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,148 Q218,135 205,122"/>
+      <circle fill="#f5f5f0" cx="200" cy="112" r="18"/>
+      <circle fill="#f5f5f0" cx="230" cy="95" r="20"/>
+      <circle fill="#f5f5f0" cx="255" cy="82" r="22"/>
+      <circle fill="#f5f5f0" cx="280" cy="90" r="18"/>
+      <circle fill="#f5f5f0" cx="295" cy="118" r="16"/>
+    </svg>
+    <p>Many small clusters along branches</p>
+  </div>
+</div>
+
+<h2>Scalloped / cloud canopy</h2>
+<div class="grid">
+
+  <!-- SC1: scalloped top edge -->
+  <div class="card">
+    <h3>SC1 — Scalloped cloud</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,278 C252,240 238,200 242,168 C246,138 236,118 232,108"/>
+      <path fill="#f5f5f0" d="M192,125 Q192,108 208,100 Q218,88 232,85 Q242,75 256,78 Q270,72 282,82 Q295,78 305,92 Q315,105 305,118 Q310,130 295,132 Q280,138 265,132 Q248,138 232,135 Q215,135 205,128 Q195,130 192,125Z"/>
+    </svg>
+    <p>Bumpy cloud outline — feels organic</p>
+  </div>
+
+  <!-- SC2: scalloped + side branch -->
+  <div class="card">
+    <h3>SC2 — Scalloped + branch</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,140 236,118 232,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,168 Q268,148 288,130"/>
+      <path fill="#f5f5f0" d="M190,120 Q192,105 205,95 Q215,82 230,80 Q245,72 258,78 Q272,70 285,80 Q298,75 308,88 Q318,102 308,115 Q312,128 298,130 Q285,136 270,130 Q255,135 240,132 Q222,132 210,125 Q198,125 190,120Z"/>
+    </svg>
+    <p>Cloud canopy with visible branch below</p>
+  </div>
+
+  <!-- SC3: wider scalloped, asymmetric -->
+  <div class="card">
+    <h3>SC3 — Wide scallop</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="13" stroke-linecap="round" d="M255,278 C248,240 236,205 240,168 C244,140 234,118 230,108"/>
+      <path fill="#f5f5f0" d="M182,118 Q185,102 198,92 Q212,80 228,78 Q240,68 255,72 Q270,65 285,75 Q300,68 312,82 Q322,98 315,112 Q320,125 308,130 Q295,138 278,132 Q262,138 245,135 Q228,138 215,130 Q200,130 190,122 Q182,122 182,118Z"/>
+    </svg>
+    <p>Extra-wide — fills more of the pin</p>
+  </div>
+
+  <!-- SC4: tight scallop, compact -->
+  <div class="card">
+    <h3>SC4 — Tight scallop</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,278 C252,240 238,200 242,168 C248,135 238,115 234,105"/>
+      <path fill="#f5f5f0" d="M202,112 Q205,98 218,92 Q228,82 242,80 Q255,74 268,82 Q280,78 290,90 Q298,102 290,114 Q295,122 282,125 Q268,130 255,125 Q240,130 228,126 Q215,125 208,118 Q200,118 202,112Z"/>
+    </svg>
+    <p>Smaller, tighter bumps — more delicate</p>
+  </div>
+
+  <!-- SC5: scallop with two branches showing -->
+  <div class="card">
+    <h3>SC5 — Scallop + 2 branches</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C250,240 238,205 242,170 C246,142 238,120 234,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M242,172 Q268,155 285,138"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M240,150 Q220,138 205,125"/>
+      <path fill="#f5f5f0" d="M188,118 Q190,102 205,92 Q218,80 235,78 Q250,70 265,76 Q280,68 295,80 Q308,92 302,108 Q310,120 298,126 Q282,134 268,128 Q252,134 238,130 Q222,132 210,125 Q196,124 188,118Z"/>
+    </svg>
+    <p>Both branches peeking out below the scalloped crown</p>
+  </div>
+</div>
+
+<h2>Organic blob / negative space</h2>
+<div class="grid">
+
+  <!-- OB1: truly organic blob with irregular edge -->
+  <div class="card">
+    <h3>OB1 — Organic blob</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,138 236,118 232,108"/>
+      <path fill="#f5f5f0" d="M195,118 C192,105 200,88 215,82 C225,76 235,72 248,75 C258,68 272,65 285,75 C298,80 310,95 305,112 C312,122 305,132 290,132 C282,138 268,135 258,132 C245,138 230,138 218,132 C205,130 195,125 195,118Z"/>
+    </svg>
+    <p>Irregular organic edge — hand-drawn feel</p>
+  </div>
+
+  <!-- OB2: organic with negative space gap -->
+  <div class="card">
+    <h3>OB2 — Light gap</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,138 236,118 232,108"/>
+      <path fill="#f5f5f0" d="M195,115 C195,100 208,85 225,80 C238,74 248,72 255,78 C248,88 245,98 248,108 C235,112 220,115 210,118 C200,120 195,118 195,115Z"/>
+      <path fill="#f5f5f0" d="M262,78 C275,70 292,78 302,92 C310,105 305,120 295,128 C285,132 275,128 268,120 C260,112 258,98 262,78Z"/>
+    </svg>
+    <p>Two canopy masses with a gap — light through leaves</p>
+  </div>
+
+  <!-- OB3: M15-base with organic blob canopy + branch -->
+  <div class="card">
+    <h3>OB3 — Blob + branch</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,140 236,118 232,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,168 Q268,148 288,130"/>
+      <path fill="#f5f5f0" d="M190,115 C188,98 200,82 218,78 C232,72 245,68 260,72 C272,65 290,70 302,85 C312,98 308,115 298,125 C290,132 278,135 265,130 C250,136 235,138 222,132 C208,130 195,125 190,115Z"/>
+    </svg>
+    <p>Rich organic canopy shape with branch visible</p>
+  </div>
+
+  <!-- OB4: multi-lobe with clear separation -->
+  <div class="card">
+    <h3>OB4 — Multi-lobe</h3>
+    <svg viewBox="0 0 512 512">
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C250,240 238,205 242,170 C246,142 238,120 234,108"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,170 Q270,150 290,130"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,145 Q215,130 200,118"/>
+      <!-- Three separate canopy blobs -->
+      <path fill="#f5f5f0" d="M185,112 C182,98 192,85 208,82 C220,80 228,88 225,100 C222,110 210,118 198,118 C190,118 185,116 185,112Z"/>
+      <path fill="#f5f5f0" d="M228,95 C228,80 240,68 255,68 C270,68 280,80 278,95 C276,108 265,115 252,112 C240,110 228,105 228,95Z"/>
+      <path fill="#f5f5f0" d="M278,105 C278,90 290,80 305,85 C315,90 318,105 310,115 C302,122 288,120 282,115 C278,112 278,108 278,105Z"/>
+    </svg>
+    <p>Three distinct canopy masses on branches</p>
+  </div>
+
+  <!-- OB5: negative space — canopy with holes -->
+  <div class="card">
+    <h3>OB5 — Dappled</h3>
+    <svg viewBox="0 0 512 512">
+      <defs>
+        <mask id="canopy-mask">
+          <rect width="512" height="512" fill="white"/>
+          <circle cx="235" cy="100" r="8" fill="black"/>
+          <circle cx="262" cy="108" r="6" fill="black"/>
+          <circle cx="280" cy="92" r="7" fill="black"/>
+        </mask>
+      </defs>
+      <path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/>
+      <path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,140 236,118 232,108"/>
+      <path fill="#f5f5f0" mask="url(#canopy-mask)" d="M190,118 C188,100 200,82 218,76 C235,70 252,66 268,72 C282,65 300,75 310,92 C318,108 310,125 295,130 C280,136 262,138 245,134 C228,136 210,132 198,125 C190,122 188,120 190,118Z"/>
+    </svg>
+    <p>Canopy with light holes cut through — dappled light</p>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Favicon — 32px (top picks)</h2>
+<div class="sizes">
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,278 C252,240 238,200 242,168 C246,138 236,118 232,108"/><circle fill="#f5f5f0" cx="220" cy="105" r="28"/><circle fill="#f5f5f0" cx="248" cy="88" r="30"/><circle fill="#f5f5f0" cx="278" cy="98" r="26"/><circle fill="#f5f5f0" cx="235" cy="120" r="22"/><circle fill="#f5f5f0" cx="265" cy="115" r="24"/></svg><span>OC1</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="11" stroke-linecap="round" d="M258,275 C248,235 238,200 242,165 C246,140 236,118 232,108"/><circle fill="#f5f5f0" cx="210" cy="108" r="32"/><circle fill="#f5f5f0" cx="250" cy="88" r="34"/><circle fill="#f5f5f0" cx="285" cy="105" r="28"/></svg><span>OC3</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,278 C252,240 238,200 242,168 C246,138 236,118 232,108"/><path fill="#f5f5f0" d="M192,125 Q192,108 208,100 Q218,88 232,85 Q242,75 256,78 Q270,72 282,82 Q295,78 305,92 Q315,105 305,118 Q310,130 295,132 Q280,138 265,132 Q248,138 232,135 Q215,135 205,128 Q195,130 192,125Z"/></svg><span>SC1</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,140 236,118 232,108"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,168 Q268,148 288,130"/><path fill="#f5f5f0" d="M190,115 C188,98 200,82 218,78 C232,72 245,68 260,72 C272,65 290,70 302,85 C312,98 308,115 298,125 C290,132 278,135 265,130 C250,136 235,138 222,132 C208,130 195,125 190,115Z"/></svg><span>OB3</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C250,240 238,205 242,170 C246,142 238,120 234,108"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,170 Q270,150 290,130"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,145 Q215,130 200,118"/><path fill="#f5f5f0" d="M185,112 C182,98 192,85 208,82 C220,80 228,88 225,100 C222,110 210,118 198,118 C190,118 185,116 185,112Z"/><path fill="#f5f5f0" d="M228,95 C228,80 240,68 255,68 C270,68 280,80 278,95 C276,108 265,115 252,112 C240,110 228,105 228,95Z"/><path fill="#f5f5f0" d="M278,105 C278,90 290,80 305,85 C315,90 318,105 310,115 C302,122 288,120 282,115 C278,112 278,108 278,105Z"/></svg><span>OB4</span></div>
+  <div class="s"><svg viewBox="0 0 512 512" width="32" height="32"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C250,240 238,205 242,170 C246,142 238,120 234,108"/><path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M242,172 Q268,155 285,138"/><path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M240,150 Q220,138 205,125"/><path fill="#f5f5f0" d="M188,118 Q190,102 205,92 Q218,80 235,78 Q250,70 265,76 Q280,68 295,80 Q308,92 302,108 Q310,120 298,126 Q282,134 268,128 Q252,134 238,130 Q222,132 210,125 Q196,124 188,118Z"/></svg><span>SC5</span></div>
+</div>
+
+<hr class="section-divider">
+
+<h2>With wordmark</h2>
+<div style="display:flex; flex-direction:column; gap:0.5rem; max-width:420px">
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,140 236,118 232,108"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,168 Q268,150 285,132"/><circle fill="#f5f5f0" cx="215" cy="108" r="26"/><circle fill="#f5f5f0" cx="242" cy="90" r="28"/><circle fill="#f5f5f0" cx="268" cy="100" r="24"/><circle fill="#f5f5f0" cx="290" cy="120" r="20"/></svg><span class="wm">campable</span><span class="lbl">OC2</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="11" stroke-linecap="round" d="M258,275 C248,235 238,200 242,165 C246,140 236,118 232,108"/><circle fill="#f5f5f0" cx="210" cy="108" r="32"/><circle fill="#f5f5f0" cx="250" cy="88" r="34"/><circle fill="#f5f5f0" cx="285" cy="105" r="28"/></svg><span class="wm">campable</span><span class="lbl">OC3</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="14" stroke-linecap="round" d="M258,278 C252,240 238,200 242,168 C246,138 236,118 232,108"/><path fill="#f5f5f0" d="M192,125 Q192,108 208,100 Q218,88 232,85 Q242,75 256,78 Q270,72 282,82 Q295,78 305,92 Q315,105 305,118 Q310,130 295,132 Q280,138 265,132 Q248,138 232,135 Q215,135 205,128 Q195,130 192,125Z"/></svg><span class="wm">campable</span><span class="lbl">SC1</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M256,278 C250,240 238,200 242,168 C246,140 236,118 232,108"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,168 Q268,148 288,130"/><path fill="#f5f5f0" d="M190,115 C188,98 200,82 218,78 C232,72 245,68 260,72 C272,65 290,70 302,85 C312,98 308,115 298,125 C290,132 278,135 265,130 C250,136 235,138 222,132 C208,130 195,125 190,115Z"/></svg><span class="wm">campable</span><span class="lbl">OB3</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C250,240 238,205 242,170 C246,142 238,120 234,108"/><path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M242,172 Q268,155 285,138"/><path fill="none" stroke="#f5f5f0" stroke-width="7" stroke-linecap="round" d="M240,150 Q220,138 205,125"/><path fill="#f5f5f0" d="M188,118 Q190,102 205,92 Q218,80 235,78 Q250,70 265,76 Q280,68 295,80 Q308,92 302,108 Q310,120 298,126 Q282,134 268,128 Q252,134 238,130 Q222,132 210,125 Q196,124 188,118Z"/></svg><span class="wm">campable</span><span class="lbl">SC5</span></div>
+  <div class="header-sim"><svg viewBox="0 0 512 512"><path fill="#2d5016" d="M256 476C256 476 88 296 88 196C88 103 163 28 256 28C349 28 424 103 424 196C424 296 256 476 256 476Z"/><path fill="none" stroke="#f5f5f0" stroke-width="12" stroke-linecap="round" d="M255,278 C250,240 238,205 242,170 C246,142 238,120 234,108"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M242,170 Q270,150 290,130"/><path fill="none" stroke="#f5f5f0" stroke-width="8" stroke-linecap="round" d="M238,145 Q215,130 200,118"/><path fill="#f5f5f0" d="M185,112 C182,98 192,85 208,82 C220,80 228,88 225,100 C222,110 210,118 198,118 C190,118 185,116 185,112Z"/><path fill="#f5f5f0" d="M228,95 C228,80 240,68 255,68 C270,68 280,80 278,95 C276,108 265,115 252,112 C240,110 228,105 228,95Z"/><path fill="#f5f5f0" d="M278,105 C278,90 290,80 305,85 C315,90 318,105 310,115 C302,122 288,120 282,115 C278,112 278,108 278,105Z"/></svg><span class="wm">campable</span><span class="lbl">OB4</span></div>
+</div>
+
+</body>
+</html>
