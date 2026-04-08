@@ -311,7 +311,9 @@ async def chat_stream(
         for block in tool_use_blocks:
             logger.info("Tool call (stream): %s  input=%s", block["name"], block.get("input"))
             try:
-                result_str = await execute_tool(block["name"], block.get("input", {}), engine, registry)
+                result_str = await execute_tool(
+                    block["name"], block.get("input", {}), engine, registry
+                )
             except Exception as exc:
                 logger.warning("Tool %s failed during stream: %s", block["name"], exc)
                 result_str = json.dumps({"error": str(exc)})
