@@ -307,41 +307,38 @@ class TestBuildToolUseBlocks:
 
 
 class TestOpenStream:
-    """Test _open_stream() normalisation of different client types."""
+    """Test _open_stream() uses create(stream=True)."""
 
     @pytest.mark.asyncio
-    async def test_context_manager_path(self):
-        """Native Anthropic client: returns context manager with __aenter__."""
+    async def test_returns_async_iterable(self):
+        """_open_stream returns whatever create(stream=True) resolves to."""
         from pnw_campsites.planner.agent import _open_stream
 
-        mock_inner = AsyncMock()
-        mock_inner.__aiter__ = lambda self: self
-        mock_inner.__anext__ = AsyncMock(side_effect=StopAsyncIteration())
+        mock_stream = AsyncMock()
+        mock_stream.__aiter__ = lambda self: self
+        mock_stream.__anext__ = AsyncMock(side_effect=StopAsyncIteration())
 
-        mock_cm = AsyncMock()
-        mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
-
-        mock_client = MagicMock()
-        mock_client.messages.stream = MagicMock(return_value=mock_cm)
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_stream)
 
         result = await _open_stream(mock_client, model="test")
-        # Should have called __aenter__
-        mock_cm.__aenter__.assert_called_once()
+        # Should have passed stream=True
+        mock_client.messages.create.assert_called_once()
+        call_kwargs = mock_client.messages.create.call_args[1]
+        assert call_kwargs["stream"] is True
 
     @pytest.mark.asyncio
-    async def test_coroutine_path(self):
-        """PostHog wrapper: stream() is async def returning async generator."""
+    async def test_posthog_wrapper_async_generator(self):
+        """PostHog wrapper: create(stream=True) returns async generator."""
         from pnw_campsites.planner.agent import _open_stream
 
         async def mock_gen():
             yield MagicMock(type="message_delta")
 
-        mock_client = MagicMock()
-        # Make stream() an async function returning an async generator
-        mock_client.messages.stream = AsyncMock(return_value=mock_gen())
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_gen())
 
         result = await _open_stream(mock_client, model="test")
-        # Should be iterable
         events = [e async for e in result]
         assert len(events) == 1
 
@@ -374,12 +371,8 @@ class TestChatStream:
             side_effect=[*stream_events, StopAsyncIteration()],
         )
 
-        mock_stream_ctx = AsyncMock()
-        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_stream)
-        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
-
         mock_client = AsyncMock()
-        mock_client.messages.stream = MagicMock(return_value=mock_stream_ctx)
+        mock_client.messages.create = AsyncMock(return_value=mock_stream)
 
         events = []
         with patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client):
@@ -409,7 +402,7 @@ class TestChatStream:
                 yield event
 
         mock_client = AsyncMock()
-        mock_client.messages.stream = AsyncMock(return_value=mock_gen())
+        mock_client.messages.create = AsyncMock(return_value=mock_gen())
 
         events = []
         with patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client):
@@ -457,19 +450,19 @@ class TestChatStream:
 
         call_count = [0]
 
-        async def mock_stream_gen(*args, **kwargs):
+        async def mock_create_stream(**kwargs):
             call_count[0] += 1
-            if call_count[0] == 1:
-                for e in [tool_block_start, tool_input_delta, tool_msg_delta]:
-                    yield e
-            else:
-                for e in final_events:
-                    yield e
+            async def gen():
+                if call_count[0] == 1:
+                    for e in [tool_block_start, tool_input_delta, tool_msg_delta]:
+                        yield e
+                else:
+                    for e in final_events:
+                        yield e
+            return gen()
 
         mock_client = AsyncMock()
-        mock_client.messages.stream = AsyncMock(
-            side_effect=lambda **kw: mock_stream_gen(**kw),
-        )
+        mock_client.messages.create = AsyncMock(side_effect=mock_create_stream)
 
         mock_tool_result = json.dumps({
             "found": 2, "total_checked": 10, "campgrounds": [],
@@ -506,11 +499,8 @@ class TestChatStream:
         """chat_stream() yields an error event on API failure."""
         from pnw_campsites.planner.agent import chat_stream
 
-        mock_stream_ctx = AsyncMock()
-        mock_stream_ctx.__aenter__ = AsyncMock(side_effect=Exception("API down"))
-
         mock_client = AsyncMock()
-        mock_client.messages.stream = MagicMock(return_value=mock_stream_ctx)
+        mock_client.messages.create = AsyncMock(side_effect=Exception("API down"))
 
         events = []
         with patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client):
