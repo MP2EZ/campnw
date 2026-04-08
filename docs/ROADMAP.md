@@ -999,28 +999,24 @@ Operational stability. The availability_history table hit 9.37M rows in 2.5 days
 
 ---
 
-## v1.29 "Brand + Polish"
+## v1.29 "Brand + Polish" [SHIPPED 2026-04-07]
 
-### Theme
-Prepare campable for broader marketing. Establish visual brand identity, clean up the registry to remove non-campground facilities, add LLM analytics for cost/performance visibility, and build itinerary cards for the trip planner.
+### What Shipped
 
-### Features
+| Feature | Description |
+|---------|-------------|
+| Madrona pin logo | Custom madrona tree silhouette (S-curve trunk, 3 branches, scalloped canopy) inside a map pin. Generated all icon PNGs (16-512px), apple-touch-icon, og:image (1200x630). |
+| PostHog LLM analytics | Wrapped all 12 Anthropic call sites with `posthog.ai.anthropic` wrapper. Captures `$ai_generation` events with model, tokens, latency, cost. Shared client in `posthog_client.py`. |
+| PostHog session replay | Enabled with `maskAllInputs: true` for user privacy. |
+| Registry cleanup | Removed 3 non-campground RIDB facilities (corridors, scenic areas). Updated seed script exclude patterns. |
+| Itinerary card view | `ItineraryCard` component renders trip planner campground suggestions as visual cards with numbered badges, source badges, dates, drive time, booking links. Planner outputs structured JSON in ```itinerary fences. |
 
-| Feature | Size | Description |
-|---------|------|-------------|
-| PostHog LLM analytics | S | Wrap existing `anthropic.AsyncAnthropic` calls (AI summaries, trip planner) with PostHog's `posthog.ai.anthropic` wrapper. Tracks token usage, latency, cost per generation. Captures `$ai_generation` events automatically. |
-| Registry cleanup | S | Remove non-campground RIDB facilities from registry (scenic corridors, byways, day-use-only areas, visitor centers). Currently ~5-10 bad entries showing as broken results. One-off script + ongoing seed filter. |
-| Brand + Identity | L | Logo design, og:image for social sharing, notification copy polish. Build on the existing green/cream palette. The text wordmark stays — focus on a logomark/icon that works as favicon, og:image, and app icon. |
-| Itinerary card view | L | Day-by-day visual cards for trip planner output. Each card shows campground name, drive time from previous stop, availability status, booking link. Replaces plain-text trip planner responses with a visual timeline. Shareable via existing shared links infrastructure. |
-
-### Dependencies
-- v1.28 shipped
-
-### Quality Bar
-- LLM analytics: `$ai_generation` events visible in PostHog LLM Analytics dashboard
-- Registry: zero non-campground facilities returned in search results
-- Brand: og:image renders correctly on Twitter/iMessage/Slack link previews
-- Itinerary: trip planner output renders as visual cards with booking links
+### Design Process
+- Logo exploration: 60+ variations across evergreen, spruce, lodgepole, madrona tree types
+- Final direction: madrona (Pacific madrone) — distinctive PNW tree with sinuous curved trunk
+- Canopy styles explored: overlapping circles, scalloped edges, organic blobs, dappled negative space
+- Final: LF9 — deep S-curve trunk, 3 forking branches, merged scalloped canopy, positioned +40px down / -5px left
+- Design files: `docs/v1.29-logo-*.html`
 
 ---
 
