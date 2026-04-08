@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import Markdown from "react-markdown";
 import { planChatStream, track } from "../api";
 import type { ChatMessage, ToolCall } from "../api";
@@ -245,6 +246,10 @@ export default function TripPlanner() {
 
   return (
     <main id="main-content" className="trip-planner">
+      <Helmet>
+        <title>Trip Planner — Campable</title>
+        <meta name="description" content="AI-powered camping trip planner. Get personalized campground recommendations and itineraries." />
+      </Helmet>
       {!isEmpty && (
         <button
           className="chat-new-btn"

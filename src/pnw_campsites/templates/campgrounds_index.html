@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}All Campgrounds — Campable{% endblock %}
+{% block description %}Browse {{ total }} campgrounds across Washington, Oregon, Idaho, Montana, Wyoming, and Northern California.{% endblock %}
+
+{% block content %}
+<h1 class="index__title">Campgrounds</h1>
+<p class="index__subtitle">{{ total }} campgrounds across 6 states</p>
+
+<div class="state-grid">
+  {% for state, info in states %}
+  <a class="state-card" href="/campgrounds/{{ state | lower }}">
+    <div class="state-card__abbr">{{ state }}</div>
+    <div class="state-card__count">{{ info.count }} campgrounds</div>
+  </a>
+  {% endfor %}
+</div>
+
+{% if all_tags %}
+<section style="margin-top: var(--space-6)">
+  <h2 class="index__group-title">Browse by tag</h2>
+  <ul class="tag-list">
+    {% for tag, count in all_tags %}
+    <li><a class="tag" href="/tags/{{ tag }}">{{ tag }} ({{ count }})</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useMemo } from "react";
+import { Helmet } from "react-helmet-async";
 import { Link, useLocation } from "react-router-dom";
 import { useSearchContext } from "../contexts/SearchContext";
 import type { CampgroundResult, SearchParams } from "../api";
@@ -227,6 +228,10 @@ export default function MapView() {
 
   return (
     <main id="main-content" className="map-page">
+      <Helmet>
+        <title>Map — Campable</title>
+        <meta name="description" content="Interactive map of campsite availability across the western US." />
+      </Helmet>
       <div aria-live="polite" className="sr-only">
         {loading ? "Loading map results" : `Map showing ${withAvailability.length} campgrounds with availability`}
       </div>

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tag | title }} Campgrounds — Campable{% endblock %}
+{% block description %}{{ total }} {{ tag }} campgrounds across the Pacific Northwest and western US. Find and check availability.{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/campgrounds">Campgrounds</a>
+  <span class="breadcrumb__sep" aria-hidden="true">/</span>
+  <span aria-current="page">{{ tag }}</span>
+</nav>
+
+<h1 class="index__title">{{ tag | title }} campgrounds</h1>
+<p class="index__subtitle">{{ total }} campgrounds</p>
+
+{% if other_tags %}
+<div class="tag-filter" role="navigation" aria-label="Browse other tags">
+  <span class="tag-filter__label">Other tags:</span>
+  {% for t, count in other_tags %}
+  <a class="tag" href="/tags/{{ t }}">{{ t }} ({{ count }})</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% for state_name, campgrounds in groups %}
+<section>
+  <h2 class="index__group-title">{{ state_name }}</h2>
+  {% for cg in campgrounds %}
+  <div class="cg-row">
+    <a class="cg-row__name" href="/campgrounds/{{ cg.state | lower }}/{{ cg.slug }}">{{ cg.name }}</a>
+    <span class="cg-row__meta">
+      {{ cg.region }}
+      {% if cg.drive_minutes_from_base is not none %}
+        &middot; {{ format_drive_time(cg.drive_minutes_from_base) }}
+      {% endif %}
+    </span>
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+{% endblock %}

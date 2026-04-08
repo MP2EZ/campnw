@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
+import { Helmet } from "react-helmet-async";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { getSearchHistory, getRecommendations, track } from "./api";
 import { renderMarkdown } from "./renderMarkdown";
@@ -792,6 +793,14 @@ export default function App() {
   return (
     <SearchContext.Provider value={searchContextValue}>
     <div className="app">
+      <Helmet>
+        <title>Campable — Find Available Campsites</title>
+        <meta name="description" content="Search and monitor campsite availability across Washington, Oregon, Idaho, Montana, Wyoming, and Northern California." />
+        <meta property="og:title" content="Campable — Find Available Campsites" />
+        <meta property="og:description" content="Search and monitor campsite availability across the western US." />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="/og-default.png" />
+      </Helmet>
       <a href="#main-content" className="skip-link">Skip to main content</a>
       <div aria-live="polite" className="sr-only">{liveAnnouncement}</div>
       <header>

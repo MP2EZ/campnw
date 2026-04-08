@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}{{ cg.name }} — Camping in {{ state_name }}{% endblock %}
+{% block description %}{{ cg.elevator_pitch or cg.vibe or (cg.name ~ ' campground in ' ~ state_name ~ '. ' ~ cg.region ~ '.') }}{% endblock %}
+
+{% block jsonld %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Campground",
+  "name": {{ cg.name | tojson }},
+  "description": {{ (cg.description_rewrite or cg.elevator_pitch or cg.vibe or '') | tojson }},
+  "url": {{ canonical_url | tojson }},
+  {% if cg.latitude and cg.longitude %}
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": {{ cg.latitude }},
+    "longitude": {{ cg.longitude }}
+  },
+  {% endif %}
+  "address": {
+    "@type": "PostalAddress",
+    "addressRegion": {{ cg.state | tojson }}
+  }
+  {% if cg.tags %},
+  "amenityFeature": [
+    {% for tag in cg.tags %}
+    {
+      "@type": "LocationFeatureSpecification",
+      "name": {{ tag | tojson }},
+      "value": true
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+  {% endif %}
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/campgrounds">Campgrounds</a>
+  <span class="breadcrumb__sep" aria-hidden="true">/</span>
+  <a href="/campgrounds/{{ cg.state | lower }}">{{ state_name }}</a>
+  <span class="breadcrumb__sep" aria-hidden="true">/</span>
+  <span aria-current="page">{{ cg.name }}</span>
+</nav>
+
+<article class="profile">
+  <header class="profile__header">
+    <h1 class="profile__name">{{ cg.name }}</h1>
+    <p class="profile__region">
+      {{ cg.region }}{% if cg.region %} &middot; {% endif %}{{ state_name }}
+      <span class="source-badge source-badge--{{ cg.booking_system.value }}">{{ source_label }}</span>
+    </p>
+  </header>
+
+  {% if cg.elevator_pitch %}
+  <p class="profile__pitch">{{ cg.elevator_pitch }}</p>
+  {% endif %}
+
+  {% if cg.description_rewrite %}
+  <div class="profile__description">{{ cg.description_rewrite }}</div>
+  {% endif %}
+
+  <div class="profile__meta">
+    {% if cg.best_for %}
+    <div class="profile__meta-item">
+      <span class="profile__meta-label">Best for</span>
+      {{ cg.best_for }}
+    </div>
+    {% endif %}
+    {% if cg.drive_minutes_from_base is not none %}
+    <div class="profile__meta-item">
+      <span class="profile__meta-label">Drive from Seattle</span>
+      {{ drive_time }}
+    </div>
+    {% endif %}
+    {% if cg.total_sites %}
+    <div class="profile__meta-item">
+      <span class="profile__meta-label">Total sites</span>
+      {{ cg.total_sites }}
+    </div>
+    {% endif %}
+    {% if cg.vibe %}
+    <div class="profile__meta-item">
+      <span class="profile__meta-label">Vibe</span>
+      {{ cg.vibe }}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if cg.tags %}
+  <ul class="tag-list" aria-label="Campground tags">
+    {% for tag in cg.tags %}
+    <li><a class="tag" href="/tags/{{ tag }}">{{ tag }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if booking_tips %}
+  <section class="card" style="margin-top: var(--space-4)">
+    <h2 style="font-size: var(--text-base); font-weight: var(--weight-semi); margin-bottom: var(--space-2)">Booking tips</h2>
+    <ul class="profile__tips">
+      {% for tip in booking_tips %}
+      <li>{{ tip }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <div style="margin-top: var(--space-5)">
+    <a class="profile__booking-link" href="{{ booking_url }}" rel="noopener" target="_blank">
+      Check availability &rarr;
+    </a>
+    <a href="/?name={{ cg.name | urlencode }}" style="margin-left: var(--space-3); font-size: var(--text-base);">
+      Search on Campable
+    </a>
+  </div>
+
+  {% if nearby %}
+  <section class="nearby">
+    <h2 class="nearby__title">Nearby campgrounds</h2>
+    {% for n in nearby %}
+    <div class="card">
+      <a class="cg-row__name" href="/campgrounds/{{ n.state | lower }}/{{ n.slug }}">{{ n.name }}</a>
+      <span class="cg-row__meta">
+        {{ n.region }}
+        {% if n.drive_minutes_from_base is not none %}
+         &middot; {{ format_drive_time(n.drive_minutes_from_base) }}
+        {% endif %}
+      </span>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+</article>
+{% endblock %}

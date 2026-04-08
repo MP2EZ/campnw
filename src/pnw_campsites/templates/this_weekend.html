@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Camping This Weekend — Campable{% endblock %}
+{% block description %}Campgrounds with availability this weekend ({{ date_range }}). Real-time availability across Washington, Oregon, Idaho, Montana, Wyoming, and Northern California.{% endblock %}
+
+{% block content %}
+<header class="weekend__header">
+  <h1 class="index__title">Available this weekend</h1>
+  <p class="weekend__date-range">{{ date_range }}</p>
+  {% if refreshed_at %}
+  <p class="weekend__refreshed">Last updated {{ refreshed_at }}</p>
+  {% endif %}
+</header>
+
+{% if results %}
+{% for state_name, campgrounds in groups %}
+<section>
+  <h2 class="index__group-title">{{ state_name }}</h2>
+  {% for item in campgrounds %}
+  <div class="card weekend__card">
+    <span class="weekend__avail-count" aria-label="{{ item.available_sites }} sites available">{{ item.available_sites }}</span>
+    <div style="flex: 1">
+      <a class="cg-row__name" href="/campgrounds/{{ item.cg.state | lower }}/{{ item.cg.slug }}">{{ item.cg.name }}</a>
+      <div class="cg-row__meta">
+        {{ item.cg.region }}
+        {% if item.cg.drive_minutes_from_base is not none %}
+          &middot; {{ format_drive_time(item.cg.drive_minutes_from_base) }}
+        {% endif %}
+      </div>
+      {% if item.cg.tags %}
+      <div style="margin-top: var(--space-1)">
+        {% for tag in item.cg.tags[:3] %}
+        <span class="tag" style="font-size: var(--text-xs)">{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <a class="profile__booking-link" href="{{ item.booking_url }}" rel="noopener" target="_blank" style="font-size: var(--text-sm)">
+      Book &rarr;
+    </a>
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+{% elif loading %}
+<div class="weekend__empty">
+  <p>Checking availability&hellip; check back in a few minutes.</p>
+</div>
+{% else %}
+<div class="weekend__empty">
+  <p>No availability found for this weekend. Try <a href="/">searching other dates</a>.</p>
+</div>
+{% endif %}
+
+<div style="margin-top: var(--space-5); text-align: center">
+  <a href="/" style="font-size: var(--text-base)">Search other dates &rarr;</a>
+</div>
+{% endblock %}

@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from pnw_campsites.monitor.db import WatchDB
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
@@ -249,6 +250,85 @@ async def lifespan(app: FastAPI):
             coalesce=True,
         )
 
+        # "This weekend" availability cache refresh
+        async def _refresh_weekend_cache():
+            """Populate the /this-weekend page cache with live availability."""
+            from datetime import date as _date
+
+            from pnw_campsites.routes.seo import (
+                STATE_NAMES,
+                _booking_url,
+                get_weekend_cache,
+            )
+            from pnw_campsites.search.engine import SearchQuery
+
+            log = logging.getLogger("pnw_campsites.weekend")
+            if not _engine or not _registry:
+                return
+
+            # Calculate upcoming weekend (Fri-Sun)
+            today = _date.today()
+            days_to_fri = (4 - today.weekday()) % 7
+            if days_to_fri == 0 and today.weekday() == 4:
+                days_to_fri = 0  # Today is Friday
+            elif days_to_fri == 0:
+                days_to_fri = 7
+            fri = today + timedelta(days=days_to_fri)
+            sun = fri + timedelta(days=2)
+
+            query = SearchQuery(
+                start_date=fri,
+                end_date=sun,
+                min_consecutive_nights=1,
+                max_campgrounds=50,
+            )
+            try:
+                results = await _engine.search(query, _skip_diagnosis=True)
+            except Exception as e:
+                log.warning("Weekend cache refresh failed: %s", e)
+                return
+
+            items = []
+            for r in results.results:
+                if r.total_available_sites > 0:
+                    items.append({
+                        "cg": r.campground,
+                        "available_sites": r.total_available_sites,
+                        "booking_url": _booking_url(r.campground),
+                    })
+            items.sort(key=lambda x: x["available_sites"], reverse=True)
+
+            # Group by state
+            from itertools import groupby as _groupby
+
+            items.sort(key=lambda x: x["cg"].state)
+            groups = []
+            for state_code, state_items in _groupby(items, key=lambda x: x["cg"].state):
+                groups.append((
+                    STATE_NAMES.get(state_code, state_code),
+                    list(state_items),
+                ))
+
+            cache = get_weekend_cache()
+            cache["results"] = items
+            cache["groups"] = groups
+            cache["date_range"] = f"{fri.strftime('%b %d')} – {sun.strftime('%b %d, %Y')}"
+            cache["refreshed_at"] = datetime.now(UTC).strftime("%I:%M %p UTC")
+            log.info(
+                "Weekend cache refreshed: %d campgrounds with availability",
+                len(items),
+            )
+
+        scheduler.add_job(
+            _refresh_weekend_cache,
+            "interval",
+            minutes=30,
+            id="weekend_cache",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now() + timedelta(minutes=2),
+        )
+
         scheduler.start()
         next_t0 = scheduler.get_job("watch_poller_t0").next_run_time
         _poll_state["next_poll"] = (
@@ -337,6 +417,7 @@ from pnw_campsites.routes.poll import router as poll_router  # noqa: E402
 from pnw_campsites.routes.push import router as push_router  # noqa: E402
 from pnw_campsites.routes.recommendations import router as recs_router  # noqa: E402
 from pnw_campsites.routes.search import router as search_router  # noqa: E402
+from pnw_campsites.routes.seo import router as seo_router  # noqa: E402
 from pnw_campsites.routes.sharing import router as sharing_router  # noqa: E402
 from pnw_campsites.routes.tracking import router as tracking_router  # noqa: E402
 from pnw_campsites.routes.trips import router as trips_router  # noqa: E402
@@ -353,6 +434,19 @@ app.include_router(trips_router)
 app.include_router(sharing_router)
 app.include_router(compare_router)
 app.include_router(poll_router)
+# SEO routes MUST be before the SPA catch-all so /campgrounds/{state}/{slug}
+# takes precedence over /{path:path}
+app.include_router(seo_router)
+
+# Mount SEO static assets (tokens.css, seo.css)
+_seo_static_candidates = [
+    Path("/app/seo-static"),
+    Path(__file__).resolve().parent / "seo-static",
+]
+for _seo_candidate in _seo_static_candidates:
+    if _seo_candidate.is_dir():
+        app.mount("/seo-static", StaticFiles(directory=str(_seo_candidate)), name="seo-static")
+        break
 
 # Re-export for test compatibility
 from pnw_campsites.routes.auth import _auth_rate_limit  # noqa: E402, F401

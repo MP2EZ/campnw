@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { getTrips, createTrip, deleteTrip, track } from "../api";
 import type { TripData } from "../api";
@@ -52,6 +53,10 @@ export default function TripsPage() {
 
   return (
     <div className="trips-page">
+      <Helmet>
+        <title>My Trips — Campable</title>
+        <meta name="description" content="Manage your camping trips and itineraries." />
+      </Helmet>
       <h2>My Trips</h2>
 
       <div className="trip-create-row">

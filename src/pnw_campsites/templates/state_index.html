@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Campgrounds in {{ state_name }} — Campable{% endblock %}
+{% block description %}Browse {{ total }} campgrounds in {{ state_name }}. Filter by tags, see drive times, and check availability.{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/campgrounds">Campgrounds</a>
+  <span class="breadcrumb__sep" aria-hidden="true">/</span>
+  <span aria-current="page">{{ state_name }}</span>
+</nav>
+
+<h1 class="index__title">Campgrounds in {{ state_name }}</h1>
+<p class="index__subtitle">{{ total }} campgrounds{% if active_tag %} tagged "{{ active_tag }}"{% endif %}</p>
+
+{% if all_tags %}
+<div class="tag-filter" role="navigation" aria-label="Filter by tag">
+  <span class="tag-filter__label">Filter:</span>
+  {% if active_tag %}
+  <a class="tag" href="/campgrounds/{{ state | lower }}">All</a>
+  {% endif %}
+  {% for tag, count in all_tags %}
+  {% if tag == active_tag %}
+  <span class="tag" aria-current="true"><strong>{{ tag }}</strong> ({{ count }})</span>
+  {% else %}
+  <a class="tag" href="/campgrounds/{{ state | lower }}?tag={{ tag }}">{{ tag }} ({{ count }})</a>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+{% for region, campgrounds in groups %}
+<section>
+  <h2 class="index__group-title">{{ region or "Other" }}</h2>
+  {% for cg in campgrounds %}
+  <div class="cg-row">
+    <a class="cg-row__name" href="/campgrounds/{{ cg.state | lower }}/{{ cg.slug }}">{{ cg.name }}</a>
+    <span class="cg-row__meta">
+      <span class="source-badge source-badge--{{ cg.booking_system.value }}">{{ source_labels[cg.booking_system.value] }}</span>
+      {% if cg.drive_minutes_from_base is not none %}
+        {{ format_drive_time(cg.drive_minutes_from_base) }}
+      {% endif %}
+      {% if cg.total_sites %}
+        &middot; {{ cg.total_sites }} sites
+      {% endif %}
+    </span>
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+{% endblock %}
