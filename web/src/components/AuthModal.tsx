@@ -92,7 +92,7 @@ export function AuthModal({
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
-          {error && <p className="auth-error">{error}</p>}
+          {error && <p className="auth-error" role="alert">{error}</p>}
 
           {mode === "signup" && (
             <label>

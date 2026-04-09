@@ -244,7 +244,7 @@ function SearchForm({
 
   return (
     <form onSubmit={handleSubmit} className="search-form">
-      <div className="mode-toggle">
+      <div className="mode-toggle" role="group" aria-label="Search mode">
         <button
           type="button"
           className={mode === "find" ? "active" : ""}
@@ -810,7 +810,7 @@ export default function App() {
             <p className="header-subtitle">Find available campsites across the western US</p>
           </div>
           <div className="header-actions">
-            <div className="header-secondary">
+            <nav className="header-secondary" aria-label="Main navigation">
               {user && (
                 <Link to="/trips" className="header-btn">
                   Trips
@@ -839,7 +839,7 @@ export default function App() {
                   Sign in
                 </button>
               )}
-            </div>
+            </nav>
             <div className="mobile-menu-wrapper" ref={mobileMenuRef}>
               <button
                 className="header-btn mobile-menu-btn"

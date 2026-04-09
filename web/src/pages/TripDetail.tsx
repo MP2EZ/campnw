@@ -84,6 +84,7 @@ export default function TripDetail() {
               onKeyDown={(e) => e.key === "Enter" && handleSaveName()}
               maxLength={200}
               className="trip-name-input"
+              aria-label="Trip name"
               autoFocus
             />
             <button onClick={handleSaveName} className="btn-primary">Save</button>

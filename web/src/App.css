@@ -38,7 +38,7 @@
   /* Text — warm off-white, never pure white */
   --text: #deded8;
   --text-muted: #9a9a90;
-  --text-light: #8a8a80;
+  --text-light: #a5a598;
 
   /* Borders — warm-tinted, low contrast */
   --border: #38382e;
@@ -702,8 +702,20 @@ header p {
   overflow: hidden;
 }
 
+.result-header-row {
+  display: flex;
+  align-items: center;
+}
+
+.result-header-row > .compare-check {
+  flex-shrink: 0;
+  margin-right: var(--space-3);
+}
+
 .result-header {
   display: flex;
+  flex: 1;
+  min-width: 0;
   justify-content: space-between;
   align-items: center;
   padding: var(--space-3) var(--space-4);
@@ -1877,6 +1889,15 @@ header p {
 
   .site-chip,
   .window-chip {
+    min-height: 44px;
+  }
+
+  .view-toggle button,
+  .source-toggle-btn {
+    min-height: 44px;
+  }
+
+  .tag-btn {
     min-height: 44px;
   }
 

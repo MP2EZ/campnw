@@ -44,15 +44,15 @@ export default function TripsPage() {
 
   if (!user) {
     return (
-      <div className="trips-page">
+      <main id="main-content" className="trips-page">
         <h2>My Trips</h2>
         <p className="trips-empty">Sign in to save and manage trips.</p>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="trips-page">
+    <main id="main-content" className="trips-page">
       <Helmet>
         <title>My Trips — Campable</title>
         <meta name="description" content="Manage your camping trips and itineraries." />
@@ -65,6 +65,7 @@ export default function TripsPage() {
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           placeholder="New trip name..."
+          aria-label="New trip name"
           maxLength={200}
           onKeyDown={(e) => e.key === "Enter" && handleCreate()}
           className="trip-name-input"
@@ -115,6 +116,6 @@ export default function TripsPage() {
           ))}
         </ul>
       )}
-    </div>
+    </main>
   );
 }

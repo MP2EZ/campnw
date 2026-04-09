@@ -285,54 +285,54 @@ export function ResultCard({
 
   return (
     <div className={`result-card card-${result.booking_system}${focused ? " card-focused" : ""}`} ref={cardRef}>
-      <button
-        className="result-header"
-        onClick={handleToggle}
-        aria-expanded={expanded}
-        type="button"
-        ref={headerRef}
-      >
-        <div>
-          <h3>
-            {result.name}{" "}
-            <span className={`source-badge source-${result.booking_system}`}>
-              {sourceLabel}
-            </span>
-            {result.estimated_drive_minutes != null && (
-              <span className="drive-badge">
-                {result.estimated_drive_minutes < 60
-                  ? `~${result.estimated_drive_minutes}m`
-                  : `~${Math.floor(result.estimated_drive_minutes / 60)}h ${result.estimated_drive_minutes % 60}m`}
+      <div className="result-header-row">
+        <button
+          className="result-header"
+          onClick={handleToggle}
+          aria-expanded={expanded}
+          type="button"
+          ref={headerRef}
+        >
+          <div>
+            <h3>
+              {result.name}{" "}
+              <span className={`source-badge source-${result.booking_system}`}>
+                {sourceLabel}
               </span>
+              {result.estimated_drive_minutes != null && (
+                <span className="drive-badge">
+                  {result.estimated_drive_minutes < 60
+                    ? `~${result.estimated_drive_minutes}m`
+                    : `~${Math.floor(result.estimated_drive_minutes / 60)}h ${result.estimated_drive_minutes % 60}m`}
+                </span>
+              )}
+              {(result.tags || []).slice(0, 4).map((tag) => (
+                <span key={tag} className="tag-badge">{tag}</span>
+              ))}
+            </h3>
+            <p className="result-summary">
+              {summaryText}
+              {result.fcfs_sites > 0 && <>{" "}+ {result.fcfs_sites} <span title="First-come, first-served">FCFS</span></>}
+            </p>
+            {result.elevator_pitch && (
+              <p className="result-pitch">{result.elevator_pitch}</p>
             )}
-            {(result.tags || []).slice(0, 4).map((tag) => (
-              <span key={tag} className="tag-badge">{tag}</span>
-            ))}
-          </h3>
-          <p className="result-summary">
-            {summaryText}
-            {result.fcfs_sites > 0 && <>{" "}+ {result.fcfs_sites} <span title="First-come, first-served">FCFS</span></>}
-          </p>
-          {result.elevator_pitch && (
-            <p className="result-pitch">{result.elevator_pitch}</p>
-          )}
-        </div>
-        <div className="card-actions">
-          {onToggleCompare && (
-            <button
-              className={`compare-check${compareSelected ? " selected" : ""}`}
-              onClick={(e) => { e.stopPropagation(); onToggleCompare(result.facility_id); }}
-              disabled={compareDisabled && !compareSelected}
-              title={compareSelected ? "Remove from comparison" : "Add to comparison"}
-              aria-label={compareSelected ? "Remove from comparison" : "Add to comparison"}
-              type="button"
-            >
-              {compareSelected ? "\u2713" : "vs"}
-            </button>
-          )}
+          </div>
           <span className="expand-icon" aria-hidden="true">{expanded ? <IconMinus className="icon-sm" /> : <IconPlus className="icon-sm" />}</span>
-        </div>
-      </button>
+        </button>
+        {onToggleCompare && (
+          <button
+            className={`compare-check${compareSelected ? " selected" : ""}`}
+            onClick={() => onToggleCompare(result.facility_id)}
+            disabled={compareDisabled && !compareSelected}
+            title={compareSelected ? "Remove from comparison" : "Add to comparison"}
+            aria-label={compareSelected ? "Remove from comparison" : "Add to comparison"}
+            type="button"
+          >
+            {compareSelected ? "\u2713" : "vs"}
+          </button>
+        )}
+      </div>
 
       <div className={`card-body${expanded ? " card-body-open" : ""}`}>
         <div className="card-body-inner">

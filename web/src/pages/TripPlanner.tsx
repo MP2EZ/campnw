@@ -301,7 +301,6 @@ export default function TripPlanner() {
         className="chat-messages"
         role="log"
         aria-label="Trip planner conversation"
-        aria-live="polite"
         ref={transcriptRef}
       >
         {messages.map((msg, i) => (
