@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 from starlette.responses import Response
 
 from pnw_campsites.routes.deps import (
-    SESSION_COOKIE,
     get_client_ip,
     get_current_user,
     get_engine,
@@ -24,24 +23,30 @@ router = APIRouter(prefix="/api/plan", tags=["planner"])
 # Rate limiting
 # ---------------------------------------------------------------------------
 
-# Simple in-memory rate limiter: session -> (date, count)
+# Simple in-memory rate limiter: IP -> (date, count)
 _plan_rate_limit: dict[str, tuple[str, int]] = {}
 _PLAN_DAILY_LIMIT = 5
 
 
-def _check_plan_rate_limit(session_key: str) -> bool:
+def _check_plan_rate_limit(ip: str) -> bool:
     """Return True if request is allowed, False if daily limit exceeded."""
     from datetime import date
 
     today = date.today().isoformat()
-    existing = _plan_rate_limit.get(session_key)
+
+    # Evict stale entries from previous days
+    stale = [k for k, (d, _) in _plan_rate_limit.items() if d != today]
+    for k in stale:
+        del _plan_rate_limit[k]
+
+    existing = _plan_rate_limit.get(ip)
     if existing is None or existing[0] != today:
-        _plan_rate_limit[session_key] = (today, 1)
+        _plan_rate_limit[ip] = (today, 1)
         return True
     day, count = existing
     if count >= _PLAN_DAILY_LIMIT:
         return False
-    _plan_rate_limit[session_key] = (day, count + 1)
+    _plan_rate_limit[ip] = (day, count + 1)
     return True
 
 
@@ -81,8 +86,7 @@ async def plan_chat(body: PlanChatRequest, request: Request, response: Response)
         raise HTTPException(status_code=503, detail="Trip planner not configured")
 
     # Rate limit by session token or IP
-    session_key = request.cookies.get(SESSION_COOKIE) or get_client_ip(request)
-    if not _check_plan_rate_limit(session_key):
+    if not _check_plan_rate_limit(get_client_ip(request)):
         raise HTTPException(
             status_code=429,
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
@@ -103,8 +107,7 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request):
     if not api_key:
         raise HTTPException(status_code=503, detail="Trip planner not configured")
 
-    session_key = request.cookies.get(SESSION_COOKIE) or get_client_ip(request)
-    if not _check_plan_rate_limit(session_key):
+    if not _check_plan_rate_limit(get_client_ip(request)):
         raise HTTPException(
             status_code=429,
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",

@@ -396,7 +396,7 @@ async def timing_middleware(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'sha256-CMFuBmDEnalqz4XFUGlfZyihuNSwK+f4Yw31pcHjU98='; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' https://*.tile.openstreetmap.org data:; "
@@ -469,9 +469,10 @@ async def posthog_proxy(request: Request, path: str):
     else:
         target = f"{_posthog_host}/{path}"
 
+    _FORWARD_HEADERS = {"content-type", "accept", "user-agent", "origin", "referer"}
     headers = {
         k: v for k, v in request.headers.items()
-        if k.lower() not in ("host", "connection", "content-length")
+        if k.lower() in _FORWARD_HEADERS
     }
     body = await request.body()
 

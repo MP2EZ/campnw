@@ -67,12 +67,22 @@ class UpdateProfileRequest(BaseModel):
 _auth_rate_limit: dict[str, tuple[float, int]] = {}
 _AUTH_WINDOW_SECONDS = 900  # 15 minutes
 _AUTH_MAX_ATTEMPTS = 10
+_auth_last_cleanup: float = 0.0
 
 
 def _check_auth_rate_limit(request: Request) -> None:
     """Raise 429 if auth attempts from this IP exceed threshold."""
+    global _auth_last_cleanup
     ip = get_client_ip(request)
     now = time.monotonic()
+
+    # Evict expired entries every 60s to prevent unbounded growth
+    if now - _auth_last_cleanup > 60:
+        stale = [k for k, (ws, _) in _auth_rate_limit.items() if now - ws > _AUTH_WINDOW_SECONDS]
+        for k in stale:
+            del _auth_rate_limit[k]
+        _auth_last_cleanup = now
+
     existing = _auth_rate_limit.get(ip)
     if existing is None or (now - existing[0]) > _AUTH_WINDOW_SECONDS:
         _auth_rate_limit[ip] = (now, 1)

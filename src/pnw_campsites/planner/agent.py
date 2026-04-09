@@ -272,7 +272,7 @@ async def chat_stream(
 
         except Exception as exc:
             logger.error("Streaming API call failed (iteration %d): %s", _iteration, exc)
-            yield json.dumps({"type": "error", "message": str(exc)})
+            yield json.dumps({"type": "error", "message": "Something went wrong. Please try again."})
             return
 
         final_text = "".join(iter_text_parts)
@@ -311,7 +311,7 @@ async def chat_stream(
                 result_str = json.dumps({"error": str(exc)})
                 yield json.dumps({
                     "type": "error",
-                    "message": f"Tool {block['name']} failed: {exc}",
+                    "message": "A search tool encountered an error. Results may be incomplete.",
                 })
 
             summary = _summarize_result(block["name"], result_str)
@@ -352,7 +352,7 @@ async def chat_stream(
         })
     except Exception as exc:
         logger.error("Final fallback stream failed: %s", exc)
-        yield json.dumps({"type": "error", "message": str(exc)})
+        yield json.dumps({"type": "error", "message": "Something went wrong. Please try again."})
 
 
 def _extract_text(content: list) -> str:

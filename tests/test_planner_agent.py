@@ -514,4 +514,6 @@ class TestChatStream:
 
         assert len(events) == 1
         assert events[0]["type"] == "error"
-        assert "API down" in events[0]["message"]
+        # SEC-06: error messages are sanitized — no raw exception details
+        assert "Something went wrong" in events[0]["message"]
+        assert "API down" not in events[0]["message"]

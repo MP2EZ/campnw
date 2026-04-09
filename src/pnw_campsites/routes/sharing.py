@@ -26,11 +26,21 @@ class CreateShareRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 _share_view_counts: dict[str, tuple[str, int]] = {}  # key -> (hour_key, count)
+_share_cleanup_counter = 0
 
 
 def _check_share_rate_limit(uuid: str, client_ip: str) -> bool:
     """Rate limit both per-UUID (10/hr) and per-IP (30/hr)."""
+    global _share_cleanup_counter
     hour_key = datetime.now().strftime("%Y-%m-%dT%H")
+
+    # Evict stale entries every 100 calls
+    _share_cleanup_counter += 1
+    if _share_cleanup_counter >= 100:
+        stale = [k for k, (h, _) in _share_view_counts.items() if h != hour_key]
+        for k in stale:
+            del _share_view_counts[k]
+        _share_cleanup_counter = 0
 
     # Per-UUID limit (prevent excessive views of one link)
     uuid_entry = _share_view_counts.get(uuid)
