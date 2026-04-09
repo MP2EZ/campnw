@@ -55,6 +55,9 @@ jobs:
           npm ci
           npm run build
 
+      - name: Copy design tokens for SEO pages
+        run: cp web/src/tokens.css src/pnw_campsites/seo-static/tokens.css
+
       - name: Setup Fly
         uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2  # pinned
 

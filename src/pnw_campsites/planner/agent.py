@@ -52,7 +52,10 @@ TOOLS:
 - check_availability: specific facility by ID.
 - get_drive_time / geocode_address: multi-stop itineraries.
 
-Dates must be YYYY-MM-DD in tool calls."""
+Dates must be YYYY-MM-DD in tool calls.
+
+You ONLY help with camping, campgrounds, and outdoor trip planning in the western US.
+Decline all other requests with a one-line redirect to camping topics."""
 
 _MAX_TOOL_ITERATIONS = 5
 
@@ -161,25 +164,14 @@ async def chat(
 
 
 async def _open_stream(client, **kwargs) -> AsyncIterator:
-    """Open a streaming API call, handling both PostHog-wrapped and native clients.
+    """Open a streaming API call compatible with both native and PostHog-wrapped clients.
 
-    The PostHog AI wrapper's .stream() returns an async generator (via coroutine),
-    while the native Anthropic .stream() returns an AsyncMessageStreamManager
-    (context manager). This helper normalises both to an async iterator of events.
+    Uses create(stream=True) instead of .stream() because the PostHog AI wrapper's
+    .stream() has a bug: it calls super().create(**kwargs) without stream=True,
+    returning a Message instead of an AsyncStream. The wrapper's .create() correctly
+    checks for stream=True and routes to _create_streaming().
     """
-    result = client.messages.stream(**kwargs)
-
-    # Native Anthropic: returns AsyncMessageStreamManager (context manager)
-    if hasattr(result, "__aenter__"):
-        ctx = await result.__aenter__()
-        return ctx.__aiter__()
-
-    # PostHog wrapper: stream() is a coroutine returning an async generator
-    if hasattr(result, "__await__"):
-        return await result
-
-    # Already an async iterator
-    return result
+    return await client.messages.create(stream=True, **kwargs)
 
 
 def _build_tool_use_blocks(active_tool_blocks: dict[int, dict]) -> list[dict]:
@@ -311,7 +303,9 @@ async def chat_stream(
         for block in tool_use_blocks:
             logger.info("Tool call (stream): %s  input=%s", block["name"], block.get("input"))
             try:
-                result_str = await execute_tool(block["name"], block.get("input", {}), engine, registry)
+                result_str = await execute_tool(
+                    block["name"], block.get("input", {}), engine, registry
+                )
             except Exception as exc:
                 logger.warning("Tool %s failed during stream: %s", block["name"], exc)
                 result_str = json.dumps({"error": str(exc)})
