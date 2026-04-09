@@ -469,10 +469,10 @@ async def posthog_proxy(request: Request, path: str):
     else:
         target = f"{_posthog_host}/{path}"
 
-    _FORWARD_HEADERS = {"content-type", "accept", "user-agent", "origin", "referer"}
+    forward = {"content-type", "accept", "user-agent", "origin", "referer"}
     headers = {
         k: v for k, v in request.headers.items()
-        if k.lower() in _FORWARD_HEADERS
+        if k.lower() in forward
     }
     body = await request.body()
 

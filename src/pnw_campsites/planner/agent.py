@@ -272,7 +272,8 @@ async def chat_stream(
 
         except Exception as exc:
             logger.error("Streaming API call failed (iteration %d): %s", _iteration, exc)
-            yield json.dumps({"type": "error", "message": "Something went wrong. Please try again."})
+            _err = "Something went wrong. Please try again."
+            yield json.dumps({"type": "error", "message": _err})
             return
 
         final_text = "".join(iter_text_parts)
