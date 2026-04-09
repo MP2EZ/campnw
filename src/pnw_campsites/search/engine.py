@@ -403,9 +403,10 @@ class SearchEngine:
 
     async def search(
         self, query: SearchQuery, *, _skip_diagnosis: bool = False,
+        _prep: _PreparedSearch | None = None,
     ) -> SearchResults:
         """Run a discovery search: filter registry, then check availability."""
-        prep = await self._prepare_search(query)
+        prep = _prep or await self._prepare_search(query)
         campgrounds = prep.campgrounds
         drive_times = prep.drive_times
         from_coords = prep.from_coords
@@ -669,9 +670,25 @@ class SearchEngine:
         if not probes:
             return []
 
-        # Run all probes in parallel
+        # Pre-resolve registry/drive data once; reuse across all probes
+        base_prep = await self._prepare_search(query)
+
+        # Run all probes in parallel, reusing the prepared campground list
+        async def _run_probe(q: SearchQuery) -> SearchResults:
+            # Override date range in prep for each probe
+            probe_prep = _PreparedSearch(
+                campgrounds=base_prep.campgrounds,
+                drive_times=base_prep.drive_times,
+                registry_count=base_prep.registry_count,
+                distance_filtered=base_prep.distance_filtered,
+                start_month=q.start_date or base_prep.start_month,
+                end_month=q.end_date or base_prep.end_month,
+                from_coords=base_prep.from_coords,
+            )
+            return await self.search(q, _skip_diagnosis=True, _prep=probe_prep)
+
         probe_results = await asyncio.gather(
-            *(self.search(q, _skip_diagnosis=True) for _, _, _, q in probes)
+            *(_run_probe(q) for _, _, _, q in probes)
         )
 
         suggestions: list[DateSuggestion] = []

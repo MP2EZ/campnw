@@ -143,19 +143,31 @@ export default function TripPlanner() {
 
     const toolCalls: ToolCall[] = [];
     let fullText = "";
+    let rafId = 0;
+    let pendingFlush = false;
+
+    const flushText = () => {
+      rafId = 0;
+      pendingFlush = false;
+      const text = fullText;
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.role === "assistant") {
+          updated[updated.length - 1] = { ...last, content: text };
+        }
+        return updated;
+      });
+    };
 
     await planChatStream(
       nextApiMessages,
       (chunk) => {
         fullText += chunk;
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === "assistant") {
-            updated[updated.length - 1] = { ...last, content: fullText };
-          }
-          return updated;
-        });
+        if (!pendingFlush) {
+          pendingFlush = true;
+          rafId = requestAnimationFrame(flushText);
+        }
       },
       (name) => {
         toolCalls.push({ name, input: {} });
@@ -187,6 +199,7 @@ export default function TripPlanner() {
         });
       },
       (finalContent, finalToolCalls) => {
+        if (rafId) cancelAnimationFrame(rafId);
         const content = finalContent || fullText;
         setApiMessages((prev) => [
           ...prev,
@@ -208,6 +221,7 @@ export default function TripPlanner() {
         inputRef.current?.focus();
       },
       (err) => {
+        if (rafId) cancelAnimationFrame(rafId);
         const message = err.message || "Something went wrong";
         setError(message);
         setMessages((prev) => {

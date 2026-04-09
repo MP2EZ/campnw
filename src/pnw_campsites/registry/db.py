@@ -312,18 +312,18 @@ class CampgroundRegistry:
             clauses.append("name LIKE ?")
             params.append(f"%{name_like}%")
 
+        if tags:
+            placeholders = ",".join("?" for _ in tags)
+            clauses.append(
+                f"EXISTS (SELECT 1 FROM json_each(tags) WHERE value IN ({placeholders}))"
+            )
+            params.extend(tags)
+
         where = " AND ".join(clauses) if clauses else "1=1"
         sql = f"SELECT * FROM campgrounds WHERE {where} ORDER BY name"
 
         rows = self._conn.execute(sql, params).fetchall()
-        results = [self._row_to_campground(r) for r in rows]
-
-        # Tag filtering in Python (JSON array in SQLite isn't great for SQL WHERE)
-        if tags:
-            tag_set = set(tags)
-            results = [cg for cg in results if tag_set.intersection(cg.tags)]
-
-        return results
+        return [self._row_to_campground(r) for r in rows]
 
     def list_all(self, *, enabled_only: bool = True) -> list[Campground]:
         """Return all campgrounds."""
@@ -352,8 +352,14 @@ class CampgroundRegistry:
         exclude_id: int | None = None,
     ) -> list[Campground]:
         """Find nearest campgrounds by haversine distance."""
-        clauses = ["enabled = 1", "latitude != 0.0", "longitude != 0.0"]
-        params: list[object] = []
+        # Bounding box pre-filter (~2 degrees ≈ 140 miles at PNW latitudes)
+        bbox = 2.0
+        clauses = [
+            "enabled = 1",
+            "latitude BETWEEN ? AND ?",
+            "longitude BETWEEN ? AND ?",
+        ]
+        params: list[object] = [lat - bbox, lat + bbox, lon - bbox, lon + bbox]
         if state:
             clauses.append("state = ?")
             params.append(state)
@@ -365,6 +371,22 @@ class CampgroundRegistry:
             f"SELECT * FROM campgrounds WHERE {where}", params
         ).fetchall()
         campgrounds = [self._row_to_campground(r) for r in rows]
+
+        # Fallback to full scan if bbox returned fewer than requested
+        if len(campgrounds) < limit:
+            clauses_full = ["enabled = 1", "latitude != 0.0", "longitude != 0.0"]
+            params_full: list[object] = []
+            if state:
+                clauses_full.append("state = ?")
+                params_full.append(state)
+            if exclude_id is not None:
+                clauses_full.append("id != ?")
+                params_full.append(exclude_id)
+            rows = self._conn.execute(
+                f"SELECT * FROM campgrounds WHERE {' AND '.join(clauses_full)}", params_full
+            ).fetchall()
+            campgrounds = [self._row_to_campground(r) for r in rows]
+
         campgrounds.sort(
             key=lambda cg: haversine_miles(lat, lon, cg.latitude, cg.longitude)
         )

@@ -264,9 +264,40 @@ async def poll_all(
     for watch in expanded:
         by_facility[watch.facility_id].append(watch)
 
-    # Poll facilities concurrently (max 3 in parallel)
+    # Pre-warm cache: for each facility, fetch the widest date range needed
+    # so individual poll_watch calls all hit cache
     sem = asyncio.Semaphore(3)
 
+    async def prefetch_facility(fid: str, watches: list[Watch]) -> None:
+        """Fetch availability once for the widest date range across watches."""
+        starts = [date.fromisoformat(w.start_date) for w in watches]
+        ends = [date.fromisoformat(w.end_date) for w in watches]
+        wide_start, wide_end = min(starts), max(ends)
+        booking_system = BookingSystem(watches[0].booking_system)
+        async with sem:
+            try:
+                await asyncio.wait_for(
+                    _fetch_availability(
+                        fid, wide_start, wide_end, booking_system,
+                        recgov, goingtocamp, watch_db,
+                        reserveamerica=reserveamerica,
+                    ),
+                    timeout=15.0,
+                )
+            except Exception as exc:
+                _logger.debug("Prefetch for %s failed (will retry per-watch): %s", fid, exc)
+
+    # Only prefetch facilities with multiple watches (single-watch facilities
+    # get fetched normally in poll_watch)
+    multi_facility_tasks = [
+        prefetch_facility(fid, watches)
+        for fid, watches in by_facility.items()
+        if len(watches) > 1
+    ]
+    if multi_facility_tasks:
+        await asyncio.gather(*multi_facility_tasks)
+
+    # Poll all watches (cache is warm for multi-watch facilities)
     async def poll_limited(watch: Watch) -> PollResult:
         async with sem:
             try:

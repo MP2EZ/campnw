@@ -45,6 +45,8 @@ _STATUS_MAP: dict[str, AvailabilityStatus] = {
 
 # Max days per SSR page load
 _WINDOW_DAYS = 14
+# Records per page (RA default)
+_PAGE_SIZE = 20
 
 # Regex to extract the Redux state JSON blob from the HTML
 _REDUX_RE = re.compile(r'(\{"application"\s*:\s*\{.+\})\s*</script>')
@@ -95,33 +97,37 @@ class ReserveAmericaClient:
         end_date: date,
     ) -> CampgroundAvailability:
         all_campsites: dict[str, CampsiteAvailability] = {}
-        total_records = 0
 
         # Break date range into 14-day windows
         window_start = start_date
         while window_start <= end_date:
             window_end = min(window_start + timedelta(days=_WINDOW_DAYS - 1), end_date)
 
-            records, total = self._fetch_window(
-                park_id, slug, state, window_start, window_end,
-            )
-            if total > total_records:
-                total_records = total
+            # Paginate within each window (20 records per page)
+            page = 1
+            while True:
+                records, total = self._fetch_window(
+                    park_id, slug, state, window_start, window_end, page=page,
+                )
 
-            # Merge into all_campsites
-            for rec in records:
-                site_id = str(rec["id"])
-                avail_dict = _parse_availability_grid(rec.get("availabilityGrid", []))
+                for rec in records:
+                    site_id = str(rec["id"])
+                    avail_dict = _parse_availability_grid(rec.get("availabilityGrid", []))
 
-                if site_id in all_campsites:
-                    # Extend existing site's availability with new dates
-                    all_campsites[site_id].availabilities.update(avail_dict)
-                else:
-                    all_campsites[site_id] = _record_to_campsite(rec, avail_dict)
+                    if site_id in all_campsites:
+                        all_campsites[site_id].availabilities.update(avail_dict)
+                    else:
+                        all_campsites[site_id] = _record_to_campsite(rec, avail_dict)
+
+                fetched_so_far = _PAGE_SIZE * page
+                if not records or fetched_so_far >= total:
+                    break
+                page += 1
+                time.sleep(1.0)  # rate limit between pages
 
             window_start = window_end + timedelta(days=1)
 
-            # Rate limit: 1 request/sec between windows
+            # Rate limit between windows
             if window_start <= end_date:
                 time.sleep(1.0)
 
@@ -137,18 +143,21 @@ class ReserveAmericaClient:
         state: str,
         start_date: date,
         end_date: date,
+        page: int = 1,
     ) -> tuple[list[dict], int]:
-        """Fetch one 14-day window of availability. Returns (records, totalRecords)."""
+        """Fetch one page of a 14-day window. Returns (records, totalRecords)."""
         assert self._session is not None
 
         url = (
             f"{BASE_URL}/explore/{slug}/{state}/{park_id}"
             f"/campsite-availability"
         )
-        params = {
+        params: dict[str, str | int] = {
             "arrivalDate": start_date.isoformat(),
             "departureDate": end_date.isoformat(),
         }
+        if page > 1:
+            params["page"] = page
 
         for attempt in range(2):
             try:
