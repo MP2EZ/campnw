@@ -33,6 +33,7 @@ v1.27   [SHIPPED]  UX Polish           — Blue heatmap, teal WA, date picker, N
 v1.28   [SHIPPED]  Watch Reliability   — Watch source persistence, N+1 fix, SSE batching, perf
 v1.29   [SHIPPED]  Brand + Polish       — Madrona logo, og:image, LLM analytics, registry cleanup, itinerary cards
 v1.3    ------->   SEO + Discoverability — Campground profile pages, sitemap, structured data, Cloudflare
+v1.31   ------->   Audit Fixes          — Security hardening, perf optimizations, WCAG AA compliance
 v1.4    ------->   Monetization Launch  — Pro tier gate, payment, freemium conversion flows
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
@@ -1056,6 +1057,51 @@ The React SPA continues to handle all interactive features (search, map, watch, 
 
 ### Key Risk
 Thin content — campground profiles with just registry metadata may not rank. Enriched descriptions, tags, and drive times help, but richer content (availability snippets, seasonal tips) may be needed based on Search Console data.
+
+---
+
+## v1.31 "Audit Fixes"
+
+### Theme
+Harden the app before monetization. Full-codebase audit (security, performance, accessibility) found 6 critical and 15 warning issues. This milestone closes them all — tightening rate limits, fixing data gaps, and reaching WCAG AA compliance across the UI.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Rate limit hardening (SEC-04) | S | Planner rate limit keyed by IP only — removes cookie-based bypass that exposed Anthropic API costs. |
+| Error sanitization (SEC-06) | XS | Streamed planner errors return generic message; no raw exception details to client. |
+| PostHog proxy allowlist (SEC-01) | XS | Proxy forwards only safe headers (content-type, accept, user-agent, origin, referer). |
+| Rate limiter cleanup (SEC-03/05) | S | Auth, planner, and share rate limiters evict stale entries to prevent unbounded memory growth. |
+| CSP hash (SEC-02) | XS | Replace `unsafe-inline` in script-src with sha256 hash for PostHog init snippet. |
+| ReserveAmerica pagination (PERF-01) | M | Fetch all pages when park has >20 sites. Previously silently truncated availability data. |
+| Watcher fetch dedup (PERF-02) | S | Pre-warm availability cache for multi-watch facilities before poll loop. |
+| SQL bounding box (PERF-03) | S | `get_nearby` uses lat/lon bounding box pre-filter before Python haversine sort. |
+| SQL tag filter (PERF-04) | S | Tag filtering via SQLite `json_each()` instead of Python post-filter on all rows. |
+| Alt-date probe reuse (PERF-05) | S | Date suggestion probes reuse prepared search data (registry, drive times) instead of re-querying. |
+| LLM stream batching (PERF-06) | S | Text chunks batched via `requestAnimationFrame` — one render per frame, not per chunk. |
+| Dark mode contrast (A11Y-01) | XS | `--text-light` lightened to #a5a598 (4.7:1 on bg-card). Fixes 40+ locations. |
+| Auth error announcement (A11Y-02) | XS | `role="alert"` on auth error messages for screen reader announcement. |
+| TripsPage landmark (A11Y-03) | XS | Wrapped in `<main id="main-content">` for skip link and landmark navigation. |
+| Search mode group (A11Y-05) | XS | Mode toggle gets `role="group" aria-label="Search mode"`. |
+| Mobile touch targets (A11Y-06/10) | XS | View toggle and tag buttons get 44px min-height on mobile. |
+| ResultCard structure (A11Y-07) | S | Compare button moved outside header button — no more nested interactive controls. |
+| Chat aria-live (A11Y-08) | XS | Remove redundant `aria-live` on `role="log"` container. |
+| Header nav landmark (A11Y-09) | XS | Header actions wrapped in `<nav aria-label="Main navigation">`. |
+| Input labels (A11Y-11/12) | XS | Trip name inputs get `aria-label` on both create and edit forms. |
+
+### Dependencies
+- v1.29 shipped (PostHog LLM analytics provides cost visibility for SEC-04)
+
+### Quality Bar
+- All 6 critical findings resolved
+- All 15 warning findings resolved
+- Full test suite passes (786 tests)
+- Lighthouse accessibility score green
+- No regressions in search, planner, or watch polling
+
+### Key Risk
+PERF-01 pagination depends on ReserveAmerica accepting a `page` query parameter — undocumented API. If RA uses a different pagination mechanism, the pagination loop may need adjustment based on observed Redux state.
 
 ---
 
