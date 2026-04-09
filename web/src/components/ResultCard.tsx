@@ -65,6 +65,11 @@ function meaningfulLoop(loop: string, campgroundName: string): string | null {
   const nl = normalize(loop);
   const nc = normalize(campgroundName);
   if (!nl || nl === nc || nc.includes(nl) || nl.includes(nc)) return null;
+  // Strip "AREA"/"LOOP" prefix from loop and re-check — rec.gov loops like
+  // "AREA ELK CREEK CAMPGROUND" are redundant with "ELK CREEK CAMPGROUND
+  // (CLEARWATER NF)" (parens already gone after normalize)
+  const stripped = nl.replace(/^(AREA|LOOP)\s+/, "");
+  if (stripped.length > 2 && nc.includes(stripped)) return null;
   return loop;
 }
 
