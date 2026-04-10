@@ -480,13 +480,25 @@ async def posthog_proxy(request: Request, path: str):
     if not _posthog_client:
         return Response(status_code=503)
     try:
-        resp = await _posthog_client.request(
-            method=request.method,
-            url=target,
-            headers=headers,
-            content=body,
-            params=dict(request.query_params),
-        )
+        # Use a fresh client for config requests — the shared client's
+        # connection pool intermittently fails on this path
+        if "/config" in path:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.request(
+                    method=request.method,
+                    url=target,
+                    headers=headers,
+                    content=body,
+                    params=dict(request.query_params),
+                )
+        else:
+            resp = await _posthog_client.request(
+                method=request.method,
+                url=target,
+                headers=headers,
+                content=body,
+                params=dict(request.query_params),
+            )
     except httpx.TimeoutException:
         return Response(
             status_code=502,
