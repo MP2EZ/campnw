@@ -396,7 +396,7 @@ async def timing_middleware(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'sha256-CMFuBmDEnalqz4XFUGlfZyihuNSwK+f4Yw31pcHjU98='; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' https://*.tile.openstreetmap.org data:; "
