@@ -460,12 +460,9 @@ _posthog_host = "https://eu.i.posthog.com"
 _posthog_asset_host = "https://eu-assets.i.posthog.com"
 
 
-@app.api_route("/a/{path:path}", methods=["GET", "POST", "OPTIONS"])
+@app.api_route("/ingest/{path:path}", methods=["GET", "POST", "OPTIONS"])
 async def posthog_proxy(request: Request, path: str):
     """Proxy PostHog requests through our domain to bypass ad blockers.
-
-    Mounted at /a (not /ingest) to avoid Cloudflare WAF pattern-matching
-    on known analytics paths like /ingest/array/{token}/config.
 
     Routing follows PostHog's documented reverse proxy setup:
       /static/* → asset CDN (JS bundles, recorder)
@@ -498,9 +495,10 @@ async def posthog_proxy(request: Request, path: str):
             headers={"Cache-Control": "no-store"},
         )
 
+    _strip = {"transfer-encoding", "content-encoding", "content-length", "connection"}
     resp_headers = {
         k: v for k, v in resp.headers.items()
-        if k.lower() not in ("transfer-encoding", "content-encoding", "connection")
+        if k.lower() not in _strip
     }
     resp_headers["Cache-Control"] = "no-store"
 
