@@ -463,11 +463,12 @@ _posthog_asset_host = "https://eu-assets.i.posthog.com"
 @app.api_route("/ingest/{path:path}", methods=["GET", "POST", "OPTIONS"])
 async def posthog_proxy(request: Request, path: str):
     """Proxy PostHog requests through our domain to bypass ad blockers."""
-    # Static assets (array.full.js, recorder, etc.) come from the asset host
-    if path.startswith("static/") or path.startswith("array/"):
-        target = f"{_posthog_asset_host}/{path}"
-    else:
-        target = f"{_posthog_host}/{path}"
+    # Static assets (array.full.js, recorder, etc.) come from the asset host.
+    # array/{token}/config is an API call, not a static asset.
+    is_static = path.startswith("static/") or (
+        path.startswith("array/") and "/config" not in path
+    )
+    target = f"{_posthog_asset_host}/{path}" if is_static else f"{_posthog_host}/{path}"
 
     forward = {"content-type", "accept", "user-agent", "origin", "referer"}
     headers = {
