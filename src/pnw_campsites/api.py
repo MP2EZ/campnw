@@ -479,21 +479,30 @@ async def posthog_proxy(request: Request, path: str):
 
     if not _posthog_client:
         return Response(status_code=503)
-    resp = await _posthog_client.request(
-        method=request.method,
-        url=target,
-        headers=headers,
-        content=body,
-        params=dict(request.query_params),
-    )
+    try:
+        resp = await _posthog_client.request(
+            method=request.method,
+            url=target,
+            headers=headers,
+            content=body,
+            params=dict(request.query_params),
+        )
+    except httpx.TimeoutException:
+        return Response(
+            status_code=502,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    resp_headers = {
+        k: v for k, v in resp.headers.items()
+        if k.lower() not in ("transfer-encoding", "content-encoding", "connection")
+    }
+    resp_headers["Cache-Control"] = "no-store"
 
     return Response(
         content=resp.content,
         status_code=resp.status_code,
-        headers={
-            k: v for k, v in resp.headers.items()
-            if k.lower() not in ("transfer-encoding", "content-encoding", "connection")
-        },
+        headers=resp_headers,
     )
 
 
