@@ -462,13 +462,14 @@ _posthog_asset_host = "https://eu-assets.i.posthog.com"
 
 @app.api_route("/ingest/{path:path}", methods=["GET", "POST", "OPTIONS"])
 async def posthog_proxy(request: Request, path: str):
-    """Proxy PostHog requests through our domain to bypass ad blockers."""
-    # Static assets (array.full.js, recorder, etc.) come from the asset host.
-    # array/{token}/config is an API call, not a static asset.
-    is_static = path.startswith("static/") or (
-        path.startswith("array/") and "/config" not in path
-    )
-    target = f"{_posthog_asset_host}/{path}" if is_static else f"{_posthog_host}/{path}"
+    """Proxy PostHog requests through our domain to bypass ad blockers.
+
+    Routing follows PostHog's documented reverse proxy setup:
+      /static/* → asset CDN (JS bundles, recorder)
+      everything else → API host (events, decide, config, flags)
+    """
+    host = _posthog_asset_host if path.startswith("static/") else _posthog_host
+    target = f"{host}/{path}"
 
     forward = {"content-type", "accept", "user-agent", "origin", "referer"}
     headers = {
@@ -480,25 +481,14 @@ async def posthog_proxy(request: Request, path: str):
     if not _posthog_client:
         return Response(status_code=503)
     try:
-        # Use a fresh client for config requests — the shared client's
-        # connection pool intermittently fails on this path
-        if "/config" in path:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.request(
-                    method=request.method,
-                    url=target,
-                    headers=headers,
-                    content=body,
-                    params=dict(request.query_params),
-                )
-        else:
-            resp = await _posthog_client.request(
-                method=request.method,
-                url=target,
-                headers=headers,
-                content=body,
-                params=dict(request.query_params),
-            )
+        resp = await _posthog_client.request(
+            method=request.method,
+            url=target,
+            headers=headers,
+            content=body,
+            params=dict(request.query_params),
+            follow_redirects=True,
+        )
     except httpx.TimeoutException:
         return Response(
             status_code=502,
