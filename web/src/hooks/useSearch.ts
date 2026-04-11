@@ -53,6 +53,7 @@ export interface UseSearchReturn {
   maxResults: number;
   handleSearch: (params: SearchParams, mode: SearchMode) => Promise<void>;
   toggleSource: (src: string) => void;
+  resetSearch: () => void;
 }
 
 export function useSearch(user: UserData | null): UseSearchReturn {
@@ -271,5 +272,10 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     maxResults,
     handleSearch,
     toggleSource,
+    resetSearch: useCallback(() => {
+      setResults(null);
+      setFormCollapsed(false);
+      setSearchSummary("");
+    }, []),
   };
 }

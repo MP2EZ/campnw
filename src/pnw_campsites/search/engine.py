@@ -484,33 +484,30 @@ class SearchEngine:
         start_month = prep.start_month
         end_month = prep.end_month
 
-        # Fetch availability in parallel (batched to respect rate limits)
-        batch_size = 5
-        batch_delay = 0.3
+        # Fetch availability concurrently (semaphore-limited)
+        concurrency = 8
+        sem = asyncio.Semaphore(concurrency)
         all_results: list[CampgroundResult] = []
         search_start = time.monotonic()
 
-        for i in range(0, len(campgrounds), batch_size):
-            if i > 0:
-                await asyncio.sleep(batch_delay)
-            batch = campgrounds[i : i + batch_size]
-            tasks = [
-                self._check_campground(cg, start_month, end_month, query)
-                for cg in batch
-            ]
-            batch_results = await asyncio.gather(*tasks)
-            all_results.extend(batch_results)
+        async def _check_with_sem(cg: Campground) -> CampgroundResult:
+            async with sem:
+                return await self._check_campground(
+                    cg, start_month, end_month, query,
+                )
+
+        all_results = await asyncio.gather(
+            *[_check_with_sem(cg) for cg in campgrounds]
+        )
 
         search_elapsed = time.monotonic() - search_start
         rate_limited = sum(1 for r in all_results if r.error == "rate_limited")
-        logger = logging.getLogger("pnw_campsites.search")
         logger.info(
-            "Search: %d campgrounds in %.1fs (batch=%d, delay=%.1fs) "
+            "Search: %d campgrounds in %.1fs (concurrency=%d) "
             "| %d rate_limited | %d with availability",
             len(campgrounds),
             search_elapsed,
-            batch_size,
-            batch_delay,
+            concurrency,
             rate_limited,
             sum(1 for r in all_results if r.total_available_sites > 0),
         )
@@ -820,34 +817,34 @@ class SearchEngine:
             )
             return
 
-        batch_size = 5
-        batch_delay = 0.3
+        concurrency = 8
+        sem = asyncio.Semaphore(concurrency)
         available_count = 0
         checked_count = 0
         all_unavailable = 0
 
-        for i in range(0, len(campgrounds), batch_size):
-            if i > 0:
-                await asyncio.sleep(batch_delay)
-            batch = campgrounds[i : i + batch_size]
-            tasks = [
-                self._check_campground(
+        async def _check_with_sem(cg: Campground) -> CampgroundResult:
+            async with sem:
+                return await self._check_campground(
                     cg, prep.start_month, prep.end_month, query,
                 )
-                for cg in batch
-            ]
-            batch_results = await asyncio.gather(*tasks)
-            for r in batch_results:
-                checked_count += 1
-                if drive_times:
-                    fid = r.campground.facility_id
-                    if fid in drive_times:
-                        r.estimated_drive_minutes = drive_times[fid]
-                if r.total_available_sites > 0 or r.fcfs_sites > 0:
-                    available_count += 1
-                    yield r
-                elif not r.error:
-                    all_unavailable += 1
+
+        pending = [
+            asyncio.ensure_future(_check_with_sem(cg))
+            for cg in campgrounds
+        ]
+        for coro in asyncio.as_completed(pending):
+            r = await coro
+            checked_count += 1
+            if drive_times:
+                fid = r.campground.facility_id
+                if fid in drive_times:
+                    r.estimated_drive_minutes = drive_times[fid]
+            if r.total_available_sites > 0 or r.fcfs_sites > 0:
+                available_count += 1
+                yield r
+            elif not r.error:
+                all_unavailable += 1
 
         # Yield diagnosis if nothing had availability
         if available_count == 0:

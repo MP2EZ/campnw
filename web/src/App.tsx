@@ -698,7 +698,7 @@ export default function App() {
     activeSearchParams, formCollapsed, setFormCollapsed,
     focusedCardIndex, setFocusedCardIndex,
     liveAnnouncement, setLiveAnnouncement,
-    cardRefs, maxResults, handleSearch, toggleSource,
+    cardRefs, maxResults, handleSearch, toggleSource, resetSearch,
   } = useSearch(user ?? null);
 
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
@@ -806,7 +806,7 @@ export default function App() {
       <header>
         <div className="header-row">
           <div>
-            <h1><Link to="/" className="wordmark-link"><img src="/favicon.svg" alt="" className="header-logo" aria-hidden="true" /><Wordmark /></Link></h1>
+            <h1><a href="/" className="wordmark-link" onClick={(e) => { e.preventDefault(); resetSearch(); navigate("/"); }}><img src="/favicon.svg" alt="" className="header-logo" aria-hidden="true" /><Wordmark /></a></h1>
             <p className="header-subtitle">Find available campsites across the western US</p>
           </div>
           <div className="header-actions">
