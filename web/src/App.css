@@ -255,10 +255,18 @@ header h1 {
 .wordmark-link {
   text-decoration: none;
   color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .wordmark-link:hover {
   opacity: 0.85;
+}
+
+.header-logo {
+  width: 32px;
+  height: 32px;
 }
 
 /* Wordmark sits where h1 was — same vertical rhythm */
@@ -1884,9 +1892,14 @@ header p {
     display: none;
   }
 
-  /* Scale wordmark down on mobile to match reduced h1 size */
+  /* Scale wordmark and logo down on mobile */
   header .wordmark {
     font-size: 20px;
+  }
+
+  .header-logo {
+    width: 24px;
+    height: 24px;
   }
 
   .site-chip,
