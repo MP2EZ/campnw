@@ -16,7 +16,11 @@ from pnw_campsites.routes.deps import (
     get_engine,
     get_registry,
 )
-from pnw_campsites.search.engine import SearchQuery, StreamDiagnosisEvent
+from pnw_campsites.search.engine import (
+    SearchQuery,
+    StreamDiagnosisEvent,
+    StreamProgressEvent,
+)
 from pnw_campsites.urls import (
     or_state_availability_url,
     recgov_availability_url,
@@ -510,6 +514,12 @@ async def search_stream(
         available_count = 0
         summary_data: list[dict] = []
         async for item in engine.search_stream(query):
+            # StreamProgressEvent = checked but no availability
+            if isinstance(item, StreamProgressEvent):
+                progress = {"type": "progress", "checked": item.checked, "total": item.total}
+                yield f"data: {json.dumps(progress)}\n\n"
+                continue
+
             # StreamDiagnosisEvent = zero results, emit diagnosis
             if isinstance(item, StreamDiagnosisEvent):
                 if item.diagnosis or item.date_suggestions:

@@ -46,6 +46,11 @@ function isSSESummary(data: unknown): data is { type: "summary"; text: string } 
     && (data as Record<string, unknown>).type === "summary";
 }
 
+function isSSEProgress(data: unknown): data is { type: "progress"; checked: number; total: number } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "progress";
+}
+
 function isCampgroundResult(data: unknown): data is CampgroundResult {
   return typeof data === "object" && data !== null
     && typeof (data as Record<string, unknown>).facility_id === "string"
@@ -195,6 +200,7 @@ export async function searchCampsitesStream(
   signal?: AbortSignal,
   onParsed?: (params: ParsedParams) => void,
   onSummary?: (text: string) => void,
+  onProgress?: (checked: number, total: number) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   if (params.q) {
@@ -244,6 +250,8 @@ export async function searchCampsitesStream(
             const parsed: unknown = JSON.parse(data);
             if (isSSEParsedParams(parsed) && onParsed) {
               onParsed(parsed.params);
+            } else if (isSSEProgress(parsed) && onProgress) {
+              onProgress(parsed.checked, parsed.total);
             } else if (isSSESummary(parsed) && onSummary) {
               onSummary(parsed.text);
             } else if (isSSEDiagnosis(parsed) && onDiagnosis) {

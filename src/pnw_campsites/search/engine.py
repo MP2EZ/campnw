@@ -135,6 +135,14 @@ class _PreparedSearch:
 
 
 @dataclass
+class StreamProgressEvent:
+    """Yielded by search_stream to report check progress."""
+
+    checked: int
+    total: int
+
+
+@dataclass
 class StreamDiagnosisEvent:
     """Yielded by search_stream when zero results, so API doesn't need a second search."""
 
@@ -794,12 +802,14 @@ class SearchEngine:
 
     async def search_stream(
         self, query: SearchQuery,
-    ) -> AsyncIterator[CampgroundResult | StreamDiagnosisEvent]:
-        """Stream search results as each batch completes.
+    ) -> AsyncIterator[
+        CampgroundResult | StreamProgressEvent | StreamDiagnosisEvent
+    ]:
+        """Stream search results as each campground check completes.
 
-        Yields CampgroundResult for each campground with availability,
-        and a final StreamDiagnosisEvent if zero results were found
-        (so the API doesn't need a second search() call).
+        Yields CampgroundResult for campgrounds with availability,
+        StreamProgressEvent for checked campgrounds without availability,
+        and a final StreamDiagnosisEvent if zero results were found.
         """
         prep = await self._prepare_search(query)
         campgrounds = prep.campgrounds
@@ -817,11 +827,15 @@ class SearchEngine:
             )
             return
 
-        concurrency = 8
-        sem = asyncio.Semaphore(concurrency)
+        # Ramp concurrency: start narrow for fast first results, then widen
+        initial_concurrency = 3
+        full_concurrency = 8
+        sem = asyncio.Semaphore(initial_concurrency)
         available_count = 0
         checked_count = 0
         all_unavailable = 0
+        total = len(campgrounds)
+        ramped = False
 
         async def _check_with_sem(cg: Campground) -> CampgroundResult:
             async with sem:
@@ -836,6 +850,13 @@ class SearchEngine:
         for coro in asyncio.as_completed(pending):
             r = await coro
             checked_count += 1
+
+            # Ramp up concurrency after first results arrive
+            if not ramped and checked_count >= initial_concurrency:
+                ramped = True
+                for _ in range(full_concurrency - initial_concurrency):
+                    sem.release()
+
             if drive_times:
                 fid = r.campground.facility_id
                 if fid in drive_times:
@@ -843,8 +864,12 @@ class SearchEngine:
             if r.total_available_sites > 0 or r.fcfs_sites > 0:
                 available_count += 1
                 yield r
-            elif not r.error:
-                all_unavailable += 1
+            else:
+                if not r.error:
+                    all_unavailable += 1
+                yield StreamProgressEvent(
+                    checked=checked_count, total=total,
+                )
 
         # Yield diagnosis if nothing had availability
         if available_count == 0:

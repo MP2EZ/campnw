@@ -159,6 +159,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
 
     const streamedResults: CampgroundResult[] = [];
     let rafId: number | null = null;
+    let checkedCount = 0;
     setResults({
       campgrounds_checked: 0,
       campgrounds_with_availability: 0,
@@ -170,11 +171,12 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       searchParams,
       (result) => {
         streamedResults.push(result);
+        checkedCount++;
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
             setResults({
-              campgrounds_checked: streamedResults.length,
+              campgrounds_checked: checkedCount,
               campgrounds_with_availability: streamedResults.filter(
                 (r) => r.total_available_sites > 0,
               ).length,
@@ -195,7 +197,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           (r) => r.total_available_sites > 0,
         ).length;
         setResults({
-          campgrounds_checked: streamedResults.length,
+          campgrounds_checked: checkedCount,
           campgrounds_with_availability: withAvail,
           results: [...streamedResults],
           warnings: [],
@@ -246,6 +248,22 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         });
       },
       (text) => setSearchSummary(text),
+      (checked) => {
+        checkedCount = checked;
+        if (!rafId) {
+          rafId = requestAnimationFrame(() => {
+            rafId = null;
+            setResults({
+              campgrounds_checked: checkedCount,
+              campgrounds_with_availability: streamedResults.filter(
+                (r) => r.total_available_sites > 0,
+              ).length,
+              results: [...streamedResults],
+              warnings: [],
+            });
+          });
+        }
+      },
     );
   }, [user]);
 
