@@ -1,7 +1,7 @@
 # PNW Campsite Tool
 
 ## What This Is
-Personal tool for finding and monitoring campsite availability across the western US (WA, OR, ID, MT, WY, NorCal). Not a product — built for a single user and friends. The core value: discovery ("what's available this weekend within 3 hours of Seattle?") across multiple booking systems, not just monitoring a single known campground.
+Campsite discovery tool for the western US (WA, OR, ID, MT, WY, NorCal), deployed at campable.co. The core value: discovery ("what's available this weekend within 3 hours of Seattle?") across multiple booking systems, not just monitoring a single known campground.
 
 ## Tech Stack
 - **Python 3.12+** — core library, API clients
@@ -184,6 +184,7 @@ Full requirements: `docs/REQUIREMENTS-v1.1-v1.2.md` | Full roadmap: `docs/ROADMA
 ## Environment
 - API keys in `.env` (never commit)
 - `RIDB_API_KEY` — Recreation.gov RIDB metadata API
+- `MAPBOX_ACCESS_TOKEN` — Mapbox Directions/Matrix API for accurate drive times (free tier: 100k req/mo). App falls back to haversine if unset.
 - `VITE_PUBLIC_POSTHOG_PROJECT_TOKEN` — PostHog project API key (public, baked into frontend build)
 - `VITE_PUBLIC_POSTHOG_HOST` — PostHog API host (default: https://us.i.posthog.com)
 

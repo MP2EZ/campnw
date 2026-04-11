@@ -116,7 +116,7 @@ TOOLS: list[dict] = [
     },
     {
         "name": "get_drive_time",
-        "description": "Estimate drive time in minutes between two lat/lon coordinates.",
+        "description": "Get drive time in minutes between two lat/lon coordinates using road-network routing.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -182,7 +182,7 @@ async def execute_tool(
         elif name == "check_availability":
             return await _check_availability(tool_input, engine, registry)
         elif name == "get_drive_time":
-            return _get_drive_time(tool_input)
+            return await _get_drive_time(tool_input)
         elif name == "get_campground_detail":
             return _get_campground_detail(tool_input, registry)
         elif name == "geocode_address":
@@ -334,10 +334,10 @@ async def _check_availability(
     })
 
 
-def _get_drive_time(tool_input: dict) -> str:
-    from pnw_campsites.geo import estimated_drive_minutes
+async def _get_drive_time(tool_input: dict) -> str:
+    from pnw_campsites.geo import get_accurate_drive_minutes
 
-    minutes = estimated_drive_minutes(
+    minutes = await get_accurate_drive_minutes(
         tool_input["from_lat"],
         tool_input["from_lon"],
         tool_input["to_lat"],

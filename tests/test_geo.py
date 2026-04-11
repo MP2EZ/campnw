@@ -9,6 +9,7 @@ from pnw_campsites.geo import (
     estimated_drive_minutes,
     format_drive_time,
     geocode_address,
+    get_accurate_drive_minutes,
     haversine_miles,
     is_known_base,
     resolve_base,
@@ -334,3 +335,49 @@ class TestGeocodeAddress:
         lat, lon = await geocode_address("Test")
         assert isinstance(lat, float)
         assert isinstance(lon, float)
+
+
+# ---------------------------------------------------------------------------
+# Accurate Drive Time (Mapbox with fallback)
+# ---------------------------------------------------------------------------
+
+
+DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/driving"
+
+
+class TestGetAccurateDriveMinutes:
+    @respx.mock
+    async def test_uses_mapbox_when_available(self, monkeypatch):
+        monkeypatch.setenv("MAPBOX_ACCESS_TOKEN", "pk.test")
+        respx.get(
+            DIRECTIONS_URL + "/-122.3321,47.6062;-122.6784,45.5152",
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={"routes": [{"duration": 10200, "distance": 280000}]},
+            )
+        )
+        result = await get_accurate_drive_minutes(
+            47.6062, -122.3321, 45.5152, -122.6784,
+        )
+        assert result == 170
+
+    async def test_falls_back_to_haversine_without_token(self, monkeypatch):
+        monkeypatch.delenv("MAPBOX_ACCESS_TOKEN", raising=False)
+        result = await get_accurate_drive_minutes(
+            47.6062, -122.3321, 45.5152, -122.6784,
+        )
+        # Should return haversine estimate (not raise)
+        assert isinstance(result, int)
+        assert result > 0
+
+    @respx.mock
+    async def test_falls_back_on_api_error(self, monkeypatch):
+        monkeypatch.setenv("MAPBOX_ACCESS_TOKEN", "pk.test")
+        respx.get(
+            DIRECTIONS_URL + "/-122.3,47.6;-122.7,45.5",
+        ).mock(return_value=httpx.Response(500))
+        result = await get_accurate_drive_minutes(47.6, -122.3, 45.5, -122.7)
+        # Should return haversine estimate (not raise)
+        assert isinstance(result, int)
+        assert result > 0

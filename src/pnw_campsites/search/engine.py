@@ -22,6 +22,8 @@ from pnw_campsites.registry.models import (
     CampsiteAvailability,
 )
 
+logger = logging.getLogger("pnw_campsites.search")
+
 
 @dataclass
 class SearchQuery:
@@ -323,6 +325,64 @@ class SearchEngine:
         self._goingtocamp = goingtocamp_client
         self._reserveamerica = reserveamerica_client
 
+    async def _resolve_drive_times(
+        self,
+        query: SearchQuery,
+        from_coords: tuple[float, float],
+        campgrounds: list[Campground],
+    ) -> dict[str, int]:
+        """Resolve drive times using tiered strategy.
+
+        Tier 1: Known base -> DB lookup (instant, no API call)
+        Tier 2: Custom address -> Mapbox Matrix API (real-time, small set)
+        Tier 3: Fallback -> haversine estimate (if Mapbox unavailable)
+        """
+        drive_times: dict[str, int] = {}
+
+        # Tier 1: known base — load pre-computed from DB
+        if query.from_location and is_known_base(query.from_location):
+            base_name = query.from_location.lower()
+            db_times = self._registry.get_drive_times_from_base(base_name)
+            if db_times:
+                for cg in campgrounds:
+                    key = (cg.booking_system.value, cg.facility_id)
+                    if key in db_times:
+                        drive_times[cg.facility_id] = db_times[key]
+                    elif cg.latitude and cg.longitude:
+                        drive_times[cg.facility_id] = estimated_drive_minutes(
+                            from_coords[0], from_coords[1],
+                            cg.latitude, cg.longitude,
+                        )
+                return drive_times
+
+        # Tier 2: custom address — Mapbox Matrix for filtered set
+        try:
+            from pnw_campsites.mapbox import get_drive_times_matrix
+
+            destinations = [
+                (cg.facility_id, cg.latitude, cg.longitude)
+                for cg in campgrounds
+                if cg.latitude and cg.longitude
+            ]
+            if destinations:
+                mapbox_times = await get_drive_times_matrix(
+                    from_coords, destinations,
+                )
+                for fid, data in mapbox_times.items():
+                    drive_times[fid] = data["drive_minutes"]
+                return drive_times
+        except Exception:
+            logger.warning("Mapbox Matrix API failed, falling back to haversine")
+
+        # Tier 3: haversine fallback
+        for cg in campgrounds:
+            if cg.latitude and cg.longitude:
+                drive_times[cg.facility_id] = estimated_drive_minutes(
+                    from_coords[0], from_coords[1],
+                    cg.latitude, cg.longitude,
+                )
+        return drive_times
+
     async def _prepare_search(self, query: SearchQuery) -> _PreparedSearch:
         """Shared setup for search() and search_stream(): registry filter,
         coordinate resolution, drive-time computation, per-source limiter."""
@@ -345,12 +405,9 @@ class SearchEngine:
         drive_times: dict[str, int] = {}
         distance_filtered = 0
         if from_coords:
-            for cg in campgrounds:
-                if cg.latitude and cg.longitude:
-                    drive_times[cg.facility_id] = estimated_drive_minutes(
-                        from_coords[0], from_coords[1],
-                        cg.latitude, cg.longitude,
-                    )
+            drive_times = await self._resolve_drive_times(
+                query, from_coords, campgrounds,
+            )
             pre_distance_count = len(campgrounds)
             if query.max_drive_minutes:
                 campgrounds = [

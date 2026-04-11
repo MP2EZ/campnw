@@ -1021,87 +1021,79 @@ Operational stability. The availability_history table hit 9.37M rows in 2.5 days
 
 ---
 
-## v1.3 "SEO & Discoverability"
+## v1.3 "SEO & Discoverability" [SHIPPED 2026-04-08]
 
-### Theme
-Make campable findable. Server-rendered campground profile pages turn the 1,370-entry registry into 1,370+ indexable pages targeting long-tail search queries. Jinja2 templates served directly from FastAPI — no framework migration, no second runtime. This is the top-of-funnel for the freemium model: organic search → free search/discovery → pro conversion.
+### What Shipped
 
-### Features
-
-| Feature | Size | Description |
-|---------|------|-------------|
-| Campground profile pages | L | `/campgrounds/{state}/{slug}` — Jinja2 SSR with registry data: name, tags, drive time, source, booking link, nearby campgrounds. JSON-LD structured data (`schema.org/Campground`). |
-| State index pages | M | `/campgrounds/{state}` — all campgrounds in a state, grouped/filterable. |
-| Tag landing pages | M | `/tags/{tag}` — campgrounds filtered by enriched tags (lakeside, river, old-growth, kid-friendly). |
-| "This weekend" page | M | `/this-weekend` — auto-updated availability landing page. Highest-intent search query. Cached availability, refreshed every 30 min. |
-| Sitemap + robots.txt | S | Auto-generated `sitemap.xml` from registry. Submit to Google Search Console. |
-| Per-route meta tags | S | Unique `<title>`, `<meta description>`, og tags per SPA route via react-helmet-async. |
-| og:image fix | XS | Fix SVG→PNG mismatch. Generate a real PNG for social previews. |
-| Cloudflare CDN | S | Free tier in front of Fly.io. Cache SEO pages, serve static assets from edge. |
-| Registry slug column | S | URL-safe slug generated from campground name. Migration + seed script update. |
+| Feature | Description |
+|---------|-------------|
+| Campground profile pages | `/campgrounds/{state}/{slug}` — Jinja2 SSR with registry data, JSON-LD structured data (`schema.org/Campground`). |
+| State index pages | `/campgrounds/{state}` — all campgrounds in a state, grouped/filterable. |
+| Tag landing pages | `/tags/{tag}` — campgrounds filtered by enriched tags. |
+| "This weekend" page | `/this-weekend` — auto-updated availability landing page. |
+| Sitemap + robots.txt | Auto-generated `sitemap.xml` from registry. |
+| Per-route meta tags | Unique `<title>`, `<meta description>`, og tags per SPA route via react-helmet-async. |
+| Registry slug column | URL-safe slug generated from campground name. |
 
 ### Architecture Decision
-Jinja2 templates in FastAPI, not a Next.js migration. The Python backend already has direct SQLite access to all registry data. Adding a second runtime (Node.js) for SSR introduces deployment complexity, proxy layers, and memory pressure on a single Fly machine — all to render HTML from data that's already in the Python process. SEO pages are database queries rendered as semantic HTML with proper meta tags. FastAPI + Jinja2 does this natively.
-
-The React SPA continues to handle all interactive features (search, map, watch, trips, planner) unchanged.
-
-### Dependencies
-- v1.29 shipped
-
-### Quality Bar
-- All SEO pages pass Lighthouse SEO audit (green)
-- Structured data validates in Google Rich Results Test
-- Profile pages load under 500ms (server render + Cloudflare cache)
-- Visual consistency with SPA (shared CSS tokens)
-- All templates meet WCAG 2.1 AA
-
-### Key Risk
-Thin content — campground profiles with just registry metadata may not rank. Enriched descriptions, tags, and drive times help, but richer content (availability snippets, seasonal tips) may be needed based on Search Console data.
+Jinja2 templates in FastAPI, not a Next.js migration. The React SPA continues to handle all interactive features unchanged.
 
 ---
 
-## v1.31 "Audit Fixes"
+## v1.31 "Audit Fixes" [SHIPPED 2026-04-09]
+
+### What Shipped
+
+| Fix | Description |
+|-----|-------------|
+| Rate limit hardening (SEC-04) | Planner rate limit keyed by IP only — removes cookie-based bypass. |
+| Error sanitization (SEC-06) | Streamed planner errors return generic message; no raw exception details. |
+| PostHog proxy allowlist (SEC-01) | Proxy forwards only safe headers. |
+| Rate limiter cleanup (SEC-03/05) | Auth, planner, and share rate limiters evict stale entries. |
+| CSP hash (SEC-02) | Reverted to `unsafe-inline` — sha256 hash broke PostHog session replay. |
+| ReserveAmerica pagination (PERF-01) | Fetch all pages when park has >20 sites. |
+| Watcher fetch dedup (PERF-02) | Pre-warm availability cache for multi-watch facilities. |
+| SQL bounding box (PERF-03) | `get_nearby` uses lat/lon bounding box pre-filter. |
+| SQL tag filter (PERF-04) | Tag filtering via SQLite `json_each()`. |
+| Alt-date probe reuse (PERF-05) | Date suggestion probes reuse prepared search data. |
+| LLM stream batching (PERF-06) | Text chunks batched via `requestAnimationFrame`. |
+| Dark mode contrast (A11Y-01) | `--text-light` lightened to 4.7:1 ratio. |
+| A11Y fixes (A11Y-02–12) | Auth alerts, landmarks, touch targets, nav structure, input labels. |
+
+---
+
+## v1.32 "Accurate Drive Times"
 
 ### Theme
-Harden the app before monetization. Full-codebase audit (security, performance, accessibility) found 6 critical and 15 warning issues. This milestone closes them all — tightening rate limits, fixing data gaps, and reaching WCAG AA compliance across the UI.
+Replace haversine approximations with real road-network routing. The current haversine × 1.4 terrain multiplier can be off by 1.5-2x for PNW geography — Olympic Peninsula campgrounds show ~60 min but are actually 3+ hours due to water crossings and mountain passes. As Campable attracts real users, drive times must match what people see on Google Maps.
 
 ### Features
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| Rate limit hardening (SEC-04) | S | Planner rate limit keyed by IP only — removes cookie-based bypass that exposed Anthropic API costs. |
-| Error sanitization (SEC-06) | XS | Streamed planner errors return generic message; no raw exception details to client. |
-| PostHog proxy allowlist (SEC-01) | XS | Proxy forwards only safe headers (content-type, accept, user-agent, origin, referer). |
-| Rate limiter cleanup (SEC-03/05) | S | Auth, planner, and share rate limiters evict stale entries to prevent unbounded memory growth. |
-| CSP hash (SEC-02) | XS | Replace `unsafe-inline` in script-src with sha256 hash for PostHog init snippet. |
-| ReserveAmerica pagination (PERF-01) | M | Fetch all pages when park has >20 sites. Previously silently truncated availability data. |
-| Watcher fetch dedup (PERF-02) | S | Pre-warm availability cache for multi-watch facilities before poll loop. |
-| SQL bounding box (PERF-03) | S | `get_nearby` uses lat/lon bounding box pre-filter before Python haversine sort. |
-| SQL tag filter (PERF-04) | S | Tag filtering via SQLite `json_each()` instead of Python post-filter on all rows. |
-| Alt-date probe reuse (PERF-05) | S | Date suggestion probes reuse prepared search data (registry, drive times) instead of re-querying. |
-| LLM stream batching (PERF-06) | S | Text chunks batched via `requestAnimationFrame` — one render per frame, not per chunk. |
-| Dark mode contrast (A11Y-01) | XS | `--text-light` lightened to #a5a598 (4.7:1 on bg-card). Fixes 40+ locations. |
-| Auth error announcement (A11Y-02) | XS | `role="alert"` on auth error messages for screen reader announcement. |
-| TripsPage landmark (A11Y-03) | XS | Wrapped in `<main id="main-content">` for skip link and landmark navigation. |
-| Search mode group (A11Y-05) | XS | Mode toggle gets `role="group" aria-label="Search mode"`. |
-| Mobile touch targets (A11Y-06/10) | XS | View toggle and tag buttons get 44px min-height on mobile. |
-| ResultCard structure (A11Y-07) | S | Compare button moved outside header button — no more nested interactive controls. |
-| Chat aria-live (A11Y-08) | XS | Remove redundant `aria-live` on `role="log"` container. |
-| Header nav landmark (A11Y-09) | XS | Header actions wrapped in `<nav aria-label="Main navigation">`. |
-| Input labels (A11Y-11/12) | XS | Trip name inputs get `aria-label` on both create and edit forms. |
+| Mapbox client module | M | Async `mapbox.py` with Directions API (single route) and Matrix API (batch, auto-chunks at 25 destinations). |
+| `drive_times` table | S | New SQLite table keyed by `(base_name, booking_system, facility_id)` storing Mapbox-computed minutes + miles. |
+| Batch pre-compute script | M | `scripts/compute_drive_times.py` — Matrix API batch for all 12 known bases × 1,370 campgrounds (~660 API calls). |
+| Tiered search engine lookup | M | Tier 1: DB lookup for known bases (instant). Tier 2: Mapbox Matrix for custom addresses (~10-50 results). Tier 3: haversine fallback. |
+| Planner tool upgrade | S | `get_drive_time` uses Mapbox single route with haversine fallback. |
+| Accurate `get_accurate_drive_minutes()` | S | New async function in `geo.py` — Mapbox with haversine fallback. |
+
+### Architecture Decision
+Mapbox free tier (100k requests/month) over self-hosted OSRM. Both use OpenStreetMap road data, but Mapbox requires zero infra — no Docker sidecar, no OSM data updates, no extra RAM on Fly.io. Pre-computed drive times from known bases mean most searches hit the DB with zero API calls. Custom address searches only route the filtered result set (~10-50 campgrounds), not all 1,370.
 
 ### Dependencies
-- v1.29 shipped (PostHog LLM analytics provides cost visibility for SEC-04)
+- v1.31 shipped
+- `MAPBOX_ACCESS_TOKEN` in `.env` and Fly secrets
 
 ### Quality Bar
-- All 6 critical findings resolved
-- All 15 warning findings resolved
-- Full test suite passes (786 tests)
-- Lighthouse accessibility score green
-- No regressions in search, planner, or watch polling
+- Spot-check known-bad routes: Kalaloch, Hurricane Ridge, Hoh Rainforest (Olympic Peninsula), Mt. Rainier east side
+- Known base searches return DB-cached times (no API call)
+- Custom address searches route via Mapbox Matrix
+- App starts and searches work without `MAPBOX_ACCESS_TOKEN` (haversine fallback)
+- All tests pass
 
 ### Key Risk
-PERF-01 pagination depends on ReserveAmerica accepting a `page` query parameter — undocumented API. If RA uses a different pagination mechanism, the pagination loop may need adjustment based on observed Redux state.
+Mapbox Matrix API may return `null` for campgrounds on unmapped forest service roads. Fallback to haversine for those individual campgrounds, clearly labeled as "estimated."
 
 ---
 

@@ -57,6 +57,19 @@ CREATE TABLE IF NOT EXISTS campgrounds (
 
 CREATE INDEX IF NOT EXISTS idx_campgrounds_state ON campgrounds(state);
 CREATE INDEX IF NOT EXISTS idx_campgrounds_booking_system ON campgrounds(booking_system);
+
+CREATE TABLE IF NOT EXISTS drive_times (
+    base_name TEXT NOT NULL,
+    booking_system TEXT NOT NULL,
+    facility_id TEXT NOT NULL,
+    drive_minutes INTEGER NOT NULL,
+    drive_miles REAL,
+    source TEXT NOT NULL DEFAULT 'mapbox',
+    computed_at TEXT NOT NULL,
+    PRIMARY KEY (base_name, booking_system, facility_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_drive_times_base ON drive_times(base_name);
 """
 
 
@@ -541,3 +554,50 @@ class CampgroundRegistry:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [cg for _, cg in scored[:limit]]
+
+    # -------------------------------------------------------------------
+    # Drive times (Mapbox pre-computed)
+    # -------------------------------------------------------------------
+
+    def get_drive_times_from_base(
+        self, base_name: str
+    ) -> dict[tuple[str, str], int]:
+        """Load all pre-computed drive times for a known base.
+
+        Returns {(booking_system, facility_id): drive_minutes}.
+        """
+        rows = self._conn.execute(
+            "SELECT booking_system, facility_id, drive_minutes "
+            "FROM drive_times WHERE base_name = ?",
+            (base_name.lower(),),
+        ).fetchall()
+        return {(r["booking_system"], r["facility_id"]): r["drive_minutes"] for r in rows}
+
+    def upsert_drive_times(self, rows: list[dict]) -> int:
+        """Bulk upsert pre-computed drive times.
+
+        Each dict: {base_name, booking_system, facility_id, drive_minutes,
+                     drive_miles, source, computed_at}
+        Returns number of rows upserted.
+        """
+        if not rows:
+            return 0
+        self._conn.executemany(
+            """\
+            INSERT INTO drive_times
+                (base_name, booking_system, facility_id, drive_minutes,
+                 drive_miles, source, computed_at)
+            VALUES
+                (:base_name, :booking_system, :facility_id, :drive_minutes,
+                 :drive_miles, :source, :computed_at)
+            ON CONFLICT (base_name, booking_system, facility_id)
+            DO UPDATE SET
+                drive_minutes = excluded.drive_minutes,
+                drive_miles = excluded.drive_miles,
+                source = excluded.source,
+                computed_at = excluded.computed_at
+            """,
+            rows,
+        )
+        self._conn.commit()
+        return len(rows)

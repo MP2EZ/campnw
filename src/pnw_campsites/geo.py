@@ -114,3 +114,26 @@ async def geocode_address(address: str) -> tuple[float, float]:
         raise ValueError(f"Could not geocode address: '{address}'")
 
     return float(results[0]["lat"]), float(results[0]["lon"])
+
+
+# ---------------------------------------------------------------------------
+# Accurate drive time (Mapbox with haversine fallback)
+# ---------------------------------------------------------------------------
+
+
+async def get_accurate_drive_minutes(
+    lat1: float, lon1: float, lat2: float, lon2: float
+) -> int:
+    """Drive time via Mapbox road-network routing, falling back to haversine.
+
+    Uses the Mapbox Directions API for a single origin-destination pair.
+    Falls back to the haversine estimate if the token is missing or the API
+    call fails for any reason.
+    """
+    try:
+        from pnw_campsites.mapbox import get_drive_time
+
+        result = await get_drive_time((lat1, lon1), (lat2, lon2))
+        return result["drive_minutes"]
+    except Exception:
+        return estimated_drive_minutes(lat1, lon1, lat2, lon2)

@@ -1521,3 +1521,209 @@ class TestSearchIntegration:
             assert results.diagnosis.binding_constraint in (
                 "days", "dates"
             )
+
+
+class TestResolveDriveTimes:
+    """Test the tiered drive time resolution in _resolve_drive_times."""
+
+    @pytest.fixture
+    def registry(self, tmp_path):
+        from pnw_campsites.registry.db import CampgroundRegistry
+
+        db_path = tmp_path / "test.db"
+        with CampgroundRegistry(db_path) as reg:
+            yield reg
+
+    @pytest.mark.asyncio
+    async def test_tier1_known_base_uses_db(self, registry) -> None:
+        """Known base name with pre-computed data uses DB lookup, no API."""
+        from unittest.mock import AsyncMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        # Seed a campground
+        cg = make_campground(
+            facility_id="100", latitude=47.0, longitude=-121.5, state="WA",
+        )
+        registry.upsert(cg)
+
+        # Pre-compute a drive time in the DB
+        registry.upsert_drive_times([{
+            "base_name": "seattle",
+            "booking_system": "recgov",
+            "facility_id": "100",
+            "drive_minutes": 195,
+            "drive_miles": 110.0,
+            "source": "mapbox",
+            "computed_at": "2026-04-10T12:00:00",
+        }])
+
+        engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
+
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            from_location="seattle",
+            from_coords=(47.6062, -122.3321),
+        )
+        drive_times = await engine._resolve_drive_times(
+            query, query.from_coords, [cg],
+        )
+
+        # Should return the DB value (195), not haversine estimate
+        assert drive_times["100"] == 195
+
+    @pytest.mark.asyncio
+    async def test_tier1_known_base_empty_db_falls_to_haversine(
+        self, registry,
+    ) -> None:
+        """Known base with no pre-computed data falls back to haversine."""
+        from unittest.mock import AsyncMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        cg = make_campground(
+            facility_id="100", latitude=47.0, longitude=-121.5, state="WA",
+        )
+        registry.upsert(cg)
+
+        # No drive_times rows in DB for this base
+        engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
+
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            from_location="seattle",
+            from_coords=(47.6062, -122.3321),
+        )
+        drive_times = await engine._resolve_drive_times(
+            query, query.from_coords, [cg],
+        )
+
+        # Should still return a value (haversine fallback)
+        assert "100" in drive_times
+        assert isinstance(drive_times["100"], int)
+        assert drive_times["100"] > 0
+
+    @pytest.mark.asyncio
+    async def test_tier1_partial_db_fills_gaps_with_haversine(
+        self, registry,
+    ) -> None:
+        """Known base with partial DB coverage uses haversine for missing."""
+        from unittest.mock import AsyncMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        cg_in_db = make_campground(
+            facility_id="100", latitude=47.0, longitude=-121.5, state="WA",
+        )
+        cg_not_in_db = make_campground(
+            facility_id="200", latitude=46.5, longitude=-121.0, state="WA",
+        )
+        registry.upsert(cg_in_db)
+        registry.upsert(cg_not_in_db)
+
+        registry.upsert_drive_times([{
+            "base_name": "seattle",
+            "booking_system": "recgov",
+            "facility_id": "100",
+            "drive_minutes": 195,
+            "drive_miles": 110.0,
+            "source": "mapbox",
+            "computed_at": "2026-04-10T12:00:00",
+        }])
+
+        engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
+
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            from_location="seattle",
+            from_coords=(47.6062, -122.3321),
+        )
+        drive_times = await engine._resolve_drive_times(
+            query, query.from_coords, [cg_in_db, cg_not_in_db],
+        )
+
+        assert drive_times["100"] == 195  # from DB
+        assert "200" in drive_times  # haversine fallback
+        assert drive_times["200"] != 195  # different value
+
+    @pytest.mark.asyncio
+    async def test_tier2_custom_address_calls_mapbox(
+        self, registry, monkeypatch,
+    ) -> None:
+        """Custom address (non-base) routes via Mapbox Matrix API."""
+        import respx
+        import httpx
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        monkeypatch.setenv("MAPBOX_ACCESS_TOKEN", "pk.test")
+
+        cg = make_campground(
+            facility_id="100", latitude=47.0, longitude=-121.5, state="WA",
+        )
+        registry.upsert(cg)
+
+        engine = SearchEngine(registry=registry, recgov_client=None)
+
+        # Mock the Matrix API
+        with respx.mock:
+            respx.route(
+                method="GET",
+                url__startswith="https://api.mapbox.com/directions-matrix",
+            ).mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "durations": [[0, 7200]],  # 120 min
+                        "distances": [[0, 180000]],  # ~112 mi
+                    },
+                )
+            )
+
+            query = SearchQuery(
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 30),
+                from_location="123 Main St, Tacoma, WA",
+                from_coords=(47.25, -122.44),
+            )
+            drive_times = await engine._resolve_drive_times(
+                query, query.from_coords, [cg],
+            )
+
+        assert drive_times["100"] == 120  # from Mapbox
+
+    @pytest.mark.asyncio
+    async def test_tier3_fallback_when_mapbox_fails(
+        self, registry, monkeypatch,
+    ) -> None:
+        """Falls back to haversine when Mapbox is unavailable."""
+        from unittest.mock import AsyncMock
+
+        from pnw_campsites.search.engine import SearchEngine
+
+        monkeypatch.delenv("MAPBOX_ACCESS_TOKEN", raising=False)
+
+        cg = make_campground(
+            facility_id="100", latitude=47.0, longitude=-121.5, state="WA",
+        )
+        registry.upsert(cg)
+
+        engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
+
+        # Custom address, no base match, no Mapbox token -> haversine
+        query = SearchQuery(
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            from_location="123 Main St, Tacoma, WA",
+            from_coords=(47.25, -122.44),
+        )
+        drive_times = await engine._resolve_drive_times(
+            query, query.from_coords, [cg],
+        )
+
+        assert "100" in drive_times
+        assert isinstance(drive_times["100"], int)
+        assert drive_times["100"] > 0

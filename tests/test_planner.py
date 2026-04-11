@@ -491,11 +491,12 @@ class TestCheckAvailabilityTool:
 
 
 class TestGetDriveTimeTool:
-    """Test _get_drive_time() logic."""
+    """Test _get_drive_time() logic (async, falls back to haversine without token)."""
 
-    def test_get_drive_time_returns_minutes_and_readable(self):
+    async def test_get_drive_time_returns_minutes_and_readable(self, monkeypatch):
         """Drive time returns both minutes and readable format."""
-        result_json = _get_drive_time(
+        monkeypatch.delenv("MAPBOX_ACCESS_TOKEN", raising=False)
+        result_json = await _get_drive_time(
             {
                 "from_lat": 47.6,
                 "from_lon": -122.3,
@@ -510,9 +511,10 @@ class TestGetDriveTimeTool:
         assert isinstance(data["drive_minutes"], int)
         assert data["drive_minutes"] > 0
 
-    def test_drive_time_readable_format_hours(self):
+    async def test_drive_time_readable_format_hours(self, monkeypatch):
         """Readable format includes hours when > 60 minutes."""
-        result_json = _get_drive_time(
+        monkeypatch.delenv("MAPBOX_ACCESS_TOKEN", raising=False)
+        result_json = await _get_drive_time(
             {
                 "from_lat": 47.6,
                 "from_lon": -122.3,
@@ -525,9 +527,10 @@ class TestGetDriveTimeTool:
         if data["drive_minutes"] >= 60:
             assert "h" in data["readable"]
 
-    def test_drive_time_readable_format_minutes_only(self):
+    async def test_drive_time_readable_format_minutes_only(self, monkeypatch):
         """Readable format is minutes only for short drives."""
-        result_json = _get_drive_time(
+        monkeypatch.delenv("MAPBOX_ACCESS_TOKEN", raising=False)
+        result_json = await _get_drive_time(
             {
                 "from_lat": 47.6,
                 "from_lon": -122.3,
