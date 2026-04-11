@@ -116,7 +116,10 @@ TOOLS: list[dict] = [
     },
     {
         "name": "get_drive_time",
-        "description": "Get drive time in minutes between two lat/lon coordinates using road-network routing.",
+        "description": (
+            "Get drive time between two lat/lon coordinates"
+            " using road-network routing."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
