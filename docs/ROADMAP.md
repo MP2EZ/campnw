@@ -1,7 +1,7 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
 **Last updated:** April 2026
-**Current version:** v1.29 in progress (deployed at campable.co)
+**Current version:** v1.32 shipped (deployed at campable.co)
 
 ---
 
@@ -26,19 +26,22 @@ v0.98   [SHIPPED]  Quality Hardening   — WCAG AA contrast, focus styles, Error
 v0.99   [SHIPPED]  Pre-launch Audit    — Security headers, CSP, login rate limit, lazy loading, CVE CI
 v1.0    [SHIPPED]  campnw 1.0          — OR State Parks, recs, collapsible form, hamburger, polish
 v1.1    [SHIPPED]  Better Search       — NL search, registry expansion (MT/WY/NorCal), AI summaries
-v1.15   ------->   Brand + Identity    — Logo, palette, voice, og:image, notification copy
+v1.15   [SHIPPED]  Brand + Identity    — Logo, palette, voice, og:image, notification copy
 v1.2    [SHIPPED]  Trips + Watches     — Trip object, template watches, sharing, onboarding
 v1.26   [SHIPPED]  Hardening           — History compaction, DB backup, SEC-10, re-enrichment
 v1.27   [SHIPPED]  UX Polish           — Blue heatmap, teal WA, date picker, NL search, icons, filters
 v1.28   [SHIPPED]  Watch Reliability   — Watch source persistence, N+1 fix, SSE batching, perf
-v1.29   [SHIPPED]  Brand + Polish       — Madrona logo, og:image, LLM analytics, registry cleanup, itinerary cards
-v1.3    ------->   SEO + Discoverability — Campground profile pages, sitemap, structured data, Cloudflare
-v1.31   ------->   Audit Fixes          — Security hardening, perf optimizations, WCAG AA compliance
+v1.29   [SHIPPED]  Brand + Polish        — Madrona logo, og:image, LLM analytics, registry cleanup, itinerary cards
+v1.3    [SHIPPED]  SEO + Discoverability — Campground profile pages, sitemap, structured data, Cloudflare
+v1.31   [SHIPPED]  Audit Fixes          — Security hardening, perf optimizations, WCAG AA compliance
+v1.32   [SHIPPED]  Accurate Drive Times — Mapbox routing, drive_times table, tiered search lookup
+v1.33   ------->   Supabase Auth        — Replace custom auth with Supabase, Bearer tokens, auto-provisioning
+v1.34   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
 v1.4    ------->   Monetization Launch  — Pro tier gate, payment, freemium conversion flows
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
-Each milestone is a shippable increment with clear user value. v1.3–v1.4 transition campable from personal tool to public product. v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
+Each milestone is a shippable increment with clear user value. v1.33–v1.34 establish production auth (Supabase + OAuth), v1.4 transitions campable from personal tool to public product. v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -1062,7 +1065,7 @@ Jinja2 templates in FastAPI, not a Next.js migration. The React SPA continues to
 
 ---
 
-## v1.32 "Accurate Drive Times"
+## v1.32 "Accurate Drive Times" [SHIPPED 2026-04-13]
 
 ### Theme
 Replace haversine approximations with real road-network routing. The current haversine × 1.4 terrain multiplier can be off by 1.5-2x for PNW geography — Olympic Peninsula campgrounds show ~60 min but are actually 3+ hours due to water crossings and mountain passes. As Campable attracts real users, drive times must match what people see on Google Maps.
@@ -1097,6 +1100,177 @@ Mapbox Matrix API may return `null` for campgrounds on unmapped forest service r
 
 ---
 
+## v1.33 "Supabase Auth"
+
+### Theme
+Replace custom email/password auth with Supabase Auth. No existing users — clean swap with no migration bridges. OAuth providers configured in Supabase dashboard but not connected yet (placeholders for v1.34). Auth data (email, password, OAuth identities) moves to Supabase; profile/preferences stay in SQLite keyed by Supabase user UUID.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Supabase project setup | S | Create project (us-west region for PNW latency), configure redirect URLs, note secrets. |
+| Backend JWT swap | M | Replace custom HS256 validation with Supabase JWT validation via PyJWT. `SUPABASE_JWT_SECRET` env var. Local decode only (~0.5ms) — no network calls per request. |
+| User auto-provisioning | S | `supabase_id TEXT UNIQUE` column on `users` table. On first authenticated API call, `get_current_user` creates local user record. Integer `id` stays as FK everywhere — zero schema migration on watches/trips. |
+| Remove custom auth routes | M | Delete `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout`. Keep `/api/auth/me` (GET, PATCH, DELETE) and `/api/auth/export`. Remove bcrypt dependency. |
+| Frontend Supabase client | M | `@supabase/supabase-js` (~50KB gzipped). Replace `useAuth` internals — keep same `AuthContextValue` interface so all consumers unchanged. |
+| Bearer token pattern | M | Replace `credentials: "include"` cookie approach with `Authorization: Bearer` header on all API calls. New `authFetch()` wrapper in `api.ts`. |
+| Anonymous session migration | S | On first authenticated call for a new user, check for `campnw_session` cookie and migrate watches via existing `migrate_watches_to_user()`. |
+| CSP update | S | Add `https://<project-ref>.supabase.co` to `connect-src`. Pin to exact project ref. |
+| Account deletion update | S | `DELETE /api/auth/me` also calls Supabase admin API to delete user (prevents orphaned PII in Supabase). |
+
+### Architecture Decisions
+
+**Split data model.** Auth in Supabase, profile in SQLite. Lookup path: Supabase JWT `sub` (UUID) → query `users WHERE supabase_id = ?` → get local integer `id` → use as FK everywhere. One index, one join, zero FK migration.
+
+**Auto-provisioning over webhooks.** `get_current_user()` creates the local user inline on first request. No webhook ordering issues, no race conditions.
+
+**localStorage for tokens.** Supabase JS SDK default. A cookie proxy pattern would be more secure against XSS but adds significant complexity (backend refresh management, token rotation). Acceptable for a campsite tool with CSP protections. Revisit if handling sensitive data.
+
+**Local JWT validation only.** Supabase uses HS256 with a static secret. PyJWT decodes in ~0.5ms — actually faster than the current bcrypt + JWT approach (~5ms). Never call Supabase's `/auth/v1/user` per-request.
+
+### Security Requirements
+- Pin JWT algorithm to `["HS256"]` — reject `none` and other algorithms
+- Add `leeway=30` to `jwt.decode()` for clock skew between Supabase and Fly.io
+- Validate `aud: "authenticated"` and `role: "authenticated"` claims
+- `SUPABASE_SERVICE_ROLE_KEY` in Fly secrets only — never in frontend code or client responses
+- `SUPABASE_ANON_KEY` is public by design — expose as `VITE_PUBLIC_SUPABASE_ANON_KEY`
+
+### Secret Management
+
+| Secret | Where | Notes |
+|--------|-------|-------|
+| `SUPABASE_JWT_SECRET` | Fly secrets | Replaces `JWT_SECRET` |
+| `SUPABASE_URL` | Fly secrets + frontend env | Public project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Fly secrets only | Bypasses RLS — backend-only |
+| `VITE_PUBLIC_SUPABASE_URL` | Frontend build env | Public |
+| `VITE_PUBLIC_SUPABASE_ANON_KEY` | Frontend build env | Public |
+
+### Files Changed
+
+**Backend (~150 lines changed):**
+- `auth.py` — gut and replace with Supabase JWT decode (~20 lines)
+- `routes/auth.py` — remove signup/login/logout, keep profile CRUD (~-80 lines)
+- `routes/deps.py` — rewrite `get_current_user` for Bearer token + auto-provision
+- `monitor/db.py` — add `supabase_id` column, `get_user_by_supabase_id()`, make `password_hash` optional
+- `api.py` — CSP `connect-src` update
+
+**Frontend (~110 lines changed):**
+- `lib/supabase.ts` — new, ~5 lines
+- `hooks/useAuth.ts` — rewrite internals, keep interface
+- `api.ts` — replace cookie auth with Bearer token helper
+- `components/AuthModal.tsx` — swap to use Supabase via hook
+
+### Testing Strategy
+
+**Delete:** Custom signup/login/bcrypt endpoint tests.
+
+**New (15-20 tests):**
+- 5 JWT validation (valid, expired, malformed, missing, wrong algorithm) — test JWTs signed with known secret in CI, no Docker or Supabase emulator
+- 6 session migration (watches transfer, duplicates, idempotency, invalid token)
+- 3-4 frontend `useAuth` hook tests — mock Supabase JS client
+- 2 AuthModal tests
+
+**Unchanged:** All watch/trip/planner/search tests — swap auth fixture in `conftest.py` from custom JWT to Supabase-shaped JWT.
+
+### Dependencies
+- v1.32 shipped
+- Supabase project created (free tier, us-west region)
+
+### Quality Bar
+- Signup → create watch → logout → login → watch persists
+- Anonymous watch → signup → watch migrates to account
+- Expired/malformed token returns 401, not 500
+- App functional in anonymous mode if Supabase is unreachable
+- All existing tests pass with swapped auth fixture
+
+### Key Risk
+Supabase availability becomes a dependency for login (not for ongoing sessions — local JWT validation works offline). Existing valid tokens continue working until expiry (1 hour default). Anonymous mode is unaffected.
+
+---
+
+## v1.34 "OAuth Login"
+
+### Theme
+Enable Google, Apple, and GitHub sign-in. Supabase infrastructure from v1.33 already supports OAuth — this milestone is provider configuration, frontend buttons, and account-linking UX. The backend doesn't change (a JWT from Google OAuth is identical to one from email/password). GitHub can ship immediately (no LLC/developer account needed); Google and Apple ship when accounts are ready.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| GitHub OAuth provider | S | Configure in Supabase dashboard. Create OAuth App in GitHub Developer Settings — free, no paid account, ~5 min. Can ship immediately. |
+| Google OAuth provider | S | Configure in Supabase dashboard. Google Cloud Console: OAuth consent screen, client ID + secret, redirect URL. Blocked on LLC. |
+| Apple OAuth provider | S | Configure in Supabase dashboard. Apple Developer: Services ID, domain verification, private key for client secret signing. Blocked on LLC + $99/yr membership. |
+| OAuth buttons in AuthModal | S | "Continue with GitHub/Google/Apple" buttons above email/password form. Calls `supabase.auth.signInWithOAuth({ provider })`. |
+| Apple display name capture | S | Apple only sends name on first sign-in. Capture from `user_metadata` during auto-provisioning and store in local profile. |
+| Email-linking UX | S | When OAuth email matches existing email/password account, Supabase auto-links. Surface clear message to user. |
+
+### Architecture Decisions
+
+**Supabase PKCE by default.** `@supabase/supabase-js` v2+ uses PKCE (Proof Key for Code Exchange) automatically for OAuth. No custom implementation. Do not set `flowType: 'implicit'`.
+
+**Zero backend changes for OAuth.** `get_current_user` validates Supabase JWTs regardless of auth method. OAuth users hit the same auto-provisioning path as email/password users.
+
+### Security Requirements
+- Verify PKCE is active (default in SDK v2+)
+- Pin redirect URLs in Supabase dashboard — exact URLs only, no wildcards
+- Google: verify domain ownership in Cloud Console, submit OAuth consent screen for verification before launch (100-user limit in testing mode)
+- Apple: domain verification via Developer portal
+- Apple refresh tokens can be user-revoked in Apple ID settings — handle gracefully (prompt re-auth)
+
+### Files Changed
+
+**Frontend (~30 lines):**
+- `components/AuthModal.tsx` — add GitHub/Google/Apple OAuth buttons
+- `hooks/useAuth.ts` — capture Apple display name from `user_metadata`
+
+**Backend (minimal):**
+- `monitor/db.py` — handle display name from `user_metadata` in auto-provisioning
+
+**External config (not code):**
+- Supabase dashboard: enable GitHub, Google + Apple providers
+- GitHub Developer Settings: OAuth App (free, immediate)
+- Google Cloud Console: OAuth consent screen, credentials
+- Apple Developer: Services ID, private key
+
+### Testing Strategy
+
+**Automated (3 tests):**
+- 3 frontend: OAuth buttons render and call `signInWithOAuth` with correct provider string
+- 1 backend: Apple display name captured from `user_metadata` during provisioning
+
+**Manual checklist (~20 min at ship time):**
+1. Sign out, clear cookies → "Continue with GitHub" → complete flow → name in header
+2. Create watch → sign out → GitHub sign-in → watch persists
+3. Anonymous watch → GitHub sign-in → watch migrates
+4. Repeat 1-3 with Google (when available)
+5. Repeat 1-3 with Apple (when available)
+6. Existing email/password user → OAuth sign-in with same email → accounts linked
+7. Cancel OAuth mid-flow → returns to app cleanly
+
+### Dependencies
+- v1.33 shipped (Supabase auth working with email/password)
+- GitHub: none (free, can ship immediately with v1.33)
+- Google: LLC registered, Google Cloud project with OAuth consent screen verified
+- Apple: LLC registered, Apple Developer account with active membership ($99/yr)
+
+### Quality Bar
+- OAuth login completes in <4 seconds
+- Failed/cancelled OAuth returns to app without error screen
+- Apple first-sign-in captures display name
+- Email/password login still works alongside OAuth
+- All v1.33 tests pass (zero backend auth changes)
+
+### Key Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Google/Apple accounts not ready | Ship GitHub OAuth first (no blockers), add Google/Apple as accounts are set up — each provider is independent |
+| Google consent screen in "testing" mode | Submit for verification before launch; requires privacy policy on campable.co |
+| Apple only sends name once | Capture in auto-provisioning; fallback: user sets name in profile settings |
+
+---
+
 ## v1.4 "Monetization Launch"
 
 ### Theme
@@ -1113,6 +1287,7 @@ Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates t
 | Pricing page | S | Clear free vs. pro comparison. Accessible, both themes. |
 
 ### Dependencies
+- v1.34 shipped (auth solid with OAuth before gating features behind it)
 - v1.3 shipped (organic traffic flowing)
 - v0.95 billing infrastructure (already built)
 
@@ -1123,7 +1298,7 @@ Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates t
 - Conversion funnel instrumented in PostHog
 
 ### Key Risk
-Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates.
+Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates. Auth must be stable (v1.33/v1.34) before tying subscription state to user accounts.
 
 ---
 
