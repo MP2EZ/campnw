@@ -70,13 +70,46 @@ def get_search_timings():
 
 
 def get_current_user(request: Request) -> int | None:
-    """Extract user_id from JWT cookie, or None if anonymous."""
-    from pnw_campsites.auth import TOKEN_COOKIE, decode_jwt
+    """Extract user_id from Supabase Bearer token, auto-provisioning if needed."""
+    from pnw_campsites.auth import decode_supabase_jwt
 
-    token = request.cookies.get(TOKEN_COOKIE)
-    if not token:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
         return None
-    return decode_jwt(token)
+
+    token = auth_header[7:]
+    result = decode_supabase_jwt(token)
+    if not result:
+        return None
+    supabase_id, email = result
+
+    db = get_watch_db()
+    user = db.get_user_by_supabase_id(supabase_id)
+    if user:
+        return user.id
+
+    # Auto-provision local user on first authenticated request
+    from sqlite3 import IntegrityError
+
+    from pnw_campsites.monitor.db import User
+
+    try:
+        new_user = db.create_user(User(
+            email=email,
+            password_hash="",
+            supabase_id=supabase_id,
+        ))
+    except IntegrityError:
+        # Race condition: another request already created this user
+        user = db.get_user_by_supabase_id(supabase_id)
+        return user.id if user else None
+
+    # Migrate anonymous watches if session cookie is present
+    session_token = request.cookies.get(SESSION_COOKIE)
+    if session_token:
+        db.migrate_watches_to_user(session_token, new_user.id)
+
+    return new_user.id
 
 
 def get_session_token(request: Request, response: Response) -> str:

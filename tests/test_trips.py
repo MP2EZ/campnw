@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import jwt as pyjwt
 import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
 from pnw_campsites.monitor.db import User
+
+_TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"
 
 
 # ---------------------------------------------------------------------------
@@ -14,19 +20,33 @@ from pnw_campsites.monitor.db import User
 # ---------------------------------------------------------------------------
 
 
-def _signup(client: TestClient, email: str = "trips@example.com") -> dict:
-    resp = client.post(
-        "/api/auth/signup",
-        json={"email": email, "password": "testpass123", "display_name": "Trip Tester"},
-    )
+def _make_jwt(email="test@example.com", supabase_id=None):
+    sub = supabase_id or str(uuid.uuid4())
+    payload = {
+        "sub": sub, "email": email, "role": "authenticated", "aud": "authenticated",
+        "exp": datetime.now(UTC) + timedelta(hours=1), "iat": datetime.now(UTC),
+    }
+    return pyjwt.encode(payload, _TEST_SECRET, algorithm="HS256")
+
+
+def _auth_headers(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _signup(client: TestClient, email: str = "trips@example.com"):
+    """Create user via auto-provisioning and return (user_data, auth_headers)."""
+    token = _make_jwt(email=email)
+    headers = _auth_headers(token)
+    resp = client.get("/api/auth/me", headers=headers)
     assert resp.status_code == 200
-    return resp.json()
+    return resp.json(), headers
 
 
-def _create_trip(client: TestClient, name: str = "Summer Trip", **kwargs) -> dict:
+def _create_trip(client: TestClient, name: str = "Summer Trip", headers: dict | None = None, **kwargs) -> dict:
     resp = client.post(
         "/api/trips",
         json={"name": name, **kwargs},
+        headers=headers,
     )
     assert resp.status_code == 200
     return resp.json()
@@ -153,8 +173,8 @@ class TestTripAPI:
     """Tests for /api/trips endpoints."""
 
     def test_create_trip_authenticated(self, api_client: TestClient):
-        _signup(api_client)
-        trip = _create_trip(api_client, "Beach Trip", start_date="2026-07-01")
+        _, headers = _signup(api_client)
+        trip = _create_trip(api_client, "Beach Trip", headers=headers, start_date="2026-07-01")
         assert trip["name"] == "Beach Trip"
         assert trip["id"] is not None
         assert trip["campgrounds"] == []
@@ -166,111 +186,119 @@ class TestTripAPI:
         assert resp.status_code == 401
 
     def test_list_trips(self, api_client: TestClient):
-        _signup(api_client)
-        _create_trip(api_client, "Trip A")
-        _create_trip(api_client, "Trip B")
-        resp = api_client.get("/api/trips")
+        _, headers = _signup(api_client)
+        _create_trip(api_client, "Trip A", headers=headers)
+        _create_trip(api_client, "Trip B", headers=headers)
+        resp = api_client.get("/api/trips", headers=headers)
         assert resp.status_code == 200
         trips = resp.json()
         assert len(trips) == 2
 
     def test_get_trip_detail(self, api_client: TestClient):
-        _signup(api_client)
-        trip = _create_trip(api_client, "Detail Trip")
-        resp = api_client.get(f"/api/trips/{trip['id']}")
+        _, headers = _signup(api_client)
+        trip = _create_trip(api_client, "Detail Trip", headers=headers)
+        resp = api_client.get(f"/api/trips/{trip['id']}", headers=headers)
         assert resp.status_code == 200
         data = resp.json()
         assert data["name"] == "Detail Trip"
         assert "campgrounds" in data
 
     def test_get_other_users_trip_404(self, api_client: TestClient):
-        _signup(api_client, "user1@test.com")
-        trip = _create_trip(api_client, "Private Trip")
-        # Log out and create a second user
-        api_client.post("/api/auth/logout")
-        _signup(api_client, "user2@test.com")
-        resp = api_client.get(f"/api/trips/{trip['id']}")
+        _, headers1 = _signup(api_client, "user1@test.com")
+        trip = _create_trip(api_client, "Private Trip", headers=headers1)
+        # Create a second user with a different JWT
+        _, headers2 = _signup(api_client, "user2@test.com")
+        resp = api_client.get(f"/api/trips/{trip['id']}", headers=headers2)
         assert resp.status_code == 404
 
     def test_update_trip(self, api_client: TestClient):
-        _signup(api_client)
-        trip = _create_trip(api_client, "Old Name")
+        _, headers = _signup(api_client)
+        trip = _create_trip(api_client, "Old Name", headers=headers)
         resp = api_client.patch(
             f"/api/trips/{trip['id']}",
             json={"name": "New Name"},
+            headers=headers,
         )
         assert resp.status_code == 200
         assert resp.json()["name"] == "New Name"
 
     def test_delete_trip(self, api_client: TestClient):
-        _signup(api_client)
-        trip = _create_trip(api_client, "Temp")
-        resp = api_client.delete(f"/api/trips/{trip['id']}")
+        _, headers = _signup(api_client)
+        trip = _create_trip(api_client, "Temp", headers=headers)
+        resp = api_client.delete(f"/api/trips/{trip['id']}", headers=headers)
         assert resp.status_code == 200
         # Verify gone
-        resp = api_client.get(f"/api/trips/{trip['id']}")
+        resp = api_client.get(f"/api/trips/{trip['id']}", headers=headers)
         assert resp.status_code == 404
 
     def test_add_campground_to_trip(self, api_client: TestClient):
-        _signup(api_client)
-        trip = _create_trip(api_client)
+        _, headers = _signup(api_client)
+        trip = _create_trip(api_client, headers=headers)
         resp = api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
             json={"facility_id": "232465", "source": "recgov", "name": "Ohanapecosh"},
+            headers=headers,
         )
         assert resp.status_code == 200
         assert resp.json()["facility_id"] == "232465"
 
     def test_add_duplicate_campground_409(self, api_client: TestClient):
-        _signup(api_client)
-        trip = _create_trip(api_client)
+        _, headers = _signup(api_client)
+        trip = _create_trip(api_client, headers=headers)
         api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
             json={"facility_id": "232465"},
+            headers=headers,
         )
         resp = api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
             json={"facility_id": "232465"},
+            headers=headers,
         )
         assert resp.status_code == 409
 
     def test_remove_campground(self, api_client: TestClient):
-        _signup(api_client)
-        trip = _create_trip(api_client)
+        _, headers = _signup(api_client)
+        trip = _create_trip(api_client, headers=headers)
         api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
             json={"facility_id": "232465"},
+            headers=headers,
         )
         resp = api_client.delete(
             f"/api/trips/{trip['id']}/campgrounds/232465?source=recgov",
+            headers=headers,
         )
         assert resp.status_code == 200
 
     def test_max_trips_returns_409(self, api_client: TestClient):
-        _signup(api_client)
+        _, headers = _signup(api_client)
         for i in range(10):
-            _create_trip(api_client, f"Trip {i}")
+            _create_trip(api_client, f"Trip {i}", headers=headers)
         resp = api_client.post(
             "/api/trips", json={"name": "One too many"},
+            headers=headers,
         )
         assert resp.status_code == 409
 
     def test_trip_name_required(self, api_client: TestClient):
-        _signup(api_client)
-        resp = api_client.post("/api/trips", json={"name": ""})
+        _, headers = _signup(api_client)
+        resp = api_client.post("/api/trips", json={"name": ""}, headers=headers)
         assert resp.status_code == 422
 
     def test_list_shows_campground_count(self, api_client: TestClient):
-        _signup(api_client)
-        trip = _create_trip(api_client)
+        _, headers = _signup(api_client)
+        trip = _create_trip(api_client, headers=headers)
         api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
             json={"facility_id": "aaa"},
+            headers=headers,
         )
         api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
             json={"facility_id": "bbb"},
+            headers=headers,
         )
-        resp = api_client.get("/api/trips")
+        resp = api_client.get("/api/trips", headers=headers)
         trips = resp.json()
         assert trips[0]["campground_count"] == 2

@@ -1,58 +1,55 @@
-"""Authentication utilities — JWT tokens and password hashing."""
+"""Supabase JWT validation via JWKS (asymmetric ES256)."""
 
 from __future__ import annotations
 
+import logging
 import os
-import secrets
-from datetime import UTC, datetime, timedelta
 
-import bcrypt
 import jwt
+from jwt import PyJWKClient
 
-# JWT secret: env var > auto-generated (fine for single-instance SQLite app)
-_JWT_SECRET: str | None = None
+log = logging.getLogger(__name__)
 
-TOKEN_COOKIE = "campnw_token"
-TOKEN_MAX_AGE = 30 * 24 * 3600  # 30 days
+_jwks_client: PyJWKClient | None = None
 
 
-def _get_secret() -> str:
-    global _JWT_SECRET
-    if _JWT_SECRET is None:
-        env_secret = os.getenv("JWT_SECRET")
-        if not env_secret:
+def _get_jwks_client() -> PyJWKClient:
+    """Lazily create a JWKS client for the Supabase project."""
+    global _jwks_client
+    if _jwks_client is None:
+        url = os.getenv("SUPABASE_URL")
+        if not url:
             if os.getenv("FLY_APP_NAME"):
                 raise RuntimeError(
-                    "JWT_SECRET must be set in production. "
-                    "Run: fly secrets set JWT_SECRET=\"$(openssl rand -hex 32)\""
+                    "SUPABASE_URL must be set in production. "
+                    "Set it to your Supabase project URL (https://<ref>.supabase.co)."
                 )
-            env_secret = secrets.token_hex(32)
-        _JWT_SECRET = env_secret
-    return _JWT_SECRET
+            log.warning("SUPABASE_URL not set — JWT validation will reject all tokens")
+            # Return a client with a dummy URL; all validations will fail gracefully
+            url = "https://placeholder.supabase.co"
+        jwks_url = f"{url}/auth/v1/.well-known/jwks.json"
+        _jwks_client = PyJWKClient(jwks_url, cache_keys=True, lifespan=3600)
+    return _jwks_client
 
 
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-
-def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode(), password_hash.encode())
-
-
-def create_jwt(user_id: int) -> str:
-    payload = {
-        "sub": str(user_id),
-        "exp": datetime.now(UTC) + timedelta(days=30),
-        "iat": datetime.now(UTC),
-    }
-    return jwt.encode(payload, _get_secret(), algorithm="HS256")
-
-
-def decode_jwt(token: str) -> int | None:
-    """Decode a JWT and return the user_id, or None if invalid/expired."""
+def decode_supabase_jwt(token: str) -> tuple[str, str] | None:
+    """Decode a Supabase JWT and return (sub, email), or None."""
     try:
-        payload = jwt.decode(token, _get_secret(), algorithms=["HS256"])
+        client = _get_jwks_client()
+        signing_key = client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["ES256", "HS256"],
+            audience="authenticated",
+            leeway=30,
+        )
+        if payload.get("role") != "authenticated":
+            return None
         sub = payload.get("sub")
-        return int(sub) if sub is not None else None
-    except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, ValueError):
+        if not isinstance(sub, str):
+            return None
+        return sub, payload.get("email", "")
+    except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, ValueError, Exception) as exc:
+        log.debug("JWT validation failed: %s", exc)
         return None

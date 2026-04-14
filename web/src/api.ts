@@ -1,3 +1,5 @@
+import { supabase } from "./lib/supabase";
+
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
 // ---------------------------------------------------------------------------
@@ -13,11 +15,28 @@ export function track(event: string, data: Record<string, string | number>) {
 }
 
 // ---------------------------------------------------------------------------
+// Authenticated fetch — attaches Supabase Bearer token + session cookie
+// ---------------------------------------------------------------------------
+
+async function authFetch(url: string, init?: RequestInit): Promise<Response> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const authHeaders: Record<string, string> = {};
+  if (session?.access_token) {
+    authHeaders["Authorization"] = `Bearer ${session.access_token}`;
+  }
+  return fetch(url, {
+    ...init,
+    credentials: "include", // Keeps campnw_session cookie for anonymous watch migration
+    headers: { ...authHeaders, ...(init?.headers as Record<string, string> || {}) },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Typed fetch helper — eliminates untyped resp.json() calls
 // ---------------------------------------------------------------------------
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(url, init);
+  const resp = await authFetch(url, init);
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({}));
     throw new Error(
@@ -222,7 +241,7 @@ export async function searchCampsitesStream(
   if (params.limit) query.set("limit", String(params.limit));
 
   try {
-    const resp = await fetch(`${API_BASE}/api/search/stream?${query}`, { signal });
+    const resp = await authFetch(`${API_BASE}/api/search/stream?${query}`, { signal });
     if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
 
     const reader = resp.body?.getReader();
@@ -344,8 +363,7 @@ export async function compareCampgrounds(
   startDate?: string,
   endDate?: string,
 ): Promise<CompareResponse> {
-  const resp = await fetch(`${API_BASE}/api/compare`, {
-    ...fetchOpts,
+  const resp = await authFetch(`${API_BASE}/api/compare`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -364,8 +382,7 @@ export async function compareCampgrounds(
 export async function createShareLink(
   params: { watch_id?: number; trip_id?: number },
 ): Promise<{ uuid: string; expires_at: string }> {
-  const resp = await fetch(`${API_BASE}/api/shares`, {
-    ...fetchOpts,
+  const resp = await authFetch(`${API_BASE}/api/shares`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -374,8 +391,7 @@ export async function createShareLink(
 }
 
 export async function revokeShareLink(uuid: string): Promise<void> {
-  await fetch(`${API_BASE}/api/shares/${uuid}`, {
-    ...fetchOpts,
+  await authFetch(`${API_BASE}/api/shares/${uuid}`, {
     method: "DELETE",
   });
 }
@@ -396,7 +412,6 @@ export interface CreateWatchParams {
   search_params?: Record<string, unknown>;
 }
 
-const fetchOpts: RequestInit = { credentials: "include" };
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -431,52 +446,8 @@ export interface SearchHistoryEntry {
   searched_at: string;
 }
 
-export async function signup(
-  email: string,
-  password: string,
-  displayName?: string
-): Promise<UserData> {
-  const resp = await fetch(`${API_BASE}/api/auth/signup`, {
-    ...fetchOpts,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, display_name: displayName || "" }),
-  });
-  if (!resp.ok) {
-    const data = await resp.json().catch(() => ({}));
-    throw new Error(data.detail || `Signup failed: ${resp.status}`);
-  }
-  const data = await resp.json();
-  return data.user;
-}
-
-export async function login(
-  email: string,
-  password: string
-): Promise<UserData> {
-  const resp = await fetch(`${API_BASE}/api/auth/login`, {
-    ...fetchOpts,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!resp.ok) {
-    const data = await resp.json().catch(() => ({}));
-    throw new Error(data.detail || `Login failed: ${resp.status}`);
-  }
-  const data = await resp.json();
-  return data.user;
-}
-
-export async function logout(): Promise<void> {
-  await fetch(`${API_BASE}/api/auth/logout`, {
-    ...fetchOpts,
-    method: "POST",
-  });
-}
-
 export async function getMe(): Promise<UserData | null> {
-  const resp = await fetch(`${API_BASE}/api/auth/me`, fetchOpts);
+  const resp = await authFetch(`${API_BASE}/api/auth/me`);
   if (resp.status === 401) return null;
   if (!resp.ok) return null;
   const data = await resp.json();
@@ -486,8 +457,7 @@ export async function getMe(): Promise<UserData | null> {
 export async function updateProfile(
   updates: Partial<Omit<UserData, "id" | "email">>
 ): Promise<UserData> {
-  const resp = await fetch(`${API_BASE}/api/auth/me`, {
-    ...fetchOpts,
+  const resp = await authFetch(`${API_BASE}/api/auth/me`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
@@ -498,18 +468,15 @@ export async function updateProfile(
 }
 
 export async function deleteAccount(): Promise<void> {
-  await fetch(`${API_BASE}/api/auth/me`, {
-    ...fetchOpts,
-    method: "DELETE",
-  });
+  await authFetch(`${API_BASE}/api/auth/me`, { method: "DELETE" });
 }
 
 export async function exportData(): Promise<object> {
-  return fetchJson<object>(`${API_BASE}/api/auth/export`, fetchOpts);
+  return fetchJson<object>(`${API_BASE}/api/auth/export`);
 }
 
 export async function getSearchHistory(): Promise<SearchHistoryEntry[]> {
-  const resp = await fetch(`${API_BASE}/api/search-history`, fetchOpts);
+  const resp = await authFetch(`${API_BASE}/api/search-history`);
   if (resp.status === 401) return [];
   if (!resp.ok) return [];
   return resp.json();
@@ -520,8 +487,7 @@ export async function saveSearchHistory(
   resultCount: number
 ): Promise<void> {
   // Fire-and-forget — don't await or handle errors
-  fetch(`${API_BASE}/api/search-history`, {
-    ...fetchOpts,
+  authFetch(`${API_BASE}/api/search-history`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ params, result_count: resultCount }),
@@ -530,7 +496,7 @@ export async function saveSearchHistory(
 
 export async function getRecommendations(): Promise<Recommendation[]> {
   try {
-    const resp = await fetch(`${API_BASE}/api/recommendations`, fetchOpts);
+    const resp = await authFetch(`${API_BASE}/api/recommendations`);
     if (!resp.ok) return [];
     return resp.json();
   } catch {
@@ -539,14 +505,13 @@ export async function getRecommendations(): Promise<Recommendation[]> {
 }
 
 export async function getWatches(): Promise<WatchData[]> {
-  return fetchJson<WatchData[]>(`${API_BASE}/api/watches`, fetchOpts);
+  return fetchJson<WatchData[]>(`${API_BASE}/api/watches`);
 }
 
 export async function createWatch(
   params: CreateWatchParams
 ): Promise<WatchData> {
-  const resp = await fetch(`${API_BASE}/api/watches`, {
-    ...fetchOpts,
+  const resp = await authFetch(`${API_BASE}/api/watches`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -556,8 +521,7 @@ export async function createWatch(
 }
 
 export async function deleteWatch(watchId: number): Promise<void> {
-  await fetch(`${API_BASE}/api/watches/${watchId}`, {
-    ...fetchOpts,
+  await authFetch(`${API_BASE}/api/watches/${watchId}`, {
     method: "DELETE",
   });
 }
@@ -565,8 +529,7 @@ export async function deleteWatch(watchId: number): Promise<void> {
 export async function toggleWatch(
   watchId: number
 ): Promise<{ enabled: boolean }> {
-  const resp = await fetch(`${API_BASE}/api/watches/${watchId}/toggle`, {
-    ...fetchOpts,
+  const resp = await authFetch(`${API_BASE}/api/watches/${watchId}/toggle`, {
     method: "PATCH",
   });
   if (!resp.ok) throw new Error(`Failed to toggle watch: ${resp.status}`);
@@ -578,15 +541,14 @@ export async function toggleWatch(
 // ---------------------------------------------------------------------------
 
 export async function getTrips(): Promise<TripData[]> {
-  return fetchJson<TripData[]>(`${API_BASE}/api/trips`, fetchOpts);
+  return fetchJson<TripData[]>(`${API_BASE}/api/trips`);
 }
 
 export async function createTrip(
   name: string,
   opts: { start_date?: string; end_date?: string; notes?: string } = {},
 ): Promise<TripData> {
-  const resp = await fetch(`${API_BASE}/api/trips`, {
-    ...fetchOpts,
+  const resp = await authFetch(`${API_BASE}/api/trips`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, ...opts }),
@@ -595,15 +557,14 @@ export async function createTrip(
 }
 
 export async function getTrip(tripId: number): Promise<TripData> {
-  return fetchJson<TripData>(`${API_BASE}/api/trips/${tripId}`, fetchOpts);
+  return fetchJson<TripData>(`${API_BASE}/api/trips/${tripId}`);
 }
 
 export async function updateTrip(
   tripId: number,
   updates: Partial<Pick<TripData, "name" | "start_date" | "end_date" | "notes">>,
 ): Promise<TripData> {
-  const resp = await fetch(`${API_BASE}/api/trips/${tripId}`, {
-    ...fetchOpts,
+  const resp = await authFetch(`${API_BASE}/api/trips/${tripId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
@@ -612,8 +573,7 @@ export async function updateTrip(
 }
 
 export async function deleteTrip(tripId: number): Promise<void> {
-  await fetch(`${API_BASE}/api/trips/${tripId}`, {
-    ...fetchOpts,
+  await authFetch(`${API_BASE}/api/trips/${tripId}`, {
     method: "DELETE",
   });
 }
@@ -624,8 +584,7 @@ export async function addCampgroundToTrip(
   source: string = "recgov",
   name: string = "",
 ): Promise<TripCampground> {
-  const resp = await fetch(`${API_BASE}/api/trips/${tripId}/campgrounds`, {
-    ...fetchOpts,
+  const resp = await authFetch(`${API_BASE}/api/trips/${tripId}/campgrounds`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ facility_id: facilityId, source, name }),
@@ -638,8 +597,7 @@ export async function removeCampgroundFromTrip(
   facilityId: string,
   source: string = "recgov",
 ): Promise<void> {
-  await fetch(`${API_BASE}/api/trips/${tripId}/campgrounds/${facilityId}?source=${source}`, {
-    ...fetchOpts,
+  await authFetch(`${API_BASE}/api/trips/${tripId}/campgrounds/${facilityId}?source=${source}`, {
     method: "DELETE",
   });
 }
@@ -649,7 +607,7 @@ export async function removeCampgroundFromTrip(
 // ---------------------------------------------------------------------------
 
 export async function getVapidKey(): Promise<string> {
-  const resp = await fetch(`${API_BASE}/api/push/vapid-key`, fetchOpts);
+  const resp = await authFetch(`${API_BASE}/api/push/vapid-key`);
   if (!resp.ok) return "";
   const data = await resp.json() as { public_key?: string };
   return data.public_key || "";
@@ -660,8 +618,7 @@ export async function subscribePush(
   p256dh: string,
   auth: string
 ): Promise<void> {
-  await fetch(`${API_BASE}/api/push/subscribe`, {
-    ...fetchOpts,
+  await authFetch(`${API_BASE}/api/push/subscribe`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint, p256dh, auth }),
@@ -669,8 +626,7 @@ export async function subscribePush(
 }
 
 export async function unsubscribePush(endpoint: string): Promise<void> {
-  await fetch(`${API_BASE}/api/push/subscribe`, {
-    ...fetchOpts,
+  await authFetch(`${API_BASE}/api/push/subscribe`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint }),
@@ -701,8 +657,7 @@ export interface ChatResponse {
 export async function planChat(
   messages: ChatMessage[]
 ): Promise<ChatResponse> {
-  const resp = await fetch(`${API_BASE}/api/plan/chat`, {
-    ...fetchOpts,
+  const resp = await authFetch(`${API_BASE}/api/plan/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages }),
@@ -723,8 +678,7 @@ export async function planChatStream(
   onError: (err: Error) => void,
 ): Promise<void> {
   try {
-    const resp = await fetch(`${API_BASE}/api/plan/chat/stream`, {
-      ...fetchOpts,
+    const resp = await authFetch(`${API_BASE}/api/plan/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages }),
@@ -801,7 +755,7 @@ export interface PollStatus {
 }
 
 export async function getPollStatus(): Promise<PollStatus | null> {
-  const resp = await fetch(`${API_BASE}/api/poll-status`, fetchOpts);
+  const resp = await authFetch(`${API_BASE}/api/poll-status`);
   if (!resp.ok) return null;
   return resp.json() as Promise<PollStatus>;
 }

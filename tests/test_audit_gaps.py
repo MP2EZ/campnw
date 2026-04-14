@@ -7,15 +7,17 @@ and security header middleware.
 
 from __future__ import annotations
 
-from datetime import date
+import uuid
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import jwt as pyjwt
 import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
 
-TOKEN_COOKIE = "campnw_token"
+_TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"
 
 
 # ---------------------------------------------------------------------------
@@ -23,16 +25,29 @@ TOKEN_COOKIE = "campnw_token"
 # ---------------------------------------------------------------------------
 
 
-def _signup(client: TestClient, email: str = "test@example.com") -> dict:
-    resp = client.post(
-        "/api/auth/signup",
-        json={"email": email, "password": "testpass123", "display_name": "Tester"},
-    )
+def _make_jwt(email="test@example.com", supabase_id=None):
+    sub = supabase_id or str(uuid.uuid4())
+    payload = {
+        "sub": sub, "email": email, "role": "authenticated", "aud": "authenticated",
+        "exp": datetime.now(UTC) + timedelta(hours=1), "iat": datetime.now(UTC),
+    }
+    return pyjwt.encode(payload, _TEST_SECRET, algorithm="HS256")
+
+
+def _auth_headers(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _signup(client: TestClient, email: str = "test@example.com"):
+    """Create user via auto-provisioning and return (user_data, auth_headers)."""
+    token = _make_jwt(email=email)
+    headers = _auth_headers(token)
+    resp = client.get("/api/auth/me", headers=headers)
     assert resp.status_code == 200
-    return resp.json()
+    return resp.json(), headers
 
 
-def _save_searches(client: TestClient, count: int = 5, tags: str = "lakeside") -> None:
+def _save_searches(client: TestClient, headers: dict, count: int = 5, tags: str = "lakeside") -> None:
     for i in range(count):
         client.post(
             "/api/search-history",
@@ -45,53 +60,14 @@ def _save_searches(client: TestClient, count: int = 5, tags: str = "lakeside") -
                 },
                 "result_count": i * 3,
             },
+            headers=headers,
         )
 
 
 # ---------------------------------------------------------------------------
-# TEST-01: Auth rate limiter
+# TEST-01: Auth rate limiter — REMOVED
+# Auth login/signup endpoints no longer exist (Supabase handles auth).
 # ---------------------------------------------------------------------------
-
-
-class TestAuthRateLimiter:
-    """Tests for auth rate limiting (10 attempts / 15 min window)."""
-
-    def test_first_attempt_allowed(self, api_client: TestClient):
-        resp = api_client.post(
-            "/api/auth/login",
-            json={"email": "nobody@example.com", "password": "wrong"},
-        )
-        assert resp.status_code == 401  # Wrong creds, but not rate limited
-
-    def test_tenth_attempt_allowed(self, api_client: TestClient):
-        """10th attempt within window should still be allowed."""
-        for _ in range(10):
-            resp = api_client.post(
-                "/api/auth/login",
-                json={"email": "nobody@example.com", "password": "wrong"},
-            )
-        assert resp.status_code == 401  # Still auth error, not 429
-
-    def test_eleventh_attempt_returns_429(self, api_client: TestClient):
-        """11th attempt should be rate limited."""
-        for _ in range(11):
-            resp = api_client.post(
-                "/api/auth/login",
-                json={"email": "nobody@example.com", "password": "wrong"},
-            )
-        assert resp.status_code == 429
-
-    def test_rate_limit_applies_to_signup_too(self, api_client: TestClient):
-        """Rate limit should also apply to signup endpoint."""
-        for i in range(11):
-            resp = api_client.post(
-                "/api/auth/signup",
-                json={
-                    "email": f"user{i}@example.com",
-                    "password": "testpass123",
-                },
-            )
-        assert resp.status_code == 429
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +192,7 @@ class TestPushSubscribe:
     """Tests for push notification subscription endpoints."""
 
     def test_subscribe_authenticated(self, api_client: TestClient):
-        _signup(api_client)
+        _, headers = _signup(api_client)
         resp = api_client.post(
             "/api/push/subscribe",
             json={
@@ -224,6 +200,7 @@ class TestPushSubscribe:
                 "p256dh": "test-p256dh-key",
                 "auth": "test-auth-key",
             },
+            headers=headers,
         )
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
@@ -242,7 +219,7 @@ class TestPushSubscribe:
         assert resp.json()["ok"] is True
 
     def test_unsubscribe_authenticated(self, api_client: TestClient):
-        _signup(api_client)
+        _, headers = _signup(api_client)
         # Subscribe first
         api_client.post(
             "/api/push/subscribe",
@@ -251,12 +228,14 @@ class TestPushSubscribe:
                 "p256dh": "key",
                 "auth": "auth",
             },
+            headers=headers,
         )
         # Then unsubscribe
         resp = api_client.request(
             "DELETE",
             "/api/push/subscribe",
             json={"endpoint": "https://push.example.com/to-remove"},
+            headers=headers,
         )
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
@@ -278,18 +257,18 @@ class TestRecommendationScoring:
     """Tests for the recommendation scoring and reason generation."""
 
     @staticmethod
-    def _enable_recs(api_client: TestClient):
+    def _enable_recs(api_client: TestClient, headers: dict):
         """Enable recommendations for the current user via direct DB call."""
-        me = api_client.get("/api/auth/me").json()
+        me = api_client.get("/api/auth/me", headers=headers).json()
         api_module._watch_db.update_user(me["user"]["id"], recommendations_enabled=True)
 
     def test_recommendations_score_by_tag_overlap(self, api_client: TestClient):
         """Campgrounds matching searched tags should score higher."""
         from tests.conftest import make_campground
 
-        _signup(api_client)
-        self._enable_recs(api_client)
-        _save_searches(api_client, count=5, tags="lakeside")
+        _, headers = _signup(api_client)
+        self._enable_recs(api_client, headers)
+        _save_searches(api_client, headers, count=5, tags="lakeside")
 
         campgrounds = [
             make_campground(facility_id="lake-1", name="Lake A", tags=["lakeside"], state="WA"),
@@ -297,7 +276,7 @@ class TestRecommendationScoring:
         ]
         api_module._registry.search.return_value = campgrounds
 
-        resp = api_client.get("/api/recommendations")
+        resp = api_client.get("/api/recommendations", headers=headers)
         recs = resp.json()
         assert len(recs) >= 1
         assert recs[0]["facility_id"] == "lake-1"  # Lakeside matches affinity
@@ -306,9 +285,9 @@ class TestRecommendationScoring:
         """Watched campgrounds should not appear in recommendations."""
         from tests.conftest import make_campground
 
-        _signup(api_client)
-        self._enable_recs(api_client)
-        _save_searches(api_client, count=5, tags="lakeside")
+        _, headers = _signup(api_client)
+        self._enable_recs(api_client, headers)
+        _save_searches(api_client, headers, count=5, tags="lakeside")
 
         # Create a watch for lake-1
         api_module._registry.get_by_facility_id.return_value = make_campground(
@@ -318,7 +297,7 @@ class TestRecommendationScoring:
             "facility_id": "lake-1",
             "start_date": "2026-06-01",
             "end_date": "2026-06-30",
-        })
+        }, headers=headers)
 
         campgrounds = [
             make_campground(facility_id="lake-1", name="Lake A", tags=["lakeside"], state="WA"),
@@ -326,7 +305,7 @@ class TestRecommendationScoring:
         ]
         api_module._registry.search.return_value = campgrounds
 
-        resp = api_client.get("/api/recommendations")
+        resp = api_client.get("/api/recommendations", headers=headers)
         recs = resp.json()
         facility_ids = [r["facility_id"] for r in recs]
         assert "lake-1" not in facility_ids  # Watched — excluded
@@ -336,16 +315,16 @@ class TestRecommendationScoring:
         """Reason string should reference the matched tag."""
         from tests.conftest import make_campground
 
-        _signup(api_client)
-        self._enable_recs(api_client)
-        _save_searches(api_client, count=5, tags="lakeside")
+        _, headers = _signup(api_client)
+        self._enable_recs(api_client, headers)
+        _save_searches(api_client, headers, count=5, tags="lakeside")
 
         campgrounds = [
             make_campground(facility_id="lake-1", name="Lake A", tags=["lakeside"], state="WA"),
         ]
         api_module._registry.search.return_value = campgrounds
 
-        resp = api_client.get("/api/recommendations")
+        resp = api_client.get("/api/recommendations", headers=headers)
         recs = resp.json()
         assert len(recs) == 1
         assert "lakeside" in recs[0]["reason"]
@@ -354,9 +333,9 @@ class TestRecommendationScoring:
         """Should return at most 5 recommendations."""
         from tests.conftest import make_campground
 
-        _signup(api_client)
-        self._enable_recs(api_client)
-        _save_searches(api_client, count=5, tags="lakeside")
+        _, headers = _signup(api_client)
+        self._enable_recs(api_client, headers)
+        _save_searches(api_client, headers, count=5, tags="lakeside")
 
         campgrounds = [
             make_campground(
@@ -367,7 +346,7 @@ class TestRecommendationScoring:
         ]
         api_module._registry.search.return_value = campgrounds
 
-        resp = api_client.get("/api/recommendations")
+        resp = api_client.get("/api/recommendations", headers=headers)
         assert len(resp.json()) <= 5
 
 

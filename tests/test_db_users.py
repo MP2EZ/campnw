@@ -263,6 +263,35 @@ class TestUserCRUD:
         assert len(history_after) == 0
 
 
+class TestSupabaseId:
+    """Tests for supabase_id column and lookup."""
+
+    def test_create_user_with_supabase_id(self, db: WatchDB) -> None:
+        user = User(
+            email="supabase@example.com",
+            password_hash="",
+            supabase_id="550e8400-e29b-41d4-a716-446655440000",
+        )
+        created = db.create_user(user)
+        assert created.supabase_id == "550e8400-e29b-41d4-a716-446655440000"
+
+    def test_get_user_by_supabase_id(self, db: WatchDB) -> None:
+        sub = "660e8400-e29b-41d4-a716-446655440001"
+        db.create_user(User(email="lookup@example.com", password_hash="", supabase_id=sub))
+        found = db.get_user_by_supabase_id(sub)
+        assert found is not None
+        assert found.email == "lookup@example.com"
+
+    def test_get_user_by_supabase_id_not_found(self, db: WatchDB) -> None:
+        assert db.get_user_by_supabase_id("nonexistent-uuid") is None
+
+    def test_supabase_id_uniqueness(self, db: WatchDB) -> None:
+        sub = "770e8400-e29b-41d4-a716-446655440002"
+        db.create_user(User(email="first@example.com", password_hash="", supabase_id=sub))
+        with pytest.raises(Exception):
+            db.create_user(User(email="second@example.com", password_hash="", supabase_id=sub))
+
+
 class TestSearchHistory:
     """Test search history saving and retrieval."""
 

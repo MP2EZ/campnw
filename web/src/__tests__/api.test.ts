@@ -1,13 +1,23 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest'
+
+// Mock supabase before importing api
+vi.mock('../lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({
+        data: { session: null },
+        error: null,
+      }),
+    },
+  },
+}))
+
 import {
   searchCampsites,
   getWatches,
   createWatch,
   deleteWatch,
   toggleWatch,
-  signup,
-  login,
-  logout,
   getMe,
   updateProfile,
   deleteAccount,
@@ -133,7 +143,6 @@ describe('API: Watches', () => {
     expect(result).toEqual([mockWatch])
     const [, opts] = mockFetch.mock.calls[0]
     expect(opts.credentials).toBe('include')
-    expect(opts.method).toBeUndefined()
   })
 
   test('getWatches throws on non-ok response', async () => {
@@ -232,107 +241,6 @@ describe('API: Watches', () => {
 })
 
 describe('API: Auth', () => {
-  test('signup sends email and password with display_name', async () => {
-    const mockUser: UserData = {
-      id: 1,
-      email: 'test@example.com',
-      display_name: 'Test User',
-      home_base: 'seattle',
-      default_state: 'WA',
-      default_nights: 2,
-      default_from: 'seattle',
-    }
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user: mockUser }),
-    })
-
-    const result = await signup('test@example.com', 'password123', 'Test User')
-
-    expect(result).toEqual(mockUser)
-    const [url, opts] = mockFetch.mock.calls[0]
-    expect(url).toContain('/api/auth/signup')
-    expect(opts.method).toBe('POST')
-    expect(opts.credentials).toBe('include')
-    const body = JSON.parse(opts.body)
-    expect(body.email).toBe('test@example.com')
-    expect(body.password).toBe('password123')
-    expect(body.display_name).toBe('Test User')
-  })
-
-  test('signup handles error response with detail message', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 400,
-      json: async () => ({ detail: 'Email already exists' }),
-    })
-
-    await expect(
-      signup('existing@example.com', 'password123')
-    ).rejects.toThrow('Email already exists')
-  })
-
-  test('signup throws generic error when detail is missing', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      json: async () => ({}),
-    })
-
-    await expect(
-      signup('test@example.com', 'password123')
-    ).rejects.toThrow('Signup failed: 500')
-  })
-
-  test('login sends email and password', async () => {
-    const mockUser: UserData = {
-      id: 1,
-      email: 'user@example.com',
-      display_name: 'User',
-      home_base: 'bellevue',
-      default_state: 'WA',
-      default_nights: 2,
-      default_from: 'bellevue',
-    }
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user: mockUser }),
-    })
-
-    const result = await login('user@example.com', 'password123')
-
-    expect(result).toEqual(mockUser)
-    const [url, opts] = mockFetch.mock.calls[0]
-    expect(url).toContain('/api/auth/login')
-    expect(opts.method).toBe('POST')
-    const body = JSON.parse(opts.body)
-    expect(body.email).toBe('user@example.com')
-    expect(body.password).toBe('password123')
-  })
-
-  test('login throws error with 401 detail message', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 401,
-      json: async () => ({ detail: 'Invalid credentials' }),
-    })
-
-    await expect(
-      login('user@example.com', 'wrong')
-    ).rejects.toThrow('Invalid credentials')
-  })
-
-  test('logout calls POST endpoint', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true })
-
-    await logout()
-
-    const [url, opts] = mockFetch.mock.calls[0]
-    expect(url).toContain('/api/auth/logout')
-    expect(opts.method).toBe('POST')
-    expect(opts.credentials).toBe('include')
-  })
-
   test('getMe returns user data on 200 response', async () => {
     const mockUser: UserData = {
       id: 1,

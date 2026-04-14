@@ -1,7 +1,8 @@
-import { createContext, useContext, useCallback, useEffect, useState } from "react";
+import { createContext, useContext, useCallback, useEffect, useState, useRef } from "react";
 import type { ReactNode } from "react";
-import { getMe, login, signup, logout, updateProfile, track, type UserData } from "../api";
 import { createElement } from "react";
+import { supabase } from "../lib/supabase";
+import { getMe, updateProfile, track, type UserData } from "../api";
 
 interface AuthContextValue {
   user: UserData | null;
@@ -18,21 +19,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(async () => {
-    try {
-      const u = await getMe();
-      setUser(u);
-    } catch {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const initializedRef = useRef(false);
 
   const identifyUser = useCallback((u: UserData) => {
     import("posthog-js").then(({ default: posthog }) => {
@@ -42,25 +29,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }).catch(() => {});
   }, []);
 
-  const handleLogin = useCallback(async (email: string, password: string) => {
-    const u = await login(email, password);
-    setUser(u);
-    identifyUser(u);
-    track("login", {});
+  const refresh = useCallback(async () => {
+    try {
+      const u = await getMe();
+      setUser(u);
+      if (u) identifyUser(u);
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
   }, [identifyUser]);
+
+  // Listen to Supabase auth state changes
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (session) {
+          // Fetch local profile (triggers auto-provisioning on backend)
+          const u = await getMe();
+          setUser(u);
+          if (u) identifyUser(u);
+        } else {
+          setUser(null);
+        }
+        setLoading(false);
+        initializedRef.current = true;
+      }
+    );
+
+    // If no auth event fires within 500ms, stop showing loading
+    const timeout = setTimeout(() => {
+      if (!initializedRef.current) setLoading(false);
+    }, 500);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
+  }, [identifyUser]);
+
+  const handleLogin = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    track("login", {});
+    // onAuthStateChange fires → fetches profile and sets user
+  }, []);
 
   const handleSignup = useCallback(
     async (email: string, password: string, displayName?: string) => {
-      const u = await signup(email, password, displayName);
-      setUser(u);
-      identifyUser(u);
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { display_name: displayName || "" } },
+      });
+      if (error) throw new Error(error.message);
       track("signup", {});
+      // onAuthStateChange fires → fetches profile and sets user
     },
-    [identifyUser]
+    []
   );
 
   const handleLogout = useCallback(async () => {
-    await logout();
+    await supabase.auth.signOut();
     setUser(null);
     import("posthog-js").then(({ default: posthog }) => {
       posthog.reset();

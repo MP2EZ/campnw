@@ -1,11 +1,27 @@
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { AuthProvider, useAuth } from "../hooks/useAuth";
 import type { ReactNode } from "react";
 
 // ---------------------------------------------------------------------------
 // Mocks — vi.mock factories are hoisted, so no outer variable refs
 // ---------------------------------------------------------------------------
+
+const mockSignInWithPassword = vi.fn();
+const mockSignUp = vi.fn();
+const mockSignOut = vi.fn();
+const mockOnAuthStateChange = vi.fn();
+
+vi.mock("../lib/supabase", () => ({
+  supabase: {
+    auth: {
+      signInWithPassword: (...args: unknown[]) => mockSignInWithPassword(...args),
+      signUp: (...args: unknown[]) => mockSignUp(...args),
+      signOut: (...args: unknown[]) => mockSignOut(...args),
+      onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+    },
+  },
+}));
 
 vi.mock("posthog-js", () => ({
   default: {
@@ -17,20 +33,15 @@ vi.mock("posthog-js", () => ({
 
 vi.mock("../api", () => ({
   getMe: vi.fn(),
-  login: vi.fn(),
-  signup: vi.fn(),
-  logout: vi.fn(),
   updateProfile: vi.fn(),
   track: vi.fn(),
 }));
 
-import { getMe, login, signup, logout, updateProfile, track } from "../api";
+import { AuthProvider, useAuth } from "../hooks/useAuth";
+import { getMe, updateProfile, track } from "../api";
 import posthog from "posthog-js";
 
 const mockGetMe = vi.mocked(getMe);
-const mockLogin = vi.mocked(login);
-const mockSignup = vi.mocked(signup);
-const mockLogout = vi.mocked(logout);
 const mockUpdateProfile = vi.mocked(updateProfile);
 const mockTrack = vi.mocked(track);
 const mockPosthog = vi.mocked(posthog);
@@ -56,6 +67,12 @@ function wrapper({ children }: { children: ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
 }
 
+/** Simulate Supabase calling the onAuthStateChange callback */
+function triggerAuthChange(session: unknown) {
+  const callback = mockOnAuthStateChange.mock.calls[0]?.[0];
+  if (callback) callback("SIGNED_IN", session);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -63,31 +80,35 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("useAuth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetMe.mockRejectedValue(new Error("no session"));
+    mockGetMe.mockResolvedValue(null);
+    mockOnAuthStateChange.mockReturnValue({
+      data: { subscription: { unsubscribe: vi.fn() } },
+    });
+    mockSignInWithPassword.mockResolvedValue({ error: null });
+    mockSignUp.mockResolvedValue({ error: null });
+    mockSignOut.mockResolvedValue({ error: null });
   });
 
-  test("loads user on mount when session exists", async () => {
-    mockGetMe.mockResolvedValue(TEST_USER as any);
-
-    const { result } = renderHook(() => useAuth(), { wrapper });
-    expect(result.current.loading).toBe(true);
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.user).toEqual(TEST_USER);
-    expect(mockGetMe).toHaveBeenCalledOnce();
-  });
-
-  test("handles no session (getMe throws)", async () => {
-    mockGetMe.mockRejectedValue(new Error("401"));
-
+  test("loading becomes false after initialization", async () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.user).toBeNull();
   });
 
-  test("login sets user and identifies with posthog", async () => {
-    mockLogin.mockResolvedValue(TEST_USER as any);
+  test("loads user when auth state changes with session", async () => {
+    mockGetMe.mockResolvedValue(TEST_USER as any);
 
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await act(async () => {
+      triggerAuthChange({ access_token: "test-token" });
+    });
+
+    await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
+    expect(mockGetMe).toHaveBeenCalled();
+  });
+
+  test("login calls supabase signInWithPassword and tracks event", async () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -95,20 +116,29 @@ describe("useAuth", () => {
       await result.current.login("test@example.com", "password123");
     });
 
-    expect(result.current.user).toEqual(TEST_USER);
-    expect(mockLogin).toHaveBeenCalledWith("test@example.com", "password123");
-    expect(mockTrack).toHaveBeenCalledWith("login", {});
-
-    await waitFor(() => {
-      expect(mockPosthog.identify).toHaveBeenCalledWith(String(TEST_USER.id), {
-        display_name: TEST_USER.display_name,
-      });
+    expect(mockSignInWithPassword).toHaveBeenCalledWith({
+      email: "test@example.com",
+      password: "password123",
     });
+    expect(mockTrack).toHaveBeenCalledWith("login", {});
   });
 
-  test("signup sets user and identifies with posthog", async () => {
-    mockSignup.mockResolvedValue(TEST_USER as any);
+  test("login throws on supabase error", async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      error: { message: "Invalid credentials" },
+    });
 
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await expect(
+      act(async () => {
+        await result.current.login("test@example.com", "wrong");
+      })
+    ).rejects.toThrow("Invalid credentials");
+  });
+
+  test("signup calls supabase signUp with user metadata", async () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -116,16 +146,22 @@ describe("useAuth", () => {
       await result.current.signup("test@example.com", "password123", "Tester");
     });
 
-    expect(result.current.user).toEqual(TEST_USER);
-    expect(mockSignup).toHaveBeenCalledWith("test@example.com", "password123", "Tester");
+    expect(mockSignUp).toHaveBeenCalledWith({
+      email: "test@example.com",
+      password: "password123",
+      options: { data: { display_name: "Tester" } },
+    });
     expect(mockTrack).toHaveBeenCalledWith("signup", {});
   });
 
-  test("logout clears user and resets posthog", async () => {
+  test("logout calls supabase signOut and resets posthog", async () => {
     mockGetMe.mockResolvedValue(TEST_USER as any);
-    mockLogout.mockResolvedValue(undefined as any);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await act(async () => {
+      triggerAuthChange({ access_token: "test-token" });
+    });
     await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
 
     await act(async () => {
@@ -133,8 +169,7 @@ describe("useAuth", () => {
     });
 
     expect(result.current.user).toBeNull();
-    expect(mockLogout).toHaveBeenCalledOnce();
-
+    expect(mockSignOut).toHaveBeenCalledOnce();
     await waitFor(() => {
       expect(mockPosthog.reset).toHaveBeenCalled();
     });
@@ -146,6 +181,10 @@ describe("useAuth", () => {
     mockUpdateProfile.mockResolvedValue(updated as any);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await act(async () => {
+      triggerAuthChange({ access_token: "test-token" });
+    });
     await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
 
     await act(async () => {

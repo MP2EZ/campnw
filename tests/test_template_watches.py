@@ -2,21 +2,39 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
+import jwt as pyjwt
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
 from pnw_campsites.monitor.expand import expand_template
 
+_TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"
 
-def _signup(client: TestClient) -> dict:
-    resp = client.post(
-        "/api/auth/signup",
-        json={"email": "template@test.com", "password": "testpass123"},
-    )
+
+def _make_jwt(email="test@example.com", supabase_id=None):
+    sub = supabase_id or str(uuid.uuid4())
+    payload = {
+        "sub": sub, "email": email, "role": "authenticated", "aud": "authenticated",
+        "exp": datetime.now(UTC) + timedelta(hours=1), "iat": datetime.now(UTC),
+    }
+    return pyjwt.encode(payload, _TEST_SECRET, algorithm="HS256")
+
+
+def _auth_headers(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _signup(client: TestClient):
+    """Create user via auto-provisioning and return (user_data, auth_headers)."""
+    token = _make_jwt(email="template@test.com")
+    headers = _auth_headers(token)
+    resp = client.get("/api/auth/me", headers=headers)
     assert resp.status_code == 200
-    return resp.json()
+    return resp.json(), headers
 
 
 class TestExpandTemplate:
@@ -80,53 +98,53 @@ class TestTemplateWatchAPI:
     """Tests for template watch creation via API."""
 
     def test_create_template_watch(self, api_client: TestClient):
-        _signup(api_client)
+        _, headers = _signup(api_client)
         resp = api_client.post("/api/watches", json={
             "start_date": "2026-07-01",
             "end_date": "2026-07-31",
             "watch_type": "template",
             "search_params": {"state": "WA", "tags": ["lakeside"]},
             "name": "WA Lakeside",
-        })
+        }, headers=headers)
         assert resp.status_code == 200
         data = resp.json()
         assert data["watch_type"] == "template"
         assert data["search_params"]["state"] == "WA"
 
     def test_template_without_search_params_fails(self, api_client: TestClient):
-        _signup(api_client)
+        _, headers = _signup(api_client)
         resp = api_client.post("/api/watches", json={
             "start_date": "2026-07-01",
             "end_date": "2026-07-31",
             "watch_type": "template",
-        })
+        }, headers=headers)
         assert resp.status_code == 422
 
     def test_single_watch_without_facility_id_fails(self, api_client: TestClient):
-        _signup(api_client)
+        _, headers = _signup(api_client)
         resp = api_client.post("/api/watches", json={
             "start_date": "2026-07-01",
             "end_date": "2026-07-31",
             "watch_type": "single",
-        })
+        }, headers=headers)
         assert resp.status_code == 422
 
     def test_template_watch_appears_in_list(self, api_client: TestClient):
-        _signup(api_client)
+        _, headers = _signup(api_client)
         api_client.post("/api/watches", json={
             "start_date": "2026-07-01",
             "end_date": "2026-07-31",
             "watch_type": "template",
             "search_params": {"state": "OR"},
             "name": "OR Pattern",
-        })
-        resp = api_client.get("/api/watches")
+        }, headers=headers)
+        resp = api_client.get("/api/watches", headers=headers)
         watches = resp.json()
         assert any(w["watch_type"] == "template" for w in watches)
 
     def test_single_watch_still_works(self, api_client: TestClient):
         from tests.conftest import make_campground
-        _signup(api_client)
+        _, headers = _signup(api_client)
         api_module._registry.get_by_facility_id.return_value = make_campground(
             facility_id="232465",
         )
@@ -134,6 +152,6 @@ class TestTemplateWatchAPI:
             "facility_id": "232465",
             "start_date": "2026-07-01",
             "end_date": "2026-07-31",
-        })
+        }, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["watch_type"] == "single"

@@ -60,7 +60,6 @@ def seo_client(tmp_path: Path) -> TestClient:
         api_module._watch_db = db
         api_module._registry = reg
         api_module._engine = None
-        api_module._auth_rate_limit.clear()
 
         client = TestClient(
             api_module.app,

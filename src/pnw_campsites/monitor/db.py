@@ -81,6 +81,7 @@ class User:
     onboarding_complete: bool = False
     created_at: str = ""
     last_login_at: str | None = None
+    supabase_id: str | None = None
 
 
 @dataclass
@@ -319,6 +320,15 @@ class WatchDB:
             self._conn.execute(
                 "ALTER TABLE users ADD COLUMN"
                 " onboarding_complete INTEGER DEFAULT 0"
+            )
+        # v1.33: Supabase Auth — add supabase_id to users
+        if "supabase_id" not in user_cols:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN supabase_id TEXT"
+            )
+            self._conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_supabase_id "
+                "ON users(supabase_id) WHERE supabase_id IS NOT NULL"
             )
         # v1.2: trips
         self._conn.executescript("""\
@@ -624,8 +634,9 @@ class WatchDB:
             """\
             INSERT INTO users
                 (email, password_hash, display_name, home_base,
-                 default_state, default_nights, default_from, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 default_state, default_nights, default_from,
+                 supabase_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user.email,
@@ -635,6 +646,7 @@ class WatchDB:
                 user.default_state,
                 user.default_nights,
                 user.default_from,
+                user.supabase_id,
                 now,
             ),
         )
@@ -646,6 +658,12 @@ class WatchDB:
     def get_user_by_email(self, email: str) -> User | None:
         row = self._conn.execute(
             "SELECT * FROM users WHERE email=? COLLATE NOCASE", (email,)
+        ).fetchone()
+        return self._row_to_user(row) if row else None
+
+    def get_user_by_supabase_id(self, supabase_id: str) -> User | None:
+        row = self._conn.execute(
+            "SELECT * FROM users WHERE supabase_id=?", (supabase_id,)
         ).fetchone()
         return self._row_to_user(row) if row else None
 

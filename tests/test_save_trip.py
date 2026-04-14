@@ -3,19 +3,37 @@
 from __future__ import annotations
 
 import json
+import uuid
+from datetime import UTC, datetime, timedelta
 
+import jwt as pyjwt
 from fastapi.testclient import TestClient
 
 from pnw_campsites.routes.planner import _extract_campgrounds_from_messages
 
+_TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"
 
-def _signup(client: TestClient) -> dict:
-    resp = client.post(
-        "/api/auth/signup",
-        json={"email": "plansave@test.com", "password": "testpass123"},
-    )
+
+def _make_jwt(email="test@example.com", supabase_id=None):
+    sub = supabase_id or str(uuid.uuid4())
+    payload = {
+        "sub": sub, "email": email, "role": "authenticated", "aud": "authenticated",
+        "exp": datetime.now(UTC) + timedelta(hours=1), "iat": datetime.now(UTC),
+    }
+    return pyjwt.encode(payload, _TEST_SECRET, algorithm="HS256")
+
+
+def _auth_headers(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _signup(client: TestClient):
+    """Create user via auto-provisioning and return (user_data, auth_headers)."""
+    token = _make_jwt(email="plansave@test.com")
+    headers = _auth_headers(token)
+    resp = client.get("/api/auth/me", headers=headers)
     assert resp.status_code == 200
-    return resp.json()
+    return resp.json(), headers
 
 
 class TestExtractCampgrounds:
@@ -101,14 +119,14 @@ class TestExtractCampgrounds:
 
 class TestSaveTripEndpoint:
     def test_save_trip_authenticated(self, api_client: TestClient):
-        _signup(api_client)
+        _, headers = _signup(api_client)
         resp = api_client.post("/api/plan/save-trip", json={
             "name": "Summer Camping",
             "messages": [
                 {"role": "user", "content": "Find camping June 2026-06-01 to 2026-06-07"},
                 {"role": "assistant", "content": "Found some spots."},
             ],
-        })
+        }, headers=headers)
         assert resp.status_code == 200
         data = resp.json()
         assert data["name"] == "Summer Camping"
@@ -122,15 +140,15 @@ class TestSaveTripEndpoint:
         assert resp.status_code == 401
 
     def test_save_trip_extracts_dates(self, api_client: TestClient):
-        _signup(api_client)
+        _, headers = _signup(api_client)
         resp = api_client.post("/api/plan/save-trip", json={
             "name": "Date Test",
             "messages": [
                 {"role": "user", "content": "camping 2026-07-01 to 2026-07-14"},
             ],
-        })
+        }, headers=headers)
         trip_id = resp.json()["trip_id"]
         # Verify the trip has the inferred dates
-        trip = api_client.get(f"/api/trips/{trip_id}").json()
+        trip = api_client.get(f"/api/trips/{trip_id}", headers=headers).json()
         assert trip["start_date"] == "2026-07-01"
         assert trip["end_date"] == "2026-07-14"

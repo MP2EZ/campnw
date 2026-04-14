@@ -370,7 +370,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "DELETE", "PATCH"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Authorization"],
     allow_credentials=True,
 )
 
@@ -400,7 +400,7 @@ async def timing_middleware(request: Request, call_next):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' https://*.tile.openstreetmap.org data:; "
-        "connect-src 'self' https://*.tile.openstreetmap.org; "
+        f"connect-src 'self' https://*.tile.openstreetmap.org {os.getenv('SUPABASE_URL', '')}; "
         "frame-ancestors 'none'"
     )
     return response
@@ -449,7 +449,6 @@ for _seo_candidate in _seo_static_candidates:
         break
 
 # Re-export for test compatibility
-from pnw_campsites.routes.auth import _auth_rate_limit  # noqa: E402, F401
 from pnw_campsites.routes.deps import SESSION_COOKIE  # noqa: E402, F401
 
 # ---------------------------------------------------------------------------

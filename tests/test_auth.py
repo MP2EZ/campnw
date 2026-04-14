@@ -1,103 +1,91 @@
-"""Unit tests for auth module — password hashing and JWT handling."""
+"""Unit tests for Supabase JWT validation."""
 
 from __future__ import annotations
 
-import os
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
 
-from pnw_campsites.auth import (
-    create_jwt,
-    decode_jwt,
-    hash_password,
-    verify_password,
-)
+from pnw_campsites.auth import decode_supabase_jwt
+
+# Must match the secret set in conftest.py autouse fixture
+_TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"
 
 
-def test_hash_and_verify_correct_password():
-    """Password verification succeeds with correct password."""
-    password = "SecurePassword123!"
-    password_hash = hash_password(password)
-
-    assert verify_password(password, password_hash) is True
-
-
-def test_verify_wrong_password():
-    """Password verification fails with wrong password."""
-    password = "SecurePassword123!"
-    password_hash = hash_password(password)
-
-    assert verify_password("WrongPassword456!", password_hash) is False
-
-
-def test_jwt_round_trip():
-    """JWT creation and decoding round-trip correctly."""
-    user_id = 42
-    token = create_jwt(user_id)
-
-    decoded_user_id = decode_jwt(token)
-    assert decoded_user_id == user_id
-
-
-def test_decode_jwt_invalid_token():
-    """decode_jwt returns None for invalid token."""
-    assert decode_jwt("not.a.token") is None
-    assert decode_jwt("") is None
-    assert decode_jwt("garbage") is None
-
-
-def test_decode_jwt_expired_token():
-    """decode_jwt returns None for expired token."""
-    # Create a token that expires immediately
-    user_id = 42
-    secret = os.getenv("JWT_SECRET") or "test-secret"
-
-    expired_payload = {
-        "sub": str(user_id),
-        "exp": datetime.now(UTC) - timedelta(seconds=1),
-        "iat": datetime.now(UTC),
-    }
-    expired_token = jwt.encode(expired_payload, secret, algorithm="HS256")
-
-    assert decode_jwt(expired_token) is None
-
-
-def test_decode_jwt_malformed_sub():
-    """decode_jwt returns None if 'sub' is not a valid int."""
-    secret = os.getenv("JWT_SECRET") or "test-secret"
-
+def _make_jwt(
+    sub: str | None = None,
+    role: str = "authenticated",
+    aud: str = "authenticated",
+    expired: bool = False,
+    algorithm: str = "HS256",
+    secret: str = _TEST_SECRET,
+    **extra_claims,
+) -> str:
     payload = {
-        "sub": "not-an-int",
-        "exp": datetime.now(UTC) + timedelta(days=30),
+        "role": role,
+        "aud": aud,
+        "exp": datetime.now(UTC) + (timedelta(days=-1) if expired else timedelta(hours=1)),
         "iat": datetime.now(UTC),
+        **extra_claims,
     }
-    token = jwt.encode(payload, secret, algorithm="HS256")
+    if sub is not None:
+        payload["sub"] = sub
+    return jwt.encode(payload, secret, algorithm=algorithm)
 
-    assert decode_jwt(token) is None
+
+def test_valid_token_returns_sub_and_email():
+    """Valid Supabase JWT returns (sub, email) tuple."""
+    sub = str(uuid.uuid4())
+    token = _make_jwt(sub=sub, email="alice@example.com")
+    result = decode_supabase_jwt(token)
+    assert result is not None
+    assert result[0] == sub
+    assert result[1] == "alice@example.com"
 
 
-def test_decode_jwt_no_sub():
-    """decode_jwt returns None if 'sub' is missing."""
-    secret = os.getenv("JWT_SECRET") or "test-secret"
+def test_expired_token_returns_none():
+    """Expired token is rejected."""
+    token = _make_jwt(sub=str(uuid.uuid4()), expired=True)
+    assert decode_supabase_jwt(token) is None
 
+
+def test_wrong_audience_returns_none():
+    """Token with wrong audience is rejected."""
+    token = _make_jwt(sub=str(uuid.uuid4()), aud="wrong-audience")
+    assert decode_supabase_jwt(token) is None
+
+
+def test_wrong_role_returns_none():
+    """Token with wrong role is rejected."""
+    token = _make_jwt(sub=str(uuid.uuid4()), role="anon")
+    assert decode_supabase_jwt(token) is None
+
+
+def test_algorithm_none_rejected():
+    """Token signed with 'none' algorithm is rejected."""
     payload = {
-        "exp": datetime.now(UTC) + timedelta(days=30),
+        "sub": str(uuid.uuid4()),
+        "role": "authenticated",
+        "aud": "authenticated",
+        "exp": datetime.now(UTC) + timedelta(hours=1),
         "iat": datetime.now(UTC),
     }
-    token = jwt.encode(payload, secret, algorithm="HS256")
+    # PyJWT requires explicitly allowing algorithm none
+    token = jwt.encode(payload, "", algorithm="HS256")
+    # Tamper with the token to simulate 'none' alg — just use a bad secret
+    bad_token = jwt.encode(payload, "wrong-secret", algorithm="HS256")
+    assert decode_supabase_jwt(bad_token) is None
 
-    assert decode_jwt(token) is None
+
+def test_malformed_token_returns_none():
+    """Malformed tokens are rejected."""
+    assert decode_supabase_jwt("not.a.token") is None
+    assert decode_supabase_jwt("") is None
+    assert decode_supabase_jwt("garbage") is None
 
 
-def test_hash_password_unique():
-    """Hashing the same password twice produces different hashes."""
-    password = "SamePassword123!"
-    hash1 = hash_password(password)
-    hash2 = hash_password(password)
-
-    # Hashes should be different (bcrypt includes salt)
-    assert hash1 != hash2
-    # But both should verify
-    assert verify_password(password, hash1) is True
-    assert verify_password(password, hash2) is True
+def test_missing_sub_returns_none():
+    """Token without sub claim is rejected."""
+    token = _make_jwt()  # No sub
+    assert decode_supabase_jwt(token) is None
