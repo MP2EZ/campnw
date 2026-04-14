@@ -12,12 +12,12 @@ import os
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
-
-log = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 
 from pnw_campsites.monitor.db import User
 from pnw_campsites.routes.deps import get_current_user, get_watch_db
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
