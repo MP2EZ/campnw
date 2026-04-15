@@ -65,6 +65,7 @@ async def chat(
     engine: SearchEngine,
     registry: CampgroundRegistry,
     api_key: str,
+    posthog_distinct_id: str | None = None,
 ) -> dict:
     """Process one conversation turn.
 
@@ -103,6 +104,8 @@ async def chat(
             messages=current_messages,
             tools=TOOLS,  # type: ignore[arg-type]
             max_tokens=4096,
+            posthog_distinct_id=posthog_distinct_id,
+            posthog_privacy_mode=True,
         )
 
         # Final text response — no more tool calls
@@ -155,6 +158,8 @@ async def chat(
         system=system_prompt,
         messages=current_messages,
         max_tokens=1024,
+        posthog_distinct_id=posthog_distinct_id,
+        posthog_privacy_mode=True,
     )
     return {
         "role": "assistant",
@@ -198,6 +203,7 @@ async def chat_stream(
     engine: SearchEngine,
     registry: CampgroundRegistry,
     api_key: str,
+    posthog_distinct_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream one conversation turn as SSE-formatted JSON event strings.
 
@@ -243,6 +249,8 @@ async def chat_stream(
                 messages=current_messages,
                 tools=TOOLS,  # type: ignore[arg-type]
                 max_tokens=4096,
+                posthog_distinct_id=posthog_distinct_id,
+                posthog_privacy_mode=True,
             )
             async for event in event_stream:
                 if event.type == "content_block_start":

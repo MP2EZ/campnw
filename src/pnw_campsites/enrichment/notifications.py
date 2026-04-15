@@ -72,6 +72,7 @@ async def enrich_notification(
             model="claude-haiku-4-5-20251001",
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
+            posthog_privacy_mode=True,
         )
 
         text = response.content[0].text.strip()

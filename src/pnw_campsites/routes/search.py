@@ -6,13 +6,14 @@ import json
 import logging
 from datetime import date
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import (
     _FACILITY_ID_RE,
+    get_current_user,
     get_engine,
     get_registry,
 )
@@ -68,6 +69,9 @@ class CampgroundResultResponse(BaseModel):
     availability_url: str | None = None
     windows: list[WindowResponse]
     error: str | None = None
+    weather_temp_high_f: int | None = None
+    weather_temp_low_f: int | None = None
+    weather_precip_pct: int | None = None
 
 
 class SearchWarningResponse(BaseModel):
@@ -144,6 +148,7 @@ class CampgroundResponse(BaseModel):
 async def _generate_search_summary(
     results_data: list[dict],
     query: SearchQuery,
+    posthog_distinct_id: str | None = None,
 ) -> str | None:
     """Generate a brief AI summary of search results. Returns None on failure."""
     import asyncio
@@ -185,6 +190,8 @@ async def _generate_search_summary(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=150,
                 messages=[{"role": "user", "content": prompt}],
+                posthog_distinct_id=posthog_distinct_id,
+                posthog_privacy_mode=True,
             ),
             timeout=3.0,
         )
@@ -221,7 +228,11 @@ def _build_booking_url(
     return None
 
 
-def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse:
+def _format_result(
+    r,
+    booking_system: BookingSystem,
+    weather: tuple[float, float, float] | None = None,
+) -> CampgroundResultResponse:
     cg = r.campground
     start = None
     end = None
@@ -277,7 +288,60 @@ def _format_result(r, booking_system: BookingSystem) -> CampgroundResultResponse
         ) if start else None,
         windows=windows,
         error=r.error,
+        weather_temp_high_f=round(weather[0]) if weather else None,
+        weather_temp_low_f=round(weather[1]) if weather else None,
+        weather_precip_pct=round(weather[2]) if weather else None,
     )
+
+
+# ---------------------------------------------------------------------------
+# Weather enrichment helpers
+# ---------------------------------------------------------------------------
+
+
+def _weather_month(start_date: date, end_date: date) -> int:
+    """Return the month of the midpoint of a date range."""
+    mid = start_date + (end_date - start_date) / 2
+    return mid.month
+
+
+def _build_weather_map(
+    results: list, start_date: date, end_date: date,
+) -> dict[str, tuple[float, float, float]]:
+    """Batch-fetch weather normals for a list of CampgroundResults.
+
+    Returns {facility_id: (high, low, precip)}.
+    """
+    registry = get_registry()
+    month = _weather_month(start_date, end_date)
+    locations = []
+    fid_to_key: dict[str, tuple[float, float, int]] = {}
+    for r in results:
+        cg = r.campground
+        if cg.latitude and cg.longitude:
+            key = (round(cg.latitude, 2), round(cg.longitude, 2), month)
+            locations.append((cg.latitude, cg.longitude, month))
+            fid_to_key[cg.facility_id] = key
+    if not locations:
+        return {}
+    cache = registry.get_weather_normals_batch(locations)
+    return {
+        fid: cache[key]
+        for fid, key in fid_to_key.items()
+        if key in cache
+    }
+
+
+def _lookup_weather_single(
+    cg_lat: float, cg_lon: float, start_date: date, end_date: date,
+) -> tuple[float, float, float] | None:
+    """Single-campground weather lookup for streaming/check paths."""
+    if not cg_lat or not cg_lon:
+        return None
+    registry = get_registry()
+    month = _weather_month(start_date, end_date)
+    normals = registry.get_weather_normals(cg_lat, cg_lon, [month])
+    return normals.get(month)
 
 
 # ---------------------------------------------------------------------------
@@ -362,11 +426,19 @@ async def search(
 
     results = await engine.search(query)
 
+    weather_map = _build_weather_map(
+        results.results, start_date, end_date,
+    )
+
     return SearchResponse(
         campgrounds_checked=results.campgrounds_checked,
         campgrounds_with_availability=results.campgrounds_with_availability,
         results=[
-            _format_result(r, booking_system or BookingSystem.RECGOV)
+            _format_result(
+                r,
+                booking_system or BookingSystem.RECGOV,
+                weather=weather_map.get(r.campground.facility_id),
+            )
             for r in results.results
         ],
         warnings=[
@@ -414,6 +486,7 @@ async def search(
 
 @router.get("/search/stream")
 async def search_stream(
+    request: Request,
     start_date: date | None = Query(None, description="Start date"),
     end_date: date | None = Query(None, description="End date"),
     state: str | None = Query(None),
@@ -435,6 +508,8 @@ async def search_stream(
 
     engine = get_engine()
     nl_parsed: dict | None = None
+    user_id = get_current_user(request)
+    ph_distinct_id = str(user_id) if user_id else None
 
     # Natural language query -> structured params
     if q and not start_date:
@@ -442,7 +517,7 @@ async def search_stream(
         if api_key:
             from pnw_campsites.search.nl_parser import parse_natural_query
 
-            nl_parsed = await parse_natural_query(q, api_key)
+            nl_parsed = await parse_natural_query(q, api_key, posthog_distinct_id=ph_distinct_id)
             # Apply NL-parsed values as defaults (explicit params override)
             if "start_date" in nl_parsed:
                 start_date = date.fromisoformat(nl_parsed["start_date"])
@@ -564,8 +639,17 @@ async def search_stream(
                 continue
 
             # CampgroundResult — normal result
+            weather = None
+            if start_date and end_date:
+                weather = _lookup_weather_single(
+                    item.campground.latitude,
+                    item.campground.longitude,
+                    start_date,
+                    end_date,
+                )
             data = _format_result(
-                item, booking_system or BookingSystem.RECGOV
+                item, booking_system or BookingSystem.RECGOV,
+                weather=weather,
             )
             yield f"data: {json.dumps(data.model_dump())}\n\n"
             if item.total_available_sites > 0:
@@ -582,7 +666,7 @@ async def search_stream(
         if available_count > 5:
             try:
                 summary_text = await _generate_search_summary(
-                    summary_data, query,
+                    summary_data, query, posthog_distinct_id=ph_distinct_id,
                 )
                 if summary_text:
                     yield f"data: {json.dumps({'type': 'summary', 'text': summary_text})}\n\n"
@@ -615,8 +699,15 @@ async def check(
         min_nights=nights,
         booking_system=booking_system,
     )
+    weather = _lookup_weather_single(
+        result.campground.latitude,
+        result.campground.longitude,
+        start_date,
+        end_date,
+    )
     return _format_result(
-        result, booking_system or BookingSystem.RECGOV
+        result, booking_system or BookingSystem.RECGOV,
+        weather=weather,
     )
 
 

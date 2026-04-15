@@ -33,6 +33,7 @@ class SaveSearchRequest(BaseModel):
 async def _enhance_rec_reasons(
     results: list[dict],
     affinities: dict,
+    posthog_distinct_id: str | None = None,
 ) -> list[str] | None:
     """Generate personalized recommendation reasons via Haiku batch call."""
     import asyncio
@@ -80,6 +81,8 @@ async def _enhance_rec_reasons(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=400,
                 messages=[{"role": "user", "content": prompt}],
+                posthog_distinct_id=posthog_distinct_id,
+                posthog_privacy_mode=True,
             ),
             timeout=2.0,
         )
@@ -185,7 +188,7 @@ async def recommendations(request: Request):
     # Enhance reasons with LLM if user has enough search history
     if results and len(affinities["tags"]) >= 3:
         try:
-            enhanced = await _enhance_rec_reasons(results, affinities)
+            enhanced = await _enhance_rec_reasons(results, affinities, posthog_distinct_id=str(user_id))
             if enhanced:
                 for r, reason in zip(results, enhanced, strict=False):
                     if reason:

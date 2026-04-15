@@ -138,6 +138,7 @@ async def generate_weekly_digest(watch_db) -> str:
                 model="claude-haiku-4-5-20251001",
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
+                posthog_privacy_mode=True,
             )
             insights = response.content[0].text.strip()
             report += f"\n\nAI Insights:\n{insights}"

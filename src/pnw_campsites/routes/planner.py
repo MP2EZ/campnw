@@ -92,8 +92,10 @@ async def plan_chat(body: PlanChatRequest, request: Request, response: Response)
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
         )
 
+    user_id = get_current_user(request)
+    ph_distinct_id = str(user_id) if user_id else None
     msgs = [m.model_dump() for m in body.messages]
-    result = await chat(msgs, engine, registry, api_key)
+    result = await chat(msgs, engine, registry, api_key, posthog_distinct_id=ph_distinct_id)
     return PlanChatResponse(**result)
 
 
@@ -113,10 +115,12 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request):
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
         )
 
+    user_id = get_current_user(request)
+    ph_distinct_id = str(user_id) if user_id else None
     msgs = [m.model_dump() for m in body.messages]
 
     async def event_generator():
-        async for event_json in chat_stream(msgs, engine, registry, api_key):
+        async for event_json in chat_stream(msgs, engine, registry, api_key, posthog_distinct_id=ph_distinct_id):
             yield f"data: {event_json}\n\n"
         yield "data: [DONE]\n\n"
 

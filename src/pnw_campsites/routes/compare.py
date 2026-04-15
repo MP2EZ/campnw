@@ -6,10 +6,10 @@ import asyncio
 import json
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from pnw_campsites.routes.deps import get_registry
+from pnw_campsites.routes.deps import get_current_user, get_registry
 
 router = APIRouter(prefix="/api", tags=["compare"])
 
@@ -21,8 +21,10 @@ class CompareRequest(BaseModel):
 
 
 @router.post("/compare")
-async def compare_campgrounds(body: CompareRequest):
+async def compare_campgrounds(body: CompareRequest, request: Request):
     registry = get_registry()
+    user_id = get_current_user(request)
+    ph_distinct_id = str(user_id) if user_id else None
 
     campgrounds = []
     for fid in body.facility_ids:
@@ -48,7 +50,7 @@ async def compare_campgrounds(body: CompareRequest):
         })
 
     # Generate narrative comparison via Haiku (optional)
-    narrative = await _generate_narrative(campgrounds, body.start_date)
+    narrative = await _generate_narrative(campgrounds, body.start_date, posthog_distinct_id=ph_distinct_id)
 
     return {
         "campgrounds": campgrounds,
@@ -58,6 +60,7 @@ async def compare_campgrounds(body: CompareRequest):
 
 async def _generate_narrative(
     campgrounds: list[dict], date_context: str,
+    posthog_distinct_id: str | None = None,
 ) -> str | None:
     """Generate a Haiku comparison narrative. Returns None on failure."""
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
@@ -97,6 +100,8 @@ async def _generate_narrative(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}],
+                posthog_distinct_id=posthog_distinct_id,
+                posthog_privacy_mode=True,
             ),
             timeout=3.0,
         )
