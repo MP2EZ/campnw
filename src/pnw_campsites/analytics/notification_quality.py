@@ -120,6 +120,7 @@ async def _analyze_with_haiku(stats: dict) -> str | None:
                 model="claude-haiku-4-5-20251001",
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
+                posthog_privacy_mode=True,
             ),
             timeout=3.0,
         )

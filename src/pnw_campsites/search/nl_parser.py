@@ -124,6 +124,7 @@ async def parse_natural_query(
     query: str,
     api_key: str,
     today: date | None = None,
+    posthog_distinct_id: str | None = None,
 ) -> dict:
     """Parse a natural language query into structured search params.
 
@@ -148,6 +149,8 @@ async def parse_natural_query(
             tools=[_SEARCH_PARAMS_TOOL],
             tool_choice={"type": "tool", "name": "set_search_params"},
             messages=[{"role": "user", "content": query}],
+            posthog_distinct_id=posthog_distinct_id,
+            posthog_privacy_mode=True,
         )
 
         # Extract tool_use block

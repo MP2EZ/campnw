@@ -125,6 +125,7 @@ Return ONLY the JSON object, nothing else."""
             model="claude-haiku-4-5-20251001",
             max_tokens=300,
             messages=[{"role": "user", "content": prompt}],
+            posthog_privacy_mode=True,
         )
 
         text = response.content[0].text.strip()
@@ -180,6 +181,7 @@ async def generate_vibe(
             model="claude-haiku-4-5-20251001",
             max_tokens=150,
             messages=[{"role": "user", "content": prompt}],
+            posthog_privacy_mode=True,
         )
         text = response.content[0].text.strip().strip('"').strip("'")
         # Truncate at sentence boundary
@@ -243,6 +245,7 @@ async def generate_description(
             model="claude-haiku-4-5-20251001",
             max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
+            posthog_privacy_mode=True,
         )
         text = response.content[0].text.strip()
         # Handle markdown code blocks
