@@ -50,7 +50,9 @@ async def compare_campgrounds(body: CompareRequest, request: Request):
         })
 
     # Generate narrative comparison via Haiku (optional)
-    narrative = await _generate_narrative(campgrounds, body.start_date, posthog_distinct_id=ph_distinct_id)
+    narrative = await _generate_narrative(
+        campgrounds, body.start_date, posthog_distinct_id=ph_distinct_id,
+    )
 
     return {
         "campgrounds": campgrounds,

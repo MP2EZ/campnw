@@ -120,7 +120,10 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request):
     msgs = [m.model_dump() for m in body.messages]
 
     async def event_generator():
-        async for event_json in chat_stream(msgs, engine, registry, api_key, posthog_distinct_id=ph_distinct_id):
+        async for event_json in chat_stream(
+            msgs, engine, registry, api_key,
+            posthog_distinct_id=ph_distinct_id,
+        ):
             yield f"data: {event_json}\n\n"
         yield "data: [DONE]\n\n"
 

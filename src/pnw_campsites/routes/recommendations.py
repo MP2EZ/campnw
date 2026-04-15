@@ -188,7 +188,9 @@ async def recommendations(request: Request):
     # Enhance reasons with LLM if user has enough search history
     if results and len(affinities["tags"]) >= 3:
         try:
-            enhanced = await _enhance_rec_reasons(results, affinities, posthog_distinct_id=str(user_id))
+            enhanced = await _enhance_rec_reasons(
+                results, affinities, posthog_distinct_id=str(user_id),
+            )
             if enhanced:
                 for r, reason in zip(results, enhanced, strict=False):
                     if reason:
