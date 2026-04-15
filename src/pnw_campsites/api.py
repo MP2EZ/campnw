@@ -73,7 +73,9 @@ async def _poll_tranche(tranche: int | None = None) -> None:
     from pnw_campsites.enrichment.notifications import enrich_notification
 
     for result in results:
-        if result.has_changes:
+        if result.has_changes and (
+            result.watch.notification_channel or result.watch.notify_topic
+        ):
             all_dates: list[str] = []
             for change in result.changes:
                 all_dates.extend(change.new_dates)
