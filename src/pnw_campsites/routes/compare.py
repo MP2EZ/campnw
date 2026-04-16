@@ -9,6 +9,7 @@ import os
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import get_current_user, get_registry
 
 router = APIRouter(prefix="/api", tags=["compare"])
@@ -28,7 +29,12 @@ async def compare_campgrounds(body: CompareRequest, request: Request):
 
     campgrounds = []
     for fid in body.facility_ids:
-        cg = registry.get_by_facility_id(fid)
+        # Try all booking systems — frontend doesn't send booking_system
+        cg = None
+        for bs in BookingSystem:
+            cg = registry.get_by_facility_id(fid, bs)
+            if cg:
+                break
         if not cg:
             raise HTTPException(status_code=404, detail=f"Campground {fid} not found")
         campgrounds.append({

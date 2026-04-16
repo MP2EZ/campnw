@@ -15,7 +15,7 @@ class TestCompare:
         from tests.conftest import make_campground
         cg1 = make_campground(facility_id="aaa", name="Lake Camp", state="WA", tags=["lakeside"])
         cg2 = make_campground(facility_id="bbb", name="Forest Camp", state="WA", tags=["forest"])
-        api_module._registry.get_by_facility_id.side_effect = lambda fid, **kw: {
+        api_module._registry.get_by_facility_id.side_effect = lambda fid, *a, **kw: {
             "aaa": cg1, "bbb": cg2,
         }.get(fid)
 
@@ -33,7 +33,7 @@ class TestCompare:
     def test_compare_three_campgrounds(self, api_client: TestClient):
         from tests.conftest import make_campground
         cgs = {f"c{i}": make_campground(facility_id=f"c{i}", name=f"Camp {i}") for i in range(3)}
-        api_module._registry.get_by_facility_id.side_effect = lambda fid, **kw: cgs.get(fid)
+        api_module._registry.get_by_facility_id.side_effect = lambda fid, *a, **kw: cgs.get(fid)
 
         resp = api_client.post("/api/compare", json={
             "facility_ids": ["c0", "c1", "c2"],
