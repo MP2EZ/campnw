@@ -11,7 +11,9 @@ import { WatchPanel } from "./components/WatchPanel";
 const CalendarHeatMap = lazy(() => import("./components/CalendarHeatMap").then(m => ({ default: m.CalendarHeatMap })));
 import { DateRangePicker } from "./components/DateRangePicker";
 import { ResultCard, SOURCE_LABELS } from "./components/ResultCard";
-import { CompareBar } from "./components/CompareBar";
+import { CompareBar, ComparePanel } from "./components/CompareBar";
+import { compareCampgrounds } from "./api";
+import type { CompareResponse } from "./api";
 import { OnboardingModal } from "./components/OnboardingModal";
 const AuthModal = lazy(() => import("./components/AuthModal").then(m => ({ default: m.AuthModal })));
 const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").then(m => ({ default: m.ShortcutHelpModal })));
@@ -716,9 +718,17 @@ export default function App() {
   const [mainMode, setMainMode] = useState<"search" | "plan">("search");
   const [resultsDisplay, setResultsDisplay] = useState<"list" | "map">("list");
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
+  const [compareResult, setCompareResult] = useState<CompareResponse | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
   const [nlQuery, setNlQuery] = useState("");
 
   const toggleCompare = useCallback((facilityId: string) => {
+    if (compareResult) {
+      // Clear current comparison, start fresh with new selection
+      setCompareResult(null);
+      setCompareSet(new Set([facilityId]));
+      return;
+    }
     setCompareSet(prev => {
       const next = new Set(prev);
       if (next.has(facilityId)) {
@@ -728,6 +738,23 @@ export default function App() {
       }
       return next;
     });
+  }, [compareResult]);
+
+  const handleCompare = useCallback(async () => {
+    setCompareLoading(true);
+    const resp = await compareCampgrounds(
+      [...compareSet],
+      searchDates?.start,
+      searchDates?.end,
+    );
+    setCompareResult(resp);
+    setCompareLoading(false);
+    track("compare_triggered", { count: compareSet.size });
+  }, [compareSet, searchDates]);
+
+  const clearCompare = useCallback(() => {
+    setCompareResult(null);
+    setCompareSet(new Set());
   }, []);
 
   useEffect(() => {
@@ -1101,7 +1128,9 @@ export default function App() {
               from their booking system. Check GoingToCamp for full details.
             </p>
           )}
-          {searchSummary && (
+          {compareResult ? (
+            <ComparePanel result={compareResult} onClose={clearCompare} />
+          ) : searchSummary ? (
             <div className="search-summary-banner" role="status">
               <div className="summary-content">{renderMarkdown(searchSummary)}</div>
               <button
@@ -1113,7 +1142,7 @@ export default function App() {
                 <IconClose className="icon-sm" />
               </button>
             </div>
-          )}
+          ) : null}
           {filteredResults
             .filter((r) => r.total_available_sites > 0)
             .map((r, i) => (
@@ -1130,11 +1159,14 @@ export default function App() {
                 onShowMap={() => { setResultsDisplay("map"); track("map_toggled", { to: "map" }); }}
               />
             ))}
-          <CompareBar
-            selectedIds={compareSet}
-            onClear={() => setCompareSet(new Set())}
-            searchDates={searchDates || undefined}
-          />
+          {!compareResult && (
+            <CompareBar
+              selectedIds={compareSet}
+              onClear={clearCompare}
+              onCompare={handleCompare}
+              loading={compareLoading}
+            />
+          )}
           {withAvailability === 0 && (
             <SmartZeroState
               diagnosis={
