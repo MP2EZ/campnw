@@ -36,12 +36,13 @@ v1.3    [SHIPPED]  SEO + Discoverability — Campground profile pages, sitemap, 
 v1.31   [SHIPPED]  Audit Fixes          — Security hardening, perf optimizations, WCAG AA compliance
 v1.32   [SHIPPED]  Accurate Drive Times — Mapbox routing, drive_times table, tiered search lookup
 v1.33   ------->   Supabase Auth        — Replace custom auth with Supabase, Bearer tokens, auto-provisioning
-v1.34   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
+v1.34   ------->   Weather Context      — Typical temps + precipitation on search results via Visual Crossing
+v1.35   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
 v1.4    ------->   Monetization Launch  — Pro tier gate, payment, freemium conversion flows
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
-Each milestone is a shippable increment with clear user value. v1.33–v1.34 establish production auth (Supabase + OAuth), v1.4 transitions campable from personal tool to public product. v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
+Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product. v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -1103,7 +1104,7 @@ Mapbox Matrix API may return `null` for campgrounds on unmapped forest service r
 ## v1.33 "Supabase Auth"
 
 ### Theme
-Replace custom email/password auth with Supabase Auth. No existing users — clean swap with no migration bridges. OAuth providers configured in Supabase dashboard but not connected yet (placeholders for v1.34). Auth data (email, password, OAuth identities) moves to Supabase; profile/preferences stay in SQLite keyed by Supabase user UUID.
+Replace custom email/password auth with Supabase Auth. No existing users — clean swap with no migration bridges. OAuth providers configured in Supabase dashboard but not connected yet (placeholders for v1.35). Auth data (email, password, OAuth identities) moves to Supabase; profile/preferences stay in SQLite keyed by Supabase user UUID.
 
 ### Features
 
@@ -1189,7 +1190,111 @@ Supabase availability becomes a dependency for login (not for ongoing sessions �
 
 ---
 
-## v1.34 "OAuth Login"
+## v1.34 "Weather Context"
+
+### Theme
+Show typical weather (high/low temps, precipitation probability) on search results so users can factor climate into campground selection. This is a **discovery-time** feature — "is it going to be freezing at night there in May?" — not a post-booking packing list (which was rejected as low-impact). Weather context turns campable from a pure availability tool into a trip-planning tool that helps you pick the *right* campground, not just an *available* one.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Visual Crossing provider | S | Thin async `httpx` client. Takes `(lat, lon, start_date, end_date)`, returns daily normals (high/low temp °F, precip probability %). Uses Visual Crossing Timeline API with `include=stats` for statistical normals. |
+| SQLite weather cache | S | `weather_normals` table: `(lat_round, lon_round, month, day) → temp_high, temp_low, precip_pct`. Lat/lon rounded to 2 decimal places (~1km). Climate normals are static — cache never expires. |
+| Cache warmup script | S | `scripts/warm_weather_cache.py` — iterate registry campgrounds, fetch normals for all 12 months, populate cache. ~1,370 campgrounds × 12 months = ~16,400 records. Run once over ~17 days on free tier, or faster on paid. |
+| Search result enrichment | M | After availability check, look up cached normals for each result's lat/lon + searched date range. Average across the date range. Attach `weather` field to `CampgroundResultResponse`. |
+| Weather display on ResultCard | S | Small weather summary on each result card: temp range + precip indicator. Follows existing design token system. No new dependencies. |
+| Env var + fallback | S | `VISUAL_CROSSING_API_KEY` in `.env` and Fly secrets. Weather is best-effort — missing key or API errors skip weather silently, never block search results. |
+
+### Architecture Decisions
+
+**Visual Crossing over Open-Meteo.** Open-Meteo's free tier prohibits commercial use — campable.co is LLC-operated and heading toward monetization. Visual Crossing's free tier (1,000 records/day) explicitly allows commercial use. Upgrade path is pay-as-you-go at $0.0001/record if needed.
+
+**Aggressive caching eliminates ongoing API cost.** Climate normals for a given location + calendar day are 30-year averages — they don't change. After the initial cache warmup (~16,400 records across the full registry), searches hit SQLite, not Visual Crossing. New campgrounds added to the registry are the only source of cache misses.
+
+**Rounded coordinates for cache efficiency.** Lat/lon rounded to 2 decimal places (~1.1km resolution). Campgrounds within ~1km share a cache entry. This is more than precise enough — weather doesn't vary meaningfully across 1km at the scale of PNW mountain/forest terrain.
+
+**Per-source fan-out awareness.** Multi-source searches check up to `max_campgrounds` per source (e.g., 20 rec.gov + 20 WA State = 40 campgrounds). Weather lookups scale with total campgrounds checked, not the user-facing limit. Caching makes this a non-issue after warmup — all lookups are local SQLite reads.
+
+**Best-effort, never blocking.** Weather enrichment happens after availability results are ready. If the cache is cold for a campground or Visual Crossing is down, the result ships without weather. No degradation to core search functionality.
+
+### Data Model
+
+```python
+@dataclass
+class WeatherNormals:
+    temp_high_f: float    # average daily high (°F)
+    temp_low_f: float     # average daily low (°F)
+    precip_pct: float     # precipitation probability (0-100)
+```
+
+**API response addition:**
+```json
+{
+  "facility_id": "232465",
+  "name": "Ohanapecosh",
+  "weather": {
+    "temp_high_f": 72,
+    "temp_low_f": 45,
+    "precip_pct": 12
+  },
+  ...
+}
+```
+
+### Files Changed
+
+**Backend (~120 lines new):**
+- `providers/weather.py` — new, Visual Crossing client + cache logic (~80 lines)
+- `routes/search.py` — attach weather to response (~15 lines)
+- `registry/db.py` — `weather_normals` table creation + lookup methods (~25 lines)
+
+**Frontend (~40 lines new):**
+- `api.ts` — add `weather` field to `CampgroundResult` interface
+- `components/ResultCard.tsx` — weather summary display
+
+**Scripts:**
+- `scripts/warm_weather_cache.py` — new, one-time cache warmup
+
+### Testing Strategy
+
+**Automated (6-8 tests):**
+- 3 provider: API response parsing, cache hit/miss, error fallback (mock `httpx`)
+- 2 cache: round-trip write/read, coordinate rounding, deduplication
+- 2 integration: search result includes weather when cached, omits when not cached
+- 1 frontend: weather summary renders correctly, absent gracefully
+
+**Manual checklist (~10 min at ship time):**
+1. Search WA campgrounds for July dates → weather appears on result cards
+2. Same search again → instant (cache hit, no API call)
+3. Unset `VISUAL_CROSSING_API_KEY` → search works, no weather shown, no errors
+4. Check a specific campground → weather shown
+5. Search with dates spanning two months → averaged correctly
+
+### Dependencies
+- v1.33 shipped (no technical dependency, but maintains milestone order)
+- Visual Crossing free account + API key
+- Cache warmup script run at least once before deploy
+
+### Quality Bar
+- Weather never delays search results (best-effort enrichment)
+- Cached lookups add <5ms to search response
+- Missing API key logs a warning on startup, not per-request
+- All existing search tests pass unchanged
+- Temps displayed in °F (target audience is US Pacific Northwest)
+
+### Key Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Visual Crossing free tier limit (1,000 records/day) | Cache warmup amortizes over ~17 days. Ongoing usage is near-zero (cache hits). Pay-as-you-go ($0.0001/record) if traffic spikes during warmup. |
+| API accuracy for remote mountain locations | Visual Crossing blends station + radar + ERA5 reanalysis — better than pure station-based APIs for rural PNW. Verify accuracy for a few known mountain campgrounds before shipping. |
+| Visual Crossing deprecation/pricing change | Provider is a thin ~80-line wrapper. Open-Meteo (with paid commercial license) is a drop-in backup. |
+| Cache warmup takes 17 days on free tier | Acceptable for initial launch. Can accelerate with a temporary paid tier day ($0.0001 × 16,400 = $1.64 total). |
+
+---
+
+## v1.35 "OAuth Login"
 
 ### Theme
 Enable Google, Apple, and GitHub sign-in. Supabase infrastructure from v1.33 already supports OAuth — this milestone is provider configuration, frontend buttons, and account-linking UX. The backend doesn't change (a JWT from Google OAuth is identical to one from email/password). GitHub can ship immediately (no LLC/developer account needed); Google and Apple ship when accounts are ready.
@@ -1287,7 +1392,7 @@ Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates t
 | Pricing page | S | Clear free vs. pro comparison. Accessible, both themes. |
 
 ### Dependencies
-- v1.34 shipped (auth solid with OAuth before gating features behind it)
+- v1.35 shipped (auth solid with OAuth before gating features behind it)
 - v1.3 shipped (organic traffic flowing)
 - v0.95 billing infrastructure (already built)
 
@@ -1298,7 +1403,7 @@ Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates t
 - Conversion funnel instrumented in PostHog
 
 ### Key Risk
-Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates. Auth must be stable (v1.33/v1.34) before tying subscription state to user accounts.
+Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates. Auth must be stable (v1.33/v1.35) before tying subscription state to user accounts.
 
 ---
 

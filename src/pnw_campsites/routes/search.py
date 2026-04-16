@@ -299,10 +299,10 @@ def _format_result(
 # ---------------------------------------------------------------------------
 
 
-def _weather_month(start_date: date, end_date: date) -> int:
-    """Return the month of the midpoint of a date range."""
+def _weather_date(start_date: date, end_date: date) -> tuple[int, int]:
+    """Return the (month, day) of the midpoint of a date range."""
     mid = start_date + (end_date - start_date) / 2
-    return mid.month
+    return mid.month, mid.day
 
 
 def _build_weather_map(
@@ -313,14 +313,14 @@ def _build_weather_map(
     Returns {facility_id: (high, low, precip)}.
     """
     registry = get_registry()
-    month = _weather_month(start_date, end_date)
+    month, day = _weather_date(start_date, end_date)
     locations = []
     fid_to_key: dict[str, tuple[float, float, int]] = {}
     for r in results:
         cg = r.campground
         if cg.latitude and cg.longitude:
             key = (round(cg.latitude, 2), round(cg.longitude, 2), month)
-            locations.append((cg.latitude, cg.longitude, month))
+            locations.append((cg.latitude, cg.longitude, month, day))
             fid_to_key[cg.facility_id] = key
     if not locations:
         return {}
@@ -339,9 +339,8 @@ def _lookup_weather_single(
     if not cg_lat or not cg_lon:
         return None
     registry = get_registry()
-    month = _weather_month(start_date, end_date)
-    normals = registry.get_weather_normals(cg_lat, cg_lon, [month])
-    return normals.get(month)
+    month, day = _weather_date(start_date, end_date)
+    return registry.get_weather_normals(cg_lat, cg_lon, month, day)
 
 
 # ---------------------------------------------------------------------------

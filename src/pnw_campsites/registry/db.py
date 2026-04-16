@@ -70,6 +70,18 @@ CREATE TABLE IF NOT EXISTS drive_times (
 );
 
 CREATE INDEX IF NOT EXISTS idx_drive_times_base ON drive_times(base_name);
+
+CREATE TABLE IF NOT EXISTS weather_normals (
+    lat_2dp REAL NOT NULL,
+    lon_2dp REAL NOT NULL,
+    month INTEGER NOT NULL,
+    day INTEGER NOT NULL,
+    temp_high_f REAL NOT NULL,
+    temp_low_f REAL NOT NULL,
+    precip_pct REAL NOT NULL,
+    fetched_at TEXT NOT NULL,
+    PRIMARY KEY (lat_2dp, lon_2dp, month, day)
+);
 """
 
 
@@ -115,6 +127,16 @@ class CampgroundRegistry:
                 "CREATE INDEX IF NOT EXISTS idx_campgrounds_slug"
                 " ON campgrounds(state, slug)"
             )
+            self._conn.commit()
+
+        # Migration: weather_normals PK changed from (lat,lon,month) to (lat,lon,month,day)
+        wn_cols = {
+            row[1]
+            for row in self._conn.execute("PRAGMA table_info(weather_normals)").fetchall()
+        }
+        if wn_cols and "day" not in wn_cols:
+            self._conn.execute("DROP TABLE weather_normals")
+            self._conn.executescript(SCHEMA)
             self._conn.commit()
 
     def close(self) -> None:
@@ -601,3 +623,116 @@ class CampgroundRegistry:
         )
         self._conn.commit()
         return len(rows)
+
+    # ------------------------------------------------------------------
+    # Weather normals cache
+    # ------------------------------------------------------------------
+
+    def get_weather_normals(
+        self, lat: float, lon: float, month: int, day: int,
+    ) -> tuple[float, float, float] | None:
+        """Look up the closest cached weather normal for a location and date.
+
+        Finds the entry in the given month with the closest day to the
+        requested day.  Returns (temp_high_f, temp_low_f, precip_pct) or None.
+        """
+        lat_2dp = round(lat, 2)
+        lon_2dp = round(lon, 2)
+        row = self._conn.execute(
+            "SELECT temp_high_f, temp_low_f, precip_pct "
+            "FROM weather_normals "
+            "WHERE lat_2dp = ? AND lon_2dp = ? AND month = ? "
+            "ORDER BY ABS(day - ?) LIMIT 1",
+            [lat_2dp, lon_2dp, month, day],
+        ).fetchone()
+        if row:
+            return (row["temp_high_f"], row["temp_low_f"], row["precip_pct"])
+        return None
+
+    def get_weather_normals_batch(
+        self, locations: list[tuple[float, float, int, int]],
+    ) -> dict[tuple[float, float, int], tuple[float, float, float]]:
+        """Batch lookup for multiple (lat, lon, month, day) tuples.
+
+        For each location, finds the closest cached day within that month.
+        Returns {(lat_2dp, lon_2dp, month): (temp_high_f, temp_low_f, precip_pct)}.
+        """
+        if not locations:
+            return {}
+        # Build unique (lat_2dp, lon_2dp, month) keys + track requested day
+        key_to_day: dict[tuple[float, float, int], int] = {}
+        for lat, lon, m, d in locations:
+            key = (round(lat, 2), round(lon, 2), m)
+            key_to_day[key] = d
+        unique_keys = list(key_to_day.keys())
+
+        # Fetch all rows for matching (lat, lon, month) combos
+        clauses = " OR ".join(
+            "(lat_2dp = ? AND lon_2dp = ? AND month = ?)" for _ in unique_keys
+        )
+        params = [v for k in unique_keys for v in k]
+        rows = self._conn.execute(
+            "SELECT lat_2dp, lon_2dp, month, day, "
+            "temp_high_f, temp_low_f, precip_pct "
+            f"FROM weather_normals WHERE {clauses}",
+            params,
+        ).fetchall()
+
+        # Group by (lat, lon, month), pick closest day
+        from collections import defaultdict
+        grouped: dict[tuple[float, float, int], list] = defaultdict(list)
+        for r in rows:
+            grouped[(r["lat_2dp"], r["lon_2dp"], r["month"])].append(r)
+
+        result = {}
+        for key, candidates in grouped.items():
+            target_day = key_to_day.get(key, 15)
+            best = min(candidates, key=lambda r: abs(r["day"] - target_day))
+            result[key] = (best["temp_high_f"], best["temp_low_f"], best["precip_pct"])
+        return result
+
+    def upsert_weather_normals(self, rows: list[dict]) -> int:
+        """Bulk upsert weather normals.
+
+        Each dict: {lat_2dp, lon_2dp, month, day, temp_high_f, temp_low_f,
+                     precip_pct, fetched_at}
+        Returns number of rows upserted.
+        """
+        if not rows:
+            return 0
+        self._conn.executemany(
+            """\
+            INSERT INTO weather_normals
+                (lat_2dp, lon_2dp, month, day, temp_high_f, temp_low_f,
+                 precip_pct, fetched_at)
+            VALUES
+                (:lat_2dp, :lon_2dp, :month, :day, :temp_high_f, :temp_low_f,
+                 :precip_pct, :fetched_at)
+            ON CONFLICT (lat_2dp, lon_2dp, month, day)
+            DO UPDATE SET
+                temp_high_f = excluded.temp_high_f,
+                temp_low_f = excluded.temp_low_f,
+                precip_pct = excluded.precip_pct,
+                fetched_at = excluded.fetched_at
+            """,
+            rows,
+        )
+        self._conn.commit()
+        return len(rows)
+
+    def count_cached_normals(
+        self, lat: float, lon: float, day: int,
+    ) -> int:
+        """Count how many months are cached for a specific (lat, lon, day).
+
+        Used by warmup script to skip fully-cached campgrounds.
+        """
+        lat_2dp = round(lat, 2)
+        lon_2dp = round(lon, 2)
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM weather_normals "
+            "WHERE lat_2dp = ? AND lon_2dp = ? AND day = ? "
+            "AND month BETWEEN 4 AND 10",
+            [lat_2dp, lon_2dp, day],
+        ).fetchone()
+        return row[0]
