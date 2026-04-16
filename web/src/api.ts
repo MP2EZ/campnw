@@ -19,10 +19,14 @@ export function track(event: string, data: Record<string, string | number>) {
 // ---------------------------------------------------------------------------
 
 async function authFetch(url: string, init?: RequestInit): Promise<Response> {
-  const { data: { session } } = await supabase.auth.getSession();
   const authHeaders: Record<string, string> = {};
-  if (session?.access_token) {
-    authHeaders["Authorization"] = `Bearer ${session.access_token}`;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      authHeaders["Authorization"] = `Bearer ${session.access_token}`;
+    }
+  } catch {
+    // Supabase unreachable — proceed without auth
   }
   return fetch(url, {
     ...init,
