@@ -107,6 +107,9 @@ export interface CampgroundResult {
   availability_url: string | null;
   windows: Window[];
   error: string | null;
+  weather_temp_high_f?: number;
+  weather_temp_low_f?: number;
+  weather_precip_pct?: number;
 }
 
 export interface SearchWarning {

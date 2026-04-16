@@ -23,6 +23,8 @@
   --error-bg: #fee;
   --error-border: #e99;
   --error-text: #933;
+  --weather-bg: #e8f0fe;
+  --weather-text: #3b6fa0;
 }
 
 [data-theme="dark"] {
@@ -65,6 +67,10 @@
   --error-bg: #281818;
   --error-border: #4a2828;
   --error-text: #d07070;
+
+  /* Weather — cool blue */
+  --weather-bg: #1a2430;
+  --weather-text: #6aade0;
 }
 
 /* ─── Skip link (WCAG 2.4.1) ──────────────────────────────────────── */
@@ -811,6 +817,17 @@ header p {
   font-weight: var(--weight-medium);
   background: var(--warning-bg);
   color: var(--warning-text);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-xs);
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+
+.weather-badge {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  background: var(--weather-bg);
+  color: var(--weather-text);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-xs);
   margin-left: 0.3rem;
