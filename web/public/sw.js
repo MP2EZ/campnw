@@ -3,8 +3,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'Campsite Alert', {
       body: data.body || 'New availability detected',
-      icon: '/favicon.svg',
-      badge: '/favicon.svg',
+      icon: '/mark.svg',
+      badge: '/mark.svg',
       data: { url: data.url || '/' },
     })
   );

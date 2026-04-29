@@ -20,7 +20,7 @@ const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").th
 import { UserMenu } from "./components/UserMenu";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { Wordmark } from "./Wordmark";
+import { Lockup } from "./components/brand/Lockup";
 import { IconSun, IconMoon, IconClose, IconChevronUp, IconChevronDown, IconList, IconGrid, IconSearch } from "./icons";
 import { useAuth } from "./hooks/useAuth";
 import { useSearch } from "./hooks/useSearch";
@@ -833,7 +833,7 @@ export default function App() {
       <header>
         <div className="header-row">
           <div>
-            <h1><a href="/" className="wordmark-link" onClick={(e) => { e.preventDefault(); resetSearch(); navigate("/"); }}><img src="/favicon.svg" alt="" className="header-logo" aria-hidden="true" /><Wordmark /></a></h1>
+            <h1><a href="/" className="wordmark-link" onClick={(e) => { e.preventDefault(); resetSearch(); navigate("/"); }}><Lockup size={32} tone={darkMode ? "on-dark" : "on-cream"} /></a></h1>
             <p className="header-subtitle">Find available campsites across the western US</p>
           </div>
           <div className="header-actions">

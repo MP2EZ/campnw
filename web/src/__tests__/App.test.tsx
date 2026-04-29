@@ -44,7 +44,7 @@ describe('App Component', () => {
   test('renders the campable heading', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
     renderApp()
-    expect(screen.getByLabelText('campable')).toBeInTheDocument()
+    expect(screen.getByText('campable')).toBeInTheDocument()
   })
 
   test('renders tagline', () => {

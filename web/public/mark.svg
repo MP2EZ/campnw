@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Campable mark">
+  <polygon points="50.4,14 66,14 40,72" fill="currentColor"></polygon>
+  <polygon points="14,14 66,14 40,72" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="miter" stroke-linecap="square"></polygon>
+  <line x1="50.4" y1="14" x2="40" y2="72" stroke="var(--mark-bg, #f5f5f0)" stroke-width="2.45" stroke-linecap="round"></line>
+</svg>

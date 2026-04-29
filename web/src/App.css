@@ -28,6 +28,8 @@
 }
 
 [data-theme="dark"] {
+  /* Brand mark seam color matches dark surface */
+  --mark-bg: #171714;
   /* Page + card surfaces — warm dark, not cold grey */
   --bg: #171714;
   --bg-card: #21211e;
@@ -268,11 +270,6 @@ header h1 {
 
 .wordmark-link:hover {
   opacity: 0.85;
-}
-
-.header-logo {
-  width: 32px;
-  height: 32px;
 }
 
 /* Wordmark sits where h1 was — same vertical rhythm */
@@ -1912,11 +1909,6 @@ header p {
   /* Scale wordmark and logo down on mobile */
   header .wordmark {
     font-size: 20px;
-  }
-
-  .header-logo {
-    width: 24px;
-    height: 24px;
   }
 
   .site-chip,
