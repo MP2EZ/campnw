@@ -232,7 +232,9 @@ function SearchForm({
         end_date: endDate,
         mode,
         state: state || undefined,
-        nights: mode === "exact" ? 1 : nights,
+        nights: mode === "exact"
+          ? Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
+          : nights,
         days_of_week: getDaysOfWeek(),
         name: name || undefined,
         tags: selectedTags.size > 0 ? Array.from(selectedTags).join(",") : undefined,
