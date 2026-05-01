@@ -18,5 +18,6 @@ def get_posthog_client() -> Posthog | None:
     _client = Posthog(
         token,
         host=os.getenv("POSTHOG_HOST", "https://eu.i.posthog.com"),
+        enable_exception_autocapture=True,
     )
     return _client
