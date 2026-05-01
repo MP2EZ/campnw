@@ -42,11 +42,20 @@ def _find_work(
     incomplete tier. Returns empty list if all tiers are complete.
     """
     for sample_day in SAMPLE_DAYS:
-        to_fetch = []
-        for cg in unique_campgrounds:
-            cached = registry.count_cached_normals(cg.latitude, cg.longitude, sample_day)
-            if cached < len(SEASON_MONTHS):
-                to_fetch.append(cg)
+        # Find all fully-cached coordinates for this day in one query
+        cached_coords = set()
+        for row in registry._conn.execute(
+            "SELECT lat_2dp, lon_2dp FROM weather_normals "
+            "WHERE day = ? AND month BETWEEN 4 AND 10 "
+            "GROUP BY lat_2dp, lon_2dp HAVING COUNT(DISTINCT month) >= ?",
+            [sample_day, len(SEASON_MONTHS)],
+        ).fetchall():
+            cached_coords.add((row[0], row[1]))
+
+        to_fetch = [
+            cg for cg in unique_campgrounds
+            if (round(cg.latitude, 2), round(cg.longitude, 2)) not in cached_coords
+        ]
         if to_fetch:
             return [(sample_day, to_fetch)]
     return []
@@ -88,19 +97,21 @@ async def warm(
     sample_day, to_fetch = work[0]
     to_fetch = to_fetch[:limit]
 
-    # Report tier status
+    # Report tier status (single query per tier instead of per-campground)
     tier_status = []
     for sd in SAMPLE_DAYS:
-        done = sum(
-            1 for cg in unique_campgrounds
-            if registry.count_cached_normals(cg.latitude, cg.longitude, sd) >= len(SEASON_MONTHS)
-        )
-        tier_status.append(f"day {sd}: {done}/{len(unique_campgrounds)}")
+        row = registry._conn.execute(
+            "SELECT COUNT(DISTINCT lat_2dp || ',' || lon_2dp) FROM weather_normals "
+            "WHERE day = ? AND month BETWEEN 4 AND 10 "
+            "GROUP BY lat_2dp, lon_2dp HAVING COUNT(DISTINCT month) >= ?",
+            [sd, len(SEASON_MONTHS)],
+        ).fetchall()
+        tier_status.append(f"day {sd}: {len(row)}/{len(unique_campgrounds)}")
 
     print(f"Registry: {len(campgrounds)} campgrounds")
     print(f"Unique coordinates: {len(unique_campgrounds)}")
     print(f"Tier progress: {', '.join(tier_status)}")
-    print(f"Current pass: day {sample_day} ({len(to_fetch)} to fetch)")
+    print(f"Current pass: day {sample_day} ({len(to_fetch)} to fetch)", flush=True)
 
     if dry_run:
         for cg in to_fetch[:20]:
@@ -115,11 +126,21 @@ async def warm(
         for i, cg in enumerate(to_fetch, 1):
             if i > 1:
                 await asyncio.sleep(2.0)
-            # Build targets: only months not yet cached for this day
+            # Build targets: only months not yet cached for this exact day
+            lat_2dp = round(cg.latitude, 2)
+            lon_2dp = round(cg.longitude, 2)
+            cached_months = {
+                r[0] for r in registry._conn.execute(
+                    "SELECT month FROM weather_normals "
+                    "WHERE lat_2dp = ? AND lon_2dp = ? AND day = ? "
+                    "AND month BETWEEN 4 AND 10",
+                    [lat_2dp, lon_2dp, sample_day],
+                ).fetchall()
+            }
             targets = [
                 (m, sample_day)
                 for m in SEASON_MONTHS
-                if registry.get_weather_normals(cg.latitude, cg.longitude, m, sample_day) is None
+                if m not in cached_months
             ]
             if not targets:
                 continue

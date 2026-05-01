@@ -306,7 +306,7 @@ export function ResultCard({
                     : `~${Math.floor(result.estimated_drive_minutes / 60)}h ${result.estimated_drive_minutes % 60}m`}
                 </span>
               )}
-              {result.weather_temp_high_f != null && result.weather_temp_low_f != null && (
+              {result.weather_temp_high_f != null && result.weather_temp_high_f > -900 && result.weather_temp_low_f != null && (
                 <span className="weather-badge">
                   {result.weather_temp_high_f}°/{result.weather_temp_low_f}°F
                   {result.weather_precip_pct != null && result.weather_precip_pct >= 20 &&
