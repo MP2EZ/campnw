@@ -15,10 +15,11 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from pnw_campsites.monitor.db import WatchDB
+from pnw_campsites.posthog_client import get_posthog_client
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
@@ -375,6 +376,24 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
     allow_credentials=True,
 )
+
+
+@app.exception_handler(Exception)
+async def capture_unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    # FastAPI's HTTPException handler is more specific and intercepts first via MRO,
+    # so this only fires for truly unexpected errors (RuntimeError, KeyError, etc.).
+    client = get_posthog_client()
+    if client:
+        client.capture_exception(
+            exc,
+            properties={
+                "path": request.url.path,
+                "method": request.method,
+                "$current_url": str(request.url),
+            },
+        )
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
 
 # ---------------------------------------------------------------------------
 # Middleware

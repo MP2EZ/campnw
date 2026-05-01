@@ -1,7 +1,6 @@
 """Tests for the PostHog client singleton."""
 
-import importlib
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -30,7 +29,11 @@ def test_returns_client_when_posthog_token_set(mock_posthog):
     mock_posthog.return_value = MagicMock()
     result = phmod.get_posthog_client()
     assert result is not None
-    mock_posthog.assert_called_once_with("phc_test123", host="https://eu.i.posthog.com")
+    mock_posthog.assert_called_once_with(
+        "phc_test123",
+        host="https://eu.i.posthog.com",
+        enable_exception_autocapture=True,
+    )
 
 
 @patch.dict("os.environ", {"VITE_PUBLIC_POSTHOG_PROJECT_TOKEN": "phc_vite456"}, clear=True)
@@ -39,7 +42,11 @@ def test_falls_back_to_vite_token(mock_posthog):
     mock_posthog.return_value = MagicMock()
     result = phmod.get_posthog_client()
     assert result is not None
-    mock_posthog.assert_called_once_with("phc_vite456", host="https://eu.i.posthog.com")
+    mock_posthog.assert_called_once_with(
+        "phc_vite456",
+        host="https://eu.i.posthog.com",
+        enable_exception_autocapture=True,
+    )
 
 
 @patch.dict("os.environ", {"POSTHOG_PROJECT_TOKEN": "phc_test123"}, clear=True)
