@@ -15,10 +15,11 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from pnw_campsites.monitor.db import WatchDB
+from pnw_campsites.posthog_client import get_posthog_client
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
@@ -375,6 +376,53 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
     allow_credentials=True,
 )
+
+
+_POSTHOG_CAPTURE_TIMEOUT_S = 2.0
+
+
+async def _send_exception_to_posthog(
+    exc: BaseException,
+    path: str,
+    method: str,
+    url: str,
+) -> None:
+    # PostHog SDK calls were implicated in /ingest proxy 502s when invoked
+    # synchronously from the response path. This coroutine runs as an
+    # independent asyncio task: bounded by wait_for, isolated from the event
+    # loop via to_thread, and swallows all errors so observability can never
+    # wedge a request.
+    try:
+        client = get_posthog_client()
+        if client is None:
+            return
+        await asyncio.wait_for(
+            asyncio.to_thread(
+                client.capture_exception,
+                exc,
+                properties={"path": path, "method": method, "$current_url": url},
+            ),
+            timeout=_POSTHOG_CAPTURE_TIMEOUT_S,
+        )
+    except Exception:
+        pass
+
+
+@app.exception_handler(Exception)
+async def capture_unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    # FastAPI's HTTPException handler is more specific (MRO dispatch), so this
+    # only fires for truly unexpected errors. asyncio.create_task spawns the
+    # capture as an independent task on the event loop, so the 500 response is
+    # returned regardless of SDK latency or failure.
+    asyncio.create_task(
+        _send_exception_to_posthog(
+            exc,
+            request.url.path,
+            request.method,
+            str(request.url),
+        )
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
 # ---------------------------------------------------------------------------
