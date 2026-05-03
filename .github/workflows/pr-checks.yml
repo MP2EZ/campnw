@@ -53,7 +53,9 @@ jobs:
         run: |
           pip install pip-audit
           pip install -e ".[api]"
-          pip-audit
+          # CVE-2026-3219: pip vulnerability with no patched version available yet.
+          # Revisit periodically — when pip-audit reports a Fix Version, drop the ignore.
+          pip-audit --ignore-vuln CVE-2026-3219
 
       - name: Setup Node
         uses: actions/setup-node@v4

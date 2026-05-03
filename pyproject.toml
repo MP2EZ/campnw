@@ -7,7 +7,7 @@ dependencies = [
     "httpx==0.28.1",
     "python-dotenv==1.2.2",
     "pydantic==2.12.5",
-    "curl_cffi==0.14.0",
+    "curl_cffi==0.15.0",
 ]
 
 [project.optional-dependencies]
@@ -24,7 +24,7 @@ api = [
     "PyJWT==2.12.1",
     "apscheduler==3.11.2",
     "pywebpush==2.3.0",
-    "anthropic==0.86.0",
+    "anthropic==0.87.0",
     "posthog==7.13.2",
     "jinja2>=3.1",
 ]
@@ -32,7 +32,7 @@ notify = [
     "ntfy-wrapper>=0.2",
 ]
 enrichment = [
-    "anthropic==0.86.0",
+    "anthropic==0.87.0",
 ]
 
 [tool.ruff]
