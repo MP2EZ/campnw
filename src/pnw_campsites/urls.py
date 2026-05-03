@@ -86,3 +86,24 @@ def or_state_availability_url(
     if start_date:
         url += f"?arrivalDate={start_date.isoformat()}"
     return url
+
+
+def or_state_campsite_booking_url(
+    park_id: str,
+    slug: str,
+    site_id: str,
+    start_date: date,
+    end_date: date,
+) -> str:
+    """Deep link to book a specific campsite on ReserveAmerica.
+
+    Lands on the per-site booking page with the date range pre-filled and
+    the "Book Now" button ready. Mirrors the rec.gov per-site deep link
+    quality. The site_id is RA's internal numeric resource id, available
+    on every record returned by the OR provider.
+    """
+    return (
+        f"{RA_BASE_URL}/explore/{slug}/OR/{park_id}/{site_id}/campsite-booking"
+        f"?arrivalDate={start_date.isoformat()}"
+        f"&departureDate={end_date.isoformat()}"
+    )
