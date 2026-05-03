@@ -2,7 +2,10 @@ module.exports = {
   ci: {
     collect: {
       staticDistDir: "./web/dist",
-      url: ["/", "/plan", "/map"],
+      // Only audit "/" — /plan and /map are SPA routes served by the same
+      // index.html bundle, so the static dist server returns 404 for them.
+      // Auditing the bundle once at "/" covers what those routes would.
+      url: ["/"],
     },
     assert: {
       assertions: {
