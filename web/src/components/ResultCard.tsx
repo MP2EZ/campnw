@@ -106,6 +106,13 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                 target="_blank"
                 rel="noopener"
                 className="site-chip wa-book-link"
+                onClick={() => track("book_click", {
+                  facility_id: result.facility_id,
+                  name: result.name,
+                  source: result.booking_system,
+                  type: "wa_date_block",
+                  sites_in_block: block.sites.length,
+                })}
               >
                 {block.sites.length} site
                 {block.sites.length !== 1 ? "s" : ""} available
@@ -208,6 +215,14 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
                       target="_blank"
                       rel="noopener"
                       className="window-chip"
+                      onClick={() => track("book_click", {
+                        facility_id: result.facility_id,
+                        name: result.name,
+                        source: result.booking_system,
+                        type: "site_window",
+                        site: w.site_name,
+                        nights: w.nights,
+                      })}
                     >
                       {dayName} {fmtDate(w.start_date)} &rarr; {new Date(w.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {fmtDate(w.end_date)} ({w.nights}n)
                     </a>
