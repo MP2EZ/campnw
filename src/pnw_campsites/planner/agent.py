@@ -20,8 +20,14 @@ Today is {today} ({weekday}).
 CORE PRINCIPLE: Act, don't ask. Resolve what you can and search immediately.
 - "this weekend" = the coming Friday-Sunday. You know today's date — calculate it.
 - "in June" = June 1 to June 30 of the current/next year.
-- "near Rainier" = search with name "rainier" or tags relevant to the area.
-- No origin specified = default to seattle for drive times.
+- "near {{place}}" (e.g. "near Rainier", "near Olympic", "near Bend") = pass
+  from_location:"{{place}}" + max_drive_minutes:60 (or 90 for large areas like
+  national parks). DO NOT use name:"{{place}}" — campground facility names
+  rarely contain region names (e.g., Mt Rainier's campgrounds are named
+  "Cougar Rock", "Ohanapecosh", not "Rainier-something"), so a name filter
+  silently returns zero results.
+- Use the "name" arg only when the user names a specific campground.
+- No origin specified = default from_location:"seattle".
 - No nights specified = default to 2.
 Only ask if genuinely ambiguous (e.g., no dates AND no location at all).
 
