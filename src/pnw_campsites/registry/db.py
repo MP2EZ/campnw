@@ -98,6 +98,9 @@ CREATE TABLE IF NOT EXISTS wa_state_sites (
     park_facility_id TEXT NOT NULL,
     name TEXT NOT NULL,
     loop_map_id INTEGER,
+    max_capacity INTEGER,
+    min_capacity INTEGER,
+    allowed_equipment TEXT DEFAULT '[]',
     updated_at TEXT NOT NULL
 );
 
@@ -158,6 +161,25 @@ class CampgroundRegistry:
             self._conn.execute("DROP TABLE weather_normals")
             self._conn.executescript(SCHEMA)
             self._conn.commit()
+
+        # Migration: wa_state_sites gained capacity + equipment columns post-A1.
+        # CREATE TABLE IF NOT EXISTS leaves an existing table alone, so explicitly
+        # add the new columns to already-created tables.
+        wa_sites_cols = {
+            row[1]
+            for row in self._conn.execute("PRAGMA table_info(wa_state_sites)").fetchall()
+        }
+        if wa_sites_cols:  # only migrate if the table already exists
+            for col, sql_type in (
+                ("max_capacity", "INTEGER"),
+                ("min_capacity", "INTEGER"),
+                ("allowed_equipment", "TEXT DEFAULT '[]'"),
+            ):
+                if col not in wa_sites_cols:
+                    self._conn.execute(
+                        f"ALTER TABLE wa_state_sites ADD COLUMN {col} {sql_type}"
+                    )
+                    self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
@@ -800,7 +822,8 @@ class CampgroundRegistry:
     ) -> int:
         """Replace all sites for a park. Idempotent across re-seeds.
 
-        Each dict: {resource_id, name, loop_map_id (optional)}.
+        Each dict: {resource_id, name, loop_map_id (optional), max_capacity
+        (optional), min_capacity (optional), allowed_equipment (optional list)}.
         Returns number of rows inserted.
         """
         now = datetime.now().isoformat()
@@ -812,8 +835,9 @@ class CampgroundRegistry:
             self._conn.executemany(
                 """\
                 INSERT INTO wa_state_sites
-                    (resource_id, park_facility_id, name, loop_map_id, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                    (resource_id, park_facility_id, name, loop_map_id,
+                     max_capacity, min_capacity, allowed_equipment, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -821,6 +845,9 @@ class CampgroundRegistry:
                         park_facility_id,
                         site["name"],
                         site.get("loop_map_id"),
+                        site.get("max_capacity"),
+                        site.get("min_capacity"),
+                        json.dumps(site.get("allowed_equipment") or []),
                         now,
                     )
                     for site in sites
@@ -831,20 +858,23 @@ class CampgroundRegistry:
 
     def get_wa_site_index(
         self, park_facility_id: str
-    ) -> dict[int, tuple[str, str | None]]:
-        """Return cached site/loop names for a WA park.
+    ) -> dict[int, tuple[str, str | None, int | None]]:
+        """Return cached site/loop names + capacity for a WA park.
 
-        Maps resource_id → (site_name, loop_title or None). Used by the
-        search engine to enrich CampsiteAvailability with human-readable
-        labels before returning to the API.
+        Maps resource_id → (site_name, loop_title or None, max_capacity or None).
+        Used by the search engine to enrich CampsiteAvailability with
+        human-readable labels and real per-site capacity.
         """
         rows = self._conn.execute(
             """\
-            SELECT s.resource_id, s.name, l.title AS loop_title
+            SELECT s.resource_id, s.name, l.title AS loop_title, s.max_capacity
             FROM wa_state_sites AS s
             LEFT JOIN wa_state_loops AS l ON s.loop_map_id = l.map_id
             WHERE s.park_facility_id = ?
             """,
             (park_facility_id,),
         ).fetchall()
-        return {row["resource_id"]: (row["name"], row["loop_title"]) for row in rows}
+        return {
+            row["resource_id"]: (row["name"], row["loop_title"], row["max_capacity"])
+            for row in rows
+        }

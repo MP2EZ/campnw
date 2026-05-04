@@ -889,13 +889,15 @@ class SearchEngine:
     def _enrich_wa_availability(
         self, park_facility_id: str, availability: CampgroundAvailability
     ) -> None:
-        """Replace synthetic resource_id labels with cached human site/loop names.
+        """Replace synthetic resource_id labels with cached human site/loop names
+        and overwrite the synthetic max-capacity default with the real value.
 
         WA State's GoingToCamp availability API returns no human-readable site
-        identifiers — only opaque integer IDs. Real names live in the
+        identifiers and no per-site capacity — the provider hardcodes
+        max_num_people=8 for everyone. Real names + capacity live in the
         wa_state_sites + wa_state_loops cache populated by the metadata seeder.
-        Mutates `availability.campsites[*].site` and `.loop` in place. No-op
-        if the cache is empty for the park (graceful pre-seed fallback).
+        Mutates `availability.campsites[*]` in place. No-op if the cache is
+        empty for the park (graceful pre-seed fallback).
         """
         index = self._registry.get_wa_site_index(park_facility_id)
         if not index:
@@ -908,9 +910,11 @@ class SearchEngine:
             info = index.get(res_id)
             if not info:
                 continue
-            name, loop_title = info
+            name, loop_title, max_capacity = info
             campsite.site = name
             campsite.loop = loop_title or ""
+            if max_capacity is not None:
+                campsite.max_num_people = max_capacity
 
     async def _check_campground(
         self,
