@@ -160,7 +160,7 @@ User saves a profile on Campable (equipment, party size, vehicle info, contact i
 - **Cons:** Distribution friction (drag-to-bookmarks is a >50% drop-off action). Modern Angular/React forms may reject programmatic `input.value =` writes; need to dispatch synthetic events. Maintenance treadmill on every form change.
 - **Mitigations on distribution:** Camping power users (Campable's core demographic) are more motivated than average to install power-user tools. Onboarding with a 30-second video could lift install rate.
 
-**Status:** Research scheduled — see "Recommended next step" below. Reverses the prior "Killed: bookmarklet" entry; rationale changed once we acknowledged that the WA side of the deep-link work has hit its ceiling and checkout is the next bottleneck.
+**Status:** ⚠️ **Research complete 2026-05-04 — recommended NOT to ship as scoped.** Two findings invalidated the original framing: (a) the actual booking forms on all three providers are auth-walled and unreachable without sign-in, (b) provider account systems already auto-fill the contact-info fields server-side once signed in, leaving only ~30s of per-trip fields (equipment, occupants, vehicle plate) for a bookmarklet to address. Estimated time savings ~22%, below the 60% decision threshold. Full analysis: `docs/D1-BOOKMARKLET-RESEARCH.md`. **Recommended:** fall back to D4 (AI concierge) research, with a small optional "per-trip-fields-only" bookmarklet as a consolation prize if D4 turns out infeasible.
 
 **Effort to spike:** 2–3 hours (DevTools form-field map per provider + proof-of-concept bookmarklet against one provider). **Effort to ship for one provider:** ~half-day. **Effort to ship for all three:** ~2 days plus ongoing maintenance.
 
@@ -246,13 +246,13 @@ Rejected on second pass — adds a click and a decision in flow. Same content li
 
 ## Recommended next step
 
-**Tier A–C is largely done; the new frontier is Tier D.** Concretely, the next session should be **research on D1 (bookmarklet) + D4 (AI concierge), in that order:**
+**D1 research is complete; D4 is the next research priority.** Per the D1 findings (`docs/D1-BOOKMARKLET-RESEARCH.md`):
 
-1. **D1 research first** (~2–3 hours). Concrete deliverable: form-field map per provider + bookmarklet proof-of-concept against one provider. Outputs are reusable for D4 (the agent needs the same field knowledge). Decision gate at the end: "bookmarklet saves N seconds of X% of fields" → ship or don't.
-2. **D4 research second** (~3–4 hours). Strategy doc covering computer-use API status, ToS analysis, architecture sketch, payment-handoff design. Decision gate: green-light a prototype or fall back to D1 only.
+1. ~~**D1 research**~~ → done 2026-05-04. **Verdict: don't ship.** Auth walls + provider-account auto-fill collapse the value to ~22%, below the 60% decision threshold. The per-provider field maps and framework profiles ARE reusable for D4.
+2. **D4 research is now the next priority** (~3–4 hours). Strategy doc covering Anthropic computer-use API status, ToS analysis (rec.gov "automated reservation" prohibition vs. "user-watched, user-approved" automation), architecture sketch (sandboxed VM vs. browser pool, latency, cost-per-booking), payment-handoff design. Decision gate: green-light a prototype on rec.gov or fall back to D5 + per-trip-only bookmarklet.
 
-If D1 turns out to shave 80% of friction, the marginal value of D4 drops a lot and we may not need it. Worth knowing before committing to D4's complexity.
+The ~22% savings from a "per-trip-fields-only" mini-bookmarklet remains as a low-cost consolation prize if D4 falls through — see D1's research doc for details.
 
-Optional in parallel: **D5 (human concierge) as a free wedge** to validate willingness-to-pay before any technical work. Stripe + Notion form + a few hours of your time per booking.
+In parallel: **D5 (human concierge) as a free wedge** to validate willingness-to-pay before any technical work. Stripe + Notion form + a few hours of your time per booking. Particularly valuable for shaping what D4's automated version needs to do.
 
 The Tier A–C residual work (A2 inline UI, A3 push body, B4 ICS invites, B5 rec.gov release calendars) is real polish but no longer the highest-leverage frontier. Slot it after Tier D research clarifies what's worth investing in.
