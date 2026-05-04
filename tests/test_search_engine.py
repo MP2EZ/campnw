@@ -1815,3 +1815,50 @@ class TestEnrichWaAvailability:
 
         assert availability.campsites["-300"].site == "Known"
         assert availability.campsites["-999"].site == "-999"
+
+
+class TestEnrichWaAvailabilityCapacity:
+    """PR B: _enrich_wa_availability also overwrites max_num_people from cache."""
+
+    def _make_engine(self, registry):
+        from pnw_campsites.search.engine import SearchEngine
+        return SearchEngine(registry=registry)
+
+    def test_overwrites_max_num_people_when_cached(self, registry) -> None:
+        """Cached max_capacity replaces the synthetic 8-person default."""
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": -300, "name": "B042", "loop_map_id": None, "max_capacity": 4}],
+        )
+        availability = make_campground_availability(
+            facility_id="-100",
+            campsites={
+                "-300": make_campsite_availability(
+                    campsite_id="-300", site="-300", loop="", max_people=8,
+                ),
+            },
+        )
+
+        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+
+        assert availability.campsites["-300"].max_num_people == 4
+
+    def test_preserves_default_when_capacity_is_none(self, registry) -> None:
+        """When the cached max_capacity is NULL, max_num_people is left alone."""
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": -300, "name": "B042", "loop_map_id": None}],
+        )
+        availability = make_campground_availability(
+            facility_id="-100",
+            campsites={
+                "-300": make_campsite_availability(
+                    campsite_id="-300", site="-300", loop="", max_people=8,
+                ),
+            },
+        )
+
+        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+
+        # Provider's synthetic default (8) survives — graceful fallback
+        assert availability.campsites["-300"].max_num_people == 8

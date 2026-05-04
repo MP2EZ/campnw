@@ -605,9 +605,10 @@ class TestWaStateMetadataCache:
 
         index = registry.get_wa_site_index("-2147483624")
 
-        assert index[-2147481621] == ("L03", "Lower Loop A")
-        assert index[-2147481622] == ("L04", "Lower Loop A")
-        assert index[-2147481700] == ("B01", "Lower Loop B")
+        # 3rd tuple element is max_capacity (None when not provided)
+        assert index[-2147481621] == ("L03", "Lower Loop A", None)
+        assert index[-2147481622] == ("L04", "Lower Loop A", None)
+        assert index[-2147481700] == ("B01", "Lower Loop B", None)
 
     def test_orphan_site_has_null_loop(self, registry) -> None:
         """Sites with no loop_map_id surface as (name, None)."""
@@ -618,7 +619,7 @@ class TestWaStateMetadataCache:
 
         index = registry.get_wa_site_index("-2147483624")
 
-        assert index[-2147481999] == ("Orphan-1", None)
+        assert index[-2147481999] == ("Orphan-1", None, None)
 
     def test_site_pointing_to_unknown_loop_has_null_title(self, registry) -> None:
         """LEFT JOIN returns NULL title when loop_map_id has no row."""
@@ -629,7 +630,7 @@ class TestWaStateMetadataCache:
 
         index = registry.get_wa_site_index("-2147483624")
 
-        assert index[-2147481621] == ("L03", None)
+        assert index[-2147481621] == ("L03", None, None)
 
     def test_re_seed_replaces_park_data(self, registry) -> None:
         """A second bulk_upsert for the same park replaces existing rows."""
@@ -683,3 +684,107 @@ class TestWaStateMetadataCache:
         registry.bulk_upsert_wa_sites("-100", [])
 
         assert registry.get_wa_site_index("-100") == {}
+
+
+class TestWaStateMetadataCapacityEquipment:
+    """Tests for per-site capacity + allowed_equipment cache (PR B follow-up to A1)."""
+
+    def test_capacity_persists_through_round_trip(self, registry) -> None:
+        """max_capacity written, then surfaced via get_wa_site_index."""
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [
+                {"resource_id": 1, "name": "Big Site", "loop_map_id": None, "max_capacity": 12},
+                {"resource_id": 2, "name": "Small Site", "loop_map_id": None, "max_capacity": 4},
+            ],
+        )
+
+        index = registry.get_wa_site_index("-100")
+
+        assert index[1][2] == 12
+        assert index[2][2] == 4
+
+    def test_missing_capacity_is_none(self, registry) -> None:
+        """A site dict without max_capacity stores NULL and surfaces as None."""
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": 1, "name": "X", "loop_map_id": None}],
+        )
+
+        index = registry.get_wa_site_index("-100")
+        assert index[1][2] is None
+
+    def test_allowed_equipment_persists_as_json(self, registry) -> None:
+        """allowed_equipment stores JSON; persists across reads via SELECT."""
+        import json as _json
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{
+                "resource_id": 1,
+                "name": "RV Site",
+                "loop_map_id": None,
+                "allowed_equipment": [
+                    {"equipmentCategoryId": -32768, "subEquipmentCategoryId": -32767},
+                    {"equipmentCategoryId": -32768, "subEquipmentCategoryId": -32766},
+                ],
+            }],
+        )
+
+        # get_wa_site_index doesn't surface equipment yet (defer to filter PR);
+        # verify via direct SELECT that the JSON is intact.
+        row = registry._conn.execute(
+            "SELECT allowed_equipment FROM wa_state_sites WHERE resource_id = 1"
+        ).fetchone()
+        decoded = _json.loads(row["allowed_equipment"])
+        assert len(decoded) == 2
+        assert decoded[0] == {"equipmentCategoryId": -32768, "subEquipmentCategoryId": -32767}
+
+    def test_default_allowed_equipment_is_empty_array(self, registry) -> None:
+        """A site dict without allowed_equipment defaults to [] (not NULL)."""
+        import json as _json
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": 1, "name": "X", "loop_map_id": None}],
+        )
+        row = registry._conn.execute(
+            "SELECT allowed_equipment FROM wa_state_sites WHERE resource_id = 1"
+        ).fetchone()
+        assert _json.loads(row["allowed_equipment"]) == []
+
+    def test_migration_adds_columns_to_existing_table(self, tmp_path) -> None:
+        """A registry initialized against a pre-PR-B DB gets the new columns added."""
+        import sqlite3 as _sqlite3
+        db_path = tmp_path / "old_schema.db"
+        # Simulate the pre-PR-B schema: wa_state_sites without the new columns
+        conn = _sqlite3.connect(str(db_path))
+        conn.executescript("""
+            CREATE TABLE wa_state_sites (
+                resource_id INTEGER PRIMARY KEY,
+                park_facility_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                loop_map_id INTEGER,
+                updated_at TEXT NOT NULL
+            );
+            INSERT INTO wa_state_sites VALUES (1, '-100', 'OldSite', NULL, '2026-01-01');
+        """)
+        conn.commit()
+        conn.close()
+
+        # Open via Registry — migration should fire and add the columns
+        from pnw_campsites.registry.db import CampgroundRegistry
+        reg = CampgroundRegistry(db_path)
+        try:
+            cols = {row[1] for row in reg._conn.execute("PRAGMA table_info(wa_state_sites)").fetchall()}
+            assert "max_capacity" in cols
+            assert "min_capacity" in cols
+            assert "allowed_equipment" in cols
+
+            # Pre-existing row is intact; new columns default to NULL or '[]'
+            row = reg._conn.execute(
+                "SELECT name, max_capacity, allowed_equipment FROM wa_state_sites WHERE resource_id = 1"
+            ).fetchone()
+            assert row["name"] == "OldSite"
+            assert row["max_capacity"] is None
+            assert row["allowed_equipment"] == "[]"
+        finally:
+            reg.close()
