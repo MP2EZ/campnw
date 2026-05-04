@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Mock helpers
 # ---------------------------------------------------------------------------
@@ -321,7 +320,7 @@ class TestOpenStream:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_stream)
 
-        result = await _open_stream(mock_client, model="test")
+        await _open_stream(mock_client, model="test")
         # Should have passed stream=True
         mock_client.messages.create.assert_called_once()
         call_kwargs = mock_client.messages.create.call_args[1]

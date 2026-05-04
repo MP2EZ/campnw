@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from pnw_campsites.monitor.db import Watch, WatchDB
+from pnw_campsites.monitor.db import Watch
 from pnw_campsites.monitor.watcher import poll_all, poll_watch
 from pnw_campsites.registry.models import BookingSystem, CampgroundAvailability
 
@@ -95,7 +94,7 @@ class TestPollAllWithTemplateWatches:
     @pytest.mark.asyncio
     async def test_template_watch_expands(self, watch_db):
         """poll_all expands template watches into virtual single watches."""
-        watch = watch_db.add_watch(Watch(
+        watch_db.add_watch(Watch(
             facility_id="",
             name="WA Lakeside",
             start_date="2026-06-01",
@@ -121,7 +120,7 @@ class TestPollAllWithTemplateWatches:
             return_value=_mock_availability(),
         )
 
-        results = await poll_all(
+        await poll_all(
             mock_recgov, None, watch_db, registry,
         )
         # Should have polled 2 expanded campgrounds
@@ -130,7 +129,7 @@ class TestPollAllWithTemplateWatches:
     @pytest.mark.asyncio
     async def test_single_watch_not_expanded(self, watch_db):
         """poll_all doesn't expand single watches."""
-        watch = watch_db.add_watch(Watch(
+        watch_db.add_watch(Watch(
             facility_id="232465",
             name="Ohanapecosh",
             start_date="2026-06-01",
@@ -143,7 +142,7 @@ class TestPollAllWithTemplateWatches:
             return_value=_mock_availability(),
         )
 
-        results = await poll_all(
+        await poll_all(
             mock_recgov, None, watch_db, None,
         )
         assert mock_recgov.get_availability_range.call_count == 1

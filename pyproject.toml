@@ -45,6 +45,8 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 "src/pnw_campsites/api.py" = ["B008"]  # Query() in FastAPI defaults is idiomatic
 "src/pnw_campsites/routes/*.py" = ["B008"]  # Same for route modules
+"tests/*.py" = ["E501"]  # Long assertion/print messages are clearer unwrapped
+"scripts/*.py" = ["E501", "E402"]  # Long output strings + sys.path setup before imports
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

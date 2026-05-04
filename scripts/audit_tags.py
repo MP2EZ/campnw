@@ -45,9 +45,9 @@ def main() -> None:
         print("ERROR: Set ANTHROPIC_API_KEY environment variable")
         sys.exit(1)
 
-    from pnw_campsites.enrichment.llm_tags import VALID_TAGS
-
     import anthropic
+
+    from pnw_campsites.enrichment.llm_tags import VALID_TAGS
 
     data = get_tag_data()
 

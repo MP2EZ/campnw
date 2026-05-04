@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pnw_campsites.geo import KNOWN_BASES, is_known_base, resolve_base
-
 import pytest
+
+from pnw_campsites.geo import KNOWN_BASES, is_known_base, resolve_base
 
 
 class TestNewKnownBases:

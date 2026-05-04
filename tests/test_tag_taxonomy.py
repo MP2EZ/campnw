@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pnw_campsites.enrichment.llm_tags import (
+    _TAG_RENAMES,
     VALID_TAGS,
     TagExtractionResult,
-    _TAG_RENAMES,
 )
 
 

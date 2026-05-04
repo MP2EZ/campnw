@@ -13,7 +13,6 @@ from pnw_campsites.mapbox import (
     get_drive_times_matrix,
 )
 
-
 # ---------------------------------------------------------------------------
 # Coordinate formatting
 # ---------------------------------------------------------------------------
@@ -162,11 +161,11 @@ class TestGetDriveTimesMatrix:
     async def test_chunking_at_boundary(self, monkeypatch):
         """Should chunk at MATRIX_MAX_COORDS - 1 destinations per batch."""
         monkeypatch.setenv("MAPBOX_ACCESS_TOKEN", "pk.test")
-        chunk_size = MATRIX_MAX_COORDS - 1  # 24
 
-        # Create 25 destinations = 2 batches (24 + 1)
+        # MATRIX_MAX_COORDS dests → 2 batches: (MAX-1) + 1
+        n_dests = MATRIX_MAX_COORDS
         destinations = [
-            (f"park-{i}", 45.0 + i * 0.01, -122.0) for i in range(25)
+            (f"park-{i}", 45.0 + i * 0.01, -122.0) for i in range(n_dests)
         ]
 
         call_count = 0
@@ -189,4 +188,4 @@ class TestGetDriveTimesMatrix:
 
         result = await get_drive_times_matrix((47.6, -122.3), destinations)
         assert call_count == 2
-        assert len(result) == 25
+        assert len(result) == n_dests

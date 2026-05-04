@@ -1,6 +1,7 @@
 """Tests for WatchDB user and search history methods."""
 
 import json
+import sqlite3
 
 import pytest
 
@@ -288,7 +289,7 @@ class TestSupabaseId:
     def test_supabase_id_uniqueness(self, db: WatchDB) -> None:
         sub = "770e8400-e29b-41d4-a716-446655440002"
         db.create_user(User(email="first@example.com", password_hash="", supabase_id=sub))
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.IntegrityError):
             db.create_user(User(email="second@example.com", password_hash="", supabase_id=sub))
 
 

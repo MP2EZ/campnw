@@ -1,6 +1,6 @@
 """Tests for availability history compaction and change detection."""
 
-import sqlite3
+from pnw_campsites.analytics.patterns import get_availability_summary
 from pnw_campsites.monitor.db import WatchDB
 
 
@@ -66,9 +66,6 @@ def test_record_availability_detects_status_change(tmp_path):
     assert len(transitions) == 2
     assert (transitions[0]["old_status"], transitions[0]["new_status"]) == ("", "Available")
     assert (transitions[1]["old_status"], transitions[1]["new_status"]) == ("Available", "Reserved")
-
-
-from pnw_campsites.analytics.patterns import get_availability_summary
 
 
 def test_patterns_reads_from_daily_table(tmp_path):
