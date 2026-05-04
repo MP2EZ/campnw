@@ -59,6 +59,10 @@ def _extract_sites(resources: dict) -> list[dict]:
     Each site gets the first (and usually only) loop_map_id from its mapIds.
     The diagnostic across 7 diverse parks confirmed 0 sites in multiple loops
     (clean 1:N), with ~0.18% orphans having empty mapIds — those get NULL.
+
+    Also captures per-site capacity (~96% populated) and allowedEquipment
+    (~91%); ~4% of sites are special types (marine tents, picnic shelters)
+    that report None for these fields.
     """
     sites = []
     for resource in resources.values():
@@ -71,6 +75,9 @@ def _extract_sites(resources: dict) -> list[dict]:
             "resource_id": resource["resourceId"],
             "name": name,
             "loop_map_id": map_ids[0] if map_ids else None,
+            "max_capacity": resource.get("maxCapacity"),
+            "min_capacity": resource.get("minCapacity"),
+            "allowed_equipment": resource.get("allowedEquipment") or [],
         })
     return sites
 
