@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# pre-commit: refuse direct commits to main.
+#
+# Workflow: commit to dev (or a feature branch), then merge to main via PR.
+# Merge commits from `git merge` don't trigger this hook for fast-forward
+# or clean three-way merges, so this only catches actual typed commits.
+#
+# Install:  ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+if [ "$branch" = "main" ]; then
+    cat >&2 <<'MSG'
+
+✗ Direct commits to main are blocked.
+
+  Workflow:  commit to dev (or a feature branch), then dev → main via PR.
+
+  If this is genuinely necessary on main (rare), bypass with:
+    git commit --no-verify
+
+MSG
+    exit 1
+fi

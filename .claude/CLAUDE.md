@@ -216,6 +216,23 @@ All frontend styling uses design tokens defined in `web/src/tokens.css`. **Never
 - Line-height: 1.4, 1.45 (between named tokens)
 - Breakpoint: 640px (CSS vars don't work in @media)
 
+## Workflow
+
+**Branch policy:** all work happens on `dev` or feature branches. Never commit directly to `main`. Releases happen via `dev → main` PR (which triggers `deploy.yml`).
+
+A `pre-commit` hook enforces this. If you cloned this repo fresh, install it once:
+```
+ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit
+chmod +x scripts/git-hooks/pre-commit
+```
+
+**Common operations:**
+- Doc-only edits → commit directly to `dev` (push-trigger CI catches issues; no PR overhead).
+- Code changes → feature branch off `dev`, PR to `dev`.
+- Releases → `dev → main` PR. Triggers Fly deploy on merge.
+
+CI runs both on `pull_request` events AND on direct pushes to `dev`/`main`, so the same protection applies whether you go through a PR or push directly.
+
 ## Known Gotchas
 - Rec.gov availability endpoint needs browser-like User-Agent or you may get blocked
 - GoingToCamp has Azure WAF — bypassed with `curl_cffi` Chrome TLS impersonation. Plain `requests`/`httpx` get 403'd.
