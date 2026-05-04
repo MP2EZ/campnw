@@ -71,8 +71,6 @@ def test_algorithm_none_rejected():
         "exp": datetime.now(UTC) + timedelta(hours=1),
         "iat": datetime.now(UTC),
     }
-    # PyJWT requires explicitly allowing algorithm none
-    token = jwt.encode(payload, "", algorithm="HS256")
     # Tamper with the token to simulate 'none' alg — just use a bad secret
     bad_token = jwt.encode(payload, "wrong-secret", algorithm="HS256")
     assert decode_supabase_jwt(bad_token) is None

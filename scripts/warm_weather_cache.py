@@ -18,7 +18,7 @@ import argparse
 import asyncio
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dotenv import load_dotenv
 
@@ -158,7 +158,7 @@ async def warm(
                         "temp_high_f": n["temp_high_f"],
                         "temp_low_f": n["temp_low_f"],
                         "precip_pct": n["precip_pct"],
-                        "fetched_at": datetime.now(timezone.utc).isoformat(),
+                        "fetched_at": datetime.now(UTC).isoformat(),
                     }
                     for n in normals
                 ]

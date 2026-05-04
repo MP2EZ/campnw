@@ -15,7 +15,6 @@ from pnw_campsites.analytics.digest import (
     get_search_analytics,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -258,13 +257,15 @@ class TestGenerateWeeklyDigest:
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="- Users mostly search WA\n- Consider adding more tags")]
 
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-            with patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls:
-                mock_client = AsyncMock()
-                mock_cls.return_value = mock_client
-                mock_client.messages.create.return_value = mock_response
+        with (
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("posthog.ai.anthropic.AsyncAnthropic") as mock_cls,
+        ):
+            mock_client = AsyncMock()
+            mock_cls.return_value = mock_client
+            mock_client.messages.create.return_value = mock_response
 
-                result = await generate_weekly_digest(db)
+            result = await generate_weekly_digest(db)
 
         assert "AI Insights" in result
         assert "Users mostly search WA" in result

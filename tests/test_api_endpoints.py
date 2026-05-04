@@ -19,7 +19,6 @@ from pnw_campsites.search.engine import (
 from tests.conftest import make_campground
 
 
-
 class TestCampgroundsEndpoint:
     """Tests for GET /api/campgrounds."""
 

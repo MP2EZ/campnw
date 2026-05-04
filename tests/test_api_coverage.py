@@ -13,8 +13,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
-from pnw_campsites.registry.models import BookingSystem
-
 from tests.conftest import make_campground
 
 _TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"

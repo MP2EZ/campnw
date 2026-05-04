@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock
 
 import jwt as pyjwt
 from fastapi.testclient import TestClient

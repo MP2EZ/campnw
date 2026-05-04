@@ -64,9 +64,11 @@ def is_campground(facility: RIDBFacility) -> bool:
 
     # Positive signal: names containing "campground" or "camp" are almost
     # always valid — RIDB activity=CAMPING already pre-selects these.
-    if not re.search(r"\b(campground|camp)\b", name, re.IGNORECASE):
-        if EXCLUDE_PATTERNS.search(name):
-            return False
+    if (
+        not re.search(r"\b(campground|camp)\b", name, re.IGNORECASE)
+        and EXCLUDE_PATTERNS.search(name)
+    ):
+        return False
 
     # Must have valid coordinates
     if facility.latitude == 0.0 and facility.longitude == 0.0:

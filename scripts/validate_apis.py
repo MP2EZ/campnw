@@ -13,10 +13,8 @@ Run: python validate_camping_apis.py
 No API key needed for initial validation (RIDB key needed for production use).
 """
 
-import json
-import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 import requests
@@ -65,7 +63,7 @@ def test_ridb_api():
         # "apikey": "YOUR_API_KEY"  # Uncomment and add key for production
     }
 
-    print(f"\n[1a] Searching for WA campgrounds via RIDB...")
+    print("\n[1a] Searching for WA campgrounds via RIDB...")
     print(f"     URL: {url}")
     print(f"     Params: {params}")
 
@@ -82,8 +80,8 @@ def test_ridb_api():
                 print(f"        - {f.get('FacilityName', '?')} (ID: {f.get('FacilityID', '?')})")
             return True
         elif resp.status_code == 401:
-            print(f"     !!  401 Unauthorized — API key required")
-            print(f"        Sign up at: https://ridb.recreation.gov (free)")
+            print("     !!  401 Unauthorized — API key required")
+            print("        Sign up at: https://ridb.recreation.gov (free)")
             return "needs_key"
         else:
             print(f"     XX Unexpected status: {resp.status_code}")
@@ -135,9 +133,9 @@ def test_recgov_availability():
             reserved_count = 0
             sample_site = None
 
-            for site_id, site_data in list(campsites.items())[:50]:
+            for _site_id, site_data in list(campsites.items())[:50]:
                 availabilities = site_data.get("availabilities", {})
-                for date_str, status in availabilities.items():
+                for _date_str, status in availabilities.items():
                     if status == "Available":
                         available_count += 1
                     elif status == "Reserved":
@@ -149,7 +147,7 @@ def test_recgov_availability():
             print(f"     Reserved slots (first 50 sites): {reserved_count}")
 
             if sample_site:
-                print(f"\n     Sample campsite data structure:")
+                print("\n     Sample campsite data structure:")
                 print(f"       campsite_id: {sample_site.get('campsite_id')}")
                 print(f"       site: {sample_site.get('site')}")
                 print(f"       loop: {sample_site.get('loop')}")
@@ -159,7 +157,7 @@ def test_recgov_availability():
 
                 avail = sample_site.get("availabilities", {})
                 sorted_dates = sorted(avail.keys())[:7]
-                print(f"       First week availability:")
+                print("       First week availability:")
                 for d in sorted_dates:
                     status = avail[d]
                     indicator = "[OPEN]" if status == "Available" else "[TAKEN]" if status == "Reserved" else "[--]"
@@ -191,7 +189,7 @@ def test_recgov_search():
         "Accept": "application/json",
     }
 
-    print(f"\n[2b] Searching recreation.gov for campgrounds in WA...")
+    print("\n[2b] Searching recreation.gov for campgrounds in WA...")
 
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=15)
@@ -234,7 +232,7 @@ def test_wa_goingtocamp():
     success = True
 
     # Step 1: Maps
-    print(f"\n[3a] Fetching WA State Parks map data...")
+    print("\n[3a] Fetching WA State Parks map data...")
     try:
         resp = requests.get(f"{base}/api/maps", headers=headers, timeout=15)
         print(f"     Status: {resp.status_code}")
@@ -251,7 +249,7 @@ def test_wa_goingtocamp():
         success = False
 
     # Step 2: Resource categories
-    print(f"\n[3b] Fetching resource categories...")
+    print("\n[3b] Fetching resource categories...")
     try:
         resp = requests.get(f"{base}/api/resourcecategory", headers=headers, timeout=15)
         print(f"     Status: {resp.status_code}")
@@ -266,7 +264,7 @@ def test_wa_goingtocamp():
         print(f"     XX Error: {e}")
 
     # Step 3: Availability
-    print(f"\n[3c] Testing availability search...")
+    print("\n[3c] Testing availability search...")
     payload = {
         "mapId": -2147483648,
         "bookingCategoryId": 0,
@@ -288,7 +286,7 @@ def test_wa_goingtocamp():
             if isinstance(data, dict):
                 map_items = data.get("mapLinkAvailabilities", [])
                 resource_avail = data.get("resourceAvailabilities", [])
-                print(f"     OK Got response!")
+                print("     OK Got response!")
                 print(f"        mapLinkAvailabilities: {len(map_items)} entries")
                 print(f"        resourceAvailabilities: {len(resource_avail)} entries")
                 for item in map_items[:5]:
@@ -327,7 +325,7 @@ def test_or_reserveamerica():
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
 
-    print(f"\n[4a] Testing ReserveAmerica availability endpoint...")
+    print("\n[4a] Testing ReserveAmerica availability endpoint...")
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=15, allow_redirects=True)
         print(f"     Status: {resp.status_code}")
@@ -336,11 +334,11 @@ def test_or_reserveamerica():
 
         if resp.status_code == 200:
             if "availability" in resp.text.lower() or "campsite" in resp.text.lower():
-                print(f"     OK Got page with camping content (HTML scraping needed)")
+                print("     OK Got page with camping content (HTML scraping needed)")
             elif "javascript" in resp.text.lower() and len(resp.text) < 1000:
-                print(f"     !!  Got JS redirect — needs headless browser (Playwright)")
+                print("     !!  Got JS redirect — needs headless browser (Playwright)")
             else:
-                print(f"     !!  Got response but unclear content")
+                print("     !!  Got response but unclear content")
                 print(f"        First 200 chars: {resp.text[:200]}")
             return "partial"
         else:
@@ -378,9 +376,9 @@ def print_summary(results: dict[str, Any]):
     rec_avail = results.get("Recreation.gov Availability")
     wa_parks = results.get("WA State Parks (GoingToCamp)")
 
-    if rec_avail == True and wa_parks == True:
+    if rec_avail and wa_parks:
         print("  Both primary data sources working — ready for Phase 1")
-    elif rec_avail == True:
+    elif rec_avail:
         print("  Recreation.gov working — start there, add WA State Parks later")
     else:
         print("  Review individual test results above")

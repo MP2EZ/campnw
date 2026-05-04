@@ -16,7 +16,7 @@ import argparse
 import asyncio
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -51,7 +51,7 @@ async def geocode_parks(dry_run: bool = False) -> None:
                     registry._conn.execute(
                         "UPDATE campgrounds SET latitude=?, longitude=?, updated_at=? "
                         "WHERE booking_system=? AND facility_id=?",
-                        (lat, lon, datetime.now(timezone.utc).isoformat(),
+                        (lat, lon, datetime.now(UTC).isoformat(),
                          cg.booking_system.value, cg.facility_id),
                     )
                     registry._conn.commit()

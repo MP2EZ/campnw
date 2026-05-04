@@ -1,6 +1,5 @@
 """Tests for Visual Crossing weather provider."""
 
-import asyncio
 
 import pytest
 import respx

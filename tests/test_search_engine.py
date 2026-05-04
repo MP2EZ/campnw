@@ -1654,8 +1654,8 @@ class TestResolveDriveTimes:
         self, registry, monkeypatch,
     ) -> None:
         """Custom address (non-base) routes via Mapbox Matrix API."""
-        import respx
         import httpx
+        import respx
 
         from pnw_campsites.search.engine import SearchEngine
 

@@ -16,7 +16,6 @@ from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.seo import _format_drive_time
 from tests.conftest import make_campground
 
-
 # -------------------------------------------------------------------
 # Fixtures
 # -------------------------------------------------------------------

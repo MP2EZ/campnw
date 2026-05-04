@@ -5,14 +5,9 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from pnw_campsites.enrichment.batch import process_results
-from pnw_campsites.enrichment.llm_tags import VALID_TAGS
 from pnw_campsites.registry.models import BookingSystem
-
 from tests.conftest import make_campground
-
 
 # ---------------------------------------------------------------------------
 # Helpers — mock batch result objects

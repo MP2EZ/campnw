@@ -3,6 +3,10 @@ name: PR Checks
 on:
   pull_request:
     branches: [main, dev]
+  push:
+    # Also run on direct pushes so commits that bypass PRs get the same checks
+    # (security scan, lighthouse, bundle-size enforcement, frontend tests).
+    branches: [main, dev]
 
 jobs:
   test:

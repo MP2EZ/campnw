@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
-import pytest
-
 from pnw_campsites.enrichment.batch import (
     _parse_json_response,
     build_batch_requests,
@@ -13,7 +9,6 @@ from pnw_campsites.enrichment.batch import (
     truncation_score,
 )
 from tests.conftest import make_campground
-
 
 # ---------------------------------------------------------------------------
 # truncation_score
