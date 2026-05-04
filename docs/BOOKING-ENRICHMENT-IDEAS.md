@@ -26,9 +26,19 @@ The internal resource ID is meaningless to the user *and* GoingToCamp's UI doesn
 
 **This makes registry enrichment for WA the prerequisite for most other WA improvements.**
 
+## Reframe: discovery friction vs checkout friction (2026-05-03)
+
+After shipping A1 / B6 / OR deep-linking, the remaining friction in "search → reservation" isn't on Campable's side anymore — it's on the destination provider's checkout page. **The slow step is filling out the booking form** (equipment, party size, vehicle info, name/address/phone/email, payment) once the user lands there. That's the 2–3 minutes where bookings actually die.
+
+Every Tier A–C item below addresses *Campable-side* friction (better signal, faster notifications, deeper deep links). They were the right work to ship first because Campable's side was the easier surface. But going forward, the highest-leverage moves are about **bypassing, pre-filling, or delegating the destination-side checkout form** — see new Tier D below.
+
+The ceiling on Tier A–C is "user clicks Book and lands on the booking page in one click." That ceiling is now reached for rec.gov and OR; WA reaches it once A2 ships. Tier D is about everything *after* that landing.
+
 ## Tier A — Ship these, in order
 
 ### A1. Cache human site + loop names for WA parks (one-time enrichment per park)
+
+**✅ Shipped 2026-05-03 (PR #5 / #7).** Followed by PR #9 / #10 which extended the cache to per-site `max_capacity`, `min_capacity`, and `allowed_equipment` (the latter stored, not yet consumed). Production cache holds 6,984 sites + 364 loops. WA search now shows real names like `Site 91 · Loop 3` instead of `WA--2147481xxx`.
 
 **Diagnostic outcome (2026-05-03):** No Playwright needed. DevTools capture of the live GTC booking flow surfaced two undocumented endpoints the frontend hits on every search, both reachable via our existing `curl_cffi` chrome131 session with no auth:
 
@@ -102,6 +112,8 @@ Rec.gov releases sites on a rolling 6-month window at 7am MT (with **per-facilit
 
 ### B6. URL parameter sniff on RA and GTC
 
+**✅ Shipped 2026-05-03 (PR #4).** OR provider's `_build_booking_url` now constructs the per-site RA deep link below; every OR search-result window ships with a fully deep-linked `booking_url`. GTC sniff intentionally not run — A1 was the right path for WA.
+
 **RA outcome (2026-05-03):** ReserveAmerica supports rec.gov-quality per-site deep linking out of the box:
 
 ```
@@ -136,11 +148,67 @@ One email to rec.gov dev relations + WA State Parks IT asking about affiliate / 
 
 **Effort:** 30 min. **Impact:** lottery ticket.
 
+## Tier D — Checkout friction reduction (2026-05-03)
+
+The four classes of moves that compress the destination-side form-filling step. None of them have shipped or even been spiked yet; D1 and D4 are the immediate research priorities.
+
+### D1. Bookmarklet that pre-fills the destination booking form
+
+User saves a profile on Campable (equipment, party size, vehicle info, contact info). A bookmarklet they drag to their bookmarks bar recognizes when they're on a rec.gov / RA / GTC booking page and auto-fills the form fields with their saved values. User just clicks "Reserve" and enters payment.
+
+- **Pros:** Actually compresses checkout from 2–3 min to ~30 sec. ~50 lines of JS, no extension store review. Pairs with the existing deep-link work.
+- **Cons:** Distribution friction (drag-to-bookmarks is a >50% drop-off action). Modern Angular/React forms may reject programmatic `input.value =` writes; need to dispatch synthetic events. Maintenance treadmill on every form change.
+- **Mitigations on distribution:** Camping power users (Campable's core demographic) are more motivated than average to install power-user tools. Onboarding with a 30-second video could lift install rate.
+
+**Status:** Research scheduled — see "Recommended next step" below. Reverses the prior "Killed: bookmarklet" entry; rationale changed once we acknowledged that the WA side of the deep-link work has hit its ceiling and checkout is the next bottleneck.
+
+**Effort to spike:** 2–3 hours (DevTools form-field map per provider + proof-of-concept bookmarklet against one provider). **Effort to ship for one provider:** ~half-day. **Effort to ship for all three:** ~2 days plus ongoing maintenance.
+
+### D2. Browser extension (D1's polished form)
+
+Same as D1 but as a Chrome/Firefox extension: auto-runs on every visit to a booking page, no manual click. Adds polish, removes the "drag a bookmarklet" friction.
+
+- **Pros:** Lower per-use friction once installed.
+- **Cons:** Higher install friction (Chrome Web Store review + permissions warning). Takes ~1 week to ship vs. ~1 day for bookmarklet. Worth it once the bookmarklet has proven user demand.
+
+**Status:** Defer until D1 has telemetry showing "users want this" (e.g., bookmarklet adoption + repeat use). Don't build extension first.
+
+### D3. Account linking via provider OAuth
+
+User authorizes Campable to act against their rec.gov / GTC / RA account. Pre-favorite sites, pre-fill cart where the API allows, store equipment/contact info per-account.
+
+- **Pros:** The cleanest theoretical path — uses providers' own systems, no DOM scraping, no maintenance treadmill.
+- **Cons:** **Likely blocked.** Rec.gov and Aspira (RA + GTC) are government / B2B platforms; neither offers public OAuth for third-party integrations. The only paths are (a) undocumented APIs, (b) credential-proxy where Campable holds user passwords (security + ToS minefield), or (c) formal partnership we won't get pre-PMF.
+
+**Status:** Research blocked unless one of those three paths opens. Worth one email per provider asking (folds into C8) but don't plan around it.
+
+### D4. AI concierge with computer use (the differentiated bet)
+
+User submits intent + payment authorization on Campable. A Claude-with-computer-use agent navigates the destination site, fills forms, gets to the payment step, surfaces a confirmation screen for the user to approve. **The closest thing to "book directly from Campable" that's actually buildable.**
+
+- **Pros:** Genuinely seamless from the user's POV. Differentiates Campable from every other discovery tool. Degrades gracefully — if the agent fails, user falls back to manual booking. Compute cost (~$0.50/booking) is acceptable for a paid feature.
+- **Cons:** **ToS risk is non-zero** — rec.gov "automated reservation" prohibition is the load-bearing concern; the gray area is whether "user-watched, user-approved automation" falls outside it. Maintenance treadmill on every UI change. Payment-handoff design needs careful thought (probably hand off the cart link with everything filled, user enters card themselves). Latency budget per booking could be 30–60 seconds.
+
+**Status:** Research scheduled — see "Recommended next step." Distinct from the killed "full middle-man booking" because the user is in the loop (intent submitted explicitly, watching the agent, entering payment themselves) — different liability and ToS profile than headless mass automation.
+
+**Effort to research:** ~3–4 hours (computer-use API status + ToS deep-read + architecture sketch + payment-handoff design + comparable products). **Effort to prototype on one provider:** ~1 week. **Effort to productize:** multi-week.
+
+### D5. Human concierge (the wedge to test demand)
+
+User submits booking intent + payment authorization. A human (initially: you) does the booking on their behalf within a few hours. **Charge for it ($5–10/booking?) to validate willingness-to-pay before any automation work.**
+
+- **Pros:** Zero technical risk. Real travel agencies were built on exactly this. Validates the "users will pay to skip the form" hypothesis cheaply. Shapes what D4's automated version needs to do (you'll know exactly which fields matter, which providers fail, where things go wrong).
+- **Cons:** Doesn't scale past a few bookings/day. Requires you to actually do bookings.
+
+**Status:** Worth considering as a paid-tier wedge once Campable has any paying-customer cohort. Not urgent today.
+
+**Effort:** Stripe checkout setup + a Notion form + you. ~1 day.
+
 ## Don't / Killed
 
-### Bookmarklet or browser extension
+### ~~Bookmarklet or browser extension~~ → moved to D1/D2
 
-Distribution friction (drag-to-bookmarks or Chrome Web Store install) kills adoption pre-PMF. Power-user feature at best — revisit only if a paying-customer cohort asks for it.
+**Originally killed** for distribution friction. **Reinstated 2026-05-03** under Tier D after acknowledging that Campable-side deep-link work has hit its ceiling and the next bottleneck is destination-side checkout. The distribution friction is real but the value has grown: not "a slightly better booking link" (the original framing) but "compress 2–3 minutes of form-filling to 30 seconds" (the actual problem).
 
 ### Server-side Playwright "click-through" service (runtime)
 
@@ -148,16 +216,18 @@ A backend that opens a browser per booking click, navigates the destination site
 
 **Note:** A1 was originally scoped to use Playwright as a periodic enrichment job (different risk profile than runtime). The 2026-05-03 diagnostic obviated even that — A1 is now plain HTTP via the existing `curl_cffi` session.
 
-### Full middle-man booking (Campable takes payment, completes the reservation)
+### Full middle-man booking (Campable takes payment, completes the reservation headlessly)
 
-Hard no:
+Hard no — distinct from D4 (AI concierge) which keeps the user in the loop.
 
-- **ToS.** Rec.gov explicitly prohibits automated reservation. Campnab/Campflare have lived in the gray zone for years by *only monitoring*. There's a reason.
+- **ToS.** Rec.gov explicitly prohibits automated reservation; the headless / unattended interpretation is the load-bearing one. Campnab/Campflare have lived in the gray zone for years by *only monitoring*. There's a reason.
 - **CAPTCHA + 2FA** would force us to handle user credentials.
 - **Payment liability and refund disputes.** Provider refunds go to the original card; we'd inherit chargeback handling.
 - **Strategic risk.** The discovery moat (registry + filtering + watches) is defensible. A booking-automation moat is a regulatory cat-and-mouse game.
 
-The right framing of "1-click booking" is "we get you to the booking page faster than anyone else," not "we book for you."
+**What's different about D4:** the user explicitly submits intent, watches the agent navigate, and enters their own payment. That's closer to "power-user automation tool" than "Campable becomes a booking platform" — different ToS surface and different liability shape, though still non-zero.
+
+The right framing of "1-click booking" is *not* "we book for you headlessly" — it's either "we get you to the booking page faster than anyone else" (Tier A–C) or "we fill out the form for you while you watch and confirm" (D4).
 
 ### Interstitial "how to book" page
 
@@ -170,7 +240,19 @@ Rejected on second pass — adds a click and a decision in flow. Same content li
 3. ~~**B6 RA params:** Does the new ReserveAmerica system honor a `siteId=` query param?~~ **Answered 2026-05-03 (yes — see B6 above; per-site URL pattern verified for Fort Stevens).**
 4. **A3 push providers:** Confirm both ntfy and Pushover render long-press copy correctly on iOS and Android. Both should — but verify before relying on it.
 5. **Conflict with existing watch v2:** The push and ICS work in A3/B4 should be reviewed against whatever notification format watches currently emit, to avoid double-sending.
+6. **D1 feasibility:** Can a bookmarklet actually populate Angular/React form fields on rec.gov / RA / GTC, or do they reject programmatic writes? Need a DevTools form-field map per provider, then a proof-of-concept bookmarklet against one provider.
+7. **D4 ToS analysis:** Does "user-watched, user-approved" automation fall outside the rec.gov / Aspira "automated reservation" prohibition? Read the exact terms language; lay out the gray areas (this is a strategic call, not a legal one).
+8. **D4 architecture & cost:** What's the per-booking compute cost and latency budget for Claude computer-use agent navigating a multi-step booking flow? Sandboxed VM per session or browser pool? How does failure recovery work?
 
 ## Recommended next step
 
-If this becomes work: **A1 first.** Without it, A2 and A3 can't reach WA and the bulk of new value goes to OR/rec.gov only (where the UX is already best). A1 is also the one piece that's a prerequisite, not a polish — it changes what's achievable, not just how it looks.
+**Tier A–C is largely done; the new frontier is Tier D.** Concretely, the next session should be **research on D1 (bookmarklet) + D4 (AI concierge), in that order:**
+
+1. **D1 research first** (~2–3 hours). Concrete deliverable: form-field map per provider + bookmarklet proof-of-concept against one provider. Outputs are reusable for D4 (the agent needs the same field knowledge). Decision gate at the end: "bookmarklet saves N seconds of X% of fields" → ship or don't.
+2. **D4 research second** (~3–4 hours). Strategy doc covering computer-use API status, ToS analysis, architecture sketch, payment-handoff design. Decision gate: green-light a prototype or fall back to D1 only.
+
+If D1 turns out to shave 80% of friction, the marginal value of D4 drops a lot and we may not need it. Worth knowing before committing to D4's complexity.
+
+Optional in parallel: **D5 (human concierge) as a free wedge** to validate willingness-to-pay before any technical work. Stripe + Notion form + a few hours of your time per booking.
+
+The Tier A–C residual work (A2 inline UI, A3 push body, B4 ICS invites, B5 rec.gov release calendars) is real polish but no longer the highest-leverage frontier. Slot it after Tier D research clarifies what's worth investing in.
