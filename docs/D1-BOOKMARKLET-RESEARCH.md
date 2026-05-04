@@ -13,6 +13,8 @@ Two unexpected findings from the DevTools sniff invalidated the original D1 fram
 
 What's left for a bookmarklet to do is the ~30 seconds of per-trip fields (equipment type/length, vehicle license plate, occupants), not the 2–3 minutes of full form-filling we originally pitched. That falls below the 60% time-savings decision threshold from the parent doc.
 
+**Provider priority context:** rec.gov is the priority provider; the state sites (RA, GTC) are P1. This *sharpens* the verdict rather than softening it — rec.gov happens to be the provider where the bookmarklet has the *least* value (most mature account auto-fill, deepest deep links, auth-walled checkout). A bookmarklet that only worked for the P1 state sites would be exactly the wrong investment shape: maximum maintenance burden (Angular Material widgets at GTC, vanilla JS surface area at RA) for the lowest-priority providers.
+
 ## Per-provider field maps
 
 ### Recreation.gov
@@ -114,10 +116,11 @@ Plus: every provider can add ReCAPTCHA, mandatory new fields, or A/B test new fl
 
 1. **D1's expected savings are below threshold.** ~22% time savings vs the 60% decision gate. The original framing assumed the bookmarklet would attack the full form-filling cost; reality is most of that cost is either server-side auto-fill or doesn't exist on Campable's deep-link path.
 2. **D1 doesn't address the auth wall**, which is where the form actually lives. A bookmarklet only helps users who've already logged in and reached the booking form — at which point the provider's own auto-fill covers most of what the bookmarklet would do.
-3. **D4 doesn't have either of these limitations.** An agent navigating with the user's session can: cross the auth wall, handle Material Date Pickers via visual interaction, and fill per-trip fields the same as any other field.
-4. **The maintenance treadmill is similar between D1 and D4** (both break on UI changes), but D4 delivers more value per breakage event.
+3. **The provider priority makes it worse, not better.** rec.gov (the priority provider) is exactly where the bookmarklet has the least marginal value, because rec.gov already solved the saved-profile problem with their account system. A bookmarklet that disproportionately benefits P1 state sites isn't an efficient use of effort.
+4. **D4 doesn't have any of these limitations.** An agent navigating with the user's session can: cross the auth wall, handle Material Date Pickers via visual interaction, fill per-trip fields the same as any other field, and apply equally well to rec.gov (where the value is highest).
+5. **The maintenance treadmill is similar between D1 and D4** (both break on UI changes), but D4 delivers more value per breakage event and concentrates that value at the priority provider.
 
-**Optional small consolation prize:** A "per-trip field bookmarklet" focused only on the auth-walled-form fields a bookmarklet *could* fill if the user got there manually (equipment type/length, vehicle license plate, occupants). Probably ~30 lines of JS. Saves the ~30 seconds of per-trip typing but ignores all other fields. Low engineering cost, low maintenance burden (these fields are simpler than the picker widgets), low user value but non-zero. Worth keeping in the back pocket if D4 turns out to be too expensive.
+**Optional small consolation prize:** A "per-trip field bookmarklet" focused only on the auth-walled-form fields a bookmarklet *could* fill if the user got there manually (equipment type/length, vehicle license plate, occupants). Probably ~30 lines of JS. Saves the ~30 seconds of per-trip typing but ignores all other fields. Low engineering cost, low maintenance burden (these fields are simpler than the picker widgets), low user value but non-zero. Worth keeping in the back pocket if D4 turns out to be too expensive — but per the priority context above, build it for rec.gov *first* (where stable IDs and React uncontrolled inputs make it the easiest target), not for the state sites.
 
 ## What this research did NOT cover
 
