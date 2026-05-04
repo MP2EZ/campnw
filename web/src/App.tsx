@@ -1123,13 +1123,6 @@ export default function App() {
               ))}
             </div>
           )}
-          {filteredResults.some((r) => r.booking_system === "wa_state") && (
-            <p className="wa-data-note">
-              <span className="source-badge source-wa_state">WA Parks</span>{" "}
-              site data is limited — names, types, and capacity aren't available
-              from their booking system. Check GoingToCamp for full details.
-            </p>
-          )}
           {compareResult ? (
             <ComparePanel result={compareResult} onClose={clearCompare} />
           ) : searchSummary ? (

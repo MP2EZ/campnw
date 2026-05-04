@@ -82,6 +82,26 @@ CREATE TABLE IF NOT EXISTS weather_normals (
     fetched_at TEXT NOT NULL,
     PRIMARY KEY (lat_2dp, lon_2dp, month, day)
 );
+
+CREATE TABLE IF NOT EXISTS wa_state_loops (
+    map_id INTEGER PRIMARY KEY,
+    park_facility_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_loops_park ON wa_state_loops(park_facility_id);
+
+CREATE TABLE IF NOT EXISTS wa_state_sites (
+    resource_id INTEGER PRIMARY KEY,
+    park_facility_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    loop_map_id INTEGER,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_sites_park ON wa_state_sites(park_facility_id);
 """
 
 
@@ -736,3 +756,95 @@ class CampgroundRegistry:
             [lat_2dp, lon_2dp, day],
         ).fetchone()
         return row[0]
+
+    # ------------------------------------------------------------------
+    # WA State Parks site/loop name cache (GoingToCamp metadata)
+    # ------------------------------------------------------------------
+
+    def bulk_upsert_wa_loops(
+        self, park_facility_id: str, loops: list[dict]
+    ) -> int:
+        """Replace all loops for a park. Idempotent across re-seeds.
+
+        Each dict: {map_id, title, description (optional)}.
+        Returns number of rows inserted.
+        """
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "DELETE FROM wa_state_loops WHERE park_facility_id = ?",
+            (park_facility_id,),
+        )
+        if loops:
+            self._conn.executemany(
+                """\
+                INSERT INTO wa_state_loops
+                    (map_id, park_facility_id, title, description, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        loop["map_id"],
+                        park_facility_id,
+                        loop["title"],
+                        loop.get("description", ""),
+                        now,
+                    )
+                    for loop in loops
+                ],
+            )
+        self._conn.commit()
+        return len(loops)
+
+    def bulk_upsert_wa_sites(
+        self, park_facility_id: str, sites: list[dict]
+    ) -> int:
+        """Replace all sites for a park. Idempotent across re-seeds.
+
+        Each dict: {resource_id, name, loop_map_id (optional)}.
+        Returns number of rows inserted.
+        """
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "DELETE FROM wa_state_sites WHERE park_facility_id = ?",
+            (park_facility_id,),
+        )
+        if sites:
+            self._conn.executemany(
+                """\
+                INSERT INTO wa_state_sites
+                    (resource_id, park_facility_id, name, loop_map_id, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        site["resource_id"],
+                        park_facility_id,
+                        site["name"],
+                        site.get("loop_map_id"),
+                        now,
+                    )
+                    for site in sites
+                ],
+            )
+        self._conn.commit()
+        return len(sites)
+
+    def get_wa_site_index(
+        self, park_facility_id: str
+    ) -> dict[int, tuple[str, str | None]]:
+        """Return cached site/loop names for a WA park.
+
+        Maps resource_id → (site_name, loop_title or None). Used by the
+        search engine to enrich CampsiteAvailability with human-readable
+        labels before returning to the API.
+        """
+        rows = self._conn.execute(
+            """\
+            SELECT s.resource_id, s.name, l.title AS loop_title
+            FROM wa_state_sites AS s
+            LEFT JOIN wa_state_loops AS l ON s.loop_map_id = l.map_id
+            WHERE s.park_facility_id = ?
+            """,
+            (park_facility_id,),
+        ).fetchall()
+        return {row["resource_id"]: (row["name"], row["loop_title"]) for row in rows}
