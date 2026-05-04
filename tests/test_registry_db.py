@@ -580,3 +580,106 @@ class TestFindSimilar:
         results = registry.search(state="OR")
 
         assert len(results) == 0
+
+
+class TestWaStateMetadataCache:
+    """Tests for WA State Parks site/loop name cache (A1)."""
+
+    def test_round_trip_loops_and_sites(self, registry) -> None:
+        """bulk_upsert + get_wa_site_index returns the joined view."""
+        registry.bulk_upsert_wa_loops(
+            "-2147483624",
+            [
+                {"map_id": -2147483615, "title": "Lower Loop A", "description": "Sites 79-145"},
+                {"map_id": -2147483614, "title": "Lower Loop B", "description": ""},
+            ],
+        )
+        registry.bulk_upsert_wa_sites(
+            "-2147483624",
+            [
+                {"resource_id": -2147481621, "name": "L03", "loop_map_id": -2147483615},
+                {"resource_id": -2147481622, "name": "L04", "loop_map_id": -2147483615},
+                {"resource_id": -2147481700, "name": "B01", "loop_map_id": -2147483614},
+            ],
+        )
+
+        index = registry.get_wa_site_index("-2147483624")
+
+        assert index[-2147481621] == ("L03", "Lower Loop A")
+        assert index[-2147481622] == ("L04", "Lower Loop A")
+        assert index[-2147481700] == ("B01", "Lower Loop B")
+
+    def test_orphan_site_has_null_loop(self, registry) -> None:
+        """Sites with no loop_map_id surface as (name, None)."""
+        registry.bulk_upsert_wa_sites(
+            "-2147483624",
+            [{"resource_id": -2147481999, "name": "Orphan-1", "loop_map_id": None}],
+        )
+
+        index = registry.get_wa_site_index("-2147483624")
+
+        assert index[-2147481999] == ("Orphan-1", None)
+
+    def test_site_pointing_to_unknown_loop_has_null_title(self, registry) -> None:
+        """LEFT JOIN returns NULL title when loop_map_id has no row."""
+        registry.bulk_upsert_wa_sites(
+            "-2147483624",
+            [{"resource_id": -2147481621, "name": "L03", "loop_map_id": -999999}],
+        )
+
+        index = registry.get_wa_site_index("-2147483624")
+
+        assert index[-2147481621] == ("L03", None)
+
+    def test_re_seed_replaces_park_data(self, registry) -> None:
+        """A second bulk_upsert for the same park replaces existing rows."""
+        registry.bulk_upsert_wa_sites(
+            "-2147483624",
+            [{"resource_id": -2147481621, "name": "L03", "loop_map_id": None}],
+        )
+        registry.bulk_upsert_wa_sites(
+            "-2147483624",
+            [
+                {"resource_id": -2147481621, "name": "L03-renamed", "loop_map_id": None},
+                {"resource_id": -2147481622, "name": "L04", "loop_map_id": None},
+            ],
+        )
+
+        index = registry.get_wa_site_index("-2147483624")
+
+        assert len(index) == 2
+        assert index[-2147481621][0] == "L03-renamed"
+        assert -2147481622 in index
+
+    def test_re_seed_does_not_affect_other_parks(self, registry) -> None:
+        """Re-seeding park A leaves park B's rows untouched."""
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": 1, "name": "A1", "loop_map_id": None}],
+        )
+        registry.bulk_upsert_wa_sites(
+            "-200",
+            [{"resource_id": 2, "name": "B1", "loop_map_id": None}],
+        )
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": 3, "name": "A2-new", "loop_map_id": None}],
+        )
+
+        assert 1 not in registry.get_wa_site_index("-100")
+        assert 3 in registry.get_wa_site_index("-100")
+        assert 2 in registry.get_wa_site_index("-200")
+
+    def test_empty_park_returns_empty_dict(self, registry) -> None:
+        """get_wa_site_index for a park with no cached data returns empty."""
+        assert registry.get_wa_site_index("-9999999") == {}
+
+    def test_bulk_upsert_empty_list_clears_park(self, registry) -> None:
+        """Passing empty list deletes existing rows for that park (idempotent)."""
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": 1, "name": "A", "loop_map_id": None}],
+        )
+        registry.bulk_upsert_wa_sites("-100", [])
+
+        assert registry.get_wa_site_index("-100") == {}

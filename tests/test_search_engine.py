@@ -1727,3 +1727,91 @@ class TestResolveDriveTimes:
         assert "100" in drive_times
         assert isinstance(drive_times["100"], int)
         assert drive_times["100"] > 0
+
+
+class TestEnrichWaAvailability:
+    """A1: SearchEngine._enrich_wa_availability replaces synthetic IDs with cached names."""
+
+    def _make_engine(self, registry):
+        from pnw_campsites.search.engine import SearchEngine
+        # Provider clients default to None — _enrich_wa_availability doesn't use them.
+        return SearchEngine(registry=registry)
+
+    def test_replaces_synthetic_label_with_cached_name(self, registry) -> None:
+        """Synthetic resource_id label gets replaced with cached human name."""
+        registry.bulk_upsert_wa_loops(
+            "-100", [{"map_id": -200, "title": "Forest Loop", "description": ""}]
+        )
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": -300, "name": "B042", "loop_map_id": -200}],
+        )
+        availability = make_campground_availability(
+            facility_id="-100",
+            campsites={
+                "-300": make_campsite_availability(
+                    campsite_id="-300", site="-300", loop="",
+                ),
+            },
+        )
+
+        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+
+        site = availability.campsites["-300"]
+        assert site.site == "B042"
+        assert site.loop == "Forest Loop"
+
+    def test_no_op_when_cache_empty(self, registry) -> None:
+        """Pre-seed: cache empty → labels untouched (graceful fallback)."""
+        availability = make_campground_availability(
+            facility_id="-100",
+            campsites={
+                "-300": make_campsite_availability(
+                    campsite_id="-300", site="-300", loop="",
+                ),
+            },
+        )
+
+        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+
+        # Synthetic label preserved — engine doesn't touch it
+        assert availability.campsites["-300"].site == "-300"
+
+    def test_orphan_site_keeps_empty_loop(self, registry) -> None:
+        """Site with NULL loop_map_id renders with empty loop string."""
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": -300, "name": "Orphan-1", "loop_map_id": None}],
+        )
+        availability = make_campground_availability(
+            facility_id="-100",
+            campsites={
+                "-300": make_campsite_availability(
+                    campsite_id="-300", site="-300", loop="",
+                ),
+            },
+        )
+
+        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+
+        assert availability.campsites["-300"].site == "Orphan-1"
+        assert availability.campsites["-300"].loop == ""
+
+    def test_unknown_site_in_response_left_alone(self, registry) -> None:
+        """Sites in availability but not in cache (e.g., new since seed) keep raw label."""
+        registry.bulk_upsert_wa_sites(
+            "-100",
+            [{"resource_id": -300, "name": "Known", "loop_map_id": None}],
+        )
+        availability = make_campground_availability(
+            facility_id="-100",
+            campsites={
+                "-300": make_campsite_availability(campsite_id="-300", site="-300"),
+                "-999": make_campsite_availability(campsite_id="-999", site="-999"),
+            },
+        )
+
+        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+
+        assert availability.campsites["-300"].site == "Known"
+        assert availability.campsites["-999"].site == "-999"
