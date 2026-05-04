@@ -93,6 +93,18 @@ class BookingSystem(StrEnum):
     ID_STATE = "id_state"  # ReserveAmerica
     FCFS = "fcfs"  # First-come-first-served, no online system
 
+    @classmethod
+    def _missing_(cls, value):
+        # Accept dash-style aliases (e.g. "wa-state") in addition to the
+        # canonical underscore form. Avoids a recurring footgun at API/CLI
+        # boundaries where one style is used but the enum expects the other.
+        if isinstance(value, str) and "-" in value:
+            try:
+                return cls(value.replace("-", "_"))
+            except ValueError:
+                pass
+        return None
+
 
 class Campground(BaseModel):
     """A campground in the local registry, enriched beyond API metadata."""
