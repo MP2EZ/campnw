@@ -1,5 +1,13 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+
+// SaveToTripButton uses useAuth() which requires AuthProvider context.
+// Mock it the same way components.test.tsx does — keeps these tests focused
+// on ItineraryCard rendering without coupling to the auth context.
+vi.mock('../components/SaveToTripButton', () => ({
+  SaveToTripButton: () => <button>Save to trip</button>,
+}))
+
 import { ItineraryCard, parseItinerary } from '../components/ItineraryCard'
 import type { ItineraryLeg } from '../components/ItineraryCard'
 

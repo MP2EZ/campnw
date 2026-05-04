@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { track } from "../api";
+import { SaveToTripButton } from "./SaveToTripButton";
 
 export interface ItineraryLeg {
   name: string;
@@ -47,21 +48,28 @@ export const ItineraryCard = memo(function ItineraryCard({ leg, index }: { leg: 
           </div>
         )}
         {leg.booking_url && (
-          <a
-            href={leg.booking_url}
-            target="_blank"
-            rel="noopener"
-            className="itinerary-card-book"
-            onClick={() => track("book_click", {
-              facility_id: leg.facility_id,
-              name: leg.name,
-              source: leg.booking_system,
-              type: "itinerary",
-              leg_index: index,
-            })}
-          >
-            Book
-          </a>
+          <div className="itinerary-card-actions">
+            <a
+              href={leg.booking_url}
+              target="_blank"
+              rel="noopener"
+              className="itinerary-card-book"
+              onClick={() => track("book_click", {
+                facility_id: leg.facility_id,
+                name: leg.name,
+                source: leg.booking_system,
+                type: "itinerary",
+                leg_index: index,
+              })}
+            >
+              Book
+            </a>
+            <SaveToTripButton
+              facilityId={leg.facility_id}
+              source={leg.booking_system}
+              name={leg.name}
+            />
+          </div>
         )}
       </div>
     </div>
