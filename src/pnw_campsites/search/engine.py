@@ -886,6 +886,32 @@ class SearchEngine:
                 action_chips=chips,
             )
 
+    def _enrich_wa_availability(
+        self, park_facility_id: str, availability: CampgroundAvailability
+    ) -> None:
+        """Replace synthetic resource_id labels with cached human site/loop names.
+
+        WA State's GoingToCamp availability API returns no human-readable site
+        identifiers — only opaque integer IDs. Real names live in the
+        wa_state_sites + wa_state_loops cache populated by the metadata seeder.
+        Mutates `availability.campsites[*].site` and `.loop` in place. No-op
+        if the cache is empty for the park (graceful pre-seed fallback).
+        """
+        index = self._registry.get_wa_site_index(park_facility_id)
+        if not index:
+            return
+        for campsite_id, campsite in availability.campsites.items():
+            try:
+                res_id = int(campsite_id)
+            except ValueError:
+                continue
+            info = index.get(res_id)
+            if not info:
+                continue
+            name, loop_title = info
+            campsite.site = name
+            campsite.loop = loop_title or ""
+
     async def _check_campground(
         self,
         campground: Campground,
@@ -904,6 +930,7 @@ class SearchEngine:
                 availability = await self._goingtocamp.get_availability(
                     int(campground.facility_id), start_month, end_month
                 )
+                self._enrich_wa_availability(campground.facility_id, availability)
             elif campground.booking_system == BookingSystem.OR_STATE:
                 if not self._reserveamerica:
                     return CampgroundResult(

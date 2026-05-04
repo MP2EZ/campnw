@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from pnw_campsites.analytics.notification_quality import (
-    MIN_NOTIFICATIONS,
     generate_quality_report,
     get_notification_stats,
 )

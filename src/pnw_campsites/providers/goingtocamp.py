@@ -109,6 +109,34 @@ class GoingToCampClient:
         ]
 
     # -------------------------------------------------------------------
+    # Site/loop metadata (for one-time enrichment)
+    # -------------------------------------------------------------------
+
+    async def get_park_resources(self, resource_location_id: int) -> dict:
+        """Fetch every site (resource) for a park keyed by resource_id.
+
+        Each value contains localizedValues[0].name (the human site label
+        like "L03" or "MT8") and mapIds (the loop maps the site belongs to).
+        Used by the one-time site/loop name enrichment seeder.
+        """
+        return await self._get(
+            "/api/resourcelocation/resources",
+            params={"resourceLocationId": resource_location_id},
+        )
+
+    async def get_park_maps(self, resource_location_id: int) -> list[dict]:
+        """Fetch all maps for a park, including leaf loop maps.
+
+        Each leaf map has localizedValues[0].title ("Lower Loop A") and
+        a description ("Sites 79-145..."). Used by the one-time site/loop
+        name enrichment seeder.
+        """
+        return await self._get(
+            "/api/maps",
+            params={"resourceLocationId": resource_location_id},
+        )
+
+    # -------------------------------------------------------------------
     # Availability
     # -------------------------------------------------------------------
 
@@ -223,7 +251,9 @@ class GoingToCampClient:
 
             campsites[res_id] = CampsiteAvailability(
                 campsite_id=res_id,
-                site=f"WA-{res_id}",
+                # Bare resource_id; engine enriches with cached human name from
+                # wa_state_sites if the metadata seeder has populated it.
+                site=str(res_id),
                 loop="",
                 campsite_type="STANDARD",
                 type_of_use="Overnight",

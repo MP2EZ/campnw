@@ -24,6 +24,7 @@ from pnw_campsites.search.engine import (
 )
 from pnw_campsites.urls import (
     or_state_availability_url,
+    or_state_campsite_booking_url,
     recgov_availability_url,
     recgov_campsite_booking_url,
     wa_state_availability_url,
@@ -220,10 +221,15 @@ def _build_booking_url(
     booking_system: BookingSystem,
     start_date: date,
     end_date: date,
+    slug: str = "",
 ) -> str | None:
     if booking_system == BookingSystem.RECGOV:
         return recgov_campsite_booking_url(
             facility_id, campsite_id, start_date, end_date
+        )
+    if booking_system == BookingSystem.OR_STATE and slug:
+        return or_state_campsite_booking_url(
+            facility_id, slug, campsite_id, start_date, end_date
         )
     return None
 
@@ -251,6 +257,7 @@ def _format_result(
                 cg.booking_system,
                 date.fromisoformat(w.start_date),
                 date.fromisoformat(w.end_date),
+                slug=cg.booking_url_slug,
             )
         windows.append(
             WindowResponse(

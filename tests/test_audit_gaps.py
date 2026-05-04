@@ -667,10 +667,9 @@ class TestFormatResult:
 
     def test_basic_recgov_result(self):
         """Should format a basic rec.gov result with windows and URLs."""
-        from tests.conftest import make_campground
-
         from pnw_campsites.routes.search import _format_result
         from pnw_campsites.search.engine import AvailableWindow, CampgroundResult
+        from tests.conftest import make_campground
 
         cg = make_campground(
             facility_id="232465",
@@ -710,10 +709,9 @@ class TestFormatResult:
 
     def test_fcfs_window_has_no_booking_url(self):
         """FCFS windows should not have booking URLs."""
-        from tests.conftest import make_campground
-
         from pnw_campsites.routes.search import _format_result
         from pnw_campsites.search.engine import AvailableWindow, CampgroundResult
+        from tests.conftest import make_campground
 
         cg = make_campground(facility_id="123")
         window = AvailableWindow(
@@ -735,10 +733,9 @@ class TestFormatResult:
 
     def test_no_windows_gives_no_availability_url(self):
         """Result with no windows should have no availability URL."""
-        from tests.conftest import make_campground
-
         from pnw_campsites.routes.search import _format_result
         from pnw_campsites.search.engine import CampgroundResult
+        from tests.conftest import make_campground
 
         cg = make_campground(facility_id="999")
         result = CampgroundResult(campground=cg, available_windows=[])
@@ -749,11 +746,10 @@ class TestFormatResult:
 
     def test_wa_state_result_has_no_booking_url(self):
         """WA State Park results don't have per-site booking URLs."""
-        from tests.conftest import make_campground
-
         from pnw_campsites.registry.models import BookingSystem
         from pnw_campsites.routes.search import _format_result
         from pnw_campsites.search.engine import AvailableWindow, CampgroundResult
+        from tests.conftest import make_campground
 
         cg = make_campground(
             facility_id="-2147483624",
@@ -776,10 +772,9 @@ class TestFormatResult:
 
     def test_error_result_preserved(self):
         """Error message from the engine should be preserved."""
-        from tests.conftest import make_campground
-
         from pnw_campsites.routes.search import _format_result
         from pnw_campsites.search.engine import CampgroundResult
+        from tests.conftest import make_campground
 
         cg = make_campground(facility_id="404")
         result = CampgroundResult(
@@ -793,10 +788,9 @@ class TestFormatResult:
 
     def test_drive_time_preserved(self):
         """Estimated drive time should be passed through."""
-        from tests.conftest import make_campground
-
         from pnw_campsites.routes.search import _format_result
         from pnw_campsites.search.engine import CampgroundResult
+        from tests.conftest import make_campground
 
         cg = make_campground(facility_id="789")
         result = CampgroundResult(

@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import sys
 import os
-
-import pytest
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from pnw_campsites.registry.models import RIDBFacility
 from seed_registry import is_campground
+
+from pnw_campsites.registry.models import RIDBFacility
 
 
 def _facility(name: str, lat: float = 47.0, lon: float = -121.0, enabled: bool = True) -> RIDBFacility:

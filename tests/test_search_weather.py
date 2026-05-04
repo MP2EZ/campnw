@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from pnw_campsites.routes.search import _weather_date, _lookup_weather_single
+from pnw_campsites.routes.search import _lookup_weather_single, _weather_date
 
 
 def test_weather_date_midpoint():
@@ -31,7 +31,8 @@ def test_lookup_weather_single_zero_coords():
 
 def test_lookup_weather_single_uncached(tmp_path):
     """Uncached location returns None gracefully."""
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
+
     from pnw_campsites.registry.db import CampgroundRegistry
 
     reg = CampgroundRegistry(tmp_path / "registry.db")
@@ -47,7 +48,8 @@ def test_lookup_weather_single_uncached(tmp_path):
 
 def test_lookup_weather_single_cached(tmp_path):
     """Cached weather is returned correctly."""
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
+
     from pnw_campsites.registry.db import CampgroundRegistry
 
     reg = CampgroundRegistry(tmp_path / "registry.db")

@@ -9,7 +9,6 @@ import jwt as pyjwt
 import pytest
 from fastapi.testclient import TestClient
 
-import pnw_campsites.api as api_module
 from pnw_campsites.monitor.db import User
 
 _TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"

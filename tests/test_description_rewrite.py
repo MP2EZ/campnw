@@ -11,7 +11,6 @@ from pnw_campsites.enrichment.llm_tags import generate_description
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import BookingSystem, Campground
 
-
 # ---------------------------------------------------------------------------
 # generate_description tests
 # ---------------------------------------------------------------------------

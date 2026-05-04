@@ -1,6 +1,7 @@
 """Test IP extraction prefers Fly-Client-IP."""
 
 from unittest.mock import MagicMock
+
 from pnw_campsites.routes.deps import get_client_ip
 
 

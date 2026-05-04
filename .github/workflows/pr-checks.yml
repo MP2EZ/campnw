@@ -3,6 +3,10 @@ name: PR Checks
 on:
   pull_request:
     branches: [main, dev]
+  push:
+    # Also run on direct pushes so commits that bypass PRs get the same checks
+    # (security scan, lighthouse, bundle-size enforcement, frontend tests).
+    branches: [main, dev]
 
 jobs:
   test:
@@ -53,7 +57,9 @@ jobs:
         run: |
           pip install pip-audit
           pip install -e ".[api]"
-          pip-audit
+          # CVE-2026-3219: pip vulnerability with no patched version available yet.
+          # Revisit periodically — when pip-audit reports a Fix Version, drop the ignore.
+          pip-audit --ignore-vuln CVE-2026-3219
 
       - name: Setup Node
         uses: actions/setup-node@v4

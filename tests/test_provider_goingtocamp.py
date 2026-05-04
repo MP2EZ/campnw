@@ -70,7 +70,9 @@ class TestBuildCampsites:
         assert "2147482394" in result
         campsite = result["2147482394"]
         assert campsite.campsite_id == "2147482394"
-        assert campsite.site == "WA-2147482394"
+        # Provider returns the bare resource_id; the search engine enriches it
+        # with cached human names from wa_state_sites at availability-resolve time.
+        assert campsite.site == "2147482394"
         assert campsite.loop == ""
         assert campsite.max_num_people == 8
         assert (
@@ -176,8 +178,8 @@ class TestBuildCampsites:
         for campsite in result.values():
             assert campsite.loop == ""
 
-    def test_site_format_wa_prefix(self) -> None:
-        """site field formatted as WA-{resource_id}."""
+    def test_site_is_bare_resource_id(self) -> None:
+        """site field is the bare resource_id; engine enriches it with cached names."""
         client = GoingToCampClient()
         resources = {
             "2147482394": [{"availability": 0}],
@@ -188,7 +190,7 @@ class TestBuildCampsites:
         result = client._build_campsites(resources, start_date, end_date)
 
         campsite = result["2147482394"]
-        assert campsite.site == "WA-2147482394"
+        assert campsite.site == "2147482394"
 
     def test_multiple_sites_all_transformed(self) -> None:
         """Multiple resource IDs all transformed correctly."""
@@ -381,6 +383,61 @@ class TestGetSyncErrorHandling:
             client._get_sync("/api/test")
 
         assert client._session.get.call_count == 2
+
+
+class TestParkMetadataEndpoints:
+    """Tests for get_park_resources and get_park_maps."""
+
+    @pytest.mark.asyncio
+    async def test_get_park_resources_passes_resource_location_id(self) -> None:
+        """get_park_resources hits /api/resourcelocation/resources with the right id."""
+        client = GoingToCampClient()
+        client._session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "-2147481621": {
+                "resourceId": -2147481621,
+                "localizedValues": [{"name": "L03"}],
+                "mapIds": [-2147483615],
+            }
+        }
+        client._session.get.return_value = mock_resp
+
+        result = await client.get_park_resources(-2147483624)
+
+        client._session.get.assert_called_once()
+        call_url, call_kwargs = client._session.get.call_args.args, client._session.get.call_args.kwargs
+        assert "/api/resourcelocation/resources" in call_url[0]
+        assert call_kwargs["params"]["resourceLocationId"] == -2147483624
+        assert "-2147481621" in result
+        assert result["-2147481621"]["localizedValues"][0]["name"] == "L03"
+
+    @pytest.mark.asyncio
+    async def test_get_park_maps_passes_resource_location_id(self) -> None:
+        """get_park_maps hits /api/maps with resourceLocationId param."""
+        client = GoingToCampClient()
+        client._session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = [
+            {
+                "mapId": -2147483615,
+                "localizedValues": [{
+                    "title": "Lower Loop A",
+                    "description": "Sites 79-145",
+                }],
+            }
+        ]
+        client._session.get.return_value = mock_resp
+
+        result = await client.get_park_maps(-2147483624)
+
+        client._session.get.assert_called_once()
+        call_url, call_kwargs = client._session.get.call_args.args, client._session.get.call_args.kwargs
+        assert "/api/maps" in call_url[0]
+        assert call_kwargs["params"]["resourceLocationId"] == -2147483624
+        assert result[0]["localizedValues"][0]["title"] == "Lower Loop A"
 
 
 class TestCategoryConstants:

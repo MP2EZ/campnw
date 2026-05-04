@@ -4,6 +4,7 @@ from datetime import date
 
 from pnw_campsites.urls import (
     or_state_availability_url,
+    or_state_campsite_booking_url,
     recgov_availability_url,
     recgov_campground_url,
     recgov_campsite_booking_url,
@@ -241,3 +242,54 @@ class TestOrStateAvailabilityUrl:
             start_date=None, end_date=None,
         )
         assert "?" not in url
+
+
+class TestOrStateCampsitBookingUrl:
+    """Tests for or_state_campsite_booking_url."""
+
+    def test_basic_structure(self):
+        """URL contains slug, park_id, site_id, and date params."""
+        start = date(2026, 6, 15)
+        end = date(2026, 6, 17)
+        url = or_state_campsite_booking_url(
+            "402178", "fort-stevens-state-park", "3171", start, end,
+        )
+        assert "/explore/fort-stevens-state-park/OR/402178/3171/campsite-booking" in url
+        assert "arrivalDate=2026-06-15" in url
+        assert "departureDate=2026-06-17" in url
+
+    def test_full_url(self):
+        """Full URL matches the verified-working pattern."""
+        start = date(2026, 6, 15)
+        end = date(2026, 6, 17)
+        url = or_state_campsite_booking_url(
+            "402178", "fort-stevens-state-park", "3171", start, end,
+        )
+        expected = (
+            "https://www.reserveamerica.com/explore/"
+            "fort-stevens-state-park/OR/402178/3171/campsite-booking"
+            "?arrivalDate=2026-06-15"
+            "&departureDate=2026-06-17"
+        )
+        assert url == expected
+
+    def test_dates_use_iso_format(self):
+        """Both date parameters use ISO format."""
+        start = date(2026, 12, 25)
+        end = date(2026, 12, 27)
+        url = or_state_campsite_booking_url(
+            "402334", "jessie-m-honeyman-memorial-state-park", "999",
+            start, end,
+        )
+        assert "arrivalDate=2026-12-25" in url
+        assert "departureDate=2026-12-27" in url
+
+    def test_single_night_booking(self):
+        """Consecutive dates work (next-day departure)."""
+        start = date(2026, 8, 10)
+        end = date(2026, 8, 11)
+        url = or_state_campsite_booking_url(
+            "402178", "fort-stevens-state-park", "1", start, end,
+        )
+        assert "arrivalDate=2026-08-10" in url
+        assert "departureDate=2026-08-11" in url
