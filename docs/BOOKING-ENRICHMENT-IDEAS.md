@@ -189,7 +189,7 @@ User submits intent + payment authorization on Campable. A Claude-with-computer-
 - **Pros:** Genuinely seamless from the user's POV. Differentiates Campable from every other discovery tool. Degrades gracefully — if the agent fails, user falls back to manual booking. Compute cost (~$0.50/booking) is acceptable for a paid feature.
 - **Cons:** **ToS risk is non-zero** — rec.gov "automated reservation" prohibition is the load-bearing concern; the gray area is whether "user-watched, user-approved automation" falls outside it. Maintenance treadmill on every UI change. Payment-handoff design needs careful thought (probably hand off the cart link with everything filled, user enters card themselves). Latency budget per booking could be 30–60 seconds.
 
-**Status:** Research scheduled — see "Recommended next step." Distinct from the killed "full middle-man booking" because the user is in the loop (intent submitted explicitly, watching the agent, entering payment themselves) — different liability and ToS profile than headless mass automation.
+**Status:** ⚠️ **Research complete 2026-05-04 — recommended NOT to build as scoped.** Three independent disqualifiers: (1) **legal/ToS risk hardened in March 2026** — Amazon v. Perplexity established federal precedent that user-permitted AI agents can still violate CFAA when the platform's ToS prohibits automation, and both rec.gov and Aspira have sweeping anti-automation language; (2) **agent latency (~3 min) actually exceeds the manual baseline (~2.25 min)** at the booking moment, so there's no time-savings dividend; (3) **rec.gov has active enforcement** with documented account-ban policy. Full analysis: `docs/D4-AI-CONCIERGE-RESEARCH.md`. **Recommended:** ship D5 (human concierge) as the highest-leverage next move; park D4 until 9th Circuit rules on Perplexity appeal.
 
 **Effort to research:** ~3–4 hours (computer-use API status + ToS deep-read + architecture sketch + payment-handoff design + comparable products). **Effort to prototype on one provider:** ~1 week. **Effort to productize:** multi-week.
 
@@ -246,13 +246,13 @@ Rejected on second pass — adds a click and a decision in flow. Same content li
 
 ## Recommended next step
 
-**D1 research is complete; D4 is the next research priority.** Per the D1 findings (`docs/D1-BOOKMARKLET-RESEARCH.md`):
+**D1 and D4 research both complete; D5 is now the highest-leverage next move.** Per the two research docs:
 
-1. ~~**D1 research**~~ → done 2026-05-04. **Verdict: don't ship.** Auth walls + provider-account auto-fill collapse the value to ~22%, below the 60% decision threshold. The per-provider field maps and framework profiles ARE reusable for D4.
-2. **D4 research is now the next priority** (~3–4 hours). Strategy doc covering Anthropic computer-use API status, ToS analysis (rec.gov "automated reservation" prohibition vs. "user-watched, user-approved" automation), architecture sketch (sandboxed VM vs. browser pool, latency, cost-per-booking), payment-handoff design. Decision gate: green-light a prototype on rec.gov or fall back to D5 + per-trip-only bookmarklet.
+1. ~~**D1 research**~~ → done 2026-05-04. **Verdict: don't ship.** Auth walls + provider-account auto-fill collapse the value to ~22%, below the 60% decision threshold.
+2. ~~**D4 research**~~ → done 2026-05-04. **Verdict: don't build as scoped.** Three independent disqualifiers (legal/ToS, latency vs manual baseline, active enforcement). Amazon v. Perplexity (March 2026) directly addressed and rejected the "user-watched automation" theory D4 depended on.
+3. **D5 (human concierge) is now the highest-leverage next move** (~1 day to ship). Humans aren't bots; ToS doesn't apply; no legal exposure. Stripe Checkout + Notion form + Slack alert + you doing a few bookings to validate willingness-to-pay at $5–10/booking. Particularly compelling for the rec.gov rolling-release-at-7am-MT moment where users *would* pay to skip the race. Operationally limited to a few bookings/day, but that's enough to validate the wedge.
+4. **Per-trip-fields-only bookmarklet** remains as the smallest D-tier engineering option (~30 lines of JS, low ToS risk because it doesn't navigate or submit). Worth keeping as a paid-tier feature once D5 validates pricing.
+5. **Park D4 until the 9th Circuit rules on Perplexity appeal.** If the ruling narrows (distinguishes assistive from competitive AI, or carves out user-watched flows), reconsider. Otherwise stays parked.
+6. **One outreach email each to rec.gov and Aspira** asking about affiliate/partnership programs (folds into C8). Long-shot, but the only legitimate path to a fully automated D4.
 
-The ~22% savings from a "per-trip-fields-only" mini-bookmarklet remains as a low-cost consolation prize if D4 falls through — see D1's research doc for details.
-
-In parallel: **D5 (human concierge) as a free wedge** to validate willingness-to-pay before any technical work. Stripe + Notion form + a few hours of your time per booking. Particularly valuable for shaping what D4's automated version needs to do.
-
-The Tier A–C residual work (A2 inline UI, A3 push body, B4 ICS invites, B5 rec.gov release calendars) is real polish but no longer the highest-leverage frontier. Slot it after Tier D research clarifies what's worth investing in.
+The Tier A–C residual work (A2 inline UI, A3 push body, B4 ICS invites, B5 rec.gov release calendars) is real polish — slot it after D5 validates the paid-concierge demand, since the answer there might reframe what's worth investing in next.
