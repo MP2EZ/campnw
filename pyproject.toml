@@ -35,6 +35,17 @@ enrichment = [
     "anthropic==0.87.0",
 ]
 
+[tool.setuptools.package-data]
+# Non-Python files that must be packaged so SSR routes work in the deployed
+# image. Without these, pip install ".[api]" leaves Jinja templates and
+# SEO-page CSS out of site-packages, and every /tags, /this-weekend,
+# /campgrounds/{state}, /campgrounds/{state}/{slug} request returns 500
+# with TemplateNotFound. (Affected production from v1.3 ship until fixed.)
+"pnw_campsites" = [
+    "templates/*.html",
+    "seo-static/*",
+]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
