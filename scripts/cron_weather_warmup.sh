@@ -21,7 +21,7 @@ fi
 
 if echo "$OUTPUT" | grep -q "months cached"; then
     echo "Quota available — running full batch" >> /tmp/weather-warmup.log
-    .venv/bin/python3 scripts/warm_weather_cache.py --limit 140 >> /tmp/weather-warmup.log 2>&1
+    .venv/bin/python3 scripts/warm_weather_cache.py --limit 144 >> /tmp/weather-warmup.log 2>&1
 else
     echo "Test call failed: $OUTPUT" >> /tmp/weather-warmup.log
 fi
