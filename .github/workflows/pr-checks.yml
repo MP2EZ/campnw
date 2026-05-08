@@ -55,6 +55,10 @@ jobs:
 
       - name: Python CVE scan
         run: |
+          # Upgrade pip first — the pip version pre-installed by setup-python
+          # lags actual CVE patches (e.g. CVE-2026-6357 fixed in pip 26.1).
+          # Without this, pip-audit flags pip itself, regardless of project deps.
+          python -m pip install --upgrade pip
           pip install pip-audit
           pip install -e ".[api]"
           # CVE-2026-3219: pip vulnerability with no patched version available yet.
