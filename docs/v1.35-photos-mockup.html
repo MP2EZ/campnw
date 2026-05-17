@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>v1.35 — Source-site photos (Option B-minimal)</title>
+<style>
+:root {
+  --brand-green: #2d5016;
+  --brand-cream: #f5f5f0;
+  --brand-orange: #D4722A;
+
+  --src-recgov-badge-bg: #e8f0e0;
+  --src-recgov-badge-text: #2d5016;
+  --src-recgov-border: #5a8a32;
+
+  --src-wa-badge-bg: #e0f0ec;
+  --src-wa-badge-text: #14584a;
+  --src-wa-border: #1a8a7a;
+
+  --src-or-badge-bg: #fef3e0;
+  --src-or-badge-text: #7d5a1a;
+  --src-or-border: #d4920a;
+
+  --bg: #fafaf7;
+  --text: #1a1a1a;
+  --text-dim: #555;
+  --border: #e2e2dc;
+  --card-bg: #fff;
+  --chip-bg: #f0efe9;
+  --note-bg: #fff8e6;
+  --note-border: #d4920a;
+
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+  --space-4: 1rem; --space-5: 1.5rem; --space-6: 2rem;
+
+  --text-xs: 0.7rem; --text-sm: 0.75rem; --text-body: 0.8rem;
+  --text-base: 0.85rem; --text-md: 0.9rem; --text-lg: 1.1rem;
+
+  --radius-xs: 3px; --radius-sm: 6px; --radius-md: 8px;
+  --radius-lg: 10px; --radius-pill: 999px;
+
+  --shadow-card: 0 4px 12px rgba(0,0,0,0.08);
+  --transition-base: 0.15s;
+  --max-w-app: 960px;
+}
+
+[data-theme="dark"] {
+  --bg: #1a1a1a;
+  --text: #f5f5f0;
+  --text-dim: #aaa;
+  --border: #2e2e2a;
+  --card-bg: #232320;
+  --chip-bg: #2a2a26;
+  --note-bg: #2a2210;
+  --note-border: #c08820;
+
+  --src-recgov-badge-bg: #1e2e14;
+  --src-recgov-badge-text: #90c060;
+  --src-recgov-border: #5a8a38;
+  --src-wa-badge-bg: #142820;
+  --src-wa-badge-text: #50a898;
+  --src-wa-border: #1a7868;
+  --src-or-badge-bg: #2a2010;
+  --src-or-badge-text: #c89050;
+  --src-or-border: #c08820;
+  --shadow-card: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+.page {
+  max-width: var(--max-w-app);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+.page-header h1 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+.page-header .sub {
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  margin-top: var(--space-1);
+}
+
+.theme-toggle {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* ── Annotation banner ───────────────────────────────────────── */
+.note {
+  background: var(--note-bg);
+  border-left: 3px solid var(--note-border);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  margin: var(--space-4) 0;
+  color: var(--text);
+}
+.note strong { display: block; margin-bottom: var(--space-1); }
+.note code {
+  background: var(--chip-bg);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  font-size: 0.95em;
+}
+
+/* ── Result card ─────────────────────────────────────────────── */
+.result-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.card-recgov { border-left: 3px solid var(--src-recgov-border); }
+.card-wa_state { border-left: 3px solid var(--src-wa-border); }
+.card-or_state { border-left: 3px solid var(--src-or-border); }
+
+details > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  transition: background var(--transition-base);
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary:hover { background: var(--chip-bg); }
+
+.title-block { flex: 1; min-width: 0; }
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.title-row h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.source-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+}
+.badge-recgov { background: var(--src-recgov-badge-bg); color: var(--src-recgov-badge-text); }
+.badge-wa_state { background: var(--src-wa-badge-bg); color: var(--src-wa-badge-text); }
+.badge-or_state { background: var(--src-or-badge-bg); color: var(--src-or-badge-text); }
+
+.meta-row {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.tag-chip {
+  background: var(--chip-bg);
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+.chev {
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-dim);
+  transition: transform var(--transition-base);
+  flex-shrink: 0;
+}
+details[open] .chev { transform: rotate(180deg); }
+
+/* ── Card body (expanded) ────────────────────────────────────── */
+.card-body {
+  border-top: 1px solid var(--border);
+  padding: 0;
+}
+
+/* ── HERO PHOTO — the new bit ────────────────────────────────── */
+.hero {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--chip-bg);
+  overflow: hidden;
+}
+.hero img, .hero svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+/* Uniform photo treatment — flattens quality variance between sources
+   (Rec.gov ranger snapshots ↔ ReserveAmerica glossy shots). Applied only
+   to real photos; the postcard placeholder keeps full brand saturation. */
+.hero.is-photo img, .hero.is-photo svg {
+  filter: saturate(0.85) contrast(1.03);
+}
+.hero-attribution {
+  position: absolute;
+  bottom: var(--space-2);
+  right: var(--space-2);
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+.hero:hover .hero-attribution,
+.hero:focus-within .hero-attribution { opacity: 1; }
+
+.hero-pager {
+  position: absolute;
+  bottom: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(0,0,0,0.45);
+  border-radius: var(--radius-pill);
+}
+.hero-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+}
+.hero-dot.active { background: #fff; }
+
+/* ── Date blocks ─────────────────────────────────────────────── */
+.date-blocks {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+.date-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  background: var(--bg);
+}
+.date-block:last-child { margin-bottom: 0; }
+.date-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+.date-block-meta { color: var(--text-dim); font-weight: 400; }
+.sites-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.site-chip {
+  background: var(--src-recgov-badge-bg);
+  color: var(--src-recgov-badge-text);
+  padding: 2px 8px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-xs);
+  border: 1px solid transparent;
+}
+.card-wa_state .site-chip { background: var(--src-wa-badge-bg); color: var(--src-wa-badge-text); }
+.card-or_state .site-chip { background: var(--src-or-badge-bg); color: var(--src-or-badge-text); }
+
+.toolbar {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.btn {
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn-primary {
+  background: var(--brand-green);
+  color: #fff;
+  border-color: var(--brand-green);
+}
+
+/* ── Annotation pins on the mockup ───────────────────────────── */
+.pin {
+  position: relative;
+}
+.pin::after {
+  content: attr(data-pin);
+  position: absolute;
+  top: 50%;
+  right: -16px;
+  transform: translate(100%, -50%);
+  background: var(--brand-orange);
+  color: #fff;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  max-width: 240px;
+  white-space: normal;
+  width: 220px;
+  line-height: 1.35;
+}
+
+.section-label {
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin: var(--space-5) 0 var(--space-2);
+  font-weight: 600;
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="page-header">
+    <div>
+      <h1>v1.35 — Source-site photos · Option B-minimal</h1>
+      <div class="sub">Hero photo + SVG postcard placeholder, shown only on expand</div>
+    </div>
+    <button class="theme-toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">🌓 Theme</button>
+  </div>
+
+  <div class="note">
+    <strong>What this is</strong>
+    Click any result to expand. Photos appear <em>only</em> in the expanded state — the scan path (collapsed list) is untouched. Card #1 shows a real source photo. Card #2 shows the SVG postcard placeholder for campgrounds with no source photo (~9% of registry, mostly WA State Parks).
+  </div>
+
+  <div class="section-label">Collapsed scan view (unchanged)</div>
+
+  <!-- ── Collapsed Rec.gov card ────────────────────────────────── -->
+  <details class="result-card card-recgov">
+    <summary>
+      <div class="title-block">
+        <div class="title-row">
+          <h3>Cougar Rock Campground</h3>
+          <span class="source-badge badge-recgov">Rec.gov</span>
+        </div>
+        <div class="meta-row">
+          <span>Mt. Rainier NP</span>
+          <span>·</span>
+          <span>2h 10m drive</span>
+          <span class="tag-chip">old-growth</span>
+          <span class="tag-chip">river</span>
+        </div>
+      </div>
+      <span class="chev">▾</span>
+    </summary>
+    <div class="card-body">
+      <div style="padding: var(--space-4); color: var(--text-dim); font-size: var(--text-sm);">
+        (Expand: hero photo appears here, then date blocks.)
+      </div>
+    </div>
+  </details>
+
+  <!-- ── Collapsed OR Parks card ───────────────────────────────── -->
+  <details class="result-card card-or_state">
+    <summary>
+      <div class="title-block">
+        <div class="title-row">
+          <h3>Cape Lookout State Park</h3>
+          <span class="source-badge badge-or_state">OR Parks</span>
+        </div>
+        <div class="meta-row">
+          <span>Oregon Coast</span>
+          <span>·</span>
+          <span>4h 50m drive</span>
+          <span class="tag-chip">oceanfront</span>
+          <span class="tag-chip">pet-friendly</span>
+        </div>
+      </div>
+      <span class="chev">▾</span>
+    </summary>
+    <div class="card-body">
+      <div style="padding: var(--space-4); color: var(--text-dim); font-size: var(--text-sm);">
+        (Expand: hero photo appears here, then date blocks.)
+      </div>
+    </div>
+  </details>
+
+  <div class="section-label">Expanded — with source photo</div>
+
+  <!-- ── EXPANDED Rec.gov card WITH PHOTO ──────────────────────── -->
+  <details class="result-card card-recgov" open>
+    <summary>
+      <div class="title-block">
+        <div class="title-row">
+          <h3>Ohanapecosh Campground</h3>
+          <span class="source-badge badge-recgov">Rec.gov</span>
+        </div>
+        <div class="meta-row">
+          <span>Mt. Rainier NP</span>
+          <span>·</span>
+          <span>2h 30m drive</span>
+          <span class="tag-chip">old-growth</span>
+          <span class="tag-chip">river</span>
+        </div>
+      </div>
+      <span class="chev">▾</span>
+    </summary>
+    <div class="card-body">
+      <div class="hero is-photo">
+        <!-- Inline SVG = stand-in for real <img src=cdn loading="lazy"> -->
+        <svg viewBox="0 0 600 338" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ffd9a8"/>
+              <stop offset="55%" stop-color="#f4a878"/>
+              <stop offset="100%" stop-color="#7c5a4a"/>
+            </linearGradient>
+            <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#3a4a2a"/>
+              <stop offset="100%" stop-color="#1f2818"/>
+            </linearGradient>
+          </defs>
+          <rect width="600" height="338" fill="url(#sky)"/>
+          <!-- Far ridge -->
+          <path d="M0,180 L80,150 L160,170 L240,140 L320,160 L400,135 L480,155 L600,140 L600,200 L0,200 Z" fill="#5d4f4a" opacity="0.7"/>
+          <!-- Near ridge -->
+          <path d="M0,210 L60,195 L140,215 L220,190 L300,205 L380,185 L460,210 L540,195 L600,205 L600,260 L0,260 Z" fill="#2d3528"/>
+          <!-- Forest line -->
+          <g fill="#1a2014">
+            <polygon points="40,260 50,220 60,260"/>
+            <polygon points="80,260 92,215 104,260"/>
+            <polygon points="125,260 138,225 151,260"/>
+            <polygon points="175,260 188,210 201,260"/>
+            <polygon points="225,260 240,220 255,260"/>
+            <polygon points="280,260 293,215 306,260"/>
+            <polygon points="335,260 348,225 361,260"/>
+            <polygon points="390,260 405,210 420,260"/>
+            <polygon points="445,260 458,220 471,260"/>
+            <polygon points="500,260 513,215 526,260"/>
+            <polygon points="550,260 565,225 580,260"/>
+          </g>
+          <!-- Ground -->
+          <rect y="260" width="600" height="78" fill="url(#ground)"/>
+          <!-- Tent -->
+          <g>
+            <polygon points="240,310 290,260 340,310" fill="#c44a2a"/>
+            <polygon points="290,260 340,310 320,310 280,272" fill="#9a3a1f"/>
+            <line x1="290" y1="260" x2="290" y2="310" stroke="#1a1a1a" stroke-width="1.5"/>
+          </g>
+          <!-- Campfire glow -->
+          <ellipse cx="400" cy="305" rx="18" ry="6" fill="#ffb070" opacity="0.6"/>
+          <polygon points="395,305 400,290 405,305" fill="#ff7a3a"/>
+          <polygon points="397,305 400,295 403,305" fill="#ffd060"/>
+        </svg>
+        <div class="hero-pager" aria-label="Photo 1 of 3">
+          <span class="hero-dot active"></span>
+          <span class="hero-dot"></span>
+          <span class="hero-dot"></span>
+        </div>
+        <div class="hero-attribution">Photo: Recreation.gov</div>
+      </div>
+      <div class="date-blocks">
+        <div class="date-block">
+          <div class="date-block-header">
+            <span>Fri Jun 5 – Sun Jun 7 <span class="date-block-meta">· 2 nights</span></span>
+            <span class="date-block-meta">4 sites</span>
+          </div>
+          <div class="sites-row">
+            <span class="site-chip">Site A12</span>
+            <span class="site-chip">Site A18</span>
+            <span class="site-chip">Site B04</span>
+            <span class="site-chip">Site C22</span>
+          </div>
+        </div>
+        <div class="date-block">
+          <div class="date-block-header">
+            <span>Thu Jun 11 – Sun Jun 14 <span class="date-block-meta">· 3 nights</span></span>
+            <span class="date-block-meta">2 sites</span>
+          </div>
+          <div class="sites-row">
+            <span class="site-chip">Site A07</span>
+            <span class="site-chip">Site B16</span>
+          </div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-primary">Book on Rec.gov ↗</button>
+        <button class="btn">♥ Watch</button>
+        <button class="btn">+ Save to trip</button>
+      </div>
+    </div>
+  </details>
+
+  <div class="note pin" data-pin="aspect-ratio reserves space — no CLS even before image loads">
+    <strong>Why a 16:9 SVG, not an &lt;img&gt;</strong>
+    In production: <code>&lt;img src="…/cdn/photo.webp" loading="lazy" decoding="async" alt="Ohanapecosh Campground, old-growth"&gt;</code> inside a wrapper with <code>aspect-ratio: 16/9</code>. Hotlinked from Rec.gov CDN with URLs cached in registry (<code>image_urls TEXT</code> column) + a <code>last_verified_at</code> timestamp. Inline SVG above is just the mockup's stand-in.
+  </div>
+
+  <div class="section-label">Expanded — no source photo (placeholder postcard)</div>
+
+  <!-- ── EXPANDED WA Parks card WITH PLACEHOLDER ──────────────── -->
+  <details class="result-card card-wa_state" open>
+    <summary>
+      <div class="title-block">
+        <div class="title-row">
+          <h3>Deception Pass State Park</h3>
+          <span class="source-badge badge-wa_state">WA Parks</span>
+        </div>
+        <div class="meta-row">
+          <span>Whidbey Island</span>
+          <span>·</span>
+          <span>1h 45m drive</span>
+          <span class="tag-chip">oceanfront</span>
+          <span class="tag-chip">forest</span>
+          <span class="tag-chip">family</span>
+        </div>
+      </div>
+      <span class="chev">▾</span>
+    </summary>
+    <div class="card-body">
+      <div class="hero">
+        <!-- SVG POSTCARD PLACEHOLDER — deterministic from registry data -->
+        <svg viewBox="0 0 600 338" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <pattern id="grain" x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse">
+              <rect width="4" height="4" fill="#e0f0ec"/>
+              <circle cx="2" cy="2" r="0.5" fill="#cce4dc" opacity="0.6"/>
+            </pattern>
+          </defs>
+          <rect width="600" height="338" fill="url(#grain)"/>
+          <!-- Subtle stripe accent (top, source-color) -->
+          <rect width="600" height="6" fill="#1a8a7a"/>
+          <!-- Madrona pin centered top -->
+          <g transform="translate(300, 90)">
+            <!-- Pin shape -->
+            <path d="M0,-30 C-22,-30 -28,-12 -28,0 C-28,18 0,40 0,40 C0,40 28,18 28,0 C28,-12 22,-30 0,-30 Z" fill="#1a8a7a" opacity="0.18"/>
+            <!-- Madrona simplified — S-trunk + 3 branches + scalloped canopy -->
+            <path d="M-2,18 Q-6,8 -3,-2 Q1,-12 -2,-22" stroke="#14584a" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <circle cx="-8" cy="-10" r="6" fill="#14584a"/>
+            <circle cx="0" cy="-18" r="7" fill="#14584a"/>
+            <circle cx="8" cy="-12" r="5" fill="#14584a"/>
+          </g>
+          <!-- Campground name -->
+          <text x="300" y="195" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="26" font-weight="600" fill="#14584a">Deception Pass</text>
+          <text x="300" y="222" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#14584a" opacity="0.7">Whidbey Island, WA</text>
+          <!-- Tag glyphs row -->
+          <g transform="translate(300, 268)" fill="#14584a">
+            <!-- Wave -->
+            <g transform="translate(-60, 0)">
+              <path d="M-12,2 Q-6,-4 0,2 T12,2" stroke="#14584a" stroke-width="2" fill="none" stroke-linecap="round"/>
+              <text y="22" text-anchor="middle" font-size="10" font-family="sans-serif" opacity="0.7">oceanfront</text>
+            </g>
+            <!-- Tree -->
+            <g transform="translate(0, 0)">
+              <polygon points="-8,4 0,-10 8,4"/>
+              <rect x="-1.5" y="4" width="3" height="5"/>
+              <text y="22" text-anchor="middle" font-size="10" font-family="sans-serif" opacity="0.7">forest</text>
+            </g>
+            <!-- Tent -->
+            <g transform="translate(60, 0)">
+              <polygon points="-10,6 0,-10 10,6" fill="none" stroke="#14584a" stroke-width="2" stroke-linejoin="round"/>
+              <line x1="0" y1="-10" x2="0" y2="6" stroke="#14584a" stroke-width="2"/>
+              <text y="22" text-anchor="middle" font-size="10" font-family="sans-serif" opacity="0.7">family</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="date-blocks">
+        <div class="date-block">
+          <div class="date-block-header">
+            <span>Sat May 23 – Sun May 24 <span class="date-block-meta">· 1 night</span></span>
+            <span class="date-block-meta">3 sites</span>
+          </div>
+          <div class="sites-row">
+            <span class="site-chip">WA-2147482394</span>
+            <span class="site-chip">WA-2147482401</span>
+            <span class="site-chip">WA-2147482415</span>
+          </div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-primary">Book on WA Parks ↗</button>
+        <button class="btn">♥ Watch</button>
+        <button class="btn">+ Save to trip</button>
+      </div>
+    </div>
+  </details>
+
+  <div class="note pin" data-pin="signals 'we know this place' — not 'broken image'">
+    <strong>SVG postcard placeholder</strong>
+    Deterministic from registry data: source color stripe, Madrona pin watermark, campground name + region in the existing type scale, 2-3 tag glyphs from the campground's <code>tags</code> column. Zero network cost, no broken-state. Renders identically across all browsers. Generated server-side or inline at render time — no asset pipeline.
+  </div>
+
+  <div class="section-label">Implementation sketch</div>
+
+  <div class="note">
+    <strong>Backend (Python)</strong>
+    <ul style="margin: var(--space-2) 0 0; padding-left: var(--space-4);">
+      <li>Add <code>image_urls TEXT DEFAULT '[]'</code> + <code>image_verified_at TEXT</code> to <code>campgrounds</code> table.</li>
+      <li>Extend <code>scripts/seed_registry.py</code> to fetch <code>GET /facilities/{id}/media</code> from RIDB; store first 3 photo URLs as JSON array.</li>
+      <li>Extend OR seed (<code>scripts/seed_or_state.py</code>) to extract photo URLs from existing Redux scrape — no new requests.</li>
+      <li>API response: <code>SearchResponse.results[].image_urls</code> + <code>image_attribution</code>.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <strong>Frontend (React)</strong>
+    <ul style="margin: var(--space-2) 0 0; padding-left: var(--space-4);">
+      <li>New <code>&lt;HeroPhoto&gt;</code> component, rendered inside <code>ResultCard.tsx</code> body (only when <code>expanded === true</code>).</li>
+      <li>Wrapper has <code>aspect-ratio: 16/9</code>, <code>object-fit: cover</code>, and <code>filter: saturate(0.85) contrast(1.03)</code> to flatten quality variance between sources. <code>&lt;img loading="lazy" decoding="async"&gt;</code> with alt = <code>${name}, ${tags[0]}</code>.</li>
+      <li>If <code>image_urls.length === 0</code> → render <code>&lt;PostcardPlaceholder&gt;</code> instead (SVG component, deterministic from name/region/tags/source).</li>
+      <li>Track PostHog event <code>card_photo_viewed</code> on expand; compare expand→outbound-click conversion vs. control.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <strong>What we ship to measure</strong>
+    Ship to 100% behind kill-switch flag <code>hero_photos</code>. Two weeks of data answers:
+    <ul style="margin: var(--space-2) 0 0; padding-left: var(--space-4);">
+      <li>Does expansion rate lift? (do collapsed cards <em>also</em> get expanded more once users know photos exist?)</li>
+      <li>Does expand → outbound-click conversion lift?</li>
+      <li>Does the no-photo cohort (WA Parks) underperform — i.e., is the 9% gap a real problem?</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

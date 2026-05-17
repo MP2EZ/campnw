@@ -1,7 +1,7 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
-**Last updated:** April 2026
-**Current version:** v1.32 shipped (deployed at campable.co)
+**Last updated:** May 2026
+**Current version:** v1.34 shipped (deployed at campable.co; weather cache warmup completing)
 
 ---
 
@@ -36,13 +36,14 @@ v1.3    [SHIPPED]  SEO + Discoverability — Campground profile pages, sitemap, 
 v1.31   [SHIPPED]  Audit Fixes          — Security hardening, perf optimizations, WCAG AA compliance
 v1.32   [SHIPPED]  Accurate Drive Times — Mapbox routing, drive_times table, tiered search lookup
 v1.33   ------->   Supabase Auth        — Replace custom auth with Supabase, Bearer tokens, auto-provisioning
-v1.34   ------->   Weather Context      — Typical temps + precipitation on search results via Visual Crossing
-v1.35   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
+v1.34   [SHIPPED]  Weather Context      — Typical temps + precipitation on search results via Visual Crossing
+v1.35   ------->   Source Photos        — Campground photos from RIDB/RA + SVG postcard placeholder for missing sources
+v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
 v1.4    ------->   Monetization Launch  — Pro tier gate, payment, freemium conversion flows
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
-Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product. v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
+Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product. v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -1104,7 +1105,7 @@ Mapbox Matrix API may return `null` for campgrounds on unmapped forest service r
 ## v1.33 "Supabase Auth"
 
 ### Theme
-Replace custom email/password auth with Supabase Auth. No existing users — clean swap with no migration bridges. OAuth providers configured in Supabase dashboard but not connected yet (placeholders for v1.35). Auth data (email, password, OAuth identities) moves to Supabase; profile/preferences stay in SQLite keyed by Supabase user UUID.
+Replace custom email/password auth with Supabase Auth. No existing users — clean swap with no migration bridges. OAuth providers configured in Supabase dashboard but not connected yet (placeholders for v1.36). Auth data (email, password, OAuth identities) moves to Supabase; profile/preferences stay in SQLite keyed by Supabase user UUID.
 
 ### Features
 
@@ -1190,7 +1191,7 @@ Supabase availability becomes a dependency for login (not for ongoing sessions �
 
 ---
 
-## v1.34 "Weather Context"
+## v1.34 "Weather Context" [SHIPPED 2026-05-16]
 
 ### Theme
 Show typical weather (high/low temps, precipitation probability) on search results so users can factor climate into campground selection. This is a **discovery-time** feature — "is it going to be freezing at night there in May?" — not a post-booking packing list (which was rejected as low-impact). Weather context turns campable from a pure availability tool into a trip-planning tool that helps you pick the *right* campground, not just an *available* one.
@@ -1272,7 +1273,7 @@ class WeatherNormals:
 5. Search with dates spanning two months → averaged correctly
 
 ### Dependencies
-- v1.33 shipped (no technical dependency, but maintains milestone order)
+- None. Weather is fully independent of auth — no shared models, no shared endpoints, no shared cache.
 - Visual Crossing free account + API key
 - Cache warmup script run at least once before deploy
 
@@ -1294,7 +1295,99 @@ class WeatherNormals:
 
 ---
 
-## v1.35 "OAuth Login"
+## v1.35 "Source Photos"
+
+### Theme
+Surface campground photos from booking sources on result cards. Campable is a discovery tool — users compare 10-30 options before committing — and right now a result is a name + tags + availability. A photo answers "do I want to be there?" in the moment users would otherwise bounce to Google Images. Photos are facility-level (not site-level), shown only in the expanded card body so the collapsed scan path is unchanged.
+
+Sources differ in photo accessibility: Rec.gov/RIDB has a documented `/facilities/{id}/media` endpoint (1,242 campgrounds, public domain); ReserveAmerica photos are already in the Redux JSON we scrape for OR State Parks (53 campgrounds, attribution required); WA State Parks/GoingToCamp has no JSON photo API, so its 75 campgrounds render an SVG postcard placeholder until/unless we add HTML scraping. ~91% real photo coverage at ship, the rest visibly designed as "we know this place, no photo yet" rather than "broken."
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Registry schema migration | S | Add `image_urls TEXT DEFAULT '[]'`, `image_attribution TEXT DEFAULT ''`, `image_verified_at TEXT` to `campgrounds` table. Inline migration in `registry/db.py` `__init__` following existing pattern. |
+| RIDB media fetch in seed | S | Extend `scripts/seed_registry.py` to call `GET /facilities/{id}/media`; store first 3 photo URLs as JSON array. Throttled to 50 req/min (existing RIDB limit). |
+| RA Redux photo extract | S | Extend `scripts/seed_or_state.py` to pull photo URLs from the existing Redux scrape — no new HTTP. Attribution: "Oregon State Parks". |
+| `<HeroPhoto>` component | M | Renders inside expanded `ResultCard.tsx` body, above date blocks. `aspect-ratio: 16/9` wrapper, `object-fit: cover`, `filter: saturate(0.85) contrast(1.03)` to flatten quality variance between sources. `<img loading="lazy" decoding="async">` with `alt={name}, {tags[0]}`. Dot pager for 2-3 photos. |
+| `<PostcardPlaceholder>` component | S | Deterministic SVG: source-color stripe, Madrona pin watermark, campground name + region, 2-3 tag glyphs derived from `tags[]`. Zero network cost. Renders for campgrounds with empty `image_urls`. |
+| Attribution overlay | XS | "Photo: Recreation.gov" / "Photo: Oregon State Parks" — hover/focus reveal, bottom-right of hero. Not shown on placeholder. |
+| URL verification cron | S | Nightly job HEADs each cached `image_urls` entry; clears stale (4xx/5xx) URLs and bumps `image_verified_at`. Stale URLs gracefully fall back to placeholder. |
+| Kill-switch flag | XS | `hero_photos` env flag (server-rendered into bootstrap). Ship 100%-on; flag exists for rollback only. |
+
+### Architecture Decisions
+
+**Hotlink, don't cache.** Store source-CDN URLs in registry; serve directly to clients. Saves Fly egress and storage. If Rec.gov/RA rotates CDN paths, `image_verified_at` plus the nightly probe catches breakage within 24h — broken cards fall back to placeholder cleanly. Caching layer (R2 / Fly volume) can be added later without schema change.
+
+**Campground-level only.** No per-site photos. All three sources index media by facility, not by individual site. UX-wise, the hero answers "do I want to be at this campground?" — site-specific decisions happen on the booking site. Future v1.4+ enhancement could surface per-site media via RIDB `/campsites/{id}/media`, but coverage is sparse and the data shape pushes us toward a different UI (site-picker thumbnails), not an evolution of this hero pattern.
+
+**Placeholder as design, not fallback.** The SVG postcard is rendered with the same chrome (16:9 box, source-color accent) as photo cards — it reads as a designed surface, not a defect. Critical for WA State Parks (~5.5% of registry) which will *never* have source photos until we add scraping.
+
+**Uniform photo treatment.** `filter: saturate(0.85) contrast(1.03)` applied to all real photos. Rec.gov shots skew "1990s ranger snapshot"; RA shots are glossy marketing photos. Slight desaturation + micro contrast lift normalizes the visual register so the product reads as one design language. Applied via `.is-photo` modifier — placeholder keeps full brand vibrance.
+
+### Measurement Plan
+
+Two-week before/after window on PostHog (already wired):
+- **Expansion rate** — do collapsed cards get expanded more once users learn photos exist?
+- **Expand → outbound-click conversion** — do photos help users commit, or do they linger and bounce?
+- **No-photo cohort delta** — does WA State Parks (placeholder-only) underperform on expand→click vs. photo cohorts? Tells us whether the 9% coverage gap is a real problem worth investing scraping effort into.
+
+If photos clearly lift engagement, consider Option A (collapsed-card thumbs) as a v1.4+ follow-up. If they don't, photos aren't the missing UX piece and we redirect effort.
+
+### Risks
+
+- **Layout shift (CLS).** Mitigated by `aspect-ratio: 16/9` on the hero wrapper — reserves space before image loads. Smoke-test with Lighthouse on launch.
+- **Hotlinking fragility.** Mitigated by nightly verification cron + graceful placeholder fallback. Not a launch blocker.
+- **Photo licensing for non-federal sources.** RIDB is public domain (federal). RA may include user-submitted photos with murkier rights — attribution overlay covers the obligation. Audit a sample of 20 RA photos before ship to confirm none are obviously user-uploaded.
+- **Image quality variance.** Mitigated by uniform desaturation treatment (above).
+- **No alt text from sources.** Mitigated by generating from `${name}, ${tags[0]}`. Not as good as captions but better than empty.
+
+### Files Changed
+
+**Backend (~80 lines):**
+- `src/pnw_campsites/registry/db.py` — schema constant + migration block + upsert/bulk_upsert column list + `_row_to_campground` parse + `update_image_urls()` helper
+- `src/pnw_campsites/registry/models.py` — three fields on `Campground`
+- `src/pnw_campsites/api.py` — `SearchResponse.results[]` includes `image_urls` + `image_attribution`
+- `scripts/seed_registry.py` — RIDB `/facilities/{id}/media` fetch
+- `scripts/seed_or_state.py` — extract photo URLs from existing Redux scrape
+- New: `scripts/verify_image_urls.py` — nightly HEAD probe cron
+
+**Frontend (~120 lines):**
+- `web/src/components/ResultCard.tsx` — render `<HeroPhoto>` inside `card-body` when expanded
+- New: `web/src/components/HeroPhoto.tsx` — img + lazy loading + dot pager + attribution overlay
+- New: `web/src/components/PostcardPlaceholder.tsx` — deterministic SVG postcard
+- `web/src/api.ts` — extend `SearchResponse` types
+- `web/src/App.css` (or component-scoped CSS) — `.hero`, `.hero.is-photo`, `.hero-pager`, `.hero-attribution`
+
+### Testing Strategy
+
+**Automated (~8 tests):**
+- 2 backend: registry migration adds columns; `update_image_urls()` round-trip
+- 2 backend: RIDB media-endpoint adapter parses sample responses; OR Redux extractor handles missing-media case
+- 3 frontend: `<HeroPhoto>` renders with lazy attribute and correct alt; pager increments on click; attribution shown on hover
+- 1 frontend: `<PostcardPlaceholder>` renders for empty `image_urls`, includes tag glyphs
+
+**Manual (~10 min):**
+- Smoke test 5 Rec.gov campgrounds, 3 OR State Parks, 2 WA State Parks (placeholder)
+- Lighthouse CLS check on results page
+- Dark-mode visual check on placeholder
+
+### Dependencies
+
+None hard. Could ship in parallel with v1.33/v1.34 — no auth, no data-warehouse, no shared component changes. Reasonable shipping order: alongside or just after v1.34 (Weather Context), since both touch the expanded `ResultCard.tsx` body. Bundling the redesign passes is cheaper than two separate ones if scheduling allows.
+
+### Out of Scope
+
+- Per-site photos (deferred, may be v1.4+ if facility photos prove valuable)
+- WA State Parks HTML scraping (deferred; placeholder is the launch experience for those 75 parks)
+- Photo caching layer (R2 / Fly volume) — hotlink first, cache only if breakage justifies the storage cost
+- Lightbox / fullscreen viewer — start with dot-paged hero only; revisit if usage data warrants
+- User-uploaded photos (community feature, deferred indefinitely)
+- Map view photo popovers (would land with the deferred dashboard hub item)
+
+---
+
+## v1.36 "OAuth Login"
 
 ### Theme
 Enable Google, Apple, and GitHub sign-in. Supabase infrastructure from v1.33 already supports OAuth — this milestone is provider configuration, frontend buttons, and account-linking UX. The backend doesn't change (a JWT from Google OAuth is identical to one from email/password). GitHub can ship immediately (no LLC/developer account needed); Google and Apple ship when accounts are ready.
@@ -1392,7 +1485,7 @@ Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates t
 | Pricing page | S | Clear free vs. pro comparison. Accessible, both themes. |
 
 ### Dependencies
-- v1.35 shipped (auth solid with OAuth before gating features behind it)
+- v1.36 shipped (auth solid with OAuth before gating features behind it)
 - v1.3 shipped (organic traffic flowing)
 - v0.95 billing infrastructure (already built)
 
@@ -1403,7 +1496,7 @@ Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates t
 - Conversion funnel instrumented in PostHog
 
 ### Key Risk
-Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates. Auth must be stable (v1.33/v1.35) before tying subscription state to user accounts.
+Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates. Auth must be stable (v1.33/v1.36) before tying subscription state to user accounts.
 
 ---
 

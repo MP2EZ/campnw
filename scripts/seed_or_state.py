@@ -19,8 +19,39 @@ import os
 import re
 import sys
 import time
+from datetime import datetime
+from urllib.parse import urljoin, urlparse
 
 from curl_cffi import requests as cffi_requests
+
+# Base prefix for ReserveAmerica photo URLs (originalPhotos[].photoURL is relative).
+_RA_PHOTO_BASE = "https://www.reserveamerica.com"
+_RA_PHOTO_HOST = "www.reserveamerica.com"
+
+
+def _safe_ra_photo_url(raw: str) -> str | None:
+    """Resolve a relative RA photo path against the base, then verify the
+    resulting netloc matches our expected host.
+
+    v1.35 audit S8 / CWE-20: protocol-relative inputs (``//evil.com/x``)
+    or absolute URLs to other hosts must not be stored — defense-in-depth
+    so a future change (clickable link, server proxy) can't inherit a
+    stored XSS / SSRF / open-redirect from a poisoned RA response.
+    """
+    if not isinstance(raw, str) or not raw:
+        return None
+    # Reject protocol-relative (``//host/...``) outright — RA never returns
+    # these and the form is the most common attribute-injection escape.
+    if raw.startswith("//"):
+        return None
+    if raw.startswith(("http://", "https://")):
+        candidate = raw
+    else:
+        candidate = urljoin(_RA_PHOTO_BASE + "/", raw.lstrip("/"))
+    parsed = urlparse(candidate)
+    if parsed.scheme != "https" or parsed.netloc != _RA_PHOTO_HOST:
+        return None
+    return candidate
 
 # Add src to path for direct script execution
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -119,11 +150,25 @@ def fetch_park_metadata(
         )
 
         coords = fac.get("coordinates", {})
+        # v1.35: extract source photos from Redux JSON.
+        # originalPhotos[].photoURL is a relative path with literal {pht}
+        # placeholders in the filename — they are part of the URL, not templating.
+        # _safe_ra_photo_url enforces a host allowlist so a future RA response
+        # shape change (or compromise) can't write arbitrary URLs into the
+        # registry.
+        image_urls: list[str] = []
+        for photo in fac.get("originalPhotos") or []:
+            safe = _safe_ra_photo_url(photo.get("photoURL", ""))
+            if safe:
+                image_urls.append(safe)
+            if len(image_urls) >= 3:
+                break
         return {
             "name": fac.get("name", slug.replace("-", " ").title()),
             "latitude": coords.get("latitude", 0.0),
             "longitude": coords.get("longitude", 0.0),
             "total_sites": total,
+            "image_urls": image_urls,
         }
     except Exception as e:
         print(f"  Error fetching {park_id}: {e}")
@@ -211,6 +256,7 @@ def seed(dry_run: bool = False, probe: bool = False) -> None:
         meta = fetch_park_metadata(park_id, slug, session)
 
         if meta:
+            image_urls = meta.get("image_urls") or []
             cg = Campground(
                 facility_id=park_id,
                 name=meta["name"],
@@ -220,10 +266,16 @@ def seed(dry_run: bool = False, probe: bool = False) -> None:
                 longitude=meta["longitude"],
                 total_sites=meta["total_sites"],
                 booking_url_slug=slug,
+                image_urls=image_urls,
+                image_attribution=(
+                    "Oregon State Parks via ReserveAmerica" if image_urls else ""
+                ),
+                image_verified_at=datetime.now() if image_urls else None,
                 enabled=True,
             )
             campgrounds.append(cg)
-            print(f"✓ {meta['name']} ({meta['total_sites']} sites)")
+            photo_tag = f" [📷 {len(image_urls)}]" if image_urls else ""
+            print(f"✓ {meta['name']} ({meta['total_sites']} sites){photo_tag}")
         else:
             print("✗ failed")
 

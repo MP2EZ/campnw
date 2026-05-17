@@ -213,6 +213,101 @@ class TestUpdateTags:
         assert set(retrieved.tags) == {"lakeside", "mountain"}
 
 
+class TestImageUrls:
+    """v1.35 — source-photo URLs on the campground record."""
+
+    def test_schema_migration_adds_image_columns(self, registry):
+        cols = {
+            row[1]
+            for row in registry._conn.execute(
+                "PRAGMA table_info(campgrounds)"
+            ).fetchall()
+        }
+        assert "image_urls" in cols
+        assert "image_attribution" in cols
+        assert "image_verified_at" in cols
+
+    def test_upsert_image_urls_round_trip(self, registry):
+        """Upsert with image_urls persists, get_by_id() retrieves them."""
+        cg = make_campground(
+            facility_id="232465",
+            image_urls=["https://cdn.example/a.webp", "https://cdn.example/b.webp"],
+            image_attribution="Recreation.gov",
+        )
+        result = registry.upsert(cg)
+        retrieved = registry.get_by_id(result.id)
+
+        assert retrieved is not None
+        assert retrieved.image_urls == [
+            "https://cdn.example/a.webp",
+            "https://cdn.example/b.webp",
+        ]
+        assert retrieved.image_attribution == "Recreation.gov"
+
+    def test_upsert_preserves_existing_image_urls_when_incoming_empty(
+        self, registry
+    ):
+        """Re-seed safety: when seed re-runs and gets no media, keep existing URLs."""
+        seed = make_campground(
+            facility_id="232465",
+            image_urls=["https://cdn.example/cached.webp"],
+            image_attribution="Recreation.gov",
+        )
+        registry.upsert(seed)
+
+        # Second seed returns no photos — should NOT clobber the cached URLs.
+        empty = make_campground(facility_id="232465", image_urls=[])
+        registry.upsert(empty)
+        retrieved = registry.get_by_facility_id("232465")
+
+        assert retrieved is not None
+        assert retrieved.image_urls == ["https://cdn.example/cached.webp"]
+        assert retrieved.image_attribution == "Recreation.gov"
+
+    def test_upsert_refreshes_image_urls_when_incoming_nonempty(self, registry):
+        """When seed returns new URLs, they overwrite the cached set."""
+        first = make_campground(
+            facility_id="232465",
+            image_urls=["https://cdn.example/old.webp"],
+            image_attribution="Recreation.gov",
+        )
+        registry.upsert(first)
+
+        refresh = make_campground(
+            facility_id="232465",
+            image_urls=[
+                "https://cdn.example/new1.webp",
+                "https://cdn.example/new2.webp",
+            ],
+            image_attribution="Recreation.gov",
+        )
+        registry.upsert(refresh)
+        retrieved = registry.get_by_facility_id("232465")
+
+        assert retrieved is not None
+        assert retrieved.image_urls == [
+            "https://cdn.example/new1.webp",
+            "https://cdn.example/new2.webp",
+        ]
+
+    def test_update_image_urls_helper(self, registry):
+        """update_image_urls() writes URLs + attribution + verified_at timestamp."""
+        cg = make_campground(facility_id="232465", image_urls=[])
+        result = registry.upsert(cg)
+
+        registry.update_image_urls(
+            result.id,
+            ["https://cdn.example/x.webp"],
+            "Recreation.gov",
+        )
+        retrieved = registry.get_by_id(result.id)
+
+        assert retrieved is not None
+        assert retrieved.image_urls == ["https://cdn.example/x.webp"]
+        assert retrieved.image_attribution == "Recreation.gov"
+        assert retrieved.image_verified_at is not None
+
+
 class TestUpdateNotes:
     """Test updating campground notes and rating."""
 

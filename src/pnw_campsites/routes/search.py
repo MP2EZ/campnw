@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -56,6 +57,7 @@ class CampgroundResultResponse(BaseModel):
     facility_id: str
     name: str
     state: str
+    region: str = ""
     booking_system: str
     latitude: float
     longitude: float
@@ -73,6 +75,8 @@ class CampgroundResultResponse(BaseModel):
     weather_temp_high_f: int | None = None
     weather_temp_low_f: int | None = None
     weather_precip_pct: int | None = None
+    image_urls: list[str] = []
+    image_attribution: str = ""
 
 
 class SearchWarningResponse(BaseModel):
@@ -274,10 +278,12 @@ def _format_result(
             )
         )
 
+    photos_disabled = os.getenv("DISABLE_HERO_PHOTOS") == "1"
     return CampgroundResultResponse(
         facility_id=cg.facility_id,
         name=cg.name,
         state=cg.state,
+        region=cg.region,
         booking_system=cg.booking_system.value,
         latitude=cg.latitude,
         longitude=cg.longitude,
@@ -298,6 +304,8 @@ def _format_result(
         weather_temp_high_f=round(weather[0]) if weather else None,
         weather_temp_low_f=round(weather[1]) if weather else None,
         weather_precip_pct=round(weather[2]) if weather else None,
+        image_urls=[] if photos_disabled else cg.image_urls,
+        image_attribution="" if photos_disabled else cg.image_attribution,
     )
 
 
