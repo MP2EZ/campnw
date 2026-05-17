@@ -366,6 +366,13 @@ class TestSecurityHeaders:
         assert "max-age=" in resp.headers.get("Strict-Transport-Security", "")
         assert "default-src" in resp.headers.get("Content-Security-Policy", "")
 
+    def test_csp_img_src_allows_photo_cdns(self, api_client: TestClient):
+        """v1.35: photo hotlinks must not be blocked by the production CSP."""
+        resp = api_client.get("/api/perf")
+        csp = resp.headers.get("Content-Security-Policy", "")
+        assert "cdn.recreation.gov" in csp
+        assert "reserveamerica.com" in csp
+
 
 # ---------------------------------------------------------------------------
 # TEST-06: Date suggestion probes

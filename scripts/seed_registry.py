@@ -19,6 +19,7 @@ import asyncio
 import os
 import re
 import sys
+from datetime import datetime
 
 from dotenv import load_dotenv
 
@@ -110,7 +111,9 @@ async def fetch_state_facilities(
     return facilities
 
 
-async def seed(states: list[str], dry_run: bool = False) -> None:
+async def seed(
+    states: list[str], dry_run: bool = False, photos: bool = False,
+) -> None:
     load_dotenv()
     api_key = os.getenv("RIDB_API_KEY")
     if not api_key:
@@ -135,12 +138,45 @@ async def seed(states: list[str], dry_run: bool = False) -> None:
             print(f"  {state}: {len(campgrounds)} campgrounds ({excluded} filtered out)")
             all_campgrounds.extend(campgrounds)
 
+        # v1.35: fetch source photos for campgrounds that don't already have them.
+        # The bulk_upsert CASE guards preserve existing image_urls, so this is
+        # idempotent — re-runs only hit RIDB for new/missing facilities.
+        if photos:
+            existing_photo_ids: set[str] = set()
+            with CampgroundRegistry() as registry:
+                for cg in registry.list_all(enabled_only=False):
+                    if cg.booking_system == BookingSystem.RECGOV and cg.image_urls:
+                        existing_photo_ids.add(cg.facility_id)
+            to_fetch = [
+                cg for cg in all_campgrounds
+                if cg.facility_id not in existing_photo_ids
+            ]
+            print(
+                f"\nFetching photos for {len(to_fetch)} campgrounds "
+                f"(skipping {len(all_campgrounds) - len(to_fetch)} already cached)..."
+            )
+            fetched = 0
+            for cg in to_fetch:
+                urls = await client.fetch_facility_media(cg.facility_id)
+                if urls:
+                    cg.image_urls = urls
+                    cg.image_attribution = "Recreation.gov"
+                    cg.image_verified_at = datetime.now()
+                    fetched += 1
+                if (to_fetch.index(cg) + 1) % 25 == 0:
+                    print(
+                        f"  photos: scanned {to_fetch.index(cg) + 1}/{len(to_fetch)},"
+                        f" {fetched} have media"
+                    )
+            print(f"  photos: done — {fetched}/{len(to_fetch)} campgrounds have media")
+
     print(f"\nTotal: {len(all_campgrounds)} campgrounds across {', '.join(states)}")
 
     if dry_run:
         print("\n[DRY RUN] Would insert these campgrounds:")
         for cg in sorted(all_campgrounds, key=lambda c: (c.state, c.name)):
-            print(f"  [{cg.state}] {cg.name} (facility_id={cg.facility_id})")
+            with_photos = f" [📷 {len(cg.image_urls)}]" if cg.image_urls else ""
+            print(f"  [{cg.state}] {cg.name} (facility_id={cg.facility_id}){with_photos}")
         return
 
     with CampgroundRegistry() as registry:
@@ -161,10 +197,19 @@ def main() -> None:
         action="store_true",
         help="Preview results without writing to database",
     )
+    parser.add_argument(
+        "--photos",
+        action="store_true",
+        help=(
+            "Also fetch source photos (RIDB /facilities/{id}/media) for"
+            " campgrounds that don't already have cached image_urls."
+            " Adds ~1.2s per facility (RIDB rate limit)."
+        ),
+    )
     args = parser.parse_args()
 
     states = [args.state] if args.state else ["WA", "OR", "ID", "MT", "WY", "CA"]
-    asyncio.run(seed(states, dry_run=args.dry_run))
+    asyncio.run(seed(states, dry_run=args.dry_run, photos=args.photos))
 
 
 if __name__ == "__main__":

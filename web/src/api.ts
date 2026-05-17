@@ -97,6 +97,7 @@ export interface CampgroundResult {
   facility_id: string;
   name: string;
   state: string;
+  region?: string;
   booking_system: string;
   latitude: number;
   longitude: number;
@@ -114,6 +115,8 @@ export interface CampgroundResult {
   weather_temp_high_f?: number;
   weather_temp_low_f?: number;
   weather_precip_pct?: number;
+  image_urls?: string[];
+  image_attribution?: string;
 }
 
 export interface SearchWarning {

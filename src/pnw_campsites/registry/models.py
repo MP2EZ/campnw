@@ -129,6 +129,9 @@ class Campground(BaseModel):
     notes: str = ""  # personal notes
     rating: int | None = None  # 1-5 personal rating
     total_sites: int | None = None
+    image_urls: list[str] = Field(default_factory=list)  # source-CDN photo URLs (v1.35)
+    image_attribution: str = ""  # e.g. "Recreation.gov", "Oregon State Parks"
+    image_verified_at: datetime | None = None
     enabled: bool = True  # include in searches
     created_at: datetime | None = None
     updated_at: datetime | None = None

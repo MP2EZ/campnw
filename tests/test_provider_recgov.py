@@ -683,6 +683,157 @@ async def test_get_facility_campsites_returns_list():
 
 
 # -----------------------------------------------------------------------
+# Media endpoint tests (fetch_facility_media) — v1.35
+# -----------------------------------------------------------------------
+
+
+@respx.mock
+async def test_fetch_facility_media_returns_image_urls():
+    """Returns up to `limit` Image URLs, primary first, skipping non-Image."""
+    facility_id = "232465"
+    response_data = {
+        "RECDATA": [
+            {
+                "URL": "https://cdn.recreation.gov/secondary.webp",
+                "MediaType": "Image",
+                "IsPrimary": False,
+            },
+            {
+                "URL": "https://cdn.recreation.gov/primary.webp",
+                "MediaType": "Image",
+                "IsPrimary": True,
+            },
+            {
+                "URL": "https://cdn.recreation.gov/walkthrough.mp4",
+                "MediaType": "Video",
+                "IsPrimary": False,
+            },
+            {
+                "URL": "https://cdn.recreation.gov/third.webp",
+                "MediaType": "Image",
+                "IsPrimary": False,
+            },
+            {
+                "URL": "https://cdn.recreation.gov/fourth.webp",
+                "MediaType": "Image",
+                "IsPrimary": False,
+            },
+        ],
+    }
+
+    respx.get(f"{RIDB_BASE}/facilities/{facility_id}/media").mock(
+        return_value=Response(200, json=response_data)
+    )
+
+    client = RecGovClient(ridb_api_key="test-key")
+    async with client:
+        urls = await client.fetch_facility_media(facility_id, limit=3)
+
+    # Primary photo first, video excluded, limited to 3.
+    assert urls == [
+        "https://cdn.recreation.gov/primary.webp",
+        "https://cdn.recreation.gov/secondary.webp",
+        "https://cdn.recreation.gov/third.webp",
+    ]
+
+
+@respx.mock
+async def test_fetch_facility_media_404_returns_empty_list():
+    """Missing facility (404 from RIDB) returns [] — not a fatal error."""
+    facility_id = "999999"
+
+    respx.get(f"{RIDB_BASE}/facilities/{facility_id}/media").mock(
+        return_value=Response(404, json={"error": "Not found"})
+    )
+
+    client = RecGovClient(ridb_api_key="test-key")
+    async with client:
+        urls = await client.fetch_facility_media(facility_id)
+
+    assert urls == []
+
+
+@respx.mock
+async def test_fetch_facility_media_no_images_returns_empty_list():
+    """Facility with only video/non-image media returns []."""
+    facility_id = "232465"
+    response_data = {
+        "RECDATA": [
+            {
+                "URL": "https://cdn.recreation.gov/walk.mp4",
+                "MediaType": "Video",
+                "IsPrimary": True,
+            },
+        ],
+    }
+
+    respx.get(f"{RIDB_BASE}/facilities/{facility_id}/media").mock(
+        return_value=Response(200, json=response_data)
+    )
+
+    client = RecGovClient(ridb_api_key="test-key")
+    async with client:
+        urls = await client.fetch_facility_media(facility_id)
+
+    assert urls == []
+
+
+@respx.mock
+async def test_fetch_facility_media_rejects_non_cdn_hosts():
+    """v1.35 audit S8: only https://cdn.recreation.gov/ URLs are accepted.
+
+    Defense-in-depth — a future change that exposes image_urls as a clickable
+    link must not inherit stored XSS / SSRF / open-redirect from a poisoned
+    RIDB response.
+    """
+    facility_id = "232465"
+    response_data = {
+        "RECDATA": [
+            # Allowed
+            {
+                "URL": "https://cdn.recreation.gov/legit.webp",
+                "MediaType": "Image",
+                "IsPrimary": True,
+            },
+            # Rejected — wrong host
+            {
+                "URL": "https://evil.example.com/x.webp",
+                "MediaType": "Image",
+                "IsPrimary": False,
+            },
+            # Rejected — protocol
+            {
+                "URL": "javascript:alert(1)",
+                "MediaType": "Image",
+                "IsPrimary": False,
+            },
+            # Rejected — http (no TLS)
+            {
+                "URL": "http://cdn.recreation.gov/leak.webp",
+                "MediaType": "Image",
+                "IsPrimary": False,
+            },
+            # Rejected — non-string
+            {
+                "URL": None,
+                "MediaType": "Image",
+                "IsPrimary": False,
+            },
+        ],
+    }
+
+    respx.get(f"{RIDB_BASE}/facilities/{facility_id}/media").mock(
+        return_value=Response(200, json=response_data)
+    )
+
+    client = RecGovClient(ridb_api_key="test-key")
+    async with client:
+        urls = await client.fetch_facility_media(facility_id)
+
+    assert urls == ["https://cdn.recreation.gov/legit.webp"]
+
+
+# -----------------------------------------------------------------------
 # Client lifecycle tests
 # -----------------------------------------------------------------------
 
