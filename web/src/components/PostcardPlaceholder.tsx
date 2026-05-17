@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 interface PostcardPlaceholderProps {
   name: string;
   region: string;
@@ -44,7 +46,7 @@ const FALLBACK_THEME = SOURCE_THEMES.recgov;
 
 // Simple tag → glyph map. Keys must be lowercase. Glyph is rendered as
 // inline SVG content centered in a 24×16 box, with a short label below.
-const TAG_GLYPHS: Record<string, { glyph: JSX.Element; label: string }> = {
+const TAG_GLYPHS: Record<string, { glyph: ReactNode; label: string }> = {
   oceanfront: {
     label: "oceanfront",
     glyph: (
@@ -303,9 +305,9 @@ const TAG_GLYPHS: Record<string, { glyph: JSX.Element; label: string }> = {
   },
 };
 
-function pickTagGlyphs(tags: string[]): { glyph: JSX.Element; label: string }[] {
+function pickTagGlyphs(tags: string[]): { glyph: ReactNode; label: string }[] {
   const seen = new Set<string>();
-  const out: { glyph: JSX.Element; label: string }[] = [];
+  const out: { glyph: ReactNode; label: string }[] = [];
   for (const t of tags) {
     const norm = t.toLowerCase();
     const entry = TAG_GLYPHS[norm];
