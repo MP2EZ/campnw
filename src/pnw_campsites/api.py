@@ -450,7 +450,10 @@ async def timing_middleware(request: Request, call_next):
         "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' https://*.tile.openstreetmap.org data:; "
+        "img-src 'self' data:"
+        " https://*.tile.openstreetmap.org"
+        " https://cdn.recreation.gov"
+        " https://www.reserveamerica.com; "
         f"connect-src 'self' https://*.tile.openstreetmap.org {os.getenv('SUPABASE_URL', '')}; "
         "frame-ancestors 'none'"
     )

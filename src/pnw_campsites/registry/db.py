@@ -151,6 +151,17 @@ class CampgroundRegistry:
                 " ON campgrounds(state, slug)"
             )
             self._conn.commit()
+        # v1.35 — source-site photo URLs and attribution per facility.
+        for col, sql_type in (
+            ("image_urls", "TEXT DEFAULT '[]'"),
+            ("image_attribution", "TEXT DEFAULT ''"),
+            ("image_verified_at", "TEXT"),
+        ):
+            if col not in cols:
+                self._conn.execute(
+                    f"ALTER TABLE campgrounds ADD COLUMN {col} {sql_type}"
+                )
+                self._conn.commit()
 
         # Migration: weather_normals PK changed from (lat,lon,month) to (lat,lon,month,day)
         wn_cols = {
@@ -215,12 +226,15 @@ class CampgroundRegistry:
     def _row_to_campground(self, row: sqlite3.Row) -> Campground:
         d = dict(row)
         d["tags"] = json.loads(d["tags"]) if d["tags"] else []
+        d["image_urls"] = json.loads(d.get("image_urls") or "[]")
         d["enabled"] = bool(d["enabled"])
         d["booking_system"] = BookingSystem(d["booking_system"])
         if d["created_at"]:
             d["created_at"] = datetime.fromisoformat(d["created_at"])
         if d["updated_at"]:
             d["updated_at"] = datetime.fromisoformat(d["updated_at"])
+        if d.get("image_verified_at"):
+            d["image_verified_at"] = datetime.fromisoformat(d["image_verified_at"])
         return Campground(**d)
 
     # -------------------------------------------------------------------
@@ -237,8 +251,9 @@ class CampgroundRegistry:
                 facility_id, name, booking_system, latitude, longitude,
                 region, state, drive_minutes_from_base, tags, notes,
                 rating, total_sites, enabled, booking_url_slug, slug,
+                image_urls, image_attribution, image_verified_at,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(booking_system, facility_id) DO UPDATE SET
                 name=excluded.name,
                 latitude=excluded.latitude,
@@ -261,6 +276,14 @@ class CampgroundRegistry:
                     ELSE campgrounds.booking_url_slug END,
                 slug=CASE WHEN campgrounds.slug = ''
                     THEN excluded.slug ELSE campgrounds.slug END,
+                image_urls=CASE WHEN excluded.image_urls != '[]'
+                    THEN excluded.image_urls ELSE campgrounds.image_urls END,
+                image_attribution=CASE WHEN excluded.image_attribution != ''
+                    THEN excluded.image_attribution
+                    ELSE campgrounds.image_attribution END,
+                image_verified_at=COALESCE(
+                    excluded.image_verified_at, campgrounds.image_verified_at
+                ),
                 updated_at=?
             """,
             (
@@ -279,6 +302,9 @@ class CampgroundRegistry:
                 int(cg.enabled),
                 cg.booking_url_slug,
                 slug,
+                json.dumps(cg.image_urls),
+                cg.image_attribution,
+                cg.image_verified_at.isoformat() if cg.image_verified_at else None,
                 now,
                 now,
                 now,  # for the ON CONFLICT updated_at
@@ -300,8 +326,9 @@ class CampgroundRegistry:
                 facility_id, name, booking_system, latitude, longitude,
                 region, state, drive_minutes_from_base, tags, notes,
                 rating, total_sites, enabled, booking_url_slug, slug,
+                image_urls, image_attribution, image_verified_at,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(booking_system, facility_id) DO UPDATE SET
                 name=excluded.name,
                 latitude=excluded.latitude,
@@ -324,6 +351,14 @@ class CampgroundRegistry:
                     ELSE campgrounds.booking_url_slug END,
                 slug=CASE WHEN campgrounds.slug = ''
                     THEN excluded.slug ELSE campgrounds.slug END,
+                image_urls=CASE WHEN excluded.image_urls != '[]'
+                    THEN excluded.image_urls ELSE campgrounds.image_urls END,
+                image_attribution=CASE WHEN excluded.image_attribution != ''
+                    THEN excluded.image_attribution
+                    ELSE campgrounds.image_attribution END,
+                image_verified_at=COALESCE(
+                    excluded.image_verified_at, campgrounds.image_verified_at
+                ),
                 updated_at=?
         """
         rows = [
@@ -333,6 +368,9 @@ class CampgroundRegistry:
                 cg.drive_minutes_from_base, json.dumps(cg.tags), cg.notes,
                 cg.rating, cg.total_sites, int(cg.enabled), cg.booking_url_slug,
                 cg.slug or slugify(cg.name),
+                json.dumps(cg.image_urls),
+                cg.image_attribution,
+                cg.image_verified_at.isoformat() if cg.image_verified_at else None,
                 now, now, now,
             )
             for cg in campgrounds
@@ -497,6 +535,18 @@ class CampgroundRegistry:
         self._conn.execute(
             "UPDATE campgrounds SET tags=?, updated_at=? WHERE id=?",
             (json.dumps(tags), datetime.now().isoformat(), campground_id),
+        )
+        self._conn.commit()
+
+    def update_image_urls(
+        self, campground_id: int, urls: list[str], attribution: str,
+    ) -> None:
+        """Set per-campground image URLs + attribution + verification timestamp."""
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "UPDATE campgrounds SET image_urls=?, image_attribution=?,"
+            " image_verified_at=?, updated_at=? WHERE id=?",
+            (json.dumps(urls), attribution, now, now, campground_id),
         )
         self._conn.commit()
 

@@ -17,6 +17,11 @@ from pnw_campsites.registry.models import (
 RIDB_BASE = "https://ridb.recreation.gov/api/v1"
 AVAILABILITY_BASE = "https://www.recreation.gov/api/camps/availability/campground"
 
+# Allowlist for stored image URLs — defense-in-depth so a future change
+# (clickable link, server-side proxy, etc.) can't inherit a stored XSS
+# or SSRF from a poisoned RIDB response. v1.35 audit S8 / CWE-79.
+_ALLOWED_PHOTO_HOST_PREFIX = "https://cdn.recreation.gov/"
+
 BROWSER_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -116,6 +121,32 @@ class RecGovClient:
         """Fetch campsite metadata for a facility from RIDB."""
         data = await self._ridb_get(f"/facilities/{facility_id}/campsites")
         return data.get("RECDATA", [])
+
+    async def fetch_facility_media(
+        self, facility_id: str, limit: int = 3,
+    ) -> list[str]:
+        """Fetch up to `limit` image URLs for a facility from RIDB.
+
+        Returns absolute CDN URLs (on cdn.recreation.gov). Filters to
+        MediaType == "Image" only. Primary photo (IsPrimary=true) sorted first.
+        Returns [] if the facility has no media or the endpoint errors —
+        media gaps are not failures.
+        """
+        try:
+            data = await self._ridb_get(f"/facilities/{facility_id}/media")
+        except httpx.HTTPStatusError:
+            return []
+        records = [r for r in data.get("RECDATA", []) if r.get("MediaType") == "Image"]
+        records.sort(key=lambda r: (not r.get("IsPrimary", False),))
+        # Allowlist by host prefix to prevent a poisoned RIDB response from
+        # writing arbitrary URLs (e.g., javascript:, data:, attacker-controlled
+        # host) into the registry.
+        return [
+            r["URL"]
+            for r in records[:limit]
+            if isinstance(r.get("URL"), str)
+            and r["URL"].startswith(_ALLOWED_PHOTO_HOST_PREFIX)
+        ]
 
     # -------------------------------------------------------------------
     # Availability (undocumented endpoint)

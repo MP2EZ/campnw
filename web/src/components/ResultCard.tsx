@@ -4,6 +4,8 @@ import { IconMinus, IconPlus } from "../icons";
 import type { SearchResponse, Window } from "../api";
 import { WatchButton } from "./WatchPanel";
 import { SaveToTripButton } from "./SaveToTripButton";
+import { HeroPhoto } from "./HeroPhoto";
+import { PostcardPlaceholder } from "./PostcardPlaceholder";
 import type { ResultsView } from "../hooks/useSearch";
 
 // ---------------------------------------------------------------------------
@@ -112,6 +114,7 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                   source: result.booking_system,
                   type: "wa_date_block",
                   sites_in_block: block.sites.length,
+                  has_photo: result.image_urls?.length ? 1 : 0,
                 })}
               >
                 {block.sites.length} site
@@ -134,6 +137,7 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                     source: result.booking_system,
                     type: "site",
                     site: w.site_name,
+                    has_photo: result.image_urls?.length ? 1 : 0,
                   })}
                 >
                   Site {w.site_name}
@@ -222,6 +226,7 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
                         type: "site_window",
                         site: w.site_name,
                         nights: w.nights,
+                        has_photo: result.image_urls?.length ? 1 : 0,
                       })}
                     >
                       {dayName} {fmtDate(w.start_date)} &rarr; {new Date(w.end_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })} {fmtDate(w.end_date)} ({w.nights}n)
@@ -265,6 +270,7 @@ export function ResultCard({
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const hasPhoto = !!(result.image_urls && result.image_urls.length > 0);
   const handleToggle = () => {
     const next = !expanded;
     setExpanded(next);
@@ -273,6 +279,7 @@ export function ResultCard({
         facility_id: result.facility_id,
         name: result.name,
         source: result.booking_system,
+        has_photo: hasPhoto ? 1 : 0,
       });
     }
     if (next && cardRef.current) {
@@ -358,6 +365,25 @@ export function ResultCard({
 
       <div className={`card-body${expanded ? " card-body-open" : ""}`}>
         <div className="card-body-inner">
+          {expanded && (
+            hasPhoto ? (
+              <HeroPhoto
+                urls={result.image_urls!}
+                name={result.name}
+                attribution={result.image_attribution ?? ""}
+                facilityId={result.facility_id}
+                source={result.booking_system}
+              />
+            ) : (
+              <PostcardPlaceholder
+                name={result.name}
+                region={result.region ?? ""}
+                state={result.state}
+                tags={result.tags}
+                bookingSystem={result.booking_system}
+              />
+            )
+          )}
           {(result.description_rewrite || result.vibe) && (
             <p className="result-vibe">{result.description_rewrite || result.vibe}</p>
           )}
@@ -376,6 +402,7 @@ export function ResultCard({
                   name: result.name,
                   source: result.booking_system,
                   type: "view_page",
+                  has_photo: hasPhoto ? 1 : 0,
                 })}
               >
                 View on{" "}

@@ -798,6 +798,178 @@ header p {
   border-left: 3px solid var(--src-id-border);
 }
 
+/* ── Hero photo / postcard placeholder (v1.35) ───────────────────── */
+.hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--chip-bg);
+}
+.hero img,
+.hero svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+/* v1.35 audit R1: dropped the saturate/contrast filter — it was muting
+   greens in rec.gov photos. Brand voice carries via the card chrome
+   (source-color border, badges, dot pager pill), not via photo retuning. */
+
+/* Pager — bottom-center pill of dots with adequate hit-target padding.
+   v1.35 audit S3: visual dot stays 6px, but tap area extends to ~28px
+   via padding + content-box. */
+.hero-pager {
+  position: absolute;
+  bottom: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius-pill);
+}
+.hero-dot {
+  width: 6px;
+  height: 6px;
+  padding: 11px;            /* expands hit area to ≈28x28 */
+  background-color: rgba(255, 255, 255, 0.5);
+  background-clip: content-box;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+.hero-dot:hover {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+.hero-dot.active {
+  background-color: #fff;
+}
+.hero-dot:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+  border-radius: 50%;
+}
+
+/* Attribution — always visible (WCAG 1.4.13 + licensing). Subtle scrim
+   prevents the text from disappearing into bright photos. */
+.hero-attribution {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  padding: 12px var(--space-3) var(--space-2);
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.92);
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  pointer-events: none;
+}
+
+/* Prev / next arrows — visual 40px, hit area 44x44 (iOS HIG, WCAG 2.2 SC 2.5.8).
+   Hover-revealed on desktop; always-visible on touch via @media (hover: none).
+   v1.35 audit S4: focus-visible must reveal BEFORE the hero parent's
+   :focus-within rule so keyboard tab-in doesn't paint focus on an
+   invisible target. */
+.hero-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-base), background var(--transition-fast);
+  padding: 0;
+}
+.hero-arrow > svg {
+  width: 20px;
+  height: 20px;
+}
+.hero-arrow:focus-visible {
+  /* Listed BEFORE :hover/:focus-within so keyboard focus reveals the
+     button at the same frame focus lands, not after parent's transition. */
+  opacity: 1;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.hero-arrow:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+.hero-arrow-prev { left: var(--space-2); }
+.hero-arrow-next { right: var(--space-2); }
+.hero:hover .hero-arrow,
+.hero:focus-within .hero-arrow {
+  opacity: 1;
+}
+@media (hover: none) {
+  .hero-arrow {
+    opacity: 1;
+  }
+}
+
+/* Visually hidden region — screen-reader-only status announcements. */
+.hero .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-arrow,
+  .hero-dot {
+    transition: none;
+  }
+}
+
+/* Postcard placeholder source-themed colors — re-exposes the existing
+   source-color tokens as scoped `--pc-*` variables that the inline SVG
+   reads via fill="var(--pc-text)". Light/dark adaptation comes free
+   because tokens.css already flips --src-*-badge-* and --src-*-border
+   in [data-theme="dark"]. */
+.postcard-recgov {
+  --pc-stripe: var(--src-recgov-border);
+  --pc-text: var(--src-recgov-badge-text);
+  --pc-grain: var(--src-recgov-badge-bg);
+  --pc-grain-dot: var(--src-recgov-border);
+}
+.postcard-wa_state {
+  --pc-stripe: var(--src-wa-border);
+  --pc-text: var(--src-wa-badge-text);
+  --pc-grain: var(--src-wa-badge-bg);
+  --pc-grain-dot: var(--src-wa-border);
+}
+.postcard-or_state {
+  --pc-stripe: var(--src-or-border);
+  --pc-text: var(--src-or-badge-text);
+  --pc-grain: var(--src-or-badge-bg);
+  --pc-grain-dot: var(--src-or-border);
+}
+.postcard-id_state {
+  --pc-stripe: var(--src-id-border);
+  --pc-text: var(--src-id-badge-text);
+  --pc-grain: var(--src-id-badge-bg);
+  --pc-grain-dot: var(--src-id-border);
+}
+
 .tag-badge {
   font-size: 0.6rem;
   font-weight: var(--weight-normal);
