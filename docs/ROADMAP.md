@@ -19,7 +19,7 @@ v0.6    [SHIPPED]  Smart Search        — Zero-result recovery, date shifting, 
 v0.7    [SHIPPED]  Oregon + Delight    — Vibe descriptions, contextual notifications (OR provider deferred)
 v0.8a   [SHIPPED]  Trip Planner MVP    — Conversational AI planner with tool calling
 v0.8b   [SHIPPED]  Trip Planner Polish — Streaming, itinerary cards, shareable links
-v0.95   [SHIPPED]  Monetization        — Free/Pro tiers, subscription billing, upgrade flows
+v0.95   [BUILT*]   Monetization        — Free/Pro tiers, Stripe billing — built on feature/monetization (NOT merged, stale Mar 2026)
 v0.96   [SHIPPED]  Registry + Infra    — Registry expansion, bundle audit, Lighthouse CI
 v0.97   [SHIPPED]  Map + Power User    — Map view, keyboard shortcuts, lazy loading
 v0.98   [SHIPPED]  Quality Hardening   — WCAG AA contrast, focus styles, ErrorBoundary, CI a11y
@@ -37,13 +37,14 @@ v1.31   [SHIPPED]  Audit Fixes          — Security hardening, perf optimizatio
 v1.32   [SHIPPED]  Accurate Drive Times — Mapbox routing, drive_times table, tiered search lookup
 v1.33   ------->   Supabase Auth        — Replace custom auth with Supabase, Bearer tokens, auto-provisioning
 v1.34   [SHIPPED]  Weather Context      — Typical temps + precipitation on search results via Visual Crossing
-v1.35   ------->   Source Photos        — Campground photos from RIDB/RA + SVG postcard placeholder for missing sources
+v1.35   [SHIPPED]  Source Photos        — Campground photos from RIDB/RA + SVG postcard placeholder for missing sources
 v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
 v1.4    ------->   Monetization Launch  — Pro tier gate, payment, freemium conversion flows
+v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
-Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product. v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
+Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product (note: v0.95's billing prototype lives on the abandoned `feature/monetization` branch — v1.4 will reference but not merge it, see the v1.4 entry for details), v1.45 wraps the app for iOS + Android via Capacitor (sequenced after v1.4 so monetization is validated on the web before committing to App Store review cycles). v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -437,10 +438,13 @@ Data quality and sample size. Campgrounds polled infrequently will have unreliab
 
 ---
 
-## v0.95 "Monetization"
+## v0.95 "Monetization" [BUILT 2026-03-29, NOT MERGED — see status note]
 
 ### Theme
 campnw has real users, real infrastructure costs, and a feature set that justifies a paid tier. This milestone introduces a Free/Pro split, subscription billing, and upgrade surfaces that make the paid tier discoverable without being coercive. The goal is sustainability, not growth. Break-even requires 2-4 Pro subscribers at $5/month. Everything here is scoped to that reality.
+
+### Status (2026-05-25)
+Implementation was completed on `feature/monetization` (6 commits, last touched 2026-03-29) and integrated against `main` through v1.0. The branch was never merged back to `dev`. Since March 2026, `dev` has moved 242 commits ahead — most critically v1.33 Supabase Auth, which replaced the custom-cookie user model that v0.95's billing code depends on. The branch is preserved as a reference implementation for v1.4 but will not be merged. See the v1.4 entry for the rebuild approach.
 
 ### Free vs Pro Tier
 
@@ -1295,7 +1299,7 @@ class WeatherNormals:
 
 ---
 
-## v1.35 "Source Photos"
+## v1.35 "Source Photos" [SHIPPED 2026-05-16]
 
 ### Theme
 Surface campground photos from booking sources on result cards. Campable is a discovery tool — users compare 10-30 options before committing — and right now a result is a name + tags + availability. A photo answers "do I want to be there?" in the moment users would otherwise bounce to Google Images. Photos are facility-level (not site-level), shown only in the expanded card body so the collapsed scan path is unchanged.
@@ -1385,6 +1389,12 @@ None hard. Could ship in parallel with v1.33/v1.34 — no auth, no data-warehous
 - User-uploaded photos (community feature, deferred indefinitely)
 - Map view photo popovers (would land with the deferred dashboard hub item)
 
+### Post-ship Status (2026-05-25)
+
+- 7 of 8 spec features shipped in PR #21 (commit `2076040`). Frontend graceful fallback (`onError` → placeholder) and `photo_load_failed` PostHog event both wired and firing.
+- **URL verification cron deferred.** The spec'd nightly HEAD probe (`scripts/verify_image_urls.py`) was not built. Rationale: the user-facing failure mode is already covered by the frontend `onError` fallback (broken image → placeholder), and bulk CDN rotation events are detectable in near-real-time via PostHog. A PostHog alert on `photo_load_failed` event rate replaces the cron as the detection mechanism — same coverage for ~80% of the risk at zero operational cost. Revisit the cron only if (a) v1.3 SEO traffic grows enough that broken OG-tag image URLs become a measurable issue, or (b) the PostHog alert misses a real rotation event.
+- **Measurement window** closes 2026-05-30 (two weeks post-ship). Read `card_expand` rate, `expand → book_click` conversion, and the no-photo (WA State Parks) cohort delta to decide whether to invest in WA HTML scraping or pursue Option A collapsed-card thumbs as v1.4+ follow-up.
+
 ---
 
 ## v1.36 "OAuth Login"
@@ -1472,7 +1482,10 @@ Enable Google, Apple, and GitHub sign-in. Supabase infrastructure from v1.33 alr
 ## v1.4 "Monetization Launch"
 
 ### Theme
-Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates the pro features (watches, alerts, trips) behind a subscription and builds the conversion flows that move free users to paid. The billing infrastructure from v0.95 is already built — this is about activating it for real.
+Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates the pro features (watches, alerts, trips) behind a subscription and builds the conversion flows that move free users to paid. The v0.95 billing prototype on `feature/monetization` is preserved as a reference but will not be merged — v1.4 rebuilds against post-v1.33 Supabase auth and the post-v1.27/v1.29 design system. See Implementation Approach below.
+
+### Implementation Approach
+v0.95's full monetization layer was built on `feature/monetization` (March 2026) but never merged. Since then, v1.33 Supabase Auth and v1.27/v1.29 design system work have made the branch's auth integration and UI patterns obsolete. v1.4 will rebuild against current architecture with the branch as a reference implementation. Specifically: lift `billing.py` (Stripe SDK wrapper) and adapt to current style; rewrite all routes against the `routes/` subdirectory pattern; reuse schema column names + grandfather migration logic; rebuild frontend components against current `tokens.css`; write tests first for entitlement logic + billing math. The branch will be deleted post-ship.
 
 ### Features
 
@@ -1487,7 +1500,7 @@ Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates t
 ### Dependencies
 - v1.36 shipped (auth solid with OAuth before gating features behind it)
 - v1.3 shipped (organic traffic flowing)
-- v0.95 billing infrastructure (already built)
+- v0.95 billing reference (`feature/monetization` branch — Stripe SDK wiring and webhook handler proven, but adapted/rebuilt against post-v1.33 Supabase auth and post-v1.27/v1.29 design system; see Implementation Approach above)
 
 ### Quality Bar
 - Upgrade flows never block free tier functionality
@@ -1497,6 +1510,149 @@ Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates t
 
 ### Key Risk
 Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates. Auth must be stable (v1.33/v1.36) before tying subscription state to user accounts.
+
+---
+
+## v1.45 "Native Apps"
+
+### Theme
+Wrap the existing React app in a Capacitor shell and ship to the iOS App Store and Google Play Store. Capacitor lets us keep the entire web codebase as the UI layer while adding native capabilities (APNs/FCM push, GPS, offline registry) that satisfy Apple's "Minimum Functionality" guideline (4.2) and make the app actually useful at the campground — where users frequently have no cell signal. This is not a port; it's a thin native shell + native plugins + a re-architected data layer that respects three different freshness models (registry = local, watches = local-with-sync, availability = online-only). Slotted after v1.4 so the monetization model is validated on the web (cheap iteration) before committing to App Store review cycles.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Capacitor scaffolding | M | `npx cap init` + `cap add ios` + `cap add android`. Vite production build bundled into `ios/App/App/public/` and `android/app/src/main/assets/public/` on each release. Web build pipeline unchanged. |
+| Native push notifications | L | Swap VAPID/Service Worker push (web) for `@capacitor/push-notifications`. APNs (iOS) + FCM (Android). New `device_push_tokens` table (`user_id`, `platform`, `token`, `created_at`). Server-side router picks transport per token type. Keep existing web push pipeline for browser users. |
+| Native geolocation | S | `@capacitor/geolocation` for true GPS-based "campgrounds near me" search. Falls back to existing IP geolocation if permission denied. Permission prompt copy reviewed for App Store. |
+| Bundled registry snapshot | M | `assets/registry.db` shipped in the IPA/APK (~2-5MB). Capacitor SQLite plugin for read-only access. Refresh on app launch when online via existing registry export endpoint. Enables offline search by name, region, distance from current location. |
+| Local watch state | M | Mirror user's watches to local SQLite via Capacitor SQLite. Sync to backend on app foreground. Conflict resolution: last-write-wins for v1, server is source of truth. Availability data still fetched live. |
+| Auth Bearer migration completion | S | Verify all `/api/*` callsites use `Authorization: Bearer` (groundwork from v1.33). Store JWT in `@capacitor/preferences`, not `localStorage` (WKWebView purges localStorage under storage pressure). |
+| Service worker gating | S | Wrap `/sw.js` registration in `!Capacitor.isNativePlatform()`. SWs are flaky in WKWebView and redundant once native push is wired. |
+| Universal Links / App Links | S | Serve `apple-app-site-association` and `assetlinks.json` from Fly. Map existing share URLs (`/trip/:id`, `/campground/:slug`) to native deep links. |
+| In-app account deletion | S | Apple Guideline 5.1.1(v) requirement. Wire Supabase user deletion to `UserMenu` settings. Check if `DELETE /api/auth/me` already exists from v1.33; surface in UI if not. |
+| Native share sheet | S | `@capacitor/share` for trip/campground sharing. Replaces web `navigator.share` fallback. |
+| App icons + splash screens | S | Generate all iOS sizes (App Store, Spotlight, Settings) + Android adaptive icon + splash screens from Madrona brand assets. Tool: `@capacitor/assets`. |
+| App Store / Play Store metadata | M | Screenshots (6.7", 6.9", iPad, Android phone, Android tablet), descriptions, keywords, privacy policy URLs, age rating, privacy nutrition labels (PostHog, Sentry, Mapbox, Visual Crossing declared). |
+| Sentry crash reporting | S | `@sentry/capacitor` for native + WebView crash traces. PostHog alone misses WKWebView crashes and Capacitor plugin failures. |
+| CI/CD via Xcode Cloud + Play Console | M | Xcode Cloud workflow building from `main` on push (25 free build-hrs/mo, native TestFlight delivery). Play Console internal testing track for Android. No Fastlane unless we outgrow it. |
+
+### Architecture Decisions
+
+**Capacitor over React Native rewrite.** RN would mean rewriting the entire React 19 + Vite + Leaflet + Supabase + PostHog frontend. Capacitor keeps the existing codebase as a WKWebView (iOS) / WebView (Android) bundle, with native plugins for the 5-10% of functionality that needs native APIs. Loss: ~5% UX polish vs RN. Gain: weeks vs months, single codebase, web and native ship from the same React PRs forever.
+
+**Offline-aware per data layer, not offline-first uniformly.** Three data types, three policies: (1) Registry metadata bundled in the IPA, refreshed on launch — works offline because the snapshot is local. (2) Watches in local SQLite, synced to backend on foreground — works offline because reads/writes are local. (3) Availability online-only with "last checked Xm ago" timestamps — caching real-time data would lie to users. This is the right shape for "used at the campground with no signal" without overengineering.
+
+**Dual push transport, not migration.** Keep web push (VAPID + SW) for browser users; add native push (APNs/FCM) for app users. `device_push_tokens` table sits alongside `push_subscriptions`. Server-side dispatcher picks per token. Web users don't lose anything; native users get native UX.
+
+**Xcode Cloud over Fastlane.** Solo dev, new Apple account, no need for Ruby toolchain or `match` certificate management. Xcode Cloud's automatic signing + native TestFlight delivery is the simpler path. Revisit if we need cross-CI parity or non-Apple infrastructure access during builds.
+
+**Ship Android two weeks before iOS.** Play Store review is hours (not days); $25 one-time vs $99/year; Capacitor's Android story is more forgiving. Finding bugs on Android first means we don't burn App Store review cycles on issues we could've caught for free.
+
+### Security Requirements
+
+- APNs `.p8` key + FCM service account JSON in Fly secrets only — never in repo
+- App Transport Security: no exceptions needed (Fly serves valid TLS 1.2+)
+- Pin `apple-app-site-association` paths to known routes only — no wildcards
+- JWT in `@capacitor/preferences` (encrypted on device) — not `localStorage`
+- Universal Link payloads validated server-side — never trust deep link query params for state mutations
+- Privacy nutrition labels honest about PostHog (analytics), Sentry (diagnostics), Mapbox (location), Visual Crossing (none — server-side only)
+- Account deletion path (Apple 5.1.1(v)) tested end-to-end before submission
+
+### Files Changed
+
+**Backend (~120 lines added):**
+- `monitor/db.py` — new `device_push_tokens` table + indexes; migration script
+- `routes/push.py` — new `POST /api/push/device-token` for native token registration; dispatcher logic to route per transport type
+- `routes/auth.py` — verify `DELETE /api/auth/me` exists and surface in spec; add Supabase admin client call if missing
+- `routes/registry.py` (new or extended) — `GET /api/registry/snapshot` returning the full 1,370-row registry as a downloadable SQLite blob for native sync
+- `api.py` — serve `apple-app-site-association` (Content-Type: application/json, no extension) and `assetlinks.json`
+- Push sender modules — add APNs HTTP/2 + FCM HTTP v1 senders alongside existing web push
+
+**Frontend (~200 lines added/changed):**
+- `main.tsx` — gate SW registration on `!Capacitor.isNativePlatform()`
+- `hooks/usePushNotifications.ts` — branch on platform: web push (existing) or `@capacitor/push-notifications` (new)
+- `hooks/useGeolocation.ts` (new) — native GPS with web fallback
+- `hooks/useLocalRegistry.ts` (new) — read from bundled SQLite on native, from API on web
+- `lib/storage.ts` (new) — abstract `localStorage` ↔ `@capacitor/preferences` per platform
+- `lib/api.ts` — read JWT from new storage abstraction
+- `App.tsx` — handle deep link routes from `@capacitor/app` URL open events
+- `components/ShareButton.tsx` — prefer `@capacitor/share` when native
+- `components/UserMenu.tsx` — wire account deletion if not already present
+
+**Native (new directories):**
+- `ios/` — Xcode workspace, generated by Capacitor, committed to repo
+- `android/` — Gradle project, generated by Capacitor, committed to repo
+- `ios/App/App/public/.well-known/` — AASA delivery as a build artifact (alternatively served from Fly)
+- `capacitor.config.ts` — app ID (`co.campable.app`), bundle settings, plugin config
+
+**Ops / external (not code):**
+- Apple Developer account ($99/yr)
+- Google Play Developer account ($25 one-time)
+- APNs `.p8` auth key generated in Apple Developer portal
+- Firebase project + FCM service account
+- App Store Connect listing (screenshots, description, keywords, privacy)
+- Google Play Console listing (same)
+- Xcode Cloud workflow connected to repo
+- Sentry project with iOS + Android DSNs in Fly secrets
+
+### Testing Strategy
+
+**Automated (~25 tests):**
+- 8 backend: `device_push_tokens` CRUD, dispatcher routing (APNs vs FCM vs web push), token deduplication, account deletion cascade
+- 5 frontend: storage abstraction (native vs web branch), geolocation hook fallback, deep link routing
+- 5 frontend: registry snapshot loader (cache hit, cache miss, stale data, refresh on foreground)
+- 4 frontend: watch sync (online write, offline write, foreground sync, conflict resolution)
+- 3 integration: Capacitor plugin mocks render correctly in Vitest
+
+**Manual checklist (~2 hrs at ship time):**
+1. Install on physical iPhone via TestFlight → grant push + location permissions → receive test notification
+2. Same for Android via Play Store internal track
+3. Airplane mode → open app → registry browsable, watches visible, availability shows "offline" state
+4. Universal link: tap shared trip URL in iMessage → opens directly in app, not Safari
+5. Account creation → delete account from in-app settings → verify Supabase user gone
+6. Cold launch in <2s on iPhone 12 / Pixel 6 baseline
+7. Push notification tapped → app opens to the correct campground
+8. Sign out → sign in with email → watches persist
+9. App Store screenshots accurately reflect current UI
+10. Crash test: force a JS error → verify Sentry receives it with native context
+
+### Dependencies
+
+- v1.33 shipped (Supabase auth with Bearer token foundation)
+- v1.36 shipped (stable OAuth for native sign-in flows)
+- v1.4 shipped (monetization model validated on web before committing to App Store review cycles)
+- Apple Developer account approved + active
+- Google Play Developer account active
+- LLC registered (required for Apple business listing)
+- APNs `.p8` key generated
+- Firebase / FCM project set up
+- Decision on map tile strategy (online-only with messaging vs MapLibre + MBTiles bundled) — see Risks
+
+### Quality Bar
+
+- App launches cold in <2s on baseline devices (iPhone 12, Pixel 6)
+- Search results render from local registry in <100ms when offline
+- Native push notifications deliver within 30s of trigger (matches web push SLA)
+- Universal Links open the correct screen 100% of the time
+- App passes WCAG 2.1 AA (inherited from web — verify in WebView context)
+- No JavaScript errors in Sentry across a 7-day TestFlight cohort before App Store submission
+- iOS + Android version numbers stay in lockstep with web `package.json`
+- Account deletion verifiable in Supabase dashboard
+- Zero P0/P1 bugs in TestFlight internal testing before external review
+
+### Key Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Web Push (VAPID/SW) doesn't work in WKWebView — existing push pipeline is dead on native | Plan APNs/FCM swap as v1.0 critical path, not a follow-on. Build server-side dispatcher to route per transport, keep web push working for browser users. |
+| First TestFlight review takes 2-7 days; rejections add another cycle | Front-load Apple's known scrutiny areas: privacy nutrition labels, account deletion, push permission copy, location justification string. Ship Android first to find non-Apple bugs cheaply. |
+| Map tiles unusable offline — Leaflet renders grey squares at the trailhead | Decide v1: ship online-only maps with explicit "connect to load map" empty state, OR migrate Leaflet → MapLibre with MBTiles bundle (~30-50MB for PNW region). Don't silently defer — users will tap and be confused. |
+| iOS WKWebView purges localStorage under storage pressure | Migrate all critical state (JWT, watch cache, user prefs) to `@capacitor/preferences` before TestFlight. UI-only state can stay in localStorage. |
+| Apple 4.2 rejection ("repackaged website") | The bundled registry + native push + native geolocation + native share sheet + in-app account deletion is comfortably over the 4.2 bar in 2026. Risk is low IF we ship all four; high if we cut any to save time. |
+| Capacitor + Vite build pipeline drift over time | Lock Capacitor major version. Run `npx cap sync` in CI on every PR touching `web/`. Document in CLAUDE.md. |
+| In-app purchases not part of v1.45 scope | Subscription billing stays web-only at v1.45. Native IAP is a v1.5+ decision — Apple takes 15-30% revenue share and adds complex receipt validation. Defer until web monetization metrics justify it. |
+| Realistic timeline: 4-6 weeks calendar for solo dev new to Capacitor | Don't promise dates externally until first TestFlight build is in Apple's hands. Screenshots/metadata always take longer than estimated. |
 
 ---
 
