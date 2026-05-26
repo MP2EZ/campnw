@@ -128,13 +128,27 @@ def verify_webhook(payload: bytes, sig_header: str) -> dict:
 def handle_webhook_event(event: dict, watch_db: WatchDB) -> bool:
     """Process a verified Stripe webhook event idempotently.
 
-    Returns True if the event was handled or already-seen. Recorded into
-    `stripe_events` (idempotency) and `subscription_events` (audit trail).
+    Returns True if the event was handled or already-seen. Idempotency is
+    claimed atomically *before* the handler runs, so concurrent deliveries
+    of the same event can never both dispatch — only the first caller sees
+    rowcount=1 from the underlying INSERT OR IGNORE.
+
+    Failure semantics: if the handler raises after we've claimed the
+    event, the claim row remains and Stripe's retries will be skipped.
+    Operators can reconcile by inspecting subscription_events for the
+    affected user (the audit table only contains rows the handler
+    actually wrote, so absence indicates partial-failure mid-handler).
+    Manual remediation: `DELETE FROM stripe_events WHERE event_id=?` to
+    re-enable Stripe's next retry.
     """
     event_id = event.get("id", "")
     event_type = event.get("type", "")
 
-    if watch_db.has_stripe_event(event_id):
+    # Atomic claim — dispatch only if this call won the insert race.
+    claimed = watch_db.save_stripe_event(
+        event_id, event_type, json.dumps(event),
+    )
+    if not claimed:
         logger.info("Skipping duplicate Stripe event %s", event_id)
         return True
 
@@ -149,7 +163,6 @@ def handle_webhook_event(event: dict, watch_db: WatchDB) -> bool:
     else:
         logger.info("Ignoring Stripe event type: %s", event_type)
 
-    watch_db.save_stripe_event(event_id, event_type, json.dumps(event))
     return True
 
 
@@ -203,10 +216,23 @@ def _handle_checkout_completed(event: dict, watch_db: WatchDB) -> None:
 
 
 def _handle_subscription_updated(event: dict, watch_db: WatchDB) -> None:
-    """Sync subscription status changes (renewals, cancellations, past_due)."""
+    """Sync subscription status changes.
+
+    Stripe's lifecycle for a cancel-at-period-end flow:
+      1. User clicks cancel (portal) → fires updated with status=active +
+         cancel_at_period_end=true. We keep Pro and record expires_at so
+         the UI can show "Pro until {date}".
+      2. Period ends → fires updated with status=canceled AND deleted.
+         Either event downgrades.
+    Immediate cancellations (admin/refund) skip step 1 and fire status=
+    canceled directly. Either way, status=canceled is authoritative for
+    "no longer entitled."
+    """
     subscription = event["data"]["object"]
     customer_id = subscription.get("customer", "") or ""
     stripe_status = subscription.get("status", "")
+    cancel_at_period_end = bool(subscription.get("cancel_at_period_end"))
+    period_end_iso = _iso_from_epoch(subscription.get("current_period_end"))
 
     user = watch_db.get_user_by_stripe_customer_id(customer_id)
     if user is None:
@@ -216,21 +242,46 @@ def _handle_subscription_updated(event: dict, watch_db: WatchDB) -> None:
         return
 
     old_status = user.subscription_status
+    old_expires_at = user.subscription_expires_at
 
     if stripe_status in ("active", "trialing"):
-        # Active subscription — ensure user is Pro. `past_due` keeps Pro
-        # during Stripe's retry window (grace period) and is treated as Pro
-        # below until explicit cancellation.
+        # User is entitled to Pro. expires_at tracks scheduled cancel.
+        new_expires_at = period_end_iso if cancel_at_period_end else ""
+        watch_db.update_user(
+            user.id,
+            subscription_status="pro",
+            subscription_expires_at=new_expires_at,
+        )
         if old_status != "pro":
-            watch_db.update_user(user.id, subscription_status="pro")
             watch_db.log_subscription_event(
                 user_id=user.id,
                 event_type="customer.subscription.updated",
                 old_status=old_status,
                 new_status="pro",
             )
+        elif cancel_at_period_end and not old_expires_at:
+            # User just scheduled a cancellation — record for analytics
+            watch_db.log_subscription_event(
+                user_id=user.id,
+                event_type="customer.subscription.scheduled_cancel",
+                old_status=old_status,
+                new_status=old_status,
+            )
+            logger.info(
+                "User %d scheduled cancel; Pro retained until %s",
+                user.id, period_end_iso,
+            )
+        elif not cancel_at_period_end and old_expires_at:
+            # User reversed their cancellation via portal
+            watch_db.log_subscription_event(
+                user_id=user.id,
+                event_type="customer.subscription.uncanceled",
+                old_status=old_status,
+                new_status=old_status,
+            )
+            logger.info("User %d uncanceled; Pro continues indefinitely", user.id)
     elif stripe_status == "past_due":
-        # Keep Pro access during retry — but record the event for analytics.
+        # Grace period during Stripe's payment retry window. Keep Pro.
         watch_db.log_subscription_event(
             user_id=user.id,
             event_type="customer.subscription.past_due",
@@ -238,12 +289,14 @@ def _handle_subscription_updated(event: dict, watch_db: WatchDB) -> None:
             new_status=old_status,
         )
         logger.info("User %d subscription past_due (Pro retained)", user.id)
-    elif stripe_status in ("canceled", "unpaid", "incomplete_expired"):
-        expires_at = _iso_from_epoch(subscription.get("current_period_end"))
+    elif stripe_status in ("canceled", "unpaid"):
+        # Subscription has ended (period expired OR immediate cancel OR
+        # retries exhausted). Downgrade now; clear expires_at because
+        # entitlement has ended.
         watch_db.update_user(
             user.id,
             subscription_status="free",
-            subscription_expires_at=expires_at,
+            subscription_expires_at="",
         )
         watch_db.log_subscription_event(
             user_id=user.id,
@@ -254,6 +307,12 @@ def _handle_subscription_updated(event: dict, watch_db: WatchDB) -> None:
         logger.info(
             "User %d downgraded to free (stripe_status=%s)",
             user.id, stripe_status,
+        )
+    elif stripe_status == "incomplete_expired":
+        # Initial payment never completed — the user was never Pro in the
+        # first place. No state change; just log for forensics.
+        logger.info(
+            "User %d subscription expired before activation (no-op)", user.id,
         )
 
 

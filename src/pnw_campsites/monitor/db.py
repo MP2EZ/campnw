@@ -796,18 +796,26 @@ class WatchDB:
 
     def save_stripe_event(
         self, event_id: str, event_type: str, payload: str,
-    ) -> None:
-        """Record a processed Stripe webhook event for idempotency.
+    ) -> bool:
+        """Atomically claim a Stripe webhook event id for processing.
 
-        Uses INSERT OR IGNORE so concurrent webhook deliveries don't error.
+        Returns True if this call inserted the event row (caller should
+        dispatch the handler), False if the event_id was already present
+        (caller should skip — already processed).
+
+        This is the atomic primitive that prevents duplicate dispatch under
+        concurrent webhook deliveries: the DB-level UNIQUE constraint on
+        event_id + cursor.rowcount check happen as a single statement, so
+        only one caller ever sees rowcount=1 for a given event_id.
         """
-        self._conn.execute(
+        cursor = self._conn.execute(
             "INSERT OR IGNORE INTO stripe_events"
             " (event_id, event_type, payload, processed_at)"
             " VALUES (?, ?, ?, ?)",
             (event_id, event_type, payload, datetime.now().isoformat()),
         )
         self._conn.commit()
+        return cursor.rowcount > 0
 
     def log_subscription_event(
         self,
