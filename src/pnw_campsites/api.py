@@ -465,6 +465,7 @@ async def timing_middleware(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 from pnw_campsites.routes.auth import router as auth_router  # noqa: E402
+from pnw_campsites.routes.billing import router as billing_router  # noqa: E402
 from pnw_campsites.routes.compare import router as compare_router  # noqa: E402
 from pnw_campsites.routes.planner import router as planner_router  # noqa: E402
 from pnw_campsites.routes.poll import router as poll_router  # noqa: E402
@@ -488,6 +489,7 @@ app.include_router(trips_router)
 app.include_router(sharing_router)
 app.include_router(compare_router)
 app.include_router(poll_router)
+app.include_router(billing_router)
 # SEO routes MUST be before the SPA catch-all so /campgrounds/{state}/{slug}
 # takes precedence over /{path:path}
 app.include_router(seo_router)

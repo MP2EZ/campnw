@@ -112,6 +112,20 @@ def get_current_user(request: Request) -> int | None:
     return new_user.id
 
 
+def get_current_user_obj(request: Request):
+    """Return the full User object for the current request, or None.
+
+    Wraps get_current_user (which returns just the id) for callers that
+    need subscription_status, stripe_customer_id, or email — typically
+    billing routes and entitlement checks. Same auto-provisioning
+    semantics as get_current_user.
+    """
+    user_id = get_current_user(request)
+    if user_id is None:
+        return None
+    return get_watch_db().get_user_by_id(user_id)
+
+
 def get_session_token(request: Request, response: Response) -> str:
     """Get or create a session token cookie for anonymous watch ownership."""
     import uuid
