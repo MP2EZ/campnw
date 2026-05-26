@@ -82,6 +82,10 @@ class User:
     created_at: str = ""
     last_login_at: str | None = None
     supabase_id: str | None = None
+    subscription_status: str = "free"  # "free" or "pro"
+    stripe_customer_id: str = ""
+    subscription_id: str = ""
+    subscription_expires_at: str = ""
 
 
 @dataclass
@@ -410,6 +414,59 @@ class WatchDB:
                 "ALTER TABLE watches ADD COLUMN"
                 " search_params TEXT DEFAULT ''"
             )
+        # v1.4: billing — subscription state on users
+        user_cols2 = [
+            r[1] for r in self._conn.execute("PRAGMA table_info(users)")
+        ]
+        if "subscription_status" not in user_cols2:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " subscription_status TEXT NOT NULL DEFAULT 'free'"
+            )
+        if "stripe_customer_id" not in user_cols2:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " stripe_customer_id TEXT NOT NULL DEFAULT ''"
+            )
+            self._conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS"
+                " idx_users_stripe_customer_id"
+                " ON users(stripe_customer_id)"
+                " WHERE stripe_customer_id != ''"
+            )
+        if "subscription_id" not in user_cols2:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " subscription_id TEXT NOT NULL DEFAULT ''"
+            )
+        if "subscription_expires_at" not in user_cols2:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " subscription_expires_at TEXT NOT NULL DEFAULT ''"
+            )
+        # v1.4: webhook event idempotency + subscription audit trail
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS stripe_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL UNIQUE,
+                event_type TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                processed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_stripe_events_type
+                ON stripe_events(event_type);
+            CREATE TABLE IF NOT EXISTS subscription_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                event_type TEXT NOT NULL,
+                old_status TEXT NOT NULL DEFAULT '',
+                new_status TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL DEFAULT 'webhook',
+                occurred_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_subscription_events_user
+                ON subscription_events(user_id, occurred_at DESC);
+        """)
         self._conn.commit()
 
     # -------------------------------------------------------------------
@@ -667,6 +724,14 @@ class WatchDB:
         ).fetchone()
         return self._row_to_user(row) if row else None
 
+    def get_user_by_stripe_customer_id(self, customer_id: str) -> User | None:
+        if not customer_id:
+            return None
+        row = self._conn.execute(
+            "SELECT * FROM users WHERE stripe_customer_id=?", (customer_id,)
+        ).fetchone()
+        return self._row_to_user(row) if row else None
+
     def get_user_by_id(self, user_id: int) -> User | None:
         row = self._conn.execute(
             "SELECT * FROM users WHERE id=?", (user_id,)
@@ -679,6 +744,8 @@ class WatchDB:
             "default_nights", "default_from", "last_login_at",
             "recommendations_enabled", "preferred_tags",
             "onboarding_complete",
+            "subscription_status", "stripe_customer_id",
+            "subscription_id", "subscription_expires_at",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -713,6 +780,66 @@ class WatchDB:
         valid_fields = {f.name for f in dataclasses.fields(User)}
         d = {k: v for k, v in d.items() if k in valid_fields}
         return User(**d)
+
+    # -------------------------------------------------------------------
+    # Billing (v1.4)
+    # -------------------------------------------------------------------
+
+    def has_stripe_event(self, event_id: str) -> bool:
+        """Return True if a Stripe webhook event ID has already been processed."""
+        if not event_id:
+            return False
+        row = self._conn.execute(
+            "SELECT 1 FROM stripe_events WHERE event_id=?", (event_id,)
+        ).fetchone()
+        return row is not None
+
+    def save_stripe_event(
+        self, event_id: str, event_type: str, payload: str,
+    ) -> None:
+        """Record a processed Stripe webhook event for idempotency.
+
+        Uses INSERT OR IGNORE so concurrent webhook deliveries don't error.
+        """
+        self._conn.execute(
+            "INSERT OR IGNORE INTO stripe_events"
+            " (event_id, event_type, payload, processed_at)"
+            " VALUES (?, ?, ?, ?)",
+            (event_id, event_type, payload, datetime.now().isoformat()),
+        )
+        self._conn.commit()
+
+    def log_subscription_event(
+        self,
+        user_id: int,
+        event_type: str,
+        old_status: str = "",
+        new_status: str = "",
+        source: str = "webhook",
+    ) -> None:
+        """Append an audit-trail entry for a subscription state change."""
+        self._conn.execute(
+            "INSERT INTO subscription_events"
+            " (user_id, event_type, old_status, new_status, source, occurred_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                user_id, event_type, old_status, new_status, source,
+                datetime.now().isoformat(),
+            ),
+        )
+        self._conn.commit()
+
+    def list_subscription_events(
+        self, user_id: int, limit: int = 50,
+    ) -> list[dict]:
+        """Return recent subscription events for a user (newest first)."""
+        rows = self._conn.execute(
+            "SELECT event_type, old_status, new_status, source, occurred_at"
+            " FROM subscription_events WHERE user_id=?"
+            " ORDER BY occurred_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # -------------------------------------------------------------------
     # Search history
