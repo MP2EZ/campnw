@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from tests.conftest import signup_and_auth
 
 # ---------------------------------------------------------------------------
@@ -345,3 +347,146 @@ class TestWatchLimitEnforcement:
         assert set(detail.keys()) == {
             "error", "limit", "current", "upgrade_url",
         }
+
+
+# ---------------------------------------------------------------------------
+# Planner session enforcement (slice 4a)
+# ---------------------------------------------------------------------------
+
+
+def _start_chat(client, headers=None, content="plan me a trip"):
+    return client.post(
+        "/api/plan/chat",
+        json={"messages": [{"role": "user", "content": content}]},
+        headers=headers or {},
+    )
+
+
+class TestPlannerSessionEnforcement:
+    @pytest.fixture(autouse=True)
+    def _reset_plan_state(self, monkeypatch, api_client):
+        """Each test starts with a clean IP rate-limit + a permissive cap.
+
+        The route-level _PLAN_DAILY_LIMIT (5/day per IP) is an anti-abuse
+        limit independent of the tier cap we're testing; TestClient reuses
+        the same IP across calls, so without this we'd hit 429 before the
+        v1.4 402. Depends on api_client so the watch_db reset hits the
+        current (not torn-down) DB instance.
+        """
+        import pnw_campsites.routes.planner as planner_mod
+
+        monkeypatch.setattr(planner_mod, "_PLAN_DAILY_LIMIT", 10_000)
+        planner_mod._plan_rate_limit.clear()
+        yield
+
+    def test_free_user_first_three_succeed(self, api_client, monkeypatch) -> None:
+        # Skip the actual LLM call — we're testing gating, not chat behaviour.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        with patch(
+            "pnw_campsites.planner.agent.chat",
+            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
+        ):
+            _, headers = signup_and_auth(
+                api_client, email="planner1@example.com",
+            )
+            for _ in range(3):
+                resp = _start_chat(api_client, headers=headers)
+                assert resp.status_code == 200, resp.json()
+
+    def test_free_user_fourth_session_returns_402(
+        self, api_client, monkeypatch,
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        with patch(
+            "pnw_campsites.planner.agent.chat",
+            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
+        ):
+            _, headers = signup_and_auth(
+                api_client, email="planner4@example.com",
+            )
+            for _ in range(3):
+                _start_chat(api_client, headers=headers)
+            resp = _start_chat(api_client, headers=headers)
+
+        assert resp.status_code == 402
+        detail = resp.json()["detail"]
+        assert detail["error"] == "planner_session_limit_reached"
+        assert detail["limit"] == 3
+        assert detail["upgrade_url"] == "/pricing"
+
+    def test_pro_user_can_exceed_free_limit(
+        self, api_client, monkeypatch,
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        user_data, headers = signup_and_auth(
+            api_client, email="proplan@example.com",
+        )
+        import pnw_campsites.api as api_module
+        api_module._watch_db.update_user(
+            user_data["id"], subscription_status="pro",
+        )
+
+        with patch(
+            "pnw_campsites.planner.agent.chat",
+            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
+        ):
+            # 5 sessions — well past free cap, well under Pro cap of 20
+            for i in range(5):
+                resp = _start_chat(api_client, headers=headers)
+                assert resp.status_code == 200, f"iteration {i}: {resp.json()}"
+
+    def test_continuation_messages_dont_count(
+        self, api_client, monkeypatch,
+    ) -> None:
+        # Multi-turn messages within an existing conversation must NOT
+        # consume from the session budget — otherwise refreshing a long
+        # trip-planning chat would burn through the cap in minutes.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        user_data, headers = signup_and_auth(
+            api_client, email="multi@example.com",
+        )
+        with patch(
+            "pnw_campsites.planner.agent.chat",
+            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
+        ):
+            # 1 session starter
+            assert _start_chat(api_client, headers=headers).status_code == 200
+            # Continuation: 3 messages — should not count as new sessions
+            for _ in range(10):
+                resp = api_client.post(
+                    "/api/plan/chat",
+                    json={
+                        "messages": [
+                            {"role": "user", "content": "hi"},
+                            {"role": "assistant", "content": "hi back"},
+                            {"role": "user", "content": "more"},
+                        ],
+                    },
+                    headers=headers,
+                )
+                assert resp.status_code == 200
+
+        # Only 1 session logged → user still has 2 starters left
+        import pnw_campsites.api as api_module
+        count = api_module._watch_db.count_planner_sessions_this_month(
+            user_id=user_data["id"],
+        )
+        assert count == 1
+
+    def test_anonymous_session_also_capped(
+        self, api_client, monkeypatch,
+    ) -> None:
+        # Anonymous users must be capped by session_token so the limit
+        # can't be bypassed by signing out / clearing cookies repeatedly.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        with patch(
+            "pnw_campsites.planner.agent.chat",
+            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
+        ):
+            # Use TestClient cookies (sticky across calls)
+            for _ in range(3):
+                _start_chat(api_client)
+            resp = _start_chat(api_client)
+
+        assert resp.status_code == 402
+        assert resp.json()["detail"]["error"] == "planner_session_limit_reached"

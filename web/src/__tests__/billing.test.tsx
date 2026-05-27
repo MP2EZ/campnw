@@ -147,6 +147,31 @@ describe("api: WatchLimitError on 402", () => {
       "Billing is not configured",
     );
   });
+
+  test("planChat throws PlannerLimitError on 402 with matching payload", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 402,
+      json: () =>
+        Promise.resolve({
+          detail: {
+            error: "planner_session_limit_reached",
+            limit: 3,
+            current: 3,
+            upgrade_url: "/pricing",
+          },
+        }),
+    });
+    const { planChat, PlannerLimitError } = await import("../api");
+    let caught: unknown = null;
+    try {
+      await planChat([{ role: "user", content: "x" }]);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(PlannerLimitError);
+    expect((caught as InstanceType<typeof PlannerLimitError>).limit).toBe(3);
+  });
 });
 
 // ---------------------------------------------------------------------------

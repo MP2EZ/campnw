@@ -535,6 +535,24 @@ export class WatchLimitError extends Error {
   }
 }
 
+/**
+ * Thrown when POST /api/plan/chat returns HTTP 402 — the user has used
+ * their monthly trip-planner session budget. UI catches and renders
+ * <UpgradeModal reason="planner_limit">.
+ */
+export class PlannerLimitError extends Error {
+  limit: number;
+  current: number;
+  upgradeUrl: string;
+  constructor(detail: { limit: number; current: number; upgrade_url: string }) {
+    super("planner_session_limit_reached");
+    this.name = "PlannerLimitError";
+    this.limit = detail.limit;
+    this.current = detail.current;
+    this.upgradeUrl = detail.upgrade_url;
+  }
+}
+
 export async function createWatch(
   params: CreateWatchParams
 ): Promise<WatchData> {
@@ -697,6 +715,14 @@ export async function planChat(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages }),
   });
+  if (resp.status === 402) {
+    const body = await resp.json().catch(() => null) as
+      | { detail?: { limit: number; current: number; upgrade_url: string; error?: string } }
+      | null;
+    if (body?.detail?.error === "planner_session_limit_reached") {
+      throw new PlannerLimitError(body.detail);
+    }
+  }
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({}));
     throw new Error((data as { detail?: string }).detail || `Chat failed: ${resp.status}`);
@@ -719,6 +745,14 @@ export async function planChatStream(
       body: JSON.stringify({ messages }),
     });
     if (!resp.ok) {
+      if (resp.status === 402) {
+        const body = await resp.json().catch(() => null) as
+          | { detail?: { limit: number; current: number; upgrade_url: string; error?: string } }
+          | null;
+        if (body?.detail?.error === "planner_session_limit_reached") {
+          throw new PlannerLimitError(body.detail);
+        }
+      }
       const data = await resp.json().catch(() => ({}));
       throw new Error(
         (data as { detail?: string }).detail || `Chat failed: ${resp.status}`,

@@ -466,6 +466,16 @@ class WatchDB:
             );
             CREATE INDEX IF NOT EXISTS idx_subscription_events_user
                 ON subscription_events(user_id, occurred_at DESC);
+            CREATE TABLE IF NOT EXISTS planner_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                session_token TEXT NOT NULL DEFAULT '',
+                started_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_planner_sessions_user
+                ON planner_sessions(user_id, started_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_planner_sessions_session
+                ON planner_sessions(session_token, started_at DESC);
         """)
         self._conn.commit()
 
@@ -848,6 +858,86 @@ class WatchDB:
             (user_id, limit),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- Planner session tracking (v1.4 trip-planner gating) ----------------
+
+    def log_planner_session(
+        self,
+        user_id: int | None = None,
+        session_token: str = "",
+    ) -> None:
+        """Record a new trip-planner conversation start.
+
+        Exactly one of user_id / session_token should be populated. Anonymous
+        sessions are tracked by session_token so the per-month cap can't be
+        bypassed by signing out.
+        """
+        self._conn.execute(
+            "INSERT INTO planner_sessions (user_id, session_token, started_at)"
+            " VALUES (?, ?, ?)",
+            (user_id, session_token, datetime.now().isoformat()),
+        )
+        self._conn.commit()
+
+    def count_planner_sessions_this_month(
+        self,
+        user_id: int | None = None,
+        session_token: str = "",
+    ) -> int:
+        """Count this user's (or session's) planner sessions so far this month.
+
+        Used by the v1.4 free-tier cap (3/mo) vs Pro (20/mo). "This month"
+        is calendar-month UTC — the simplest definition that doesn't require
+        tracking subscription anniversaries.
+        """
+        month_prefix = datetime.now().strftime("%Y-%m")
+        if user_id is not None:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM planner_sessions"
+                " WHERE user_id=? AND started_at LIKE ?",
+                (user_id, f"{month_prefix}-%"),
+            ).fetchone()
+        else:
+            if not session_token:
+                return 0
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM planner_sessions"
+                " WHERE user_id IS NULL AND session_token=?"
+                " AND started_at LIKE ?",
+                (session_token, f"{month_prefix}-%"),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    # --- Tier-filtered watch listing (v1.4 5-min Pro polling) --------------
+
+    def list_watches_for_polling(self, tier: str = "all") -> list[Watch]:
+        """Return enabled watches filtered by owner subscription tier.
+
+        - tier="all": every enabled watch (legacy poll_all behaviour)
+        - tier="pro": only watches whose user has subscription_status="pro"
+        - tier="free": anonymous (user_id IS NULL) or non-Pro users
+
+        Pro watches NEVER appear in the "free" set so we don't double-poll
+        them once we have separate APScheduler jobs per tier.
+        """
+        if tier == "all":
+            return self.list_watches(enabled_only=True)
+        if tier == "pro":
+            rows = self._conn.execute(
+                "SELECT w.* FROM watches w"
+                " INNER JOIN users u ON u.id = w.user_id"
+                " WHERE w.enabled = 1 AND u.subscription_status = 'pro'"
+            ).fetchall()
+        elif tier == "free":
+            rows = self._conn.execute(
+                "SELECT w.* FROM watches w"
+                " LEFT JOIN users u ON u.id = w.user_id"
+                " WHERE w.enabled = 1"
+                " AND (u.id IS NULL OR u.subscription_status != 'pro')"
+            ).fetchall()
+        else:
+            raise ValueError(f"Unknown tier: {tier!r}")
+        return [self._row_to_watch(r) for r in rows]
 
     # -------------------------------------------------------------------
     # Search history

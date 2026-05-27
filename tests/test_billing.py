@@ -539,6 +539,145 @@ class TestEntitlements:
 
 
 # ---------------------------------------------------------------------------
+# Planner session tracking (slice 4a)
+# ---------------------------------------------------------------------------
+
+
+class TestPlannerSessionTracking:
+    def test_log_and_count_per_user(self, watch_db: WatchDB) -> None:
+        user = watch_db.create_user(
+            User(email="planner@example.com", supabase_id="sub-planner")
+        )
+        assert watch_db.count_planner_sessions_this_month(user_id=user.id) == 0
+        watch_db.log_planner_session(user_id=user.id)
+        watch_db.log_planner_session(user_id=user.id)
+        assert watch_db.count_planner_sessions_this_month(user_id=user.id) == 2
+
+    def test_log_and_count_per_session_token(self, watch_db: WatchDB) -> None:
+        # Anonymous tracking by session_token so cap can't be bypassed.
+        watch_db.log_planner_session(session_token="anon-abc")
+        watch_db.log_planner_session(session_token="anon-abc")
+        watch_db.log_planner_session(session_token="anon-other")
+        assert (
+            watch_db.count_planner_sessions_this_month(session_token="anon-abc") == 2
+        )
+        assert (
+            watch_db.count_planner_sessions_this_month(session_token="anon-other") == 1
+        )
+
+    def test_user_and_anon_counts_are_independent(
+        self, watch_db: WatchDB,
+    ) -> None:
+        user = watch_db.create_user(
+            User(email="mix@example.com", supabase_id="sub-mix")
+        )
+        watch_db.log_planner_session(user_id=user.id)
+        watch_db.log_planner_session(session_token="anon-z")
+        assert watch_db.count_planner_sessions_this_month(user_id=user.id) == 1
+        assert (
+            watch_db.count_planner_sessions_this_month(session_token="anon-z") == 1
+        )
+
+    def test_empty_token_returns_zero(self, watch_db: WatchDB) -> None:
+        # Guard against accidental "count all anonymous" if token is empty.
+        watch_db.log_planner_session(session_token="anon-x")
+        assert watch_db.count_planner_sessions_this_month(session_token="") == 0
+
+
+# ---------------------------------------------------------------------------
+# Tier-filtered watch listing (slice 4b)
+# ---------------------------------------------------------------------------
+
+
+class TestTierFilteredWatches:
+    def _make_watch(
+        self,
+        watch_db: WatchDB,
+        user_id: int | None,
+        facility_id: str,
+    ) -> None:
+        from pnw_campsites.monitor.db import Watch
+        watch_db.add_watch(
+            Watch(
+                facility_id=facility_id,
+                name=f"Watch {facility_id}",
+                start_date="2026-07-01",
+                end_date="2026-07-07",
+                min_nights=1,
+                user_id=user_id,
+                session_token="" if user_id else "anon-x",
+            )
+        )
+
+    def test_free_tier_includes_anonymous_and_non_pro(
+        self, watch_db: WatchDB,
+    ) -> None:
+        free_user = watch_db.create_user(
+            User(email="free@example.com", supabase_id="sub-free")
+        )
+        self._make_watch(watch_db, free_user.id, "free-fac")
+        self._make_watch(watch_db, None, "anon-fac")
+        result = watch_db.list_watches_for_polling(tier="free")
+        facilities = {w.facility_id for w in result}
+        assert "free-fac" in facilities
+        assert "anon-fac" in facilities
+
+    def test_pro_tier_excludes_free_users(self, watch_db: WatchDB) -> None:
+        pro_user = watch_db.create_user(
+            User(email="pro@example.com", supabase_id="sub-pro")
+        )
+        watch_db.update_user(pro_user.id, subscription_status="pro")
+        free_user = watch_db.create_user(
+            User(email="f2@example.com", supabase_id="sub-f2")
+        )
+        self._make_watch(watch_db, pro_user.id, "pro-fac")
+        self._make_watch(watch_db, free_user.id, "f2-fac")
+        result = watch_db.list_watches_for_polling(tier="pro")
+        facilities = {w.facility_id for w in result}
+        assert facilities == {"pro-fac"}
+
+    def test_pro_watches_excluded_from_free_tier(
+        self, watch_db: WatchDB,
+    ) -> None:
+        # The whole point: Pro watches must NOT appear in the free poll
+        # cycle, or they'd be polled twice per 15 min (once at 5m, again
+        # at 7.5m), defeating the throttle benefit.
+        pro_user = watch_db.create_user(
+            User(email="p@example.com", supabase_id="sub-p")
+        )
+        watch_db.update_user(pro_user.id, subscription_status="pro")
+        self._make_watch(watch_db, pro_user.id, "pro-only")
+        result = watch_db.list_watches_for_polling(tier="free")
+        facilities = {w.facility_id for w in result}
+        assert "pro-only" not in facilities
+
+    def test_unknown_tier_raises(self, watch_db: WatchDB) -> None:
+        import pytest
+        with pytest.raises(ValueError, match="Unknown tier"):
+            watch_db.list_watches_for_polling(tier="enterprise")
+
+    def test_disabled_watches_excluded(self, watch_db: WatchDB) -> None:
+        # enabled=False watches must never be polled even if tier matches
+        free_user = watch_db.create_user(
+            User(email="d@example.com", supabase_id="sub-d")
+        )
+        from pnw_campsites.monitor.db import Watch
+        watch_db.add_watch(
+            Watch(
+                facility_id="off",
+                name="off",
+                start_date="2026-07-01",
+                end_date="2026-07-07",
+                min_nights=1,
+                user_id=free_user.id,
+                enabled=False,
+            )
+        )
+        result = watch_db.list_watches_for_polling(tier="free")
+        assert all(w.facility_id != "off" for w in result)
+
+
+# ---------------------------------------------------------------------------
 # Configuration sanity
 # ---------------------------------------------------------------------------
 
