@@ -1,11 +1,13 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { getWatches, deleteWatch, toggleWatch, createWatch, track } from "../api";
+import { getWatches, deleteWatch, toggleWatch, createWatch, track, WatchLimitError } from "../api";
 import { IconPause, IconPlay, IconClose } from "../icons";
 import type { WatchData, CreateWatchParams } from "../api";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { useAuth } from "../hooks/useAuth";
+import { useBilling } from "../hooks/useBilling";
 import { PollDashboard } from "./PollDashboard";
 import { ShareButton } from "./ShareButton";
+import { UpgradeModal } from "./UpgradeModal";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -101,7 +103,10 @@ export const WatchPanel = memo(function WatchPanel({
         aria-labelledby="watch-panel-title"
       >
         <div className="watch-panel-header">
-          <h2 id="watch-panel-title">Watchlist</h2>
+          <h2 id="watch-panel-title">
+            Watchlist
+            <WatchLimitIndicator watchCount={watches.length} />
+          </h2>
           <button className="watch-close" onClick={onClose} ref={closeRef} aria-label="Close watchlist">
             <IconClose className="icon-sm" />
           </button>
@@ -200,6 +205,8 @@ export function WatchButton({
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [limitInfo, setLimitInfo] = useState<{ limit: number; current: number } | null>(null);
   const { subscribed, subscribe } = usePushNotifications();
 
   const handleWatch = async () => {
@@ -225,8 +232,12 @@ export function WatchButton({
         setCreated(false);
         setShowPushPrompt(false);
       }, 8000);
-    } catch {
-      // ignore
+    } catch (e) {
+      if (e instanceof WatchLimitError) {
+        setLimitInfo({ limit: e.limit, current: e.current });
+        setUpgradeOpen(true);
+      }
+      // Other errors swallowed (existing behavior preserved)
     } finally {
       setCreating(false);
     }
@@ -255,12 +266,44 @@ export function WatchButton({
   }
 
   return (
-    <button
-      className="watch-cta-btn"
-      onClick={handleWatch}
-      disabled={creating}
+    <>
+      <button
+        className="watch-cta-btn"
+        onClick={handleWatch}
+        disabled={creating}
+      >
+        {creating ? "..." : "Watch"}
+      </button>
+      <UpgradeModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        reason="watch_limit"
+        contextInfo={
+          limitInfo
+            ? { limit: limitInfo.limit, current: limitInfo.current }
+            : undefined
+        }
+      />
+    </>
+  );
+}
+
+/**
+ * "2/3 watches" indicator next to the Watchlist title for free users.
+ * Hidden for Pro (unlimited) and when the limit isn't known yet.
+ * Turns warning-coloured when the user is at the cap, surfacing the
+ * upgrade prompt before they hit the 402.
+ */
+function WatchLimitIndicator({ watchCount }: { watchCount: number }) {
+  const { watchLimit } = useBilling();
+  if (watchLimit === null) return null;
+  const atLimit = watchCount >= watchLimit;
+  return (
+    <span
+      className={`watch-limit-indicator${atLimit ? " at-limit" : ""}`}
+      aria-label={`${watchCount} of ${watchLimit} watches used`}
     >
-      {creating ? "..." : "Watch"}
-    </button>
+      {watchCount}/{watchLimit}
+    </span>
   );
 }
