@@ -4094,3 +4094,311 @@ a.header-btn {
   color: var(--accent);
   font-weight: var(--weight-medium);
 }
+
+/* ===========================================================================
+   v1.4 Billing — UpgradeModal, Pricing, ProBadge, BillingSettings
+   =========================================================================== */
+
+.upgrade-modal {
+  max-width: 460px;
+}
+
+.upgrade-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.upgrade-tagline {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.upgrade-features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.upgrade-features li {
+  padding-left: 1.4em;
+  position: relative;
+}
+
+.upgrade-features li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: var(--weight-bold);
+}
+
+.upgrade-price {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.upgrade-price-amount {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--text);
+}
+
+.upgrade-price-period {
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.upgrade-cta {
+  width: 100%;
+}
+
+.upgrade-prompt-signin {
+  margin: 0;
+  padding: var(--space-2);
+  background: var(--chip-bg);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text);
+  text-align: center;
+}
+
+.upgrade-fine-print {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text);
+  opacity: 0.6;
+  text-align: center;
+}
+
+/* --- Pricing page --- */
+
+.pricing-page {
+  max-width: var(--max-w-app);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.pricing-header {
+  text-align: center;
+}
+
+.pricing-header h1 {
+  margin: 0 0 var(--space-3);
+  font-size: 2rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
+}
+
+.pricing-lede {
+  max-width: 38rem;
+  margin: 0 auto;
+  color: var(--text);
+  opacity: 0.8;
+  line-height: 1.55;
+}
+
+.pricing-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .pricing-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pricing-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--bg-card);
+}
+
+.pricing-card-pro {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-card);
+}
+
+.pricing-card h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.pricing-card-price {
+  margin: 0;
+  font-size: 2.2rem;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+.pricing-card-period {
+  font-size: var(--text-base);
+  font-weight: var(--weight-normal);
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.pricing-card-subtitle {
+  margin: 0;
+  color: var(--text);
+  opacity: 0.7;
+  font-size: var(--text-sm);
+}
+
+.pricing-card-features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.pricing-card-features li {
+  padding-left: 1.4em;
+  position: relative;
+}
+
+.pricing-card-features li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+.pricing-cta-note {
+  margin: 0;
+  padding: var(--space-2);
+  background: var(--chip-bg);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  text-align: center;
+  color: var(--text);
+}
+
+.pricing-table-wrap h2,
+.pricing-faq h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.pricing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.pricing-table th,
+.pricing-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.pricing-table thead th {
+  font-weight: var(--weight-semi);
+  background: var(--chip-bg);
+}
+
+.pricing-faq dt {
+  font-weight: var(--weight-semi);
+  margin-top: var(--space-3);
+}
+
+.pricing-faq dd {
+  margin: var(--space-1) 0 0;
+  color: var(--text);
+  opacity: 0.8;
+  line-height: 1.55;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- ProBadge --- */
+
+.pro-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-1);
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-left: var(--space-1);
+  vertical-align: middle;
+}
+
+/* --- Watch limit indicator inside WatchPanel --- */
+
+.watch-limit-indicator {
+  font-size: var(--text-xs);
+  color: var(--text);
+  opacity: 0.7;
+  margin-left: var(--space-2);
+}
+
+.watch-limit-indicator.at-limit {
+  color: var(--warning-fg, #b54a00);
+  opacity: 1;
+  font-weight: var(--weight-medium);
+}
+
+/* --- Billing section in UserMenu --- */
+
+.billing-status {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.billing-status-row {
+  display: flex;
+  justify-content: space-between;
+  margin: var(--space-1) 0;
+}
+
+.billing-status-row .label {
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.billing-expires-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text);
+  opacity: 0.6;
+}

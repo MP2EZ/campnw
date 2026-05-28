@@ -51,11 +51,16 @@ _search_timings: deque[float] = deque(maxlen=200)
 _poll_logger = logging.getLogger("pnw_campsites.poller")
 
 
-async def _poll_tranche(tranche: int | None = None) -> None:
+async def _poll_tranche(
+    tranche: int | None = None,
+    tier_filter: str = "all",
+) -> None:
     """Background job: poll a tranche of watches and dispatch notifications.
 
     When tranche is 0 or 1, only polls watches where id % 2 == tranche.
     This splits the API load into two cycles offset by ~7.5 minutes.
+    tier_filter (v1.4) restricts to "pro" or "free" watches so the 5-min
+    Pro job and the 15-min free job don't double-poll Pro watches.
     """
     from pnw_campsites.monitor.notify import notify_ntfy, notify_web_push
     from pnw_campsites.monitor.watcher import poll_all
@@ -63,11 +68,11 @@ async def _poll_tranche(tranche: int | None = None) -> None:
     if not _watch_db:
         return
 
-    label = f"tranche {tranche}" if tranche is not None else "all"
+    label = f"tranche {tranche} tier={tier_filter}"
     _poll_logger.info("Starting watch poll cycle (%s)", label)
     results = await poll_all(
         _recgov, _goingtocamp, _watch_db, _registry, tranche=tranche,
-        reserveamerica=_reserveamerica,
+        reserveamerica=_reserveamerica, tier_filter=tier_filter,
     )
 
     # Enrich notifications with LLM context (fire-and-forget, 3s timeout)
@@ -199,8 +204,9 @@ async def lifespan(app: FastAPI):
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
         scheduler = AsyncIOScheduler()
+        # Free-tier watches: 15-min interval in 2 offset tranches
         scheduler.add_job(
-            partial(_poll_tranche, tranche=0),
+            partial(_poll_tranche, tranche=0, tier_filter="free"),
             "interval",
             minutes=15,
             id="watch_poller_t0",
@@ -210,7 +216,7 @@ async def lifespan(app: FastAPI):
             next_run_time=datetime.now(),
         )
         scheduler.add_job(
-            partial(_poll_tranche, tranche=1),
+            partial(_poll_tranche, tranche=1, tier_filter="free"),
             "interval",
             minutes=15,
             id="watch_poller_t1",
@@ -218,6 +224,18 @@ async def lifespan(app: FastAPI):
             coalesce=True,
             # Offset by 7.5 minutes from tranche 0
             next_run_time=datetime.now() + timedelta(minutes=7, seconds=30),
+        )
+        # Pro-tier watches: 5-min interval, no tranche split (volumes are
+        # low; split adds complexity without API-load benefit until we
+        # have 100+ Pro users). v1.4 entitlement.
+        scheduler.add_job(
+            partial(_poll_tranche, tier_filter="pro"),
+            "interval",
+            minutes=5,
+            id="watch_poller_pro",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now() + timedelta(minutes=1),
         )
         # Weekly analytics digest — Monday 8am Pacific
         async def _weekly_digest():
@@ -337,7 +355,10 @@ async def lifespan(app: FastAPI):
         _poll_state["next_poll"] = (
             next_t0.isoformat() if next_t0 else None
         )
-        _poll_logger.info("Watch poller started (2 tranches, 15-min interval, 7.5-min offset)")
+        _poll_logger.info(
+            "Watch poller started (free: 2 tranches × 15 min @ 7.5-min offset;"
+            " pro: 1 tranche × 5 min)"
+        )
 
     _posthog_client = httpx.AsyncClient(timeout=10.0)
 
@@ -465,6 +486,7 @@ async def timing_middleware(request: Request, call_next):
 # ---------------------------------------------------------------------------
 
 from pnw_campsites.routes.auth import router as auth_router  # noqa: E402
+from pnw_campsites.routes.billing import router as billing_router  # noqa: E402
 from pnw_campsites.routes.compare import router as compare_router  # noqa: E402
 from pnw_campsites.routes.planner import router as planner_router  # noqa: E402
 from pnw_campsites.routes.poll import router as poll_router  # noqa: E402
@@ -488,6 +510,7 @@ app.include_router(trips_router)
 app.include_router(sharing_router)
 app.include_router(compare_router)
 app.include_router(poll_router)
+app.include_router(billing_router)
 # SEO routes MUST be before the SPA catch-all so /campgrounds/{state}/{slug}
 # takes precedence over /{path:path}
 app.include_router(seo_router)

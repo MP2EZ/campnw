@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import App from './App.tsx'
 import { AuthProvider } from './hooks/useAuth'
+import { BillingProvider } from './hooks/useBilling'
 
 // axe-core accessibility checks in development only
 if (import.meta.env.DEV) {
@@ -20,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
     <HelmetProvider>
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          <BillingProvider>
+            <App />
+          </BillingProvider>
         </AuthProvider>
       </BrowserRouter>
     </HelmetProvider>

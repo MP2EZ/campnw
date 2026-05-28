@@ -1,5 +1,7 @@
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import type { ReactElement } from "react";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -24,6 +26,15 @@ vi.mock("../hooks/useAuth", () => ({
   }),
 }));
 
+vi.mock("../hooks/useBilling", () => ({
+  useBilling: () => ({
+    isPro: false,
+    status: { configured: false, subscription_expires_at: "" },
+    openPortal: vi.fn(),
+    startCheckout: vi.fn(),
+  }),
+}));
+
 vi.mock("../api", () => ({
   exportData: vi.fn().mockResolvedValue({ searches: [], watches: [] }),
   deleteAccount: vi.fn().mockResolvedValue(undefined),
@@ -31,6 +42,9 @@ vi.mock("../api", () => ({
 
 import { UserMenu } from "../components/UserMenu";
 import { deleteAccount } from "../api";
+
+const renderInRouter = (ui: ReactElement) =>
+  render(<MemoryRouter>{ui}</MemoryRouter>);
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -43,17 +57,17 @@ describe("UserMenu", () => {
   });
 
   test("renders user display name as trigger", () => {
-    render(<UserMenu />);
+    renderInRouter(<UserMenu />);
     expect(screen.getByText("Tester")).toBeInTheDocument();
   });
 
   test("trigger has aria-expanded false when closed", () => {
-    render(<UserMenu />);
+    renderInRouter(<UserMenu />);
     expect(screen.getByText("Tester")).toHaveAttribute("aria-expanded", "false");
   });
 
   test("opens dropdown on click", () => {
-    render(<UserMenu />);
+    renderInRouter(<UserMenu />);
     fireEvent.click(screen.getByText("Tester"));
 
     expect(screen.getByText("Tester")).toHaveAttribute("aria-expanded", "true");
@@ -64,7 +78,7 @@ describe("UserMenu", () => {
   });
 
   test("Sign out calls logout", async () => {
-    render(<UserMenu />);
+    renderInRouter(<UserMenu />);
     fireEvent.click(screen.getByText("Tester"));
     fireEvent.click(screen.getByText("Sign out"));
 
@@ -74,7 +88,7 @@ describe("UserMenu", () => {
   });
 
   test("Delete account shows confirmation, then deletes", async () => {
-    render(<UserMenu />);
+    renderInRouter(<UserMenu />);
     fireEvent.click(screen.getByText("Tester"));
     fireEvent.click(screen.getByText("Delete account"));
 
@@ -89,7 +103,7 @@ describe("UserMenu", () => {
   });
 
   test("Delete account cancel returns to main menu", () => {
-    render(<UserMenu />);
+    renderInRouter(<UserMenu />);
     fireEvent.click(screen.getByText("Tester"));
     fireEvent.click(screen.getByText("Delete account"));
     fireEvent.click(screen.getByText("Cancel"));
@@ -99,7 +113,7 @@ describe("UserMenu", () => {
   });
 
   test("Preferences shows form with user values", () => {
-    render(<UserMenu />);
+    renderInRouter(<UserMenu />);
     fireEvent.click(screen.getByText("Tester"));
     fireEvent.click(screen.getByText("Preferences"));
 
@@ -110,7 +124,7 @@ describe("UserMenu", () => {
   });
 
   test("Preferences cancel returns to main menu", () => {
-    render(<UserMenu />);
+    renderInRouter(<UserMenu />);
     fireEvent.click(screen.getByText("Tester"));
     fireEvent.click(screen.getByText("Preferences"));
     fireEvent.click(screen.getByText("Cancel"));
@@ -119,7 +133,7 @@ describe("UserMenu", () => {
   });
 
   test("Preferences save calls updateProfile", async () => {
-    render(<UserMenu />);
+    renderInRouter(<UserMenu />);
     fireEvent.click(screen.getByText("Tester"));
     fireEvent.click(screen.getByText("Preferences"));
 

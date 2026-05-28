@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useBilling } from "../hooks/useBilling";
 import { deleteAccount, exportData } from "../api";
 
 export function UserMenu() {
   const { user, logout, updateProfile } = useAuth();
+  const { isPro, status, openPortal, startCheckout } = useBilling();
   const [open, setOpen] = useState(false);
   const [showPrefs, setShowPrefs] = useState(false);
+  const [showBilling, setShowBilling] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [billingActionPending, setBillingActionPending] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
@@ -16,6 +22,7 @@ export function UserMenu() {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
         setShowPrefs(false);
+        setShowBilling(false);
         setShowDeleteConfirm(false);
       }
     };
@@ -59,13 +66,23 @@ export function UserMenu() {
 
       {open && (
         <div className="user-menu-dropdown">
-          {!showPrefs && !showDeleteConfirm && (
+          {!showPrefs && !showBilling && !showDeleteConfirm && (
             <>
               <button
                 className="user-menu-item"
                 onClick={() => setShowPrefs(true)}
               >
                 Preferences
+              </button>
+              <button
+                className="user-menu-item"
+                onClick={() => {
+                  setShowBilling(true);
+                  setBillingError(null);
+                }}
+              >
+                Billing
+                {isPro && <span className="pro-badge">Pro</span>}
               </button>
               <button className="user-menu-item" onClick={handleExport}>
                 Export data
@@ -87,6 +104,78 @@ export function UserMenu() {
                 Sign out
               </button>
             </>
+          )}
+
+          {showBilling && (
+            <div className="billing-status">
+              <div className="billing-status-row">
+                <span className="label">Plan</span>
+                <strong>{isPro ? "Pro ($5/mo)" : "Free"}</strong>
+              </div>
+              {status?.subscription_expires_at && (
+                <p className="billing-expires-note">
+                  Pro until{" "}
+                  {new Date(status.subscription_expires_at).toLocaleDateString()}
+                </p>
+              )}
+              {billingError && (
+                <p className="auth-error" role="alert">{billingError}</p>
+              )}
+              <hr className="user-menu-divider" />
+              {isPro ? (
+                <button
+                  className="user-menu-item"
+                  disabled={billingActionPending}
+                  onClick={async () => {
+                    setBillingActionPending(true);
+                    setBillingError(null);
+                    try {
+                      await openPortal();
+                    } catch (e) {
+                      setBillingError(
+                        e instanceof Error ? e.message : "Portal unavailable"
+                      );
+                      setBillingActionPending(false);
+                    }
+                  }}
+                >
+                  {billingActionPending ? "Opening…" : "Manage billing"}
+                </button>
+              ) : status?.configured ? (
+                <button
+                  className="user-menu-item"
+                  disabled={billingActionPending}
+                  onClick={async () => {
+                    setBillingActionPending(true);
+                    setBillingError(null);
+                    try {
+                      await startCheckout();
+                    } catch (e) {
+                      setBillingError(
+                        e instanceof Error ? e.message : "Checkout unavailable"
+                      );
+                      setBillingActionPending(false);
+                    }
+                  }}
+                >
+                  {billingActionPending ? "Opening Stripe…" : "Upgrade to Pro"}
+                </button>
+              ) : (
+                <Link
+                  to="/pricing"
+                  className="user-menu-item"
+                  onClick={() => setOpen(false)}
+                >
+                  See pricing
+                </Link>
+              )}
+              <button
+                className="user-menu-item"
+                onClick={() => setShowBilling(false)}
+              >
+                Back
+              </button>
+            </div>
           )}
 
           {showPrefs && (

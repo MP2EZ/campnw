@@ -82,6 +82,10 @@ class User:
     created_at: str = ""
     last_login_at: str | None = None
     supabase_id: str | None = None
+    subscription_status: str = "free"  # "free" or "pro"
+    stripe_customer_id: str = ""
+    subscription_id: str = ""
+    subscription_expires_at: str = ""
 
 
 @dataclass
@@ -410,6 +414,69 @@ class WatchDB:
                 "ALTER TABLE watches ADD COLUMN"
                 " search_params TEXT DEFAULT ''"
             )
+        # v1.4: billing — subscription state on users
+        user_cols2 = [
+            r[1] for r in self._conn.execute("PRAGMA table_info(users)")
+        ]
+        if "subscription_status" not in user_cols2:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " subscription_status TEXT NOT NULL DEFAULT 'free'"
+            )
+        if "stripe_customer_id" not in user_cols2:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " stripe_customer_id TEXT NOT NULL DEFAULT ''"
+            )
+            self._conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS"
+                " idx_users_stripe_customer_id"
+                " ON users(stripe_customer_id)"
+                " WHERE stripe_customer_id != ''"
+            )
+        if "subscription_id" not in user_cols2:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " subscription_id TEXT NOT NULL DEFAULT ''"
+            )
+        if "subscription_expires_at" not in user_cols2:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN"
+                " subscription_expires_at TEXT NOT NULL DEFAULT ''"
+            )
+        # v1.4: webhook event idempotency + subscription audit trail
+        self._conn.executescript("""\
+            CREATE TABLE IF NOT EXISTS stripe_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL UNIQUE,
+                event_type TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                processed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_stripe_events_type
+                ON stripe_events(event_type);
+            CREATE TABLE IF NOT EXISTS subscription_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                event_type TEXT NOT NULL,
+                old_status TEXT NOT NULL DEFAULT '',
+                new_status TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL DEFAULT 'webhook',
+                occurred_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_subscription_events_user
+                ON subscription_events(user_id, occurred_at DESC);
+            CREATE TABLE IF NOT EXISTS planner_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                session_token TEXT NOT NULL DEFAULT '',
+                started_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_planner_sessions_user
+                ON planner_sessions(user_id, started_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_planner_sessions_session
+                ON planner_sessions(session_token, started_at DESC);
+        """)
         self._conn.commit()
 
     # -------------------------------------------------------------------
@@ -667,6 +734,14 @@ class WatchDB:
         ).fetchone()
         return self._row_to_user(row) if row else None
 
+    def get_user_by_stripe_customer_id(self, customer_id: str) -> User | None:
+        if not customer_id:
+            return None
+        row = self._conn.execute(
+            "SELECT * FROM users WHERE stripe_customer_id=?", (customer_id,)
+        ).fetchone()
+        return self._row_to_user(row) if row else None
+
     def get_user_by_id(self, user_id: int) -> User | None:
         row = self._conn.execute(
             "SELECT * FROM users WHERE id=?", (user_id,)
@@ -679,6 +754,8 @@ class WatchDB:
             "default_nights", "default_from", "last_login_at",
             "recommendations_enabled", "preferred_tags",
             "onboarding_complete",
+            "subscription_status", "stripe_customer_id",
+            "subscription_id", "subscription_expires_at",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -713,6 +790,154 @@ class WatchDB:
         valid_fields = {f.name for f in dataclasses.fields(User)}
         d = {k: v for k, v in d.items() if k in valid_fields}
         return User(**d)
+
+    # -------------------------------------------------------------------
+    # Billing (v1.4)
+    # -------------------------------------------------------------------
+
+    def has_stripe_event(self, event_id: str) -> bool:
+        """Return True if a Stripe webhook event ID has already been processed."""
+        if not event_id:
+            return False
+        row = self._conn.execute(
+            "SELECT 1 FROM stripe_events WHERE event_id=?", (event_id,)
+        ).fetchone()
+        return row is not None
+
+    def save_stripe_event(
+        self, event_id: str, event_type: str, payload: str,
+    ) -> bool:
+        """Atomically claim a Stripe webhook event id for processing.
+
+        Returns True if this call inserted the event row (caller should
+        dispatch the handler), False if the event_id was already present
+        (caller should skip — already processed).
+
+        This is the atomic primitive that prevents duplicate dispatch under
+        concurrent webhook deliveries: the DB-level UNIQUE constraint on
+        event_id + cursor.rowcount check happen as a single statement, so
+        only one caller ever sees rowcount=1 for a given event_id.
+        """
+        cursor = self._conn.execute(
+            "INSERT OR IGNORE INTO stripe_events"
+            " (event_id, event_type, payload, processed_at)"
+            " VALUES (?, ?, ?, ?)",
+            (event_id, event_type, payload, datetime.now().isoformat()),
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    def log_subscription_event(
+        self,
+        user_id: int,
+        event_type: str,
+        old_status: str = "",
+        new_status: str = "",
+        source: str = "webhook",
+    ) -> None:
+        """Append an audit-trail entry for a subscription state change."""
+        self._conn.execute(
+            "INSERT INTO subscription_events"
+            " (user_id, event_type, old_status, new_status, source, occurred_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                user_id, event_type, old_status, new_status, source,
+                datetime.now().isoformat(),
+            ),
+        )
+        self._conn.commit()
+
+    def list_subscription_events(
+        self, user_id: int, limit: int = 50,
+    ) -> list[dict]:
+        """Return recent subscription events for a user (newest first)."""
+        rows = self._conn.execute(
+            "SELECT event_type, old_status, new_status, source, occurred_at"
+            " FROM subscription_events WHERE user_id=?"
+            " ORDER BY occurred_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # --- Planner session tracking (v1.4 trip-planner gating) ----------------
+
+    def log_planner_session(
+        self,
+        user_id: int | None = None,
+        session_token: str = "",
+    ) -> None:
+        """Record a new trip-planner conversation start.
+
+        Exactly one of user_id / session_token should be populated. Anonymous
+        sessions are tracked by session_token so the per-month cap can't be
+        bypassed by signing out.
+        """
+        self._conn.execute(
+            "INSERT INTO planner_sessions (user_id, session_token, started_at)"
+            " VALUES (?, ?, ?)",
+            (user_id, session_token, datetime.now().isoformat()),
+        )
+        self._conn.commit()
+
+    def count_planner_sessions_this_month(
+        self,
+        user_id: int | None = None,
+        session_token: str = "",
+    ) -> int:
+        """Count this user's (or session's) planner sessions so far this month.
+
+        Used by the v1.4 free-tier cap (3/mo) vs Pro (20/mo). "This month"
+        is calendar-month UTC — the simplest definition that doesn't require
+        tracking subscription anniversaries.
+        """
+        month_prefix = datetime.now().strftime("%Y-%m")
+        if user_id is not None:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM planner_sessions"
+                " WHERE user_id=? AND started_at LIKE ?",
+                (user_id, f"{month_prefix}-%"),
+            ).fetchone()
+        else:
+            if not session_token:
+                return 0
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM planner_sessions"
+                " WHERE user_id IS NULL AND session_token=?"
+                " AND started_at LIKE ?",
+                (session_token, f"{month_prefix}-%"),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    # --- Tier-filtered watch listing (v1.4 5-min Pro polling) --------------
+
+    def list_watches_for_polling(self, tier: str = "all") -> list[Watch]:
+        """Return enabled watches filtered by owner subscription tier.
+
+        - tier="all": every enabled watch (legacy poll_all behaviour)
+        - tier="pro": only watches whose user has subscription_status="pro"
+        - tier="free": anonymous (user_id IS NULL) or non-Pro users
+
+        Pro watches NEVER appear in the "free" set so we don't double-poll
+        them once we have separate APScheduler jobs per tier.
+        """
+        if tier == "all":
+            return self.list_watches(enabled_only=True)
+        if tier == "pro":
+            rows = self._conn.execute(
+                "SELECT w.* FROM watches w"
+                " INNER JOIN users u ON u.id = w.user_id"
+                " WHERE w.enabled = 1 AND u.subscription_status = 'pro'"
+            ).fetchall()
+        elif tier == "free":
+            rows = self._conn.execute(
+                "SELECT w.* FROM watches w"
+                " LEFT JOIN users u ON u.id = w.user_id"
+                " WHERE w.enabled = 1"
+                " AND (u.id IS NULL OR u.subscription_status != 'pro')"
+            ).fetchall()
+        else:
+            raise ValueError(f"Unknown tier: {tier!r}")
+        return [self._row_to_watch(r) for r in rows]
 
     # -------------------------------------------------------------------
     # Search history

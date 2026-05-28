@@ -518,6 +518,41 @@ export async function getWatches(): Promise<WatchData[]> {
   return fetchJson<WatchData[]>(`${API_BASE}/api/watches`);
 }
 
+/**
+ * Thrown when POST /api/watches returns HTTP 402 (free-tier cap reached).
+ * UI catches this and renders <UpgradeModal>.
+ */
+export class WatchLimitError extends Error {
+  limit: number;
+  current: number;
+  upgradeUrl: string;
+  constructor(detail: { limit: number; current: number; upgrade_url: string }) {
+    super("watch_limit_reached");
+    this.name = "WatchLimitError";
+    this.limit = detail.limit;
+    this.current = detail.current;
+    this.upgradeUrl = detail.upgrade_url;
+  }
+}
+
+/**
+ * Thrown when POST /api/plan/chat returns HTTP 402 — the user has used
+ * their monthly trip-planner session budget. UI catches and renders
+ * <UpgradeModal reason="planner_limit">.
+ */
+export class PlannerLimitError extends Error {
+  limit: number;
+  current: number;
+  upgradeUrl: string;
+  constructor(detail: { limit: number; current: number; upgrade_url: string }) {
+    super("planner_session_limit_reached");
+    this.name = "PlannerLimitError";
+    this.limit = detail.limit;
+    this.current = detail.current;
+    this.upgradeUrl = detail.upgrade_url;
+  }
+}
+
 export async function createWatch(
   params: CreateWatchParams
 ): Promise<WatchData> {
@@ -526,6 +561,14 @@ export async function createWatch(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
+  if (resp.status === 402) {
+    const body = await resp.json().catch(() => null) as
+      | { detail?: { limit: number; current: number; upgrade_url: string; error?: string } }
+      | null;
+    if (body?.detail?.error === "watch_limit_reached") {
+      throw new WatchLimitError(body.detail);
+    }
+  }
   if (!resp.ok) throw new Error(`Failed to create watch: ${resp.status}`);
   return resp.json();
 }
@@ -672,6 +715,14 @@ export async function planChat(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages }),
   });
+  if (resp.status === 402) {
+    const body = await resp.json().catch(() => null) as
+      | { detail?: { limit: number; current: number; upgrade_url: string; error?: string } }
+      | null;
+    if (body?.detail?.error === "planner_session_limit_reached") {
+      throw new PlannerLimitError(body.detail);
+    }
+  }
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({}));
     throw new Error((data as { detail?: string }).detail || `Chat failed: ${resp.status}`);
@@ -694,6 +745,14 @@ export async function planChatStream(
       body: JSON.stringify({ messages }),
     });
     if (!resp.ok) {
+      if (resp.status === 402) {
+        const body = await resp.json().catch(() => null) as
+          | { detail?: { limit: number; current: number; upgrade_url: string; error?: string } }
+          | null;
+        if (body?.detail?.error === "planner_session_limit_reached") {
+          throw new PlannerLimitError(body.detail);
+        }
+      }
       const data = await resp.json().catch(() => ({}));
       throw new Error(
         (data as { detail?: string }).detail || `Chat failed: ${resp.status}`,
@@ -768,4 +827,51 @@ export async function getPollStatus(): Promise<PollStatus | null> {
   const resp = await authFetch(`${API_BASE}/api/poll-status`);
   if (!resp.ok) return null;
   return resp.json() as Promise<PollStatus>;
+}
+
+// ---------------------------------------------------------------------------
+// Billing (v1.4)
+// ---------------------------------------------------------------------------
+
+export interface BillingStatus {
+  subscription_status: "free" | "pro";
+  subscription_expires_at: string;
+  has_stripe_customer: boolean;
+  is_pro: boolean;
+  watch_limit: number | null;
+  planner_session_limit: number;
+  configured: boolean;
+}
+
+export async function getBillingStatus(): Promise<BillingStatus> {
+  return fetchJson<BillingStatus>(`${API_BASE}/api/billing/status`);
+}
+
+/**
+ * Start a Stripe Checkout Session and return the redirect URL. Caller
+ * is expected to navigate to the URL via window.location to leave the
+ * SPA (Stripe Checkout cannot be embedded).
+ */
+export async function startCheckout(): Promise<string> {
+  const resp = await authFetch(`${API_BASE}/api/billing/checkout`, {
+    method: "POST",
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { detail?: string };
+    throw new Error(body.detail || `Checkout failed: ${resp.status}`);
+  }
+  const { url } = await resp.json() as { url: string };
+  return url;
+}
+
+export async function openBillingPortal(): Promise<string> {
+  const resp = await authFetch(`${API_BASE}/api/billing/portal`, {
+    method: "POST",
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({})) as { detail?: string };
+    throw new Error(body.detail || `Portal failed: ${resp.status}`);
+  }
+  const { url } = await resp.json() as { url: string };
+  return url;
 }
