@@ -51,6 +51,11 @@ jobs:
         env:
           VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ secrets.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN }}
           VITE_PUBLIC_POSTHOG_HOST: https://eu.i.posthog.com
+          # v1.33 Supabase auth + v1.4 billing require these at build time.
+          # Without them, supabase.ts falls back to localhost:54321 and
+          # production signup silently fails (mixed-content blocked).
+          VITE_PUBLIC_SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
+          VITE_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.VITE_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           npm ci
           npm run build
