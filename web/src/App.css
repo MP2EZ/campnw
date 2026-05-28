@@ -2177,6 +2177,19 @@ header p {
   box-shadow: var(--shadow-overlay);
 }
 
+/* On narrow viewports the side-drawer would partially cover the page
+   header (Sign in / Watchlist buttons sit behind the drawer at z-index
+   below it), leaving users confused about whether they can still
+   navigate. Switch to a full-screen sheet on mobile so the modal
+   unambiguously owns the screen — common pattern in Twitter, Stripe
+   Dashboard, Discord, etc. */
+@media (max-width: 640px) {
+  .watch-panel {
+    width: 100vw;
+    border-left: none;
+  }
+}
+
 .watch-panel-header {
   display: flex;
   justify-content: space-between;
