@@ -41,29 +41,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [identifyUser]);
 
-  // Listen to Supabase auth state changes
+  // Listen to Supabase auth state changes.
+  //
+  // supabase-js v2's INITIAL_SESSION event has known race-condition issues
+  // with React effect registration — if the listener is registered after
+  // the SDK finishes reading localStorage, the event fires before anyone is
+  // listening and the persisted session is silently dropped. Symptoms:
+  // returning users see "Loading…" forever (user state stays null) even
+  // though localStorage has a valid session.
+  //
+  // Fix: read the persisted session explicitly via getSession() on mount.
+  // Register the listener separately for future SIGNED_IN / SIGNED_OUT /
+  // TOKEN_REFRESHED events. The `mounted` flag prevents setState after
+  // unmount when these calls race with route changes.
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (session) {
-          // Fetch local profile (triggers auto-provisioning on backend)
+    let mounted = true;
+
+    const applySession = async (session: { access_token: string } | null) => {
+      if (!mounted) return;
+      if (session) {
+        try {
           const u = await getMe();
+          if (!mounted) return;
           setUser(u);
           if (u) identifyUser(u);
-        } else {
-          setUser(null);
+        } catch {
+          if (mounted) setUser(null);
         }
+      } else {
+        setUser(null);
+      }
+      if (mounted) {
         setLoading(false);
         initializedRef.current = true;
       }
+    };
+
+    // Read any persisted session (writes happen synchronously from
+    // localStorage; the Promise resolves on the microtask after the SDK
+    // validates it).
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      applySession(session);
+    }).catch(() => {
+      if (mounted) setLoading(false);
+    });
+
+    // Listen for state changes after initial load
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => { applySession(session); }
     );
 
-    // If no auth event fires within 500ms, stop showing loading
+    // Failsafe: Supabase unreachable → unblock UI for anonymous browsing
     const timeout = setTimeout(() => {
-      if (!initializedRef.current) setLoading(false);
+      if (!initializedRef.current && mounted) setLoading(false);
     }, 500);
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
       clearTimeout(timeout);
     };
