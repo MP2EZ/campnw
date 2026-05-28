@@ -9,11 +9,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.responses import Response
 
+from pnw_campsites import billing
 from pnw_campsites.routes.deps import (
     get_client_ip,
     get_current_user,
+    get_current_user_obj,
     get_engine,
     get_registry,
+    get_session_token,
     get_watch_db,
 )
 
@@ -71,6 +74,55 @@ class PlanChatResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Tier-based session gating (v1.4)
+# ---------------------------------------------------------------------------
+
+
+def _is_session_start(messages: list[PlanMessage]) -> bool:
+    """A session = the first user message in a conversation.
+
+    Continuation messages (multi-turn) don't count. Defined narrowly so
+    refreshing a long conversation doesn't burn through the user's
+    monthly cap.
+    """
+    return len(messages) == 1 and messages[0].role == "user"
+
+
+def _check_planner_session_limit(
+    messages: list[PlanMessage], request: Request, response: Response,
+) -> None:
+    """Enforce v1.4 per-month planner cap on session starts.
+
+    Free: 3/month. Pro: 20/month. Anonymous sessions use session_token
+    so the cap can't be bypassed by signing out. Raises HTTPException
+    402 with the same machine-readable shape as the watch cap.
+    """
+    if not _is_session_start(messages):
+        return  # mid-conversation message — no cap
+
+    db = get_watch_db()
+    user = get_current_user_obj(request)
+    user_id = user.id if user else None
+    token = get_session_token(request, response) if user is None else ""
+
+    limit = billing.planner_session_limit(user)
+    current = db.count_planner_sessions_this_month(
+        user_id=user_id, session_token=token,
+    )
+    if current >= limit:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "planner_session_limit_reached",
+                "limit": limit,
+                "current": current,
+                "upgrade_url": "/pricing",
+            },
+        )
+    db.log_planner_session(user_id=user_id, session_token=token)
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -85,12 +137,15 @@ async def plan_chat(body: PlanChatRequest, request: Request, response: Response)
     if not api_key:
         raise HTTPException(status_code=503, detail="Trip planner not configured")
 
-    # Rate limit by session token or IP
+    # IP-level abuse limit (anti-spam, always-on)
     if not _check_plan_rate_limit(get_client_ip(request)):
         raise HTTPException(
             status_code=429,
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
         )
+
+    # Tier-based monthly session cap (v1.4)
+    _check_planner_session_limit(body.messages, request, response)
 
     user_id = get_current_user(request)
     ph_distinct_id = str(user_id) if user_id else None
@@ -100,7 +155,7 @@ async def plan_chat(body: PlanChatRequest, request: Request, response: Response)
 
 
 @router.post("/chat/stream")
-async def plan_chat_stream(body: PlanChatRequest, request: Request):
+async def plan_chat_stream(body: PlanChatRequest, request: Request, response: Response):
     from pnw_campsites.planner.agent import chat_stream
 
     engine = get_engine()
@@ -114,6 +169,9 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request):
             status_code=429,
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
         )
+
+    # Tier-based monthly session cap (v1.4)
+    _check_planner_session_limit(body.messages, request, response)
 
     user_id = get_current_user(request)
     ph_distinct_id = str(user_id) if user_id else None

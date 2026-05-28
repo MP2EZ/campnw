@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import Markdown from "react-markdown";
-import { planChatStream, track } from "../api";
+import { planChatStream, PlannerLimitError, track } from "../api";
 import type { ChatMessage, ToolCall } from "../api";
 import { ItineraryCard, parseItinerary } from "../components/ItineraryCard";
+import { UpgradeModal } from "../components/UpgradeModal";
 
 interface DisplayMessage {
   role: "user" | "assistant";
@@ -98,6 +99,8 @@ export default function TripPlanner() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [limitInfo, setLimitInfo] = useState<{ limit: number; current: number } | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -222,6 +225,18 @@ export default function TripPlanner() {
       },
       (err) => {
         if (rafId) cancelAnimationFrame(rafId);
+        // Free-tier monthly cap → open UpgradeModal instead of showing
+        // a generic error in the chat thread.
+        if (err instanceof PlannerLimitError) {
+          setLimitInfo({ limit: err.limit, current: err.current });
+          setUpgradeOpen(true);
+          // Strip the placeholder assistant message we added optimistically
+          setMessages((prev) => prev.slice(0, -1));
+          setApiMessages((prev) => prev.slice(0, -1));
+          setLoading(false);
+          inputRef.current?.focus();
+          return;
+        }
         const message = err.message || "Something went wrong";
         setError(message);
         setMessages((prev) => {
@@ -348,6 +363,16 @@ export default function TripPlanner() {
           Send
         </button>
       </form>
+      <UpgradeModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        reason="planner_limit"
+        contextInfo={
+          limitInfo
+            ? { limit: limitInfo.limit, current: limitInfo.current }
+            : undefined
+        }
+      />
     </main>
   );
 }

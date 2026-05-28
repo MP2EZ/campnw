@@ -18,6 +18,7 @@ import { OnboardingModal } from "./components/OnboardingModal";
 const AuthModal = lazy(() => import("./components/AuthModal").then(m => ({ default: m.AuthModal })));
 const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").then(m => ({ default: m.ShortcutHelpModal })));
 import { UserMenu } from "./components/UserMenu";
+import { ProBadge } from "./components/ProBadge";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Lockup } from "./components/brand/Lockup";
@@ -31,6 +32,7 @@ const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const MapView = lazy(() => import("./pages/MapView"));
 const TripsPage = lazy(() => import("./pages/TripsPage"));
 const TripDetail = lazy(() => import("./pages/TripDetail"));
+const Pricing = lazy(() => import("./pages/Pricing"));
 
 import "./tokens.css";
 import "./App.css";
@@ -859,7 +861,10 @@ export default function App() {
                 {darkMode ? <IconSun className="icon" /> : <IconMoon className="icon" />}
               </button>
               {user ? (
-                <UserMenu />
+                <>
+                  <ProBadge />
+                  <UserMenu />
+                </>
               ) : (
                 <button
                   className="header-btn"
@@ -957,6 +962,7 @@ export default function App() {
         <Route path="/map" element={<MapView />} />
         <Route path="/trips" element={<TripsPage />} />
         <Route path="/trips/:tripId" element={<TripDetail />} />
+        <Route path="/pricing" element={<Pricing />} />
         <Route path="/" element={
           <main id="main-content">
           <div className="mode-tabs" role="tablist" aria-label="Discovery mode">

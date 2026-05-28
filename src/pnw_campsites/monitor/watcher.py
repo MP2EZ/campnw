@@ -222,16 +222,20 @@ async def poll_all(
     registry: CampgroundRegistry | None = None,
     tranche: int | None = None,
     reserveamerica: ReserveAmericaClient | None = None,
+    tier_filter: str = "all",
 ) -> list[PollResult]:
     """Poll all enabled watches, grouping by facility to minimize API calls.
 
     Args:
         tranche: If set (0 or 1), only poll watches where id % 2 == tranche.
                  Used to split polling into two offset cycles.
+        tier_filter: "all" (default), "pro", or "free". v1.4 uses "pro" for
+                 the 5-min Pro-only tranche and "free" for the existing
+                 15-min tranches so Pro watches aren't double-polled.
     """
     from pnw_campsites.monitor.expand import expand_template
 
-    watches = watch_db.list_watches(enabled_only=True)
+    watches = watch_db.list_watches_for_polling(tier=tier_filter)
     if tranche is not None:
         watches = [w for w in watches if w.id % 2 == tranche]
 

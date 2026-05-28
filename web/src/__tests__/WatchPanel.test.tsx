@@ -11,6 +11,15 @@ vi.mock("../hooks/useAuth", () => ({
   }),
 }));
 
+vi.mock("../hooks/useBilling", () => ({
+  useBilling: () => ({
+    isPro: false,
+    watchLimit: 3,
+    status: { configured: false },
+    startCheckout: vi.fn(),
+  }),
+}));
+
 vi.mock("../hooks/usePushNotifications", () => ({
   usePushNotifications: () => ({ subscribed: true, subscribe: vi.fn() }),
 }));
@@ -23,12 +32,29 @@ vi.mock("../components/ShareButton", () => ({
   ShareButton: () => <button>Share</button>,
 }));
 
+vi.mock("../components/UpgradeModal", () => ({
+  UpgradeModal: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="upgrade-modal" /> : null,
+}));
+
 vi.mock("../api", () => ({
   getWatches: vi.fn().mockResolvedValue([]),
   deleteWatch: vi.fn().mockResolvedValue(undefined),
   toggleWatch: vi.fn().mockResolvedValue({ enabled: false }),
   createWatch: vi.fn().mockResolvedValue({ id: 1 }),
   track: vi.fn(),
+  WatchLimitError: class WatchLimitError extends Error {
+    limit: number;
+    current: number;
+    upgradeUrl: string;
+    constructor(d: { limit: number; current: number; upgrade_url: string }) {
+      super("watch_limit_reached");
+      this.name = "WatchLimitError";
+      this.limit = d.limit;
+      this.current = d.current;
+      this.upgradeUrl = d.upgrade_url;
+    }
+  },
 }));
 
 import { WatchPanel, WatchButton } from "../components/WatchPanel";

@@ -6,10 +6,12 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.responses import Response
 
+from pnw_campsites import billing
 from pnw_campsites.monitor.db import Watch
 from pnw_campsites.routes.deps import (
     SESSION_COOKIE,
     get_current_user,
+    get_current_user_obj,
     get_registry,
     get_session_token,
     get_watch_db,
@@ -78,7 +80,29 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
     db = get_watch_db()
     registry = get_registry()
     user_id = get_current_user(request)
+    user = get_current_user_obj(request) if user_id else None
     token = get_session_token(request, response) if not user_id else ""
+
+    # v1.4 free-tier watch limit. Pro users have no limit (watch_limit
+    # returns None). Anonymous sessions get the free-tier cap, same as
+    # signed-in free users — otherwise the cap is trivially bypassed.
+    limit = billing.watch_limit(user)
+    if limit is not None:
+        current = (
+            len(db.list_watches_by_user(user_id))
+            if user_id
+            else len(db.list_watches_by_session(token))
+        )
+        if current >= limit:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "watch_limit_reached",
+                    "limit": limit,
+                    "current": current,
+                    "upgrade_url": "/pricing",
+                },
+            )
 
     # Validate: template needs search_params, single needs facility_id
     if body.watch_type == "template":
