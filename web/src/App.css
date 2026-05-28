@@ -2182,10 +2182,18 @@ header p {
    below it), leaving users confused about whether they can still
    navigate. Switch to a full-screen sheet on mobile so the modal
    unambiguously owns the screen — common pattern in Twitter, Stripe
-   Dashboard, Discord, etc. */
+   Dashboard, Discord, etc.
+
+   The compound selectors are required because .auth-modal /
+   .upgrade-modal each set their own max-width with higher specificity
+   than .watch-panel alone — without targeting both classes the modal
+   would only honour `border-left: none` and ignore the width override. */
 @media (max-width: 640px) {
-  .watch-panel {
+  .watch-panel,
+  .watch-panel.auth-modal,
+  .watch-panel.upgrade-modal {
     width: 100vw;
+    max-width: none;
     border-left: none;
   }
 }
