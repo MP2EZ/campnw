@@ -41,11 +41,12 @@ v1.35   [SHIPPED]  Source Photos        — Campground photos from RIDB/RA + SVG
 v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
 v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)
 v1.41   ------->   Maestro E2E          — End-to-end browser flows in Maestro (upgrade, watch limit, planner limit). Shared tooling with Being mobile.
+v1.42   ------->   Site Polish + Legal  — About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.
 v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
-Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product (code shipped + validated in Stripe test mode 2026-05-28; live keys + Stripe Customer Portal config still pending — see v1.4 Post-ship Status), v1.41 stands up Maestro E2E coverage (the 5 production bugs hit during v1.4 validation would have been caught by a single upgrade-flow smoke test), v1.45 wraps the app for iOS + Android via Capacitor (sequenced after v1.4 so monetization is validated on the web before committing to App Store review cycles). v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
+Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product (code shipped + validated in Stripe test mode 2026-05-28; live keys + Stripe Customer Portal config still pending — see v1.4 Post-ship Status), v1.41 stands up Maestro E2E coverage (the 5 production bugs hit during v1.4 validation would have been caught by a single upgrade-flow smoke test), v1.42 adds the site pages v1.4 deferred (About + Privacy + Terms + footer — required for Stripe live-mode review and Apple App Store submission), v1.45 wraps the app for iOS + Android via Capacitor (sequenced after v1.4 so monetization is validated on the web before committing to App Store review cycles). v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -1622,6 +1623,94 @@ The unit tests we added in v1.4 lock in code behavior. They CAN'T catch:
 - Webhook delivery from real Stripe in real network conditions
 
 That's the gap v1.41 fills. Five real bugs from v1.4 validation map directly to flows here.
+
+---
+
+## v1.42 "Site Polish + Legal Footing"
+
+### Theme
+Add the site pages v1.4 deferred and that v1.45 (Apple App Store) will require regardless. Privacy Policy + Terms unblock Stripe live-mode review. About + Contact give trust signals that convert fence-sitters on /pricing. Footer ties everything together. ~1-2 days of focused work; the legal text comes from a generator (Termly or similar) and the user customizes the specifics, so most of the effort is page structure + content writing, not legal drafting.
+
+Sequencing: realistically wants to happen before live Stripe mode activates (Stripe flags missing Privacy/ToS on subscription products) and before v1.45 (Apple requires a Privacy Policy URL at submission). Can be done in parallel with v1.41 since they touch different surfaces.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| About page (/about) | M | Honest first-person voice matching the Pricing page. Covers: what Campable does, why it exists, who's behind it, how it's funded, where data comes from, what's coming. Trust signal for fence-sitters on /pricing. |
+| Privacy Policy (/privacy) | S | Termly-generated, customized for actual data flow: Supabase (auth), PostHog (analytics), Stripe (billing), Mapbox (drive-time geocoding), Visual Crossing (weather). Honest disclosure of what's collected, retained, and shared. GDPR/CCPA-aware language. |
+| Terms of Service (/terms) | S | Termly-generated, customized for $5/mo subscription + refund policy. Liability limit, governing jurisdiction (Washington), right to terminate abusive accounts. Embed refund policy explicitly per Stripe's preference. |
+| Footer component | S | New `<Footer>` rendered site-wide. Links: About, Pricing, Privacy, Terms, GitHub repo, contact email. Includes © year + version (auto-pulled from package.json). |
+| Contact email | XS | `support@campable.co` (or chosen address) mailto in footer. Stripe wants a support contact for activation. |
+| Stripe Business profile config | XS | Paste Privacy + ToS URLs into Stripe Dashboard → Settings → Public details. Required for live-mode review. |
+| Stripe Customer Portal links | XS | Customer Portal config page → add Terms + Privacy URLs so the cancel/manage flow shows them. |
+| Apple App Store URL prep | XS | Confirm /privacy URL renders in Helmet meta + is reachable for Apple's submission crawler. (v1.45 will actually submit; v1.42 just has the URL ready.) |
+
+### Architecture Decisions
+
+**Generator over hand-rolled legal text.** Termly (or similar) generates compliant baselines that update as regulations change. For a $5/mo solo SaaS, this is the right cost/risk balance — pay a lawyer when you have 100 paying customers, not 1. Customize the generator output for the parts specific to Campable (third-party services list, retention windows, jurisdiction), don't write from scratch.
+
+**Footer as a global component.** Rendered in `main.tsx` or App.tsx outside `<Routes>` so it appears on every page including /pricing, /trips, /plan, and the legal pages themselves. No per-route opt-out.
+
+**Voice continues from Pricing page.** Honest, direct, no marketing puffery. "Built by one person" angle works because it's true. Conversion lift comes from credibility, not slickness.
+
+**Defer cookie banner.** EU PostHog tracking technically needs a banner for GDPR consent, but enforcement against small US SaaS is near-zero and the UX cost is real. Document the deferral here so we revisit when EU traffic > 5% of total (measured via PostHog).
+
+### Files Changed
+
+**New frontend:**
+- `web/src/pages/About.tsx` — written from scratch matching Pricing voice
+- `web/src/pages/Privacy.tsx` — Termly-generated text in React component shell
+- `web/src/pages/Terms.tsx` — same pattern
+- `web/src/components/Footer.tsx` — global footer
+- `web/src/App.css` — `.about-page`, `.legal-page`, `.site-footer` styles
+
+**Modified frontend:**
+- `web/src/App.tsx` — register /about, /privacy, /terms routes; render <Footer/> outside Routes
+- `web/src/main.tsx` — possibly footer mount if not in App.tsx
+
+**Non-code:**
+- Stripe Dashboard → Settings → Public details (paste URLs)
+- Stripe Dashboard → Settings → Billing → Customer Portal (paste URLs)
+- Optional: support@campable.co email forwarding setup (Fastmail / Google Workspace / Cloudflare Email Routing)
+
+### Testing Strategy
+
+**Automated (Vitest):**
+- About / Privacy / Terms components render with correct headings
+- Footer renders all expected links and the year matches current
+- Routes resolve and lazy-load
+
+**Manual (~10 min):**
+- Smoke test all 4 pages in both themes (dark + light)
+- Lighthouse a11y pass on each
+- Confirm WCAG 2.1 AA contrast on legal text (often a sneaky regression)
+- Confirm Privacy URL is reachable from a fresh browser session (no auth wall)
+
+### Dependencies
+
+- v1.4 shipped (we have a real product and billing flow to legally cover)
+- Termly account (free tier sufficient) OR equivalent generator
+- Decision on support email address
+
+### Quality Bar
+
+- All pages WCAG 2.1 AA
+- Mobile-responsive at 375px viewport
+- Privacy Policy URL added to Stripe Business profile
+- Privacy Policy URL added to Customer Portal links
+- Privacy Policy honestly discloses each third-party service that handles user data
+- No marketing copy lifted from generic templates ("we are committed to your privacy" etc.) — keep the Campable voice
+
+### Key Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Templates miss state-specific nuance | Templates are deliberately generic. For higher-revenue future state (>$10K/mo) consider a brief lawyer review specific to WA LLC operations |
+| Cookie banner deferral risk if EU traffic grows | Measure EU traffic in PostHog quarterly; banner becomes priority if EU > 5% |
+| About-page voice drifts into marketing | Have the user read it back as if they were a skeptical Hacker News commenter before merging |
+| Privacy Policy gets stale as third parties change | Re-audit annually OR when adding any new third-party service; Termly handles regulatory drift but not service-list updates |
+| Stripe Business profile review timing | Live mode activation may stall if the profile review is slow. Submit Privacy + ToS URLs ASAP after v1.42 deploys, even if not yet ready to flip live keys |
 
 ---
 
