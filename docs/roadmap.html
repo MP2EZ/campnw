@@ -432,14 +432,14 @@
     <h1>Campable Roadmap</h1>
     <p class="subtitle">v0.2.1 → v2.0 · Generated 2026-05-28</p>
     <div class="summary">
-      <div class="summary-stat"><span class="num">35</span><span class="label">Total Milestones</span></div>
+      <div class="summary-stat"><span class="num">36</span><span class="label">Total Milestones</span></div>
       <div class="summary-stat"><span class="num" style="color: var(--accent-shipped);">29</span><span class="label">Shipped</span></div>
       <div class="summary-stat"><span class="num" style="color: var(--accent-built);">1</span><span class="label">Built (Not Merged)</span></div>
       <div class="summary-stat"><span class="num" style="color: var(--accent-current);">1</span><span class="label">In Progress</span></div>
-      <div class="summary-stat"><span class="num" style="color: var(--accent-future);">4</span><span class="label">Planned</span></div>
+      <div class="summary-stat"><span class="num" style="color: var(--accent-future);">5</span><span class="label">Planned</span></div>
     </div>
-    <div class="overall-bar"><div class="overall-bar-fill" style="width: 83%;"></div></div>
-    <p class="subtitle" style="margin-top: 6px;">83% complete · v1.4 Monetization Launch shipped 2026-05-28 · Live Stripe keys still pending</p>
+    <div class="overall-bar"><div class="overall-bar-fill" style="width: 81%;"></div></div>
+    <p class="subtitle" style="margin-top: 6px;">81% complete · v1.4 Monetization Launch shipped 2026-05-28 · Live Stripe keys still pending</p>
   </header>
 
   <div class="timeline">
@@ -659,6 +659,44 @@
                 <li>Test account email collision — use maestro-{uuid}@example.com per run; optional Supabase admin cleanup</li>
                 <li>Flow brittleness from Stripe Checkout UI revs — fix individual flows when they break, don't pre-emptively abstract</li>
                 <li>Live-mode bugs missed by test-mode flows — manual smoke test the first time a live transaction goes through (one-time)</li>
+              </ul>
+            </details>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="milestone future">
+      <div class="card">
+        <details open>
+          <summary>
+            <span class="version-badge">v1.42</span>
+            <span class="status-pill future">Planned</span>
+            <span class="milestone-name">Site Polish + Legal Footing</span>
+          </summary>
+          <p class="milestone-desc">About, Privacy, Terms, and a global footer. Unblocks Stripe live-mode review and the Privacy Policy URL Apple requires at v1.45 submission. Legal text generator-driven (Termly); voice continues from the Pricing page.</p>
+          <div class="card-body">
+            <div class="section-heading">Features</div>
+            <ul class="feature-list">
+              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">About page (/about)</span> · <span class="feature-text">First-person voice matching Pricing. Covers what/why/who/funding/data sources/what's next.</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Privacy Policy (/privacy)</span> · <span class="feature-text">Termly-generated, customized for Supabase + PostHog + Stripe + Mapbox + Visual Crossing disclosure</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Terms of Service (/terms)</span> · <span class="feature-text">$5/mo subscription terms + refund policy + WA jurisdiction</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Footer component</span> · <span class="feature-text">Rendered site-wide: About, Pricing, Privacy, Terms, GitHub, contact email, © + version</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-XS">XS</span><span><span class="feature-name">Contact email</span> · <span class="feature-text">support@campable.co mailto. Stripe wants a support contact for live activation.</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-XS">XS</span><span><span class="feature-name">Stripe Business profile config</span> · <span class="feature-text">Paste Privacy + ToS URLs into Dashboard → Settings → Public details</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-XS">XS</span><span><span class="feature-name">Customer Portal URLs</span> · <span class="feature-text">Privacy + Terms links shown in Stripe Portal cancel/manage flow</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-XS">XS</span><span><span class="feature-name">Apple App Store URL prep</span> · <span class="feature-text">Confirm /privacy reachable for Apple submission crawler (v1.45 actually submits)</span></span></li>
+            </ul>
+            <div class="progress-bar"><div class="progress-bar-fill" style="width: 13%;"></div></div>
+            <div class="progress-meta"><span>1 of 8 features (About page in progress)</span><span>~1-2 days total</span></div>
+            <details class="risks">
+              <summary>Key Risks</summary>
+              <ul class="risks-list">
+                <li>Templates miss state-specific nuance — re-review with a lawyer at higher revenue ($10K+/mo)</li>
+                <li>Cookie banner deferral risk if EU traffic grows — measure quarterly via PostHog, banner becomes priority if EU &gt; 5%</li>
+                <li>About-page voice drifts into marketing — read it back as if you were a skeptical Hacker News commenter before merging</li>
+                <li>Privacy Policy gets stale as third parties change — re-audit annually or whenever adding a new third-party</li>
+                <li>Stripe Business profile review timing — submit Privacy + ToS URLs ASAP after v1.42 deploys, even if not flipping live keys yet</li>
               </ul>
             </details>
           </div>
