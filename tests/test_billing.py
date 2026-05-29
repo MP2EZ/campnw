@@ -362,6 +362,76 @@ class TestWebhookDispatch:
             for e in audit
         )
 
+    def test_subscription_updated_root_period_end_preferred_over_items(
+        self,
+        watch_db: WatchDB,
+        free_user_with_stripe_customer: User,
+    ) -> None:
+        # Backwards compat: older Stripe API versions populate
+        # current_period_end at the subscription root. _current_period_end
+        # MUST check root first so accounts on older API versions still
+        # populate subscription_expires_at correctly. Items[] is the
+        # fallback, not the primary.
+        watch_db.update_user(
+            free_user_with_stripe_customer.id, subscription_status="pro",
+        )
+        event = {
+            "id": "evt_root_wins",
+            "type": "customer.subscription.updated",
+            "data": {
+                "object": {
+                    "customer": "cus_hook_123",
+                    "status": "active",
+                    "cancel_at_period_end": True,
+                    "current_period_end": 1735689600,  # 2025-01-01
+                    # items also present with a DIFFERENT date
+                    "items": {
+                        "data": [
+                            {"current_period_end": 1893456000},  # 2030-01-01
+                        ],
+                    },
+                },
+            },
+        }
+        billing.handle_webhook_event(event, watch_db)
+        refreshed = watch_db.get_user_by_id(free_user_with_stripe_customer.id)
+        # Root value (2025) wins, not items[0] value (2030)
+        assert "2025" in refreshed.subscription_expires_at, (
+            f"root field should take precedence; got {refreshed.subscription_expires_at!r}"
+        )
+        assert "2030" not in refreshed.subscription_expires_at
+
+    def test_subscription_updated_empty_items_array_safe(
+        self,
+        watch_db: WatchDB,
+        free_user_with_stripe_customer: User,
+    ) -> None:
+        # Defensive: malformed Stripe payload with both root and items[]
+        # absent or empty must not crash. Pro status should still be
+        # retained; subscription_expires_at just stays empty.
+        watch_db.update_user(
+            free_user_with_stripe_customer.id, subscription_status="pro",
+        )
+        event = {
+            "id": "evt_empty_items",
+            "type": "customer.subscription.updated",
+            "data": {
+                "object": {
+                    "customer": "cus_hook_123",
+                    "status": "active",
+                    "cancel_at_period_end": True,
+                    # No root current_period_end, items.data empty
+                    "items": {"data": []},
+                },
+            },
+        }
+        # Must not raise
+        billing.handle_webhook_event(event, watch_db)
+        refreshed = watch_db.get_user_by_id(free_user_with_stripe_customer.id)
+        assert refreshed.subscription_status == "pro"
+        # Empty expires_at acceptable when payload doesn't carry the field
+        assert refreshed.subscription_expires_at == ""
+
     def test_subscription_updated_reads_period_end_from_items_array(
         self,
         watch_db: WatchDB,
@@ -484,6 +554,61 @@ class TestWebhookDispatch:
         assert any(
             e["event_type"] == "invoice.payment_failed" for e in audit
         )
+
+    def test_payment_failed_audit_row_preserves_status(
+        self,
+        watch_db: WatchDB,
+        free_user_with_stripe_customer: User,
+    ) -> None:
+        # Audit row for payment_failed must record both old and new status
+        # as the SAME value (no actual transition happened, just a signal).
+        # Analytics queries depend on this shape to count churn precursors
+        # without confusing them with actual downgrades.
+        watch_db.update_user(
+            free_user_with_stripe_customer.id, subscription_status="pro",
+        )
+        event = {
+            "id": "evt_pf_audit",
+            "type": "invoice.payment_failed",
+            "data": {"object": {"customer": "cus_hook_123"}},
+        }
+        billing.handle_webhook_event(event, watch_db)
+        audit = watch_db.list_subscription_events(free_user_with_stripe_customer.id)
+        pf_rows = [e for e in audit if e["event_type"] == "invoice.payment_failed"]
+        assert len(pf_rows) == 1
+        # Both old and new are pro — payment_failed doesn't transition state
+        assert pf_rows[0]["old_status"] == "pro"
+        assert pf_rows[0]["new_status"] == "pro"
+
+    def test_unknown_event_type_still_recorded_for_forensics(
+        self,
+        watch_db: WatchDB,
+        free_user_with_stripe_customer: User,
+    ) -> None:
+        # Operators must be able to look up *every* Stripe event we
+        # received, even ones our handler doesn't act on, because:
+        # (1) it proves the endpoint received the delivery (vs Stripe-
+        #     side delivery failure)
+        # (2) the raw payload is the forensic record if we later need to
+        #     replay or audit
+        # The "ignore unknown event_type" branch in handle_webhook_event
+        # must still call save_stripe_event before returning.
+        event = {
+            "id": "evt_unknown_type",
+            "type": "customer.discount.created",  # not in our dispatch table
+            "data": {"object": {"customer": "cus_hook_123"}},
+        }
+        billing.handle_webhook_event(event, watch_db)
+        # Forensic record: present, with full payload
+        assert watch_db.has_stripe_event("evt_unknown_type")
+        row = watch_db._conn.execute(
+            "SELECT event_type, payload FROM stripe_events WHERE event_id=?",
+            ("evt_unknown_type",),
+        ).fetchone()
+        assert row["event_type"] == "customer.discount.created"
+        import json
+        parsed = json.loads(row["payload"])
+        assert parsed["id"] == "evt_unknown_type"
 
     def test_duplicate_event_is_skipped(
         self,
@@ -747,3 +872,34 @@ class TestConfiguration:
         monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
         with pytest.raises(ValueError, match="customer_id required"):
             billing.create_portal_session("")
+
+
+# ---------------------------------------------------------------------------
+# CSP defensive coding (regression: production-incident scope)
+# ---------------------------------------------------------------------------
+
+
+class TestCSPSupabaseOrigin:
+    """Surfaced live: a bare-hostname SUPABASE_URL produced an invalid
+    `connect-src` token, silently blocking Supabase auth. _supabase_csp_origin
+    must always emit a scheme-qualified origin or empty string."""
+
+    def test_bare_hostname_gets_https_prepended(self, monkeypatch) -> None:
+        from pnw_campsites.api import _supabase_csp_origin
+        monkeypatch.setenv("SUPABASE_URL", "ref.supabase.co")
+        assert _supabase_csp_origin() == "https://ref.supabase.co"
+
+    def test_https_passthrough(self, monkeypatch) -> None:
+        from pnw_campsites.api import _supabase_csp_origin
+        monkeypatch.setenv("SUPABASE_URL", "https://ref.supabase.co")
+        assert _supabase_csp_origin() == "https://ref.supabase.co"
+
+    def test_unset_returns_empty(self, monkeypatch) -> None:
+        from pnw_campsites.api import _supabase_csp_origin
+        monkeypatch.delenv("SUPABASE_URL", raising=False)
+        assert _supabase_csp_origin() == ""
+
+    def test_whitespace_trimmed(self, monkeypatch) -> None:
+        from pnw_campsites.api import _supabase_csp_origin
+        monkeypatch.setenv("SUPABASE_URL", "  https://ref.supabase.co  ")
+        assert _supabase_csp_origin() == "https://ref.supabase.co"

@@ -202,4 +202,29 @@ describe("useAuth", () => {
     );
     spy.mockRestore();
   });
+
+  test("persisted session triggers getMe() on mount without waiting for onAuthStateChange", async () => {
+    // Regression for production bug: supabase-js v2's INITIAL_SESSION
+    // event can race React effect registration — if the listener
+    // registers after the SDK has already emitted, returning users get
+    // stuck on "Loading…" forever because getMe() is never called.
+    //
+    // The fix explicitly reads the persisted session via getSession() on
+    // mount, separately from registering the listener. This test holds
+    // that contract: a session in localStorage MUST result in getMe()
+    // being called even if onAuthStateChange never fires.
+    const { supabase } = await import("../lib/supabase");
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: { access_token: "persisted-token" } as never },
+      error: null,
+    });
+    // Listener registered but never invoked — simulates the race
+    mockGetMe.mockResolvedValue(TEST_USER as never);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
+    expect(mockGetMe).toHaveBeenCalled();
+    expect(result.current.loading).toBe(false);
+  });
 });

@@ -453,6 +453,26 @@ async def capture_unhandled_exception(request: Request, exc: Exception) -> JSONR
 _search_logger = logging.getLogger("pnw_campsites.timing")
 
 
+def _supabase_csp_origin() -> str:
+    """Return the Supabase URL in CSP `connect-src` form, defensively.
+
+    Operators sometimes set SUPABASE_URL to a bare hostname (e.g.
+    `wvtsutjdtzztaghaskze.supabase.co`). Without a scheme the browser
+    treats the value as an unknown token and refuses the connection,
+    silently breaking Supabase auth in production. Prepend `https://`
+    when missing so the CSP is always well-formed regardless of how
+    the secret was set.
+
+    Empty input → empty output (no Supabase configured = no rule needed).
+    """
+    raw = os.getenv("SUPABASE_URL", "").strip()
+    if not raw:
+        return ""
+    if raw.startswith(("https://", "http://")):
+        return raw
+    return f"https://{raw}"
+
+
 @app.middleware("http")
 async def timing_middleware(request: Request, call_next):
     start = time.monotonic()
@@ -475,7 +495,7 @@ async def timing_middleware(request: Request, call_next):
         " https://*.tile.openstreetmap.org"
         " https://cdn.recreation.gov"
         " https://www.reserveamerica.com; "
-        f"connect-src 'self' https://*.tile.openstreetmap.org {os.getenv('SUPABASE_URL', '')}; "
+        f"connect-src 'self' https://*.tile.openstreetmap.org {_supabase_csp_origin()}; "
         "frame-ancestors 'none'"
     )
     return response
