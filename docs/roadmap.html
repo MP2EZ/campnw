@@ -186,9 +186,14 @@
     box-shadow: 0 0 24px rgba(212, 114, 42, 0.12);
   }
 
-  details {
-    margin: 0;
+  /* Just-shipped: latest shipped milestone gets a subtle highlight */
+  .milestone.shipped.recent .card {
+    background: linear-gradient(180deg, rgba(45, 106, 79, 0.08), var(--bg-card));
+    border-left-color: var(--accent-shipped);
+    box-shadow: 0 0 16px rgba(45, 106, 79, 0.1);
   }
+
+  details { margin: 0; }
 
   summary {
     cursor: pointer;
@@ -241,10 +246,7 @@
   .status-pill.current { background: var(--accent-current); }
   .status-pill.future { background: var(--accent-future); }
 
-  .milestone-name {
-    font-weight: 600;
-    font-size: 15px;
-  }
+  .milestone-name { font-weight: 600; font-size: 15px; }
 
   .milestone-desc {
     color: var(--text-muted);
@@ -255,6 +257,8 @@
 
   .milestone.shipped .milestone-name { color: var(--text-muted); font-weight: 500; }
   .milestone.shipped .milestone-desc { color: var(--text-dim); font-size: 12px; }
+  .milestone.shipped.recent .milestone-name { color: var(--text); font-weight: 600; }
+  .milestone.shipped.recent .milestone-desc { color: var(--text-muted); font-size: 13px; }
 
   .card-body {
     margin-top: 14px;
@@ -330,9 +334,7 @@
     justify-content: space-between;
   }
 
-  .risks {
-    margin-top: 14px;
-  }
+  .risks { margin-top: 14px; }
 
   .risks > summary {
     font-size: 12px;
@@ -341,11 +343,7 @@
     padding: 6px 0;
   }
 
-  .risks-list {
-    list-style: none;
-    padding: 6px 0 0 0;
-    margin: 0;
-  }
+  .risks-list { list-style: none; padding: 6px 0 0 0; margin: 0; }
 
   .risks-list li {
     font-size: 12px;
@@ -372,6 +370,11 @@
     font-size: 12px;
     color: var(--text-muted);
     line-height: 1.55;
+  }
+
+  .status-note.pending {
+    background: rgba(212, 114, 42, 0.06);
+    border-left-color: var(--accent-current);
   }
 
   .status-note strong { color: var(--text); }
@@ -427,16 +430,16 @@
 <div class="container">
   <header>
     <h1>Campable Roadmap</h1>
-    <p class="subtitle">v0.2.1 → v2.0 · Generated 2026-05-25</p>
+    <p class="subtitle">v0.2.1 → v2.0 · Generated 2026-05-28</p>
     <div class="summary">
-      <div class="summary-stat"><span class="num">34</span><span class="label">Total Milestones</span></div>
-      <div class="summary-stat"><span class="num" style="color: var(--accent-shipped);">28</span><span class="label">Shipped</span></div>
+      <div class="summary-stat"><span class="num">35</span><span class="label">Total Milestones</span></div>
+      <div class="summary-stat"><span class="num" style="color: var(--accent-shipped);">29</span><span class="label">Shipped</span></div>
       <div class="summary-stat"><span class="num" style="color: var(--accent-built);">1</span><span class="label">Built (Not Merged)</span></div>
       <div class="summary-stat"><span class="num" style="color: var(--accent-current);">1</span><span class="label">In Progress</span></div>
       <div class="summary-stat"><span class="num" style="color: var(--accent-future);">4</span><span class="label">Planned</span></div>
     </div>
-    <div class="overall-bar"><div class="overall-bar-fill" style="width: 82%;"></div></div>
-    <p class="subtitle" style="margin-top: 6px;">82% complete · Current focus: v1.33 Supabase Auth</p>
+    <div class="overall-bar"><div class="overall-bar-fill" style="width: 83%;"></div></div>
+    <p class="subtitle" style="margin-top: 6px;">83% complete · v1.4 Monetization Launch shipped 2026-05-28 · Live Stripe keys still pending</p>
   </header>
 
   <div class="timeline">
@@ -467,7 +470,7 @@
 
     <div class="milestone built">
       <div class="card">
-        <details open>
+        <details>
           <summary>
             <span class="version-badge">v0.95</span>
             <span class="status-pill built">Built*</span>
@@ -476,20 +479,8 @@
           <p class="milestone-desc">Free/Pro tiers, Stripe billing — built on <code>feature/monetization</code> (NOT merged, stale Mar 2026)</p>
           <div class="card-body">
             <div class="status-note">
-              <strong>Status (2026-05-25):</strong> Implementation completed on <code>feature/monetization</code> (6 commits, last touched 2026-03-29) and integrated against <code>main</code> through v1.0. The branch was never merged back to <code>dev</code>. Since March 2026, <code>dev</code> has moved 242 commits ahead — most critically v1.33 Supabase Auth, which replaced the custom-cookie user model. Preserved as reference for v1.4 rebuild; will not be merged.
+              <strong>Status:</strong> v0.95's full monetization layer was built but never merged. v1.4 (shipped 2026-05-28) rebuilt against current architecture — see v1.4 entry. The <code>feature/monetization</code> branch can now be deleted.
             </div>
-            <div class="section-heading">Built but unmerged features</div>
-            <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Payment provider integration</span> · <span class="feature-text">Stripe hosted checkout + customer portal + webhook handler</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Subscription schema + entitlements</span> · <span class="feature-text">subscription_status, subscription_events audit table, webhook event dedup</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Watch limit enforcement</span> · <span class="feature-text">HTTP 402 + upgrade URL; 5-min polling for Pro</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Trip planner gating</span> · <span class="feature-text">3 free / 20 Pro sessions per month</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Pricing page, upgrade modal, billing settings</span> · <span class="feature-text">All UI components (predate v1.27/v1.29 design system)</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Downgrade + grandfather logic</span> · <span class="feature-text">30-day grandfather window; watches paused not deleted</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Webhook security + audit trail</span> · <span class="feature-text">HMAC raw-byte signature verification, idempotency via stripe_events</span></span></li>
-            </ul>
-            <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>0 of 7 shipped to prod</span><span>built but unmerged</span></div>
           </div>
         </details>
       </div>
@@ -537,25 +528,22 @@
           </summary>
           <p class="milestone-desc">Replace custom auth with Supabase, Bearer tokens, auto-provisioning. Auth in Supabase, profile in SQLite keyed by supabase_id.</p>
           <div class="card-body">
+            <div class="status-note pending">
+              <strong>Note:</strong> Supabase auth code (auth.py, useAuth.ts) shipped in production by 2026-05-28 as part of v1.4 deployment chain. Roadmap status still <code>-----&gt;</code> because the v1.36 OAuth provider wiring on top of v1.33 hasn't shipped yet.
+            </div>
             <div class="section-heading">Features</div>
             <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Supabase project setup</span> · <span class="feature-text">us-west region, redirect URLs, secrets</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Backend JWT swap</span> · <span class="feature-text">PyJWT validation, SUPABASE_JWT_SECRET, ~0.5ms local decode</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">User auto-provisioning</span> · <span class="feature-text">supabase_id column, zero FK migration on watches/trips</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Remove custom auth routes</span> · <span class="feature-text">Drop signup/login/logout, remove bcrypt</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Frontend Supabase client</span> · <span class="feature-text">@supabase/supabase-js, keep AuthContextValue interface</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Bearer token pattern</span> · <span class="feature-text">authFetch() wrapper, Authorization header</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Anonymous session migration</span> · <span class="feature-text">Migrate campnw_session cookies to user accounts</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">CSP + Account deletion updates</span> · <span class="feature-text">Supabase connect-src, admin API user delete</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-S">S</span><span><span class="feature-name">Supabase project setup</span> · <span class="feature-text">us-west region, redirect URLs, secrets</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-M">M</span><span><span class="feature-name">Backend JWT swap</span> · <span class="feature-text">PyJWT via JWKS (ES256), ~0.5ms local decode</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-S">S</span><span><span class="feature-name">User auto-provisioning</span> · <span class="feature-text">supabase_id column, zero FK migration on watches/trips</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-M">M</span><span><span class="feature-name">Remove custom auth routes</span> · <span class="feature-text">Dropped signup/login/logout, removed bcrypt</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-M">M</span><span><span class="feature-name">Frontend Supabase client</span> · <span class="feature-text">@supabase/supabase-js, kept AuthContextValue interface</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-M">M</span><span><span class="feature-name">Bearer token pattern</span> · <span class="feature-text">authFetch() wrapper, Authorization header</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-S">S</span><span><span class="feature-name">Anonymous session migration</span> · <span class="feature-text">Migrate campnw_session cookies to user accounts</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-S">S</span><span><span class="feature-name">CSP + Account deletion updates</span> · <span class="feature-text">Supabase connect-src (defensive https:// prefix added 2026-05-28), admin API user delete</span></span></li>
             </ul>
-            <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>In progress</span><span>0 of 8 shipped</span></div>
-            <details class="risks">
-              <summary>Key Risks</summary>
-              <ul class="risks-list">
-                <li>Supabase availability becomes a dependency for login (not for ongoing sessions). Anonymous mode is unaffected.</li>
-              </ul>
-            </details>
+            <div class="progress-bar"><div class="progress-bar-fill" style="width: 100%;"></div></div>
+            <div class="progress-meta"><span>Code complete</span><span>roadmap status pending v1.36</span></div>
           </div>
         </details>
       </div>
@@ -563,7 +551,54 @@
 
     <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.34</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Weather Context</span></summary><p class="milestone-desc">Typical temps + precipitation on search results via Visual Crossing · 2026-05-16</p></details></div></div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.35</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Source Photos</span></summary><p class="milestone-desc">Campground photos from RIDB/RA + SVG postcard placeholder · 2026-05-16 (7 of 8 features; URL verification cron deferred, PostHog alert in place)</p></details></div></div>
+    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.35</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Source Photos</span></summary><p class="milestone-desc">Campground photos from RIDB/RA + SVG postcard placeholder · 2026-05-16</p></details></div></div>
+
+    <div class="milestone shipped recent">
+      <div class="card">
+        <details open>
+          <summary>
+            <span class="version-badge">v1.4</span>
+            <span class="status-pill shipped">Shipped</span>
+            <span class="milestone-name">Monetization Launch</span>
+          </summary>
+          <p class="milestone-desc">Pro tier gate, Stripe Checkout/Portal, webhook handler. <strong>Test mode validated 2026-05-28.</strong> Live keys + Stripe Customer Portal config pending.</p>
+          <div class="card-body">
+            <div class="status-note pending">
+              <strong>Live mode activation pending.</strong> Currently running on Stripe test-mode keys. To accept real money:
+              <br>1. Replace <code>STRIPE_SECRET_KEY</code> with <code>sk_live_...</code> (Dashboard → live mode → API keys)
+              <br>2. Create live-mode webhook endpoint at <code>https://campable.co/api/billing/webhook</code> for the 4 event types, copy <code>whsec_...</code> into <code>STRIPE_WEBHOOK_SECRET</code>
+              <br>3. Create live-mode price for "Campable Pro" $5/mo, copy <code>price_live_...</code> into <code>STRIPE_PRO_PRICE_ID</code>
+              <br>4. Activate Stripe account: business verification (LLC + EIN), bank account for payouts, tax decision (Stripe Tax at $0.50/tx OR self-managed)
+              <br>5. Configure Customer Portal in live mode (cancel allowed, payment method update allowed)
+              <br>6. Optional: ToS link in footer (some Stripe reviews flag missing terms)
+            </div>
+            <div class="section-heading">Features (all shipped)</div>
+            <ul class="feature-list">
+              <li><span class="feature-status done">✓</span><span class="size-badge size-M">M</span><span><span class="feature-name">Freemium gate activation</span> · <span class="feature-text">Free: 3 watches + 3 planner sessions + 15-min polling. Pro: unlimited watches + 20 planner sessions + 5-min polling.</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-S">S</span><span><span class="feature-name">Pricing page</span> · <span class="feature-text">/pricing — Free vs Pro cards, comparison table, FAQ. WCAG 2.1 AA, dark + light themes.</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-S">S</span><span><span class="feature-name">UpgradeModal + ProBadge</span> · <span class="feature-text">3 reason variants (watch_limit, planner_limit, voluntary). PRO header badge for Pro users.</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-M">M</span><span><span class="feature-name">Stripe Checkout + Portal routes</span> · <span class="feature-text">POST /api/billing/checkout, /portal, /webhook (signature-verified), GET /status</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-L">L</span><span><span class="feature-name">Webhook handler</span> · <span class="feature-text">checkout.session.completed, customer.subscription.updated (with cancel_at_period_end + items[0].current_period_end), customer.subscription.deleted, invoice.payment_failed. Idempotent via stripe_events.event_id UNIQUE.</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-S">S</span><span><span class="feature-name">5-minute Pro polling</span> · <span class="feature-text">APScheduler tier-filtered job; Pro watches polled at 5min, free at 15min, no overlap</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-S">S</span><span><span class="feature-name">Conversion analytics</span> · <span class="feature-text">PostHog funnel: pricing_page_viewed, upgrade_clicked, upgrade_modal_shown (with reason)</span></span></li>
+              <li><span class="feature-status done">✓</span><span class="size-badge size-S">S</span><span><span class="feature-name">v0.95 reconciliation</span> · <span class="feature-text">feature/monetization branch documented as built-not-merged; v1.4 rebuilt against current arch</span></span></li>
+            </ul>
+            <div class="progress-bar"><div class="progress-bar-fill" style="width: 100%;"></div></div>
+            <div class="progress-meta"><span>Shipped 2026-05-28</span><span>1202 tests passing</span></div>
+            <details class="risks">
+              <summary>Production bugs surfaced + fixed during validation</summary>
+              <ul class="risks-list">
+                <li>VITE_PUBLIC_SUPABASE_* not forwarded to build step → production bundle baked in localhost fallback → signup "Failed to fetch" (PR #25/#26)</li>
+                <li>SUPABASE_URL Fly secret missing https:// prefix → CSP connect-src malformed → blocked. Defensive _supabase_csp_origin() helper added (PR #35)</li>
+                <li>Modal drawer width media query missing max-width override on narrow viewports — covered header buttons (PR #27/#28, then #29/#30 for cascade specificity)</li>
+                <li>useAuth INITIAL_SESSION race condition → returning users stuck on "Loading…" forever. Fix calls getSession() on mount explicitly (PR #31/#32)</li>
+                <li>Stripe API version 2026-03-25.dahlia moved current_period_end from subscription root to items.data[0]. Helper checks both (PR #33/#34)</li>
+              </ul>
+            </details>
+          </div>
+        </details>
+      </div>
+    </div>
 
     <div class="group-heading">Planned</div>
 
@@ -580,22 +615,14 @@
             <div class="section-heading">Features</div>
             <ul class="feature-list">
               <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">GitHub OAuth provider</span> · <span class="feature-text">Free, no paid account, ~5 min setup — can ship immediately</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Google OAuth provider</span> · <span class="feature-text">Cloud Console setup; blocked on LLC</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Apple OAuth provider</span> · <span class="feature-text">Services ID + private key; blocked on LLC + $99/yr</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Google OAuth provider</span> · <span class="feature-text">Cloud Console setup; LLC ready now, just needs the provider wiring</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Apple OAuth provider</span> · <span class="feature-text">Services ID + private key; needs Apple Developer account active</span></span></li>
               <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">OAuth buttons in AuthModal</span> · <span class="feature-text">Above email/password form, signInWithOAuth call</span></span></li>
               <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Apple display name capture</span> · <span class="feature-text">Apple only sends name on first sign-in</span></span></li>
               <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Email-linking UX</span> · <span class="feature-text">Auto-link OAuth to existing email/password accounts</span></span></li>
             </ul>
             <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>0 of 6 shipped</span><span>GitHub unblocked; Google/Apple gated on accounts</span></div>
-            <details class="risks">
-              <summary>Key Risks</summary>
-              <ul class="risks-list">
-                <li>Google/Apple accounts not ready — ship GitHub OAuth first, others independent</li>
-                <li>Google consent screen testing mode (100-user cap) — submit for verification before launch</li>
-                <li>Apple only sends name once — capture in auto-provisioning, fallback to profile settings</li>
-              </ul>
-            </details>
+            <div class="progress-meta"><span>0 of 6 shipped</span><span>GitHub unblocked; Apple gated on dev account</span></div>
           </div>
         </details>
       </div>
@@ -605,30 +632,33 @@
       <div class="card">
         <details open>
           <summary>
-            <span class="version-badge">v1.4</span>
+            <span class="version-badge">v1.41</span>
             <span class="status-pill future">Planned</span>
-            <span class="milestone-name">Monetization Launch</span>
+            <span class="milestone-name">Maestro E2E</span>
           </summary>
-          <p class="milestone-desc">Pro tier gate, payment, freemium conversion flows. Rebuilt against current architecture; <code>feature/monetization</code> branch as reference.</p>
+          <p class="milestone-desc">End-to-end browser flows in Maestro Web. Shared DSL with Being mobile app. A single upgrade-flow smoke test would have caught 4 of the 5 production bugs hit during v1.4 validation.</p>
           <div class="card-body">
-            <div class="status-note">
-              <strong>Implementation Approach:</strong> v0.95's monetization layer was built on <code>feature/monetization</code> (Mar 2026) but never merged. Since then v1.33 Supabase Auth and v1.27/v1.29 design system work have made the branch obsolete. v1.4 will rebuild against current architecture using the branch as reference: lift <code>billing.py</code> + adapt; rewrite routes against <code>routes/</code> pattern; reuse schema names + grandfather logic; rebuild frontend against current <code>tokens.css</code>; tests first.
-            </div>
             <div class="section-heading">Features</div>
             <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Freemium gate activation</span> · <span class="feature-text">Free: search/discovery/profiles. Pro: watches (&gt;3), alerts, trip planner, sharing</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Landing page</span> · <span class="feature-text">SEO-optimized homepage, multi-source value prop, free→pro ladder</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Upgrade flows from SEO pages</span> · <span class="feature-text">"Check Live Availability" / "Set up Alerts" CTAs</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Conversion analytics</span> · <span class="feature-text">PostHog funnel: SEO → search → watch → upgrade</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Pricing page</span> · <span class="feature-text">Clear free vs pro comparison, accessible both themes</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-XS">XS</span><span><span class="feature-name">Maestro CLI + Cloud setup</span> · <span class="feature-text">Reuse existing Being account; .maestro/ directory with config + env</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Flow 1 — Upgrade smoke test</span> · <span class="feature-text">Anonymous → signup → /pricing → Upgrade → Stripe Checkout (4242) → assert PRO badge. Single flow catches CSP, env var, modal-width, useAuth race bugs.</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Flow 2 — Watch limit smoke test</span> · <span class="feature-text">3 watches OK → 4th → assert UpgradeModal opens with reason=watch_limit</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Flow 3 — Planner limit smoke test</span> · <span class="feature-text">3 planner sessions OK → 4th → assert UpgradeModal opens with reason=planner_limit</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Flow 4 — Cancel + reactivate</span> · <span class="feature-text">Pro → Manage billing → Cancel → assert expires_at countdown → Reactivate → assert countdown removed. Webhook → DB → UI loop validation.</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Staging URL strategy</span> · <span class="feature-text">Fly preview branches per PR (auto-deployed, isolated DB) OR dedicated staging.campable.co. Never against production.</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-XS">XS</span><span><span class="feature-name">Email confirmation toggle</span> · <span class="feature-text">Supabase staging project → confirmation off so tests sign in without inbox round-trip</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">CI integration</span> · <span class="feature-text">Maestro Cloud on every PR (smoke test, ~2min) + nightly (full suite). Failures surface in PR checks.</span></span></li>
             </ul>
             <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>0 of 5 shipped</span><span>blocked by v1.36 + v1.3</span></div>
+            <div class="progress-meta"><span>0 of 8 features</span><span>~2-3 days realistic effort</span></div>
             <details class="risks">
               <summary>Key Risks</summary>
               <ul class="risks-list">
-                <li>Premature monetization if v1.3 hasn't generated meaningful organic traffic — gates could hurt growth</li>
-                <li>Auth must be stable (v1.33/v1.36) before tying subscription state to user accounts</li>
+                <li>Maestro Web maturity gap vs Playwright — run a 30-min iframe-interaction spike before committing</li>
+                <li>Staging infra cost — Fly preview branches auto-suspend; Maestro Cloud has solo-project tier. Target: &lt; $30/mo total</li>
+                <li>Test account email collision — use maestro-{uuid}@example.com per run; optional Supabase admin cleanup</li>
+                <li>Flow brittleness from Stripe Checkout UI revs — fix individual flows when they break, don't pre-emptively abstract</li>
+                <li>Live-mode bugs missed by test-mode flows — manual smoke test the first time a live transaction goes through (one-time)</li>
               </ul>
             </details>
           </div>
@@ -665,17 +695,6 @@
             </ul>
             <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
             <div class="progress-meta"><span>0 of 14 shipped</span><span>~4-6 weeks to first TestFlight</span></div>
-            <details class="risks">
-              <summary>Key Risks</summary>
-              <ul class="risks-list">
-                <li>Web Push (VAPID/SW) doesn't work in WKWebView — APNs/FCM swap is v1.0 critical path, not follow-on</li>
-                <li>First TestFlight review takes 2-7 days; rejections add another cycle — front-load Apple scrutiny areas</li>
-                <li>Map tiles unusable offline — decide v1: online-only with messaging or MapLibre + MBTiles bundle</li>
-                <li>iOS WKWebView purges localStorage under pressure — migrate critical state to @capacitor/preferences</li>
-                <li>Apple 4.2 "repackaged website" rejection — bundled registry + native push + geo + share + account deletion needed to clear</li>
-                <li>In-app purchases NOT in v1.45 scope — subscription billing stays web-only; native IAP is v1.5+ decision</li>
-              </ul>
-            </details>
           </div>
         </details>
       </div>
@@ -710,7 +729,7 @@
   </div>
 
   <footer>
-    Generated 2026-05-25 · Source: <code>docs/ROADMAP.md</code> · Regenerate with <code>/roadmap</code>
+    Generated 2026-05-28 · Source: <code>docs/ROADMAP.md</code> · Regenerate with <code>/roadmap</code>
   </footer>
 </div>
 </body>

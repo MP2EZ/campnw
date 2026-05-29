@@ -39,12 +39,13 @@ v1.33   ------->   Supabase Auth        — Replace custom auth with Supabase, B
 v1.34   [SHIPPED]  Weather Context      — Typical temps + precipitation on search results via Visual Crossing
 v1.35   [SHIPPED]  Source Photos        — Campground photos from RIDB/RA + SVG postcard placeholder for missing sources
 v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
-v1.4    ------->   Monetization Launch  — Pro tier gate, payment, freemium conversion flows
+v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)
+v1.41   ------->   Maestro E2E          — End-to-end browser flows in Maestro (upgrade, watch limit, planner limit). Shared tooling with Being mobile.
 v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
-Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product (note: v0.95's billing prototype lives on the abandoned `feature/monetization` branch — v1.4 will reference but not merge it, see the v1.4 entry for details), v1.45 wraps the app for iOS + Android via Capacitor (sequenced after v1.4 so monetization is validated on the web before committing to App Store review cycles). v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
+Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product (code shipped + validated in Stripe test mode 2026-05-28; live keys + Stripe Customer Portal config still pending — see v1.4 Post-ship Status), v1.41 stands up Maestro E2E coverage (the 5 production bugs hit during v1.4 validation would have been caught by a single upgrade-flow smoke test), v1.45 wraps the app for iOS + Android via Capacitor (sequenced after v1.4 so monetization is validated on the web before committing to App Store review cycles). v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -1479,7 +1480,7 @@ Enable Google, Apple, and GitHub sign-in. Supabase infrastructure from v1.33 alr
 
 ---
 
-## v1.4 "Monetization Launch"
+## v1.4 "Monetization Launch" [SHIPPED 2026-05-28]
 
 ### Theme
 Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates the pro features (watches, alerts, trips) behind a subscription and builds the conversion flows that move free users to paid. The v0.95 billing prototype on `feature/monetization` is preserved as a reference but will not be merged — v1.4 rebuilds against post-v1.33 Supabase auth and the post-v1.27/v1.29 design system. See Implementation Approach below.
@@ -1510,6 +1511,117 @@ v0.95's full monetization layer was built on `feature/monetization` (March 2026)
 
 ### Key Risk
 Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates. Auth must be stable (v1.33/v1.36) before tying subscription state to user accounts.
+
+### Post-ship Status (2026-05-28)
+
+**Code complete + validated in Stripe test mode.** Six commits on `feat/v1.4-billing-foundation` shipped through `dev → main` in the order: roadmap reconciliation (slice 0) → schema + billing module + 31 tests (slice 1) → self-review fixes (slice 2.0) → HTTP routes + watch cap (slice 2 main) → frontend (slice 3) → planner gating + 5-min Pro polling (slice 4). Plus 6 follow-up PRs for production bugs surfaced during end-to-end validation. **1202 tests passing** across backend (999) + frontend (203).
+
+**End-to-end test mode flow validated** in production browser (via Chrome DevTools MCP, 2026-05-28): test account signup → /pricing renders Upgrade button → Stripe Checkout completes with `4242 4242 4242 4242` → PRO badge appears → `/api/billing/status` returns `is_pro:true` → cancel at period end via Customer Portal → `subscription_expires_at` populates with period end → reactivate → expires_at cleared → re-cancel → expires_at re-populates.
+
+**Five real bugs surfaced during validation** (all fixed):
+1. `VITE_PUBLIC_SUPABASE_*` not forwarded to the deploy workflow's build step → production bundle baked in `localhost:54321` fallback → "Failed to fetch" on signup. Fix: PR #25/#26.
+2. `SUPABASE_URL` Fly secret set without `https://` prefix → CSP `connect-src` malformed → blocked. Defensive fix: PR #35 added `_supabase_csp_origin()` that prepends scheme.
+3. Modal drawer width media query missing `max-width: none` override → narrow viewports kept the desktop cap. Fix: PR #27/#28 (initial), #29/#30 (cascade specificity follow-up).
+4. `useAuth` INITIAL_SESSION race condition → returning users stuck on "Loading…" forever. Fix: PR #31/#32 calls `getSession()` on mount explicitly.
+5. Stripe API version `2026-03-25.dahlia` moved `current_period_end` from subscription root to `items.data[0]` → `subscription_expires_at` empty after cancel. Fix: PR #33/#34 added `_current_period_end()` helper checking both locations.
+
+**Live mode activation — still operational/pending.** Currently running on Stripe test-mode keys. To start accepting real money:
+- Replace `STRIPE_SECRET_KEY` with `sk_live_...` from Stripe Dashboard (live mode → Developers → API keys)
+- Create a NEW webhook endpoint in live mode (Dashboard → Webhooks → Add endpoint, URL = `https://campable.co/api/billing/webhook`, same 4 event types as test mode) and replace `STRIPE_WEBHOOK_SECRET` with its `whsec_...`
+- Create a live-mode price for "Campable Pro" at $5/mo and replace `STRIPE_PRO_PRICE_ID` with the new `price_live_...` ID
+- Activate Stripe account in Dashboard: business verification (LLC docs, EIN), bank account for payouts, decide on tax (Stripe Tax at $0.50/transaction OR self-managed)
+- Configure Customer Portal for live mode (Dashboard → Settings → Billing → Customer Portal): allow cancel, allow payment-method update; same config that already worked in test mode
+- Optional: brief Terms of Service link in footer (Stripe flags missing terms on live-mode review for some accounts)
+
+**Deferred (not blocking ship)**:
+- Grandfather migration script for users with >3 watches at activation time — irrelevant pre-launch with no real users; a small one-shot if any real users land in this state post-launch
+- Announcement email (per v0.95 spec, "one honest email about Pro")
+- v1.41 Maestro E2E suite would have caught 4 of the 5 production bugs above with a single upgrade-flow smoke test (see v1.41 entry)
+
+---
+
+## v1.41 "Maestro E2E"
+
+### Theme
+Stand up end-to-end browser test coverage that mirrors real production failure patterns, using Maestro Web (the same DSL already in use for the Being mobile app). A single upgrade-flow smoke test would have caught 4 of the 5 bugs hit during v1.4 validation in seconds rather than hours. Single tool covers campable.co today AND v1.45's Capacitor-wrapped iOS/Android app later — no separate E2E stack to learn or maintain.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Maestro CLI + Cloud account setup | XS | Reuse the existing Being account if convenient. `.maestro/` directory at repo root with config and shared environment vars. |
+| Flow 1 — Upgrade smoke test | M | Anonymous → signup → /pricing → Upgrade to Pro → Stripe Checkout with `4242 4242 4242 4242` → assert PRO badge in header. Single flow that would have caught the missing VITE_PUBLIC_SUPABASE env vars, the CSP scheme bug, the modal width regression, and the useAuth race. |
+| Flow 2 — Watch limit smoke test | S | Free user → create 3 watches → 4th attempt → assert UpgradeModal opens with reason=watch_limit. Validates the 402 → modal flow. |
+| Flow 3 — Planner limit smoke test | S | Free user → start 3 trip planner sessions → 4th → assert UpgradeModal opens with reason=planner_limit. |
+| Flow 4 — Cancel + reactivate | M | Pro user → Manage billing → Cancel → assert `subscription_expires_at` rendered in BillingSettings → Reactivate → assert "Pro until X" text removed. Webhook → DB → UI loop validation. |
+| Staging URL strategy | S | Fly preview branches per PR (preferred — auto-deployed, real DB, isolated) OR a dedicated `staging.campable.co` Fly app with separate DB volume. Tests don't run against `campable.co` production. |
+| Email confirmation toggle for test | XS | Supabase project → Authentication → Providers → Email → disable "Confirm email" for the staging project so tests can sign in without inbox round-trip. |
+| CI integration | S | Maestro Cloud run on every PR (smoke test only — ~2 min) + nightly run (all flows). Failures surface in PR checks. |
+
+### Architecture Decisions
+
+**Maestro over Playwright/Cypress.** Solo dev already running Maestro on Being for mobile flows. Shared DSL, shared cloud account, shared mental model. The maturity gap on web is real (Maestro Web is newer than Playwright) but cognitive consistency wins for small teams. If we ever scale to a multi-engineer testing team, revisit.
+
+**Staging environment, not production.** Tests like "cancel subscription" can't run against real production without polluting metrics (and burning a test user account every cycle). Use Fly preview deployments per PR — each PR gets its own ephemeral URL, isolated DB, isolated Stripe test keys. After PR merges, the preview is torn down automatically.
+
+**Test mode Stripe keys only.** E2E tests never touch live-mode Stripe. The `4242 4242 4242 4242` test card flow is fast, deterministic, and free; live-mode tests would be slow, charge real money, and trigger real fraud detection.
+
+**iframe handling for Stripe Checkout card field.** Maestro Web supports iframe interaction but with slightly different syntax than top-level elements. Plan a ~30 min spike at start of implementation to confirm the card-field flow works before committing to the full suite.
+
+### Files Changed
+
+**New:**
+- `.maestro/config.yaml` — base config (timeouts, default URL)
+- `.maestro/flows/upgrade.yaml` — Flow 1
+- `.maestro/flows/watch-limit.yaml` — Flow 2
+- `.maestro/flows/planner-limit.yaml` — Flow 3
+- `.maestro/flows/cancel-reactivate.yaml` — Flow 4
+- `.github/workflows/maestro.yml` — CI integration
+
+**Modified:**
+- `fly.toml` — preview deploy config (or new `fly.staging.toml` if going the dedicated staging route)
+
+**External config:**
+- Maestro Cloud account (probably already exists for Being)
+- Supabase project for staging (could be the same project with confirmation toggled off, OR a separate staging project — recommended for isolation)
+- Stripe test-mode keys for staging (same keys as current v1.4 production-test-mode setup are fine)
+
+### Quality Bar
+
+- Smoke test (Flow 1) runs in < 90s end-to-end
+- All four flows pass on `dev` HEAD
+- CI failure includes a screenshot of the failing step
+- Each flow uses a fresh randomly-generated test account (no state bleed between runs)
+- Maestro Cloud monthly cost stays under $20 (or self-hosted if budget is tighter)
+
+### Dependencies
+
+- v1.4 shipped (we're testing v1.4's flows)
+- Fly preview deployments enabled (configuration on the Fly side, ~30 min)
+- Supabase staging project OR confirmation toggle disabled on prod project for test email domain
+
+### Key Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Maestro Web maturity gap vs Playwright | Run a 30-min spike with the iframe interaction case before committing. If it doesn't work cleanly, fall back to Playwright with the same flow structure — the YAML translates conceptually. |
+| Staging deploys add infra cost | Fly preview branches auto-suspend when idle. Maestro Cloud has a generous free tier for solo projects. Total monthly cost target: < $30. |
+| Test account email collision | Use `maestro-{random-uuid}@example.com` per run. Optionally clean up via Supabase admin API after test completion. |
+| Flow brittleness from Stripe Checkout UI changes | Stripe's Checkout UI is stable across years but does occasionally rev. If a flow breaks, fix that single flow — don't add wrapper layers that "future-proof" against hypothetical changes. |
+| Live-mode bugs missed by test-mode tests | Test mode covers ~95% of real flows. Risks not covered: real fraud detection, real bank decline codes, real refund processing. These need a manual smoke test the first time a live transaction goes through. |
+
+### What v1.41 catches that v1.4's 1202 tests don't
+
+The unit tests we added in v1.4 lock in code behavior. They CAN'T catch:
+- Build-time env var omissions (VITE_PUBLIC_* bug)
+- CSP construction at the middleware layer with real Supabase domain
+- React effect timing bugs in production (useAuth race surfaced from live network behavior)
+- CSS specificity bugs across responsive breakpoints
+- Cross-tab Supabase session sync
+- Real Stripe Checkout iframe behavior
+- Webhook delivery from real Stripe in real network conditions
+
+That's the gap v1.41 fills. Five real bugs from v1.4 validation map directly to flows here.
 
 ---
 
