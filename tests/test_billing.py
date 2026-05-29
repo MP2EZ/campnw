@@ -362,6 +362,44 @@ class TestWebhookDispatch:
             for e in audit
         )
 
+    def test_subscription_updated_reads_period_end_from_items_array(
+        self,
+        watch_db: WatchDB,
+        free_user_with_stripe_customer: User,
+    ) -> None:
+        # Newer Stripe API versions (2024-09+ including 2026-03-25.dahlia)
+        # moved current_period_end from the subscription root into
+        # subscription.items.data[0].current_period_end. Our handler must
+        # honour the new shape — surfaced live during v1.4 production
+        # testing when scheduled cancellations stopped populating
+        # subscription_expires_at despite Pro being correctly retained.
+        watch_db.update_user(
+            free_user_with_stripe_customer.id, subscription_status="pro",
+        )
+        event = {
+            "id": "evt_items_period_end",
+            "type": "customer.subscription.updated",
+            "data": {
+                "object": {
+                    "customer": "cus_hook_123",
+                    "status": "active",
+                    "cancel_at_period_end": True,
+                    # Root-level field absent — mirrors Dahlia payload
+                    "items": {
+                        "data": [
+                            {"current_period_end": 1735689600},
+                        ],
+                    },
+                },
+            },
+        }
+        billing.handle_webhook_event(event, watch_db)
+        refreshed = watch_db.get_user_by_id(free_user_with_stripe_customer.id)
+        assert refreshed.subscription_status == "pro"
+        assert "2025" in refreshed.subscription_expires_at, (
+            f"expected period end from items[0], got {refreshed.subscription_expires_at!r}"
+        )
+
     def test_subscription_updated_uncancel_clears_expires_at(
         self,
         watch_db: WatchDB,
