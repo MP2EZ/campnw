@@ -232,7 +232,7 @@ def _handle_subscription_updated(event: dict, watch_db: WatchDB) -> None:
     customer_id = subscription.get("customer", "") or ""
     stripe_status = subscription.get("status", "")
     cancel_at_period_end = bool(subscription.get("cancel_at_period_end"))
-    period_end_iso = _iso_from_epoch(subscription.get("current_period_end"))
+    period_end_iso = _iso_from_epoch(_current_period_end(subscription))
 
     user = watch_db.get_user_by_stripe_customer_id(customer_id)
     if user is None:
@@ -377,6 +377,30 @@ def _iso_from_epoch(value: object) -> str:
     if isinstance(value, str):
         return value
     return ""
+
+
+def _current_period_end(subscription: dict) -> object:
+    """Read current_period_end from a Stripe subscription payload.
+
+    Stripe moved this field from the subscription root to
+    ``subscription.items.data[0].current_period_end`` in API versions
+    around 2024-09 and later. Newer versions (e.g. 2026-03-25.dahlia,
+    which the v1.4 event destination uses) no longer populate the
+    root-level field at all. Older versions still populate the root,
+    so we check both for forward-and-backward compatibility.
+
+    Returns the epoch-seconds int when present, else None.
+    """
+    root = subscription.get("current_period_end")
+    if root is not None:
+        return root
+    items = subscription.get("items") or {}
+    data = items.get("data") if isinstance(items, dict) else None
+    if isinstance(data, list) and data:
+        first = data[0]
+        if isinstance(first, dict):
+            return first.get("current_period_end")
+    return None
 
 
 # ---------------------------------------------------------------------------
