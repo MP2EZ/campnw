@@ -1,0 +1,42 @@
+# Phase 0 spike — Maestro Web vs Stripe Checkout iframe.
+#
+# Goal: confirm Maestro Web can drive the Stripe Checkout card-number field
+# (which renders inside a cross-origin iframe). If this works in ≤20 lines
+# the rest of v1.41 ships on Maestro. If not, port to Playwright with the
+# same flow shape.
+#
+# Run:
+#   MAESTRO_BASE_URL=https://campable.co maestro test .maestro/spike.yaml
+#
+# Pass criterion: flow reaches the `Subscribe` tap without YAML workarounds
+# for iframe focus/scope. Failure to type into card fields = abort condition.
+
+appId: "campable.co"
+---
+- launchUrl: ${MAESTRO_BASE_URL}/pricing
+
+# Manual prep: log in as a Free fixture user in the same browser session
+# before running the spike. The spike intentionally skips signup so it
+# isolates the iframe interaction question.
+- assertVisible: "Upgrade to Pro"
+- tapOn: "Upgrade to Pro"
+
+# Stripe Checkout iframe — the part Maestro Web has to handle.
+- inputText:
+    id: "cardNumber"
+    text: "4242424242424242"
+- inputText:
+    id: "cardExpiry"
+    text: "12 / 30"
+- inputText:
+    id: "cardCvc"
+    text: "123"
+- inputText:
+    id: "billingName"
+    text: "Maestro Spike"
+- tapOn: "Subscribe"
+
+# If Maestro reaches this assertion, the iframe interaction works.
+- assertVisible:
+    text: "Pro"
+    timeout: 30000

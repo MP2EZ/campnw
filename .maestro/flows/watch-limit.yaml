@@ -1,0 +1,38 @@
+# Flow 2 — Watch limit enforcement.
+#
+# Free fixture user already has 3 watches → 4th attempt opens UpgradeModal
+# with reason=watch_limit. Asserts the 402 → modal path renders correctly.
+#
+# Requires fixture: maestro-fixture-free-3watches@maestro.test seeded via
+# scripts/seed_maestro_fixtures.sql
+
+appId: "campable.co"
+---
+- launchUrl: ${MAESTRO_BASE_URL}/
+
+# Login as the pre-seeded free user
+- tapOn: "Sign in"
+- inputText:
+    id: "email-input"
+    text: "${MAESTRO_FIXTURE_PREFIX}free-3watches@maestro.test"
+- inputText:
+    id: "password-input"
+    text: ${MAESTRO_FIXTURE_PASSWORD}
+- tapOn: "Sign in"
+
+# Plain-language search → pick a 4th campground → try to watch
+# NOTE: The fixture seed must include 3 existing watches whose facility_ids
+# do NOT match the result Maestro clicks here (otherwise dedupe fires
+# instead of the 402).
+- inputText:
+    css: ".nl-search-input"
+    text: "Ohanapecosh next weekend"
+- pressKey: Enter
+- assertVisible:
+    text: "Ohanapecosh"
+    timeout: 20000
+- tapOn: "Watch"
+
+# UpgradeModal asserts on watch-limit-specific headline copy
+- assertVisible: "Upgrade for unlimited watches"
+- assertVisible: "Free accounts can track 3 campgrounds"

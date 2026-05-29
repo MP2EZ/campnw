@@ -1,0 +1,21 @@
+# Maestro shared config for campable.co web flows.
+#
+# Run a single flow locally:
+#   MAESTRO_BASE_URL=http://localhost:5173 maestro test .maestro/flows/upgrade.yaml
+#
+# Run against a Fly preview URL (CI does this automatically):
+#   MAESTRO_BASE_URL=https://campnw-pr-123.fly.dev maestro test .maestro/flows/upgrade.yaml
+#
+# Required env per run:
+#   MAESTRO_BASE_URL          — root URL of the campable instance under test
+#   MAESTRO_FIXTURE_PASSWORD  — shared password for seeded fixture users
+#
+# Optional:
+#   MAESTRO_FIXTURE_PREFIX    — defaults to "maestro-fixture-"; useful for isolating runs
+
+executionOrder:
+  flowsOrder:
+    - upgrade
+    - watch-limit
+    - planner-limit
+    - cancel-reactivate

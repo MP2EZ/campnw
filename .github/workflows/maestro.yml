@@ -1,0 +1,138 @@
+name: Maestro E2E
+
+# Runs Maestro Web flows against a deployed campable instance.
+# PR: only the upgrade smoke flow (~90s). Nightly: all four flows.
+#
+# Self-hosted on GitHub Actions runners — $0/mo until Pro revenue
+# covers Maestro Cloud (revisit at 4+ paying subscribers, see ROADMAP v1.41).
+#
+# Required repo secrets:
+#   FLY_API_TOKEN, FLY_PREVIEW_APP_NAME   (Fly preview wiring)
+#   MAESTRO_FIXTURE_PASSWORD              (shared password for fixture users)
+#   SUPABASE_SERVICE_ROLE_KEY             (admin JWT for fixture seeding)
+#   VITE_PUBLIC_SUPABASE_URL              (already exists, reused for base URL)
+
+on:
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: '0 8 * * *'   # nightly 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2
+
+      - name: Deploy Fly preview
+        id: preview
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          # Fly preview app naming: campnw-pr-<num>. Auto-suspends when idle ($0 standing cost).
+          APP_NAME="campnw-pr-${{ github.event.pull_request.number || 'manual' }}"
+          flyctl deploy --remote-only --app "$APP_NAME" || flyctl launch \
+            --copy-config --name "$APP_NAME" --org personal --region sjc --now
+          PREVIEW_URL="https://${APP_NAME}.fly.dev"
+          echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          # Poll until 200 OK or timeout
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null "$PREVIEW_URL/healthz"; then
+              echo "Preview ready at $PREVIEW_URL"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Preview never became healthy"
+          exit 1
+
+      - name: Seed Maestro fixtures
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          APP_NAME="campnw-pr-${{ github.event.pull_request.number || 'manual' }}"
+          flyctl ssh console -a "$APP_NAME" -C "python scripts/seed_maestro_fixtures.py" \
+            -e SUPABASE_URL="${{ secrets.VITE_PUBLIC_SUPABASE_URL }}" \
+            -e SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -e MAESTRO_FIXTURE_PASSWORD="${{ secrets.MAESTRO_FIXTURE_PASSWORD }}"
+
+      - name: Install Maestro CLI
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Run smoke flow
+        env:
+          MAESTRO_BASE_URL: ${{ steps.preview.outputs.url }}
+          MAESTRO_FIXTURE_PASSWORD: ${{ secrets.MAESTRO_FIXTURE_PASSWORD }}
+          MAESTRO_RUN_ID: ${{ github.run_id }}
+        run: maestro test .maestro/flows/upgrade.yaml
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-smoke-screenshots
+          path: ~/.maestro/tests/
+
+  nightly:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Maestro CLI
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Seed fixtures against staging
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAESTRO_FIXTURE_PASSWORD: ${{ secrets.MAESTRO_FIXTURE_PASSWORD }}
+        run: |
+          # Nightly runs against a long-lived staging app (campnw-staging),
+          # NOT prod. Seed runs locally via direct SQLite over a Fly mount
+          # OR via the same flyctl ssh console pattern as the PR job.
+          flyctl ssh console -a campnw-staging -C "python scripts/seed_maestro_fixtures.py" \
+            -e SUPABASE_URL="$SUPABASE_URL" \
+            -e SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
+            -e MAESTRO_FIXTURE_PASSWORD="$MAESTRO_FIXTURE_PASSWORD"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Run all flows
+        env:
+          MAESTRO_BASE_URL: https://campnw-staging.fly.dev
+          MAESTRO_FIXTURE_PASSWORD: ${{ secrets.MAESTRO_FIXTURE_PASSWORD }}
+          MAESTRO_RUN_ID: ${{ github.run_id }}
+        run: maestro test .maestro/flows/
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-nightly-screenshots
+          path: ~/.maestro/tests/
+
+      - name: Open issue on nightly failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = new Date().toISOString().split('T')[0];
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly Maestro E2E failed (${date})`,
+              body: `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nScreenshots are attached as the run's artifact.`,
+              labels: ['e2e-failure'],
+            });

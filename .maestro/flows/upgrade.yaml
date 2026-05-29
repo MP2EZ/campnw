@@ -1,0 +1,57 @@
+# Flow 1 — Upgrade smoke test.
+#
+# Anonymous → signup → /pricing → Stripe Checkout (test card) → assert PRO badge.
+#
+# This is the hero flow: a single green run validates the four production bug
+# classes that 1,202 unit tests missed during v1.4 (env vars at build, CSP
+# scheme, modal width, useAuth race). Runs in <90s end-to-end.
+#
+# Required env:
+#   MAESTRO_BASE_URL  — root URL (Fly preview in CI, localhost in dev)
+
+appId: "campable.co"
+---
+- launchUrl: ${MAESTRO_BASE_URL}/
+- assertVisible: "Sign in"
+
+# Open auth modal → switch to signup
+- tapOn: "Sign in"
+- assertVisible:
+    id: "email-input"
+- tapOn: "Create one"
+
+# Fresh user per run — randomness via timestamp keeps reruns isolated.
+- inputText:
+    id: "email-input"
+    text: "maestro-${MAESTRO_RUN_ID}@maestro.test"
+- inputText:
+    id: "password-input"
+    text: ${MAESTRO_FIXTURE_PASSWORD}
+- tapOn: "Create account"
+
+# Header should now show the user menu (logged-in state) and NO Pro badge.
+- assertNotVisible: "Sign in"
+
+# Drive to /pricing and start checkout
+- launchUrl: ${MAESTRO_BASE_URL}/pricing
+- tapOn: "Upgrade to Pro"
+
+# Stripe Checkout iframe — fields validated via Phase 0 spike.
+- inputText:
+    id: "cardNumber"
+    text: "4242424242424242"
+- inputText:
+    id: "cardExpiry"
+    text: "12 / 30"
+- inputText:
+    id: "cardCvc"
+    text: "123"
+- inputText:
+    id: "billingName"
+    text: "Maestro Smoke"
+- tapOn: "Subscribe"
+
+# After webhook fires + redirect, header shows the Pro badge.
+- assertVisible:
+    text: "Pro"
+    timeout: 60000

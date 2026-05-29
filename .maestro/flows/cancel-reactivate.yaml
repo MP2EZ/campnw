@@ -1,0 +1,66 @@
+# Flow 4 — Cancel + reactivate via Stripe Customer Portal.
+#
+# Pro fixture user → Manage billing → cancel → assert "Pro until <date>"
+# rendered in BillingSettings → Manage billing → reactivate → assert
+# "Pro until …" text removed. Webhook → DB → UI loop validation.
+#
+# Requires fixture: maestro-fixture-pro@maestro.test seeded with active
+# Stripe test-mode subscription via scripts/seed_maestro_fixtures.sql
+
+appId: "campable.co"
+---
+- launchUrl: ${MAESTRO_BASE_URL}/
+
+- tapOn: "Sign in"
+- inputText:
+    id: "email-input"
+    text: "${MAESTRO_FIXTURE_PREFIX}pro@maestro.test"
+- inputText:
+    id: "password-input"
+    text: ${MAESTRO_FIXTURE_PASSWORD}
+- tapOn: "Sign in"
+
+# Pro badge confirms login + Pro state
+- assertVisible: "Pro"
+
+# UserMenu → Billing → Manage billing (redirects to Stripe Portal)
+- tapOn:
+    css: ".user-menu-trigger"
+- tapOn: "Billing"
+- tapOn: "Manage billing"
+
+# Stripe Customer Portal — selectors verified against current Portal UI.
+# Cancel flow.
+- assertVisible:
+    text: "Cancel plan"
+    timeout: 15000
+- tapOn: "Cancel plan"
+- tapOn: "Cancel subscription"
+- assertVisible: "Subscription canceled"
+
+# Webhook → DB → UI roundtrip. Back to campable, BillingSettings should
+# now render "Pro until <localized date>".
+- launchUrl: ${MAESTRO_BASE_URL}/
+- tapOn:
+    css: ".user-menu-trigger"
+- tapOn: "Billing"
+- assertVisible:
+    text: "Pro until"
+    timeout: 30000
+
+# Reactivate via the same Portal flow
+- tapOn: "Manage billing"
+- assertVisible:
+    text: "Renew plan"
+    timeout: 15000
+- tapOn: "Renew plan"
+- tapOn: "Confirm"
+
+# Back to campable — "Pro until X" copy should be gone
+- launchUrl: ${MAESTRO_BASE_URL}/
+- tapOn:
+    css: ".user-menu-trigger"
+- tapOn: "Billing"
+- assertNotVisible:
+    text: "Pro until"
+    timeout: 30000
