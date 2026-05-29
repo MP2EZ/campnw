@@ -7,16 +7,16 @@
 # Requires fixture: maestro-fixture-pro@maestro.test seeded with active
 # Stripe test-mode subscription via scripts/seed_maestro_fixtures.sql
 
-appId: "campable.co"
+url: ${MAESTRO_BASE_URL}
 ---
-- launchUrl: ${MAESTRO_BASE_URL}/
+- launchApp
 
 - tapOn: "Sign in"
 - inputText:
-    id: "email-input"
+    css: '[data-testid="email-input"]'
     text: "${MAESTRO_FIXTURE_PREFIX}pro@maestro.test"
 - inputText:
-    id: "password-input"
+    css: '[data-testid="password-input"]'
     text: ${MAESTRO_FIXTURE_PASSWORD}
 - tapOn: "Sign in"
 
@@ -31,8 +31,8 @@ appId: "campable.co"
 
 # Stripe Customer Portal — selectors verified against current Portal UI.
 # Cancel flow.
-- assertVisible:
-    text: "Cancel plan"
+- extendedWaitUntil:
+    visible: "Cancel plan"
     timeout: 15000
 - tapOn: "Cancel plan"
 - tapOn: "Cancel subscription"
@@ -40,27 +40,27 @@ appId: "campable.co"
 
 # Webhook → DB → UI roundtrip. Back to campable, BillingSettings should
 # now render "Pro until <localized date>".
-- launchUrl: ${MAESTRO_BASE_URL}/
+- openLink: ${MAESTRO_BASE_URL}/
 - tapOn:
     css: ".user-menu-trigger"
 - tapOn: "Billing"
-- assertVisible:
-    text: "Pro until"
+- extendedWaitUntil:
+    visible: "Pro until"
     timeout: 30000
 
 # Reactivate via the same Portal flow
 - tapOn: "Manage billing"
-- assertVisible:
-    text: "Renew plan"
+- extendedWaitUntil:
+    visible: "Renew plan"
     timeout: 15000
 - tapOn: "Renew plan"
 - tapOn: "Confirm"
 
 # Back to campable — "Pro until X" copy should be gone
-- launchUrl: ${MAESTRO_BASE_URL}/
+- openLink: ${MAESTRO_BASE_URL}/
 - tapOn:
     css: ".user-menu-trigger"
 - tapOn: "Billing"
-- assertNotVisible:
-    text: "Pro until"
+- extendedWaitUntil:
+    notVisible: "Pro until"
     timeout: 30000

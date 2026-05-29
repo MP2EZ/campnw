@@ -6,27 +6,27 @@
 # Requires fixture: maestro-fixture-free-3planner@maestro.test seeded via
 # scripts/seed_maestro_fixtures.sql
 
-appId: "campable.co"
+url: ${MAESTRO_BASE_URL}
 ---
-- launchUrl: ${MAESTRO_BASE_URL}/
+- launchApp
 
 - tapOn: "Sign in"
 - inputText:
-    id: "email-input"
+    css: '[data-testid="email-input"]'
     text: "${MAESTRO_FIXTURE_PREFIX}free-3planner@maestro.test"
 - inputText:
-    id: "password-input"
+    css: '[data-testid="password-input"]'
     text: ${MAESTRO_FIXTURE_PASSWORD}
 - tapOn: "Sign in"
 
-- launchUrl: ${MAESTRO_BASE_URL}/plan
+- openLink: ${MAESTRO_BASE_URL}/plan
 - inputText:
-    id: "chat-input"
+    css: '#chat-input'
     text: "Find me a lakeside spot near Seattle next weekend"
 - tapOn: "Send"
 
 # 4th session → 402 → UpgradeModal
-- assertVisible:
-    text: "Upgrade for more trip planner sessions"
+- extendedWaitUntil:
+    visible: "Upgrade for more trip planner sessions"
     timeout: 10000
 - assertVisible: "Free accounts get 3 trip planner sessions per month"

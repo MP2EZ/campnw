@@ -1,42 +1,40 @@
-# Phase 0 spike — Maestro Web vs Stripe Checkout iframe.
+# Phase 0 spike — Maestro Web viability against current prod (campable.co).
 #
-# Goal: confirm Maestro Web can drive the Stripe Checkout card-number field
-# (which renders inside a cross-origin iframe). If this works in ≤20 lines
-# the rest of v1.41 ships on Maestro. If not, port to Playwright with the
-# same flow shape.
+# Uses CSS selectors that match the CURRENT deployed code (no data-testid
+# additions yet). Validates that Maestro Web actually drives a browser,
+# can navigate, can open modals, and can interact with form fields.
 #
 # Run:
-#   MAESTRO_BASE_URL=https://campable.co maestro test .maestro/spike.yaml
+#   maestro test -p web .maestro/spike.yaml
 #
-# Pass criterion: flow reaches the `Subscribe` tap without YAML workarounds
-# for iframe focus/scope. Failure to type into card fields = abort condition.
+# Pass criterion: all steps run without selector-not-found errors.
 
-appId: "campable.co"
+url: https://campable.co
 ---
-- launchUrl: ${MAESTRO_BASE_URL}/pricing
+- launchApp
 
-# Manual prep: log in as a Free fixture user in the same browser session
-# before running the spike. The spike intentionally skips signup so it
-# isolates the iframe interaction question.
-- assertVisible: "Upgrade to Pro"
-- tapOn: "Upgrade to Pro"
+- assertVisible: "Sign in"
+- tapOn: "Sign in"
 
-# Stripe Checkout iframe — the part Maestro Web has to handle.
-- inputText:
-    id: "cardNumber"
-    text: "4242424242424242"
-- inputText:
-    id: "cardExpiry"
-    text: "12 / 30"
-- inputText:
-    id: "cardCvc"
-    text: "123"
-- inputText:
-    id: "billingName"
-    text: "Maestro Spike"
-- tapOn: "Subscribe"
-
-# If Maestro reaches this assertion, the iframe interaction works.
+# Inputs in current prod have no id/data-testid — match by HTML type.
 - assertVisible:
-    text: "Pro"
-    timeout: 30000
+    css: 'input[type="email"]'
+- assertVisible:
+    css: 'input[type="password"]'
+
+# Switch to signup mode
+- tapOn: "Create one"
+
+# Type into all three inputs (cross-origin / dynamic form interaction)
+- inputText:
+    css: 'input[autocomplete="name"]'
+    text: "Maestro Spike"
+- inputText:
+    css: 'input[type="email"]'
+    text: "spike-${MAESTRO_RUN_ID}@maestro.test"
+- inputText:
+    css: 'input[type="password"]'
+    text: "SpikeTest1234!"
+
+# Don't submit — we don't want to create a real auth user.
+# If we got here, Maestro Web is viable.

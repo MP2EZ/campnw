@@ -6,17 +6,17 @@
 # Requires fixture: maestro-fixture-free-3watches@maestro.test seeded via
 # scripts/seed_maestro_fixtures.sql
 
-appId: "campable.co"
+url: ${MAESTRO_BASE_URL}
 ---
-- launchUrl: ${MAESTRO_BASE_URL}/
+- launchApp
 
 # Login as the pre-seeded free user
 - tapOn: "Sign in"
 - inputText:
-    id: "email-input"
+    css: '[data-testid="email-input"]'
     text: "${MAESTRO_FIXTURE_PREFIX}free-3watches@maestro.test"
 - inputText:
-    id: "password-input"
+    css: '[data-testid="password-input"]'
     text: ${MAESTRO_FIXTURE_PASSWORD}
 - tapOn: "Sign in"
 
@@ -28,8 +28,8 @@ appId: "campable.co"
     css: ".nl-search-input"
     text: "Ohanapecosh next weekend"
 - pressKey: Enter
-- assertVisible:
-    text: "Ohanapecosh"
+- extendedWaitUntil:
+    visible: "Ohanapecosh"
     timeout: 20000
 - tapOn: "Watch"
 

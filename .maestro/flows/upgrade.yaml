@@ -9,23 +9,23 @@
 # Required env:
 #   MAESTRO_BASE_URL  — root URL (Fly preview in CI, localhost in dev)
 
-appId: "campable.co"
+url: ${MAESTRO_BASE_URL}
 ---
-- launchUrl: ${MAESTRO_BASE_URL}/
+- launchApp
 - assertVisible: "Sign in"
 
 # Open auth modal → switch to signup
 - tapOn: "Sign in"
 - assertVisible:
-    id: "email-input"
+    css: '[data-testid="email-input"]'
 - tapOn: "Create one"
 
 # Fresh user per run — randomness via timestamp keeps reruns isolated.
 - inputText:
-    id: "email-input"
+    css: '[data-testid="email-input"]'
     text: "maestro-${MAESTRO_RUN_ID}@maestro.test"
 - inputText:
-    id: "password-input"
+    css: '[data-testid="password-input"]'
     text: ${MAESTRO_FIXTURE_PASSWORD}
 - tapOn: "Create account"
 
@@ -33,7 +33,7 @@ appId: "campable.co"
 - assertNotVisible: "Sign in"
 
 # Drive to /pricing and start checkout
-- launchUrl: ${MAESTRO_BASE_URL}/pricing
+- openLink: ${MAESTRO_BASE_URL}/pricing
 - tapOn: "Upgrade to Pro"
 
 # Stripe Checkout iframe — fields validated via Phase 0 spike.
@@ -52,6 +52,6 @@ appId: "campable.co"
 - tapOn: "Subscribe"
 
 # After webhook fires + redirect, header shows the Pro badge.
-- assertVisible:
-    text: "Pro"
+- extendedWaitUntil:
+    visible: "Pro"
     timeout: 60000
