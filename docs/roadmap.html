@@ -640,14 +640,14 @@
           <div class="card-body">
             <div class="section-heading">Features</div>
             <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-XS">XS</span><span><span class="feature-name">Maestro CLI + Cloud setup</span> · <span class="feature-text">Reuse existing Being account; .maestro/ directory with config + env</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-XS">XS</span><span><span class="feature-name">Maestro CLI setup (self-hosted, free)</span> · <span class="feature-text">.maestro/ directory with config + env. Runs via Maestro CLI in GitHub Actions ($0/mo — uses existing CI minutes). Skip Maestro Cloud until revenue exists.</span></span></li>
               <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Flow 1 — Upgrade smoke test</span> · <span class="feature-text">Anonymous → signup → /pricing → Upgrade → Stripe Checkout (4242) → assert PRO badge. Single flow catches CSP, env var, modal-width, useAuth race bugs.</span></span></li>
               <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Flow 2 — Watch limit smoke test</span> · <span class="feature-text">3 watches OK → 4th → assert UpgradeModal opens with reason=watch_limit</span></span></li>
               <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Flow 3 — Planner limit smoke test</span> · <span class="feature-text">3 planner sessions OK → 4th → assert UpgradeModal opens with reason=planner_limit</span></span></li>
               <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Flow 4 — Cancel + reactivate</span> · <span class="feature-text">Pro → Manage billing → Cancel → assert expires_at countdown → Reactivate → assert countdown removed. Webhook → DB → UI loop validation.</span></span></li>
               <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Staging URL strategy</span> · <span class="feature-text">Fly preview branches per PR (auto-deployed, isolated DB) OR dedicated staging.campable.co. Never against production.</span></span></li>
               <li><span class="feature-status">○</span><span class="size-badge size-XS">XS</span><span><span class="feature-name">Email confirmation toggle</span> · <span class="feature-text">Supabase staging project → confirmation off so tests sign in without inbox round-trip</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">CI integration</span> · <span class="feature-text">Maestro Cloud on every PR (smoke test, ~2min) + nightly (full suite). Failures surface in PR checks.</span></span></li>
+              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">CI integration</span> · <span class="feature-text">GitHub Actions job installs Maestro CLI; runs smoke flow per PR (~2min) + nightly cron for full suite. Failures upload screenshot artifacts. $0/mo.</span></span></li>
             </ul>
             <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
             <div class="progress-meta"><span>0 of 8 features</span><span>~2-3 days realistic effort</span></div>
@@ -655,7 +655,7 @@
               <summary>Key Risks</summary>
               <ul class="risks-list">
                 <li>Maestro Web maturity gap vs Playwright — run a 30-min iframe-interaction spike before committing</li>
-                <li>Staging infra cost — Fly preview branches auto-suspend; Maestro Cloud has solo-project tier. Target: &lt; $30/mo total</li>
+                <li>Staging infra cost — Fly preview branches auto-suspend ($0 standing); Maestro runs in self-hosted GitHub Actions ($0); total target: $0/mo until revenue. Revisit Maestro Cloud once it&rsquo;s covered 2-3× by monthly Pro subscriptions.</li>
                 <li>Test account email collision — use maestro-{uuid}@example.com per run; optional Supabase admin cleanup</li>
                 <li>Flow brittleness from Stripe Checkout UI revs — fix individual flows when they break, don't pre-emptively abstract</li>
                 <li>Live-mode bugs missed by test-mode flows — manual smoke test the first time a live transaction goes through (one-time)</li>

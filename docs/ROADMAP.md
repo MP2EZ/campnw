@@ -1550,20 +1550,22 @@ Stand up end-to-end browser test coverage that mirrors real production failure p
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| Maestro CLI + Cloud account setup | XS | Reuse the existing Being account if convenient. `.maestro/` directory at repo root with config and shared environment vars. |
+| Maestro CLI setup (self-hosted, free) | XS | `.maestro/` directory at repo root with config + shared env. Runs via Maestro CLI in GitHub Actions (uses existing CI minutes, $0/mo). Skip Maestro Cloud until at least one paying Pro subscriber exists. |
 | Flow 1 — Upgrade smoke test | M | Anonymous → signup → /pricing → Upgrade to Pro → Stripe Checkout with `4242 4242 4242 4242` → assert PRO badge in header. Single flow that would have caught the missing VITE_PUBLIC_SUPABASE env vars, the CSP scheme bug, the modal width regression, and the useAuth race. |
 | Flow 2 — Watch limit smoke test | S | Free user → create 3 watches → 4th attempt → assert UpgradeModal opens with reason=watch_limit. Validates the 402 → modal flow. |
 | Flow 3 — Planner limit smoke test | S | Free user → start 3 trip planner sessions → 4th → assert UpgradeModal opens with reason=planner_limit. |
 | Flow 4 — Cancel + reactivate | M | Pro user → Manage billing → Cancel → assert `subscription_expires_at` rendered in BillingSettings → Reactivate → assert "Pro until X" text removed. Webhook → DB → UI loop validation. |
 | Staging URL strategy | S | Fly preview branches per PR (preferred — auto-deployed, real DB, isolated) OR a dedicated `staging.campable.co` Fly app with separate DB volume. Tests don't run against `campable.co` production. |
 | Email confirmation toggle for test | XS | Supabase project → Authentication → Providers → Email → disable "Confirm email" for the staging project so tests can sign in without inbox round-trip. |
-| CI integration | S | Maestro Cloud run on every PR (smoke test only — ~2 min) + nightly run (all flows). Failures surface in PR checks. |
+| CI integration | S | GitHub Actions job that installs Maestro CLI and runs the smoke flow on every PR (~2 min), nightly cron for all flows. Failures live in Actions logs + uploaded screenshot artifacts. No external cloud service. |
 
 ### Architecture Decisions
 
-**Maestro over Playwright/Cypress.** Solo dev already running Maestro on Being for mobile flows. Shared DSL, shared cloud account, shared mental model. The maturity gap on web is real (Maestro Web is newer than Playwright) but cognitive consistency wins for small teams. If we ever scale to a multi-engineer testing team, revisit.
+**Maestro over Playwright/Cypress.** Solo dev already running Maestro on Being for mobile flows. Shared DSL, shared mental model. The maturity gap on web is real (Maestro Web is newer than Playwright) but cognitive consistency wins for small teams. If we ever scale to a multi-engineer testing team, revisit.
 
-**Staging environment, not production.** Tests like "cancel subscription" can't run against real production without polluting metrics (and burning a test user account every cycle). Use Fly preview deployments per PR — each PR gets its own ephemeral URL, isolated DB, isolated Stripe test keys. After PR merges, the preview is torn down automatically.
+**Self-hosted (GitHub Actions), not Maestro Cloud.** $0/mo until revenue exists. Maestro Cloud's parallelism + retained failure screenshots are real wins but cost ~$20/mo (solo tier), which compounds against runway when the app produces zero revenue. GitHub Actions already runs Campable's other CI (test, security, lighthouse, bundle-size); adding a Maestro job uses the same already-paid-for minutes. **Revisit Maestro Cloud once monthly Pro revenue covers it 2-3×** (i.e., 4+ paying subscribers at $5/mo).
+
+**Staging environment, not production.** Tests like "cancel subscription" can't run against real production without polluting metrics (and burning a test user account every cycle). Use Fly preview deployments per PR — each PR gets its own ephemeral URL, isolated DB, isolated Stripe test keys. After PR merges, the preview is torn down automatically. Fly preview branches auto-suspend when idle = $0/mo standing cost.
 
 **Test mode Stripe keys only.** E2E tests never touch live-mode Stripe. The `4242 4242 4242 4242` test card flow is fast, deterministic, and free; live-mode tests would be slow, charge real money, and trigger real fraud detection.
 
@@ -1583,17 +1585,17 @@ Stand up end-to-end browser test coverage that mirrors real production failure p
 - `fly.toml` — preview deploy config (or new `fly.staging.toml` if going the dedicated staging route)
 
 **External config:**
-- Maestro Cloud account (probably already exists for Being)
 - Supabase project for staging (could be the same project with confirmation toggled off, OR a separate staging project — recommended for isolation)
 - Stripe test-mode keys for staging (same keys as current v1.4 production-test-mode setup are fine)
+- No Maestro Cloud account needed (self-hosted via GitHub Actions)
 
 ### Quality Bar
 
 - Smoke test (Flow 1) runs in < 90s end-to-end
 - All four flows pass on `dev` HEAD
-- CI failure includes a screenshot of the failing step
+- CI failure uploads a screenshot of the failing step as a GitHub Actions artifact
 - Each flow uses a fresh randomly-generated test account (no state bleed between runs)
-- Maestro Cloud monthly cost stays under $20 (or self-hosted if budget is tighter)
+- **Monthly infrastructure cost: $0** (GitHub Actions free minutes + Fly preview branches auto-suspend)
 
 ### Dependencies
 
@@ -1606,7 +1608,7 @@ Stand up end-to-end browser test coverage that mirrors real production failure p
 | Risk | Mitigation |
 |------|------------|
 | Maestro Web maturity gap vs Playwright | Run a 30-min spike with the iframe interaction case before committing. If it doesn't work cleanly, fall back to Playwright with the same flow structure — the YAML translates conceptually. |
-| Staging deploys add infra cost | Fly preview branches auto-suspend when idle. Maestro Cloud has a generous free tier for solo projects. Total monthly cost target: < $30. |
+| Staging deploys add infra cost | Fly preview branches auto-suspend when idle ($0 standing cost). Maestro runs via self-hosted GitHub Actions ($0 — uses already-paid CI minutes). Total monthly cost target: $0. Revisit Maestro Cloud only when revenue covers it 2-3×. |
 | Test account email collision | Use `maestro-{random-uuid}@example.com` per run. Optionally clean up via Supabase admin API after test completion. |
 | Flow brittleness from Stripe Checkout UI changes | Stripe's Checkout UI is stable across years but does occasionally rev. If a flow breaks, fix that single flow — don't add wrapper layers that "future-proof" against hypothetical changes. |
 | Live-mode bugs missed by test-mode tests | Test mode covers ~95% of real flows. Risks not covered: real fraud detection, real bank decline codes, real refund processing. These need a manual smoke test the first time a live transaction goes through. |
