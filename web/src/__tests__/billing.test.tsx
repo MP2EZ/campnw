@@ -274,6 +274,75 @@ describe("useBilling", () => {
       );
     });
   });
+
+  test("strips ?billing=success from URL after refresh", async () => {
+    // Stripe Checkout success redirect lands at /?billing=success. The
+    // hook must call refresh() (so PRO badge appears) AND clean the URL
+    // (so a bookmark or share doesn't carry the noise). Without the
+    // cleanup, the badge would still appear but the URL would persist
+    // through navigation, polluting analytics and breaking later
+    // billing=cancelled scenarios that reuse the same param.
+    const originalHistory = window.history.replaceState;
+    const replaceStateMock = vi.fn();
+    Object.defineProperty(window, "history", {
+      value: { ...window.history, replaceState: replaceStateMock },
+      writable: true,
+    });
+    Object.defineProperty(window, "location", {
+      value: {
+        ...window.location,
+        search: "?billing=success",
+        pathname: "/",
+      },
+      writable: true,
+    });
+
+    vi.doMock("../lib/supabase", () => ({
+      supabase: {
+        auth: {
+          getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+        },
+      },
+    }));
+    vi.doMock("../hooks/useAuth", () => ({
+      useAuth: () => ({
+        user: { id: 1, email: "u@x.com", display_name: "U" },
+        loading: false,
+      }),
+    }));
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          subscription_status: "pro",
+          subscription_expires_at: "",
+          has_stripe_customer: true,
+          is_pro: true,
+          watch_limit: null,
+          planner_session_limit: 20,
+          configured: true,
+        }),
+    });
+
+    const { BillingProvider } = await import("../hooks/useBilling");
+    render(
+      <BillingProvider>
+        <div />
+      </BillingProvider>,
+    );
+
+    await waitFor(() => {
+      expect(replaceStateMock).toHaveBeenCalled();
+    });
+    // Newly-replaced URL must not contain the billing=success param
+    const replaceArgs = replaceStateMock.mock.calls[0];
+    expect(replaceArgs[2]).not.toContain("billing=success");
+
+    // Restore
+    Object.defineProperty(window.history, "replaceState", {
+      value: originalHistory,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

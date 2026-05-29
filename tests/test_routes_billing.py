@@ -255,6 +255,50 @@ class TestWebhookEndpoint:
             )
         assert resp.status_code == 500
 
+    def test_handler_crash_preserves_claim_row_for_operator_runbook(
+        self, api_client, monkeypatch,
+    ) -> None:
+        # When a handler crashes AFTER save_stripe_event has claimed the
+        # event_id, the claim row remains in stripe_events even though the
+        # route returns 500. Stripe's retry will be skipped as a duplicate.
+        # The operator runbook (documented in billing.handle_webhook_event)
+        # requires DELETE FROM stripe_events WHERE event_id=? to re-enable
+        # retry. This test locks in the claim-row preservation behaviour
+        # so any future refactor that "fixes" it (e.g., by rolling back
+        # the row on exception) breaks the runbook contract loudly.
+        user_data, headers = signup_and_auth(
+            api_client, email="crashtest@example.com",
+        )
+        import pnw_campsites.api as api_module
+        api_module._watch_db.update_user(
+            user_data["id"], stripe_customer_id="cus_crash",
+        )
+
+        # Inject a real verify_webhook that returns a known event, and
+        # break _handle_subscription_updated AFTER the claim row gets
+        # written by handle_webhook_event.
+        event = {
+            "id": "evt_crash_runbook",
+            "type": "customer.subscription.updated",
+            "data": {
+                "object": {"customer": "cus_crash", "status": "active"},
+            },
+        }
+        with patch(
+            "pnw_campsites.billing.verify_webhook", return_value=event,
+        ), patch(
+            "pnw_campsites.billing._handle_subscription_updated",
+            side_effect=RuntimeError("DB blip mid-handler"),
+        ):
+            resp = api_client.post(
+                "/api/billing/webhook",
+                content=b"{}",
+                headers={"stripe-signature": "t=0,v1=ignored"},
+            )
+        assert resp.status_code == 500
+        # Claim row was inserted before the handler ran → still present
+        assert api_module._watch_db.has_stripe_event("evt_crash_runbook")
+
 
 # ---------------------------------------------------------------------------
 # Watch limit enforcement
