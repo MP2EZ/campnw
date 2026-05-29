@@ -104,6 +104,7 @@ export function AuthModal({
                 placeholder="Optional"
                 maxLength={100}
                 autoComplete="name"
+                data-testid="display-name-input"
               />
             </label>
           )}
@@ -116,6 +117,7 @@ export function AuthModal({
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
+              data-testid="email-input"
             />
           </label>
 
@@ -128,6 +130,7 @@ export function AuthModal({
               required
               minLength={8}
               autoComplete={mode === "login" ? "current-password" : "new-password"}
+              data-testid="password-input"
             />
           </label>
 
