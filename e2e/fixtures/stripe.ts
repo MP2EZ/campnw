@@ -35,15 +35,16 @@ export async function payWithCard(
   // only becomes the action button AFTER the form is filled).
   await page.getByRole("radio", { name: "Card" }).click({ force: true });
 
-  // Card form expands inline. Fields are reachable by their accessible
-  // labels even though they render inside Stripe Elements iframes —
-  // the accessibility tree exposes them at page scope.
-  await page.getByLabel("Card number").fill(values.cardNumber);
-  await page.getByLabel("Expiration").fill(values.cardExpiry);
-  await page.getByLabel("CVC").fill(values.cardCvc);
-  await page.getByLabel("Cardholder name").fill(values.cardholderName);
-  await page.getByLabel("ZIP").fill(values.zip);
-  await page.getByLabel("Phone number").fill(values.phone);
+  // Card form expands inline. Scope to role=textbox so the label match
+  // doesn't accidentally hit info icons or country-code comboboxes that
+  // share label substrings (e.g., a "CVC" info image, a "Phone number
+  // country code" combobox).
+  await page.getByRole("textbox", { name: "Card number" }).fill(values.cardNumber);
+  await page.getByRole("textbox", { name: "Expiration" }).fill(values.cardExpiry);
+  await page.getByRole("textbox", { name: "CVC" }).fill(values.cardCvc);
+  await page.getByRole("textbox", { name: "Cardholder name" }).fill(values.cardholderName);
+  await page.getByRole("textbox", { name: "ZIP" }).fill(values.zip);
+  await page.getByRole("textbox", { name: "Phone number", exact: true }).fill(values.phone);
 
   await page.getByRole("button", { name: "Subscribe" }).click();
 }
