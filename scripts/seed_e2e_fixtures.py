@@ -174,6 +174,43 @@ def ensure_planner_sessions(
         )
 
 
+def ensure_pro_stripe_objects(email: str) -> tuple[str, str]:
+    """Create (or look up) a real test-mode Stripe customer + active
+    subscription so the Pro fixture can drive the Stripe Customer Portal
+    flow (cancel-reactivate.spec.ts). Idempotent: re-running finds the
+    existing customer and active subscription rather than creating dupes.
+    """
+    import stripe
+
+    stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+    price_id = os.environ.get("STRIPE_PRO_PRICE_ID", "")
+    if not price_id or price_id == "price_placeholder_pro_monthly":
+        raise RuntimeError(
+            "STRIPE_PRO_PRICE_ID must be set on staging to seed Pro fixture"
+        )
+
+    # Find existing customer by email; reuse if has active subscription
+    existing = stripe.Customer.list(email=email, limit=10).data
+    for c in existing:
+        subs = stripe.Subscription.list(
+            customer=c.id, status="active", limit=1,
+        ).data
+        if subs:
+            return c.id, subs[0].id
+
+    # Fresh customer with built-in test payment method 'pm_card_visa'
+    customer = stripe.Customer.create(
+        email=email,
+        payment_method="pm_card_visa",
+        invoice_settings={"default_payment_method": "pm_card_visa"},
+    )
+    subscription = stripe.Subscription.create(
+        customer=customer.id,
+        items=[{"price": price_id}],
+    )
+    return customer.id, subscription.id
+
+
 def main() -> int:
     # Bootstrap schema + run migrations by instantiating WatchDB once.
     # On a fresh staging volume the users/watches/planner_sessions tables
@@ -202,13 +239,18 @@ def main() -> int:
             email = f"{PREFIX}{slug}@maestro.test"
             print(f"→ {email} ({status})")
             supabase_id = admin_create_user(email)
+            if status == "pro":
+                stripe_customer_id, subscription_id = ensure_pro_stripe_objects(email)
+                print(f"    stripe: customer={stripe_customer_id[:14]}... sub={subscription_id[:14]}...")
+            else:
+                stripe_customer_id, subscription_id = "", ""
             user_id = upsert_user(
                 conn,
                 email,
                 supabase_id,
                 subscription_status=status,
-                stripe_customer_id="cus_e2e_fixture_pro" if status == "pro" else "",
-                subscription_id="sub_e2e_fixture_pro" if status == "pro" else "",
+                stripe_customer_id=stripe_customer_id,
+                subscription_id=subscription_id,
                 subscription_expires_at=PRO_EXPIRES if status == "pro" else "",
             )
             if watch_count:

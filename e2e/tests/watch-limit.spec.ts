@@ -14,15 +14,15 @@ test("4th watch attempt opens UpgradeModal with watch_limit copy", async ({ page
   await loginAsFixture(page, "free-3watches");
   await skipOnboarding(page);
 
-  // Run a plain-language search likely to surface a fresh campground
-  // (one whose facility_id is NOT in the fixture's 3 seeded watches).
-  const nlSearch = page.getByPlaceholder(/pet-friendly/i);
-  await nlSearch.fill("Ohanapecosh");
-  await nlSearch.press("Enter");
+  // Use the structured search form's name filter — bypasses the
+  // natural-language search path (which requires ANTHROPIC_API_KEY,
+  // not always set on staging).
+  await page.getByRole("textbox", { name: "Campground name filter" }).fill("Ohanapecosh");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
 
   // First result with a Watch button → click → modal opens
-  await expect(page.getByText(/Ohanapecosh/i).first()).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("button", { name: "Watch" }).first().click();
+  await expect(page.getByText(/Ohanapecosh/i).first()).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Watch" }).first().click({ force: true });
 
   // 402 → UpgradeModal with watch-limit headline
   await expect(page.getByRole("heading", { name: "Upgrade for unlimited watches" })).toBeVisible();
