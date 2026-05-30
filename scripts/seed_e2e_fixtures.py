@@ -113,11 +113,13 @@ def upsert_user(
         "SELECT id FROM users WHERE email = ?", (email,)
     ).fetchone()
     if row is None:
+        # Pre-set onboarding_complete=1 so fixture users skip the welcome
+        # modal — eliminates a flaky race in fixture-based tests.
         cur = conn.execute(
             "INSERT INTO users (email, password_hash, supabase_id, "
             "subscription_status, stripe_customer_id, subscription_id, "
-            "subscription_expires_at, created_at) "
-            "VALUES (?, '', ?, ?, ?, ?, ?, ?)",
+            "subscription_expires_at, created_at, onboarding_complete) "
+            "VALUES (?, '', ?, ?, ?, ?, ?, ?, 1)",
             (email, supabase_id, subscription_status, stripe_customer_id,
              subscription_id, subscription_expires_at, NOW_ISO),
         )
