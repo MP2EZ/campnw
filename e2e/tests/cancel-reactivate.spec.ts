@@ -34,9 +34,12 @@ test("New Pro user can cancel and reactivate via Customer Portal", async ({ page
   await page.getByRole("button", { name: "Manage billing" }).click();
   await expect(page).toHaveURL(/billing\.stripe\.com/, { timeout: 30_000 });
 
-  await page.getByRole("button", { name: /Cancel plan/i }).click();
-  await page.getByRole("button", { name: /Cancel subscription/i }).click();
-  await expect(page.getByText(/Subscription canceled/i)).toBeVisible();
+  // Stripe Portal button text is "Cancel subscription" (verified via
+  // DevTools MCP). First click opens a confirmation modal; second
+  // click in the modal confirms.
+  await page.getByRole("button", { name: "Cancel subscription", exact: true }).click();
+  await page.getByRole("button", { name: /Cancel subscription/i }).last().click();
+  await expect(page.getByText(/(Subscription canceled|cancellation scheduled)/i)).toBeVisible({ timeout: 15_000 });
 
   // Step 3: back to campable — assert "Pro until <date>" copy
   await page.goto("/");
@@ -47,8 +50,8 @@ test("New Pro user can cancel and reactivate via Customer Portal", async ({ page
   // Step 4: reactivate via Portal
   await page.getByRole("button", { name: "Manage billing" }).click();
   await expect(page).toHaveURL(/billing\.stripe\.com/, { timeout: 30_000 });
-  await page.getByRole("button", { name: /Renew plan/i }).click();
-  await page.getByRole("button", { name: /Confirm/i }).click();
+  await page.getByRole("button", { name: /(Renew subscription|Renew plan|Continue)/i }).first().click();
+  await page.getByRole("button", { name: /(Renew subscription|Confirm|Continue|Reactivate)/i }).last().click();
 
   // Step 5: back to campable — "Pro until" text should be gone
   await page.goto("/");
