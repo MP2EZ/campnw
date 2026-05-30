@@ -38,12 +38,14 @@ export async function signupFresh(
   await page.getByTestId("password-input").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  // Wait for the modal to close (onClose() fires inside AuthModal's
-  // handleSubmit success path). The dialog locator is unambiguous;
-  // `getByRole("button", { name: "Sign in" })` matches both the header
-  // trigger AND the auth-switch-btn during signup mode, which trips
-  // Playwright's strict-mode locator uniqueness check.
-  await expect(page.getByRole("dialog")).toBeHidden({ timeout: 30_000 });
+  // Wait for the AUTH modal specifically to close. After successful
+  // signup, an onboarding "Welcome to campable" modal immediately
+  // opens — also role=dialog — so an unscoped dialog selector never
+  // sees an empty state. Match by accessible name.
+  await expect(
+    page.getByRole("dialog", { name: /Sign in|Create account/ }),
+  ).toBeHidden({ timeout: 30_000 });
+  await skipOnboarding(page);
   return email;
 }
 
@@ -63,7 +65,10 @@ export async function loginAsFixture(
   await page.getByTestId("password-input").fill(FIXTURE_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).last().click();
 
-  await expect(page.getByRole("dialog")).toBeHidden({ timeout: 30_000 });
+  await expect(
+    page.getByRole("dialog", { name: /Sign in|Create account/ }),
+  ).toBeHidden({ timeout: 30_000 });
+  await skipOnboarding(page);
 }
 
 /**
