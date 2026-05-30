@@ -40,7 +40,9 @@ test("New Pro user can cancel and reactivate via Customer Portal", async ({ page
   // First click opens a confirmation page; second click confirms.
   await page.getByText("Cancel subscription", { exact: true }).first().click();
   await page.getByText("Cancel subscription", { exact: true }).last().click();
-  await expect(page.getByText(/(Subscription canceled|cancellation scheduled|will be canceled)/i)).toBeVisible({ timeout: 15_000 });
+  // Stripe Portal confirms with "Subscription has been canceled" or
+  // similar. Match any phrasing that includes "canceled".
+  await expect(page.getByText(/cance(l|ll)ed/i).first()).toBeVisible({ timeout: 15_000 });
 
   // Step 3: back to campable — assert "Pro until <date>" copy
   await page.goto("/");

@@ -24,7 +24,8 @@ test("4th watch attempt opens UpgradeModal with watch_limit copy", async ({ page
 
   // First result with a Watch button → click → modal opens
   await expect(page.getByText(/Ohanapecosh/i).first()).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Watch" }).first().click({ force: true });
+  // exact:true so we don't accidentally match the header's "Watchlist" button
+  await page.getByRole("button", { name: "Watch", exact: true }).first().click({ force: true });
 
   // 402 → UpgradeModal with watch-limit headline
   await expect(page.getByRole("heading", { name: "Upgrade for unlimited watches" })).toBeVisible();
