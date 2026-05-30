@@ -38,8 +38,12 @@ export async function signupFresh(
   await page.getByTestId("password-input").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  // Modal closes on success; Sign in button disappears from the header.
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeHidden();
+  // Wait for the modal to close (onClose() fires inside AuthModal's
+  // handleSubmit success path). The dialog locator is unambiguous;
+  // `getByRole("button", { name: "Sign in" })` matches both the header
+  // trigger AND the auth-switch-btn during signup mode, which trips
+  // Playwright's strict-mode locator uniqueness check.
+  await expect(page.getByRole("dialog")).toBeHidden({ timeout: 30_000 });
   return email;
 }
 
@@ -59,7 +63,7 @@ export async function loginAsFixture(
   await page.getByTestId("password-input").fill(FIXTURE_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).last().click();
 
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeHidden();
+  await expect(page.getByRole("dialog")).toBeHidden({ timeout: 30_000 });
 }
 
 /**
