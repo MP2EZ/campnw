@@ -13,9 +13,12 @@ import { payWithCard, waitForProBadge } from "../fixtures/stripe";
  */
 test("anonymous signup → upgrade → assert PRO badge", async ({ page }) => {
   await signupFresh(page, { displayName: "E2E Smoke" });
+
+  // Onboarding modal appears on first navigation post-signup — dismiss
+  // it AFTER goto so the page has actually rendered the modal.
+  await page.goto("/pricing");
   await skipOnboarding(page);
 
-  await page.goto("/pricing");
   await page.getByRole("button", { name: "Upgrade to Pro" }).click();
 
   // Stripe Checkout redirect — wait for the Checkout origin
