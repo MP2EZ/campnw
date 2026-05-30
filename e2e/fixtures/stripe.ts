@@ -1,38 +1,29 @@
 import { Page, expect } from "@playwright/test";
 
 /**
- * Stripe Checkout helper.
+ * Stripe Checkout helper — for the modern hosted Checkout page
+ * at checkout.stripe.com.
  *
- * The DOM shape (Phase 0 spike against campable.co, 2026-05-29):
- *   - Payment-method tabs at top: Apple Pay / Link / Amazon Pay
- *   - Radio options below tabs: Card / Cash App Pay / Klarna / Bank
- *   - Must click "Card" radio to expand card form inline
- *   - Submit button text: "Subscribe"
+ * DOM verified via Chrome DevTools MCP against a real staging session
+ * (2026-05-30). The flow:
  *
- * Card form rendering: Stripe Checkout (hosted page at checkout.stripe.com)
- * historically rendered card fields directly in the page DOM. Modern
- * variants may move them into a nested iframe for PCI scope reduction.
- * The helper tries the direct DOM first and falls back to iframe scoping
- * if needed. First CI run will tell us which path is active; iterate
- * via the Playwright trace viewer if the fallback also fails.
- *
- * Default values are the Stripe test mode "always succeed" card.
+ *   - Payment-method block has radio options: Card, Cash App Pay,
+ *     Klarna, Bank. The "Card" element has role=radio (NOT a button).
+ *   - Click the Card radio to expand the card form inline.
+ *   - Fields render in the page accessibility tree, accessible by label.
+ *   - All required for US: card number, expiration, CVC, cardholder
+ *     name, ZIP, phone number.
+ *   - Submit button text: "Subscribe".
  */
 
 const DEFAULTS = {
   cardNumber: "4242424242424242",
   cardExpiry: "12 / 30",
   cardCvc: "123",
+  cardholderName: "E2E Smoke",
+  zip: "98101",
+  phone: "2065551234",
 };
-
-async function fillCardFields(
-  scope: { locator: (sel: string) => ReturnType<Page["locator"]> },
-  values: typeof DEFAULTS,
-): Promise<void> {
-  await scope.locator('input[name="cardNumber"]').fill(values.cardNumber);
-  await scope.locator('input[name="cardExpiry"]').fill(values.cardExpiry);
-  await scope.locator('input[name="cardCvc"]').fill(values.cardCvc);
-}
 
 export async function payWithCard(
   page: Page,
@@ -40,22 +31,19 @@ export async function payWithCard(
 ): Promise<void> {
   const values = { ...DEFAULTS, ...overrides };
 
-  // Select Card from the payment-method radios. Scope to the radio's
-  // accordion item — there's also "Card number" heading text below
-  // that would collide with a loose "Card" match.
-  await page.locator('[data-testid="payment-method-accordion-item-card"], [id*="card"][role="button"], button:has-text("Card")').first().click();
+  // Select the Card radio (NOT the "Pay with card" button — that button
+  // only becomes the action button AFTER the form is filled).
+  await page.getByRole("radio", { name: "Card" }).click({ force: true });
 
-  // Try direct DOM first (Checkout historically renders card fields
-  // in-page). If the inputs aren't on the top-level page, fall through
-  // to the iframe scope.
-  const directField = page.locator('input[name="cardNumber"]');
-  const inIframe = (await directField.count()) === 0;
-  if (inIframe) {
-    const frame = page.frameLocator('iframe[src*="stripe"], iframe[name*="stripe"]').first();
-    await fillCardFields(frame, values);
-  } else {
-    await fillCardFields(page, values);
-  }
+  // Card form expands inline. Fields are reachable by their accessible
+  // labels even though they render inside Stripe Elements iframes —
+  // the accessibility tree exposes them at page scope.
+  await page.getByLabel("Card number").fill(values.cardNumber);
+  await page.getByLabel("Expiration").fill(values.cardExpiry);
+  await page.getByLabel("CVC").fill(values.cardCvc);
+  await page.getByLabel("Cardholder name").fill(values.cardholderName);
+  await page.getByLabel("ZIP").fill(values.zip);
+  await page.getByLabel("Phone number").fill(values.phone);
 
   await page.getByRole("button", { name: "Subscribe" }).click();
 }

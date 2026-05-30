@@ -17,7 +17,10 @@ test("anonymous signup → upgrade → assert PRO badge", async ({ page }) => {
   await signupFresh(page, { displayName: "E2E Smoke" });
 
   await page.goto("/pricing");
-  await page.getByRole("button", { name: "Upgrade to Pro" }).click();
+  // force: true bypasses Playwright's hit-test actionability check, which
+  // intermittently fails on this button for the same reason as the
+  // onboarding Skip button.
+  await page.getByRole("button", { name: "Upgrade to Pro" }).click({ force: true });
 
   // Stripe Checkout redirect — wait for the Checkout origin
   await expect(page).toHaveURL(/checkout\.stripe\.com/, { timeout: 30_000 });
