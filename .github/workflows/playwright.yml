@@ -77,11 +77,13 @@ jobs:
       - name: Seed E2E fixtures
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          E2E_FIXTURE_PASSWORD: ${{ secrets.E2E_FIXTURE_PASSWORD }}
         run: |
-          flyctl ssh console -a "$STAGING_APP" -C "python scripts/seed_e2e_fixtures.py" \
-            -e SUPABASE_URL="${{ secrets.VITE_PUBLIC_SUPABASE_URL }}" \
-            -e SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -e E2E_FIXTURE_PASSWORD="${{ secrets.E2E_FIXTURE_PASSWORD }}"
+          # SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are already Fly
+          # secrets on campnw-staging (mirrored from prod/.env). Only
+          # E2E_FIXTURE_PASSWORD needs to be passed inline.
+          flyctl ssh console -a "$STAGING_APP" \
+            -C "env E2E_FIXTURE_PASSWORD='$E2E_FIXTURE_PASSWORD' python scripts/seed_e2e_fixtures.py"
 
       - name: Install Playwright + browser
         working-directory: e2e
@@ -151,11 +153,13 @@ jobs:
       - name: Seed E2E fixtures
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          E2E_FIXTURE_PASSWORD: ${{ secrets.E2E_FIXTURE_PASSWORD }}
         run: |
-          flyctl ssh console -a "$STAGING_APP" -C "python scripts/seed_e2e_fixtures.py" \
-            -e SUPABASE_URL="${{ secrets.VITE_PUBLIC_SUPABASE_URL }}" \
-            -e SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -e E2E_FIXTURE_PASSWORD="${{ secrets.E2E_FIXTURE_PASSWORD }}"
+          # SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are already Fly
+          # secrets on campnw-staging (mirrored from prod/.env). Only
+          # E2E_FIXTURE_PASSWORD needs to be passed inline.
+          flyctl ssh console -a "$STAGING_APP" \
+            -C "env E2E_FIXTURE_PASSWORD='$E2E_FIXTURE_PASSWORD' python scripts/seed_e2e_fixtures.py"
 
       - name: Install Playwright + browser
         working-directory: e2e
