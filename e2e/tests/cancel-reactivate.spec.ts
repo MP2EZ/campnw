@@ -53,8 +53,9 @@ test("New Pro user can cancel and reactivate via Customer Portal", async ({ page
   // Step 4: reactivate via Portal
   await page.getByRole("button", { name: "Manage billing" }).click();
   await expect(page).toHaveURL(/billing\.stripe\.com/, { timeout: 30_000 });
-  await page.getByText(/(Renew subscription|Renew plan|Reactivate)/i).first().click();
-  await page.getByText(/(Renew subscription|Confirm|Reactivate)/i).last().click();
+  // Stripe Portal reactivation button text varies — match permissively
+  await page.getByText(/(Renew|Reactivate|Resume|Don.t cancel|Continue your)/i).first().click();
+  await page.getByText(/(Renew|Reactivate|Resume|Continue|Confirm)/i).last().click();
 
   // Step 5: back to campable — "Pro until" text should be gone
   await page.goto("/");

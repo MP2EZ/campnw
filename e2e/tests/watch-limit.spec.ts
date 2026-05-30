@@ -22,10 +22,16 @@ test("4th watch attempt opens UpgradeModal with watch_limit copy", async ({ page
   await page.getByRole("textbox", { name: "Campground name filter" }).fill("Ohanapecosh");
   await page.getByRole("button", { name: "Search", exact: true }).click();
 
-  // First result with a Watch button → click → modal opens
-  await expect(page.getByText(/Ohanapecosh/i).first()).toBeVisible({ timeout: 30_000 });
-  // exact:true so we don't accidentally match the header's "Watchlist" button
-  await page.getByRole("button", { name: "Watch", exact: true }).first().click({ force: true });
+  // Wait until the search has completed (the "Checked N campgrounds"
+  // status appears regardless of whether results came back).
+  await expect(page.getByText(/Checked \d+ campground/i)).toBeVisible({ timeout: 30_000 });
+
+  // Use the "Watch this search" CTA which creates a watch from the
+  // search params themselves — works even when search returned 0
+  // matching availability (Ohanapecosh often has 0 free sites). The
+  // backend's watch-creation 402 fires regardless of how the watch
+  // was constructed.
+  await page.getByRole("button", { name: "Watch this search" }).click({ force: true });
 
   // 402 → UpgradeModal with watch-limit headline
   await expect(page.getByRole("heading", { name: "Upgrade for unlimited watches" })).toBeVisible();
