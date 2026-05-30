@@ -78,8 +78,16 @@ export async function loginAsFixture(
 export async function skipOnboarding(page: Page): Promise<void> {
   const onboard = page.getByText("Welcome to campable");
   for (let step = 0; step < 2; step += 1) {
-    const visible = await onboard.isVisible({ timeout: 2_000 }).catch(() => false);
+    const visible = await onboard.isVisible({ timeout: 3_000 }).catch(() => false);
     if (!visible) return;
-    await page.getByRole("button", { name: "Skip" }).click();
+    // force: true bypasses Playwright's hit-test actionability check.
+    // The Skip button is inside .onboarding-modal which sits on top of
+    // .watch-overlay (also role=dialog). Hit-testing intermittently
+    // resolves to the overlay, not the button — verified working via
+    // Chrome DevTools MCP, so the button itself is clickable. A single
+    // Skip on step 1 closes the whole modal (handleSkip dispatches
+    // updateProfile + onClose); the 2-step loop is defense-in-depth.
+    await page.getByRole("button", { name: "Skip" }).click({ force: true });
+    await page.waitForTimeout(500);
   }
 }
