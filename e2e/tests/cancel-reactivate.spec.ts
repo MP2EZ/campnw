@@ -53,9 +53,10 @@ test("New Pro user can cancel and reactivate via Customer Portal", async ({ page
   // Step 4: reactivate via Portal
   await page.getByRole("button", { name: "Manage billing" }).click();
   await expect(page).toHaveURL(/billing\.stripe\.com/, { timeout: 30_000 });
-  // Stripe Portal reactivation button text varies — match permissively
+  // Stripe Portal reactivation: a single click usually fires the
+  // mutation directly (button changes to 'Renewing…' loading state).
+  // No confirmation modal needed in the modern Portal.
   await page.getByText(/(Renew|Reactivate|Resume|Don.t cancel|Continue your)/i).first().click();
-  await page.getByText(/(Renew|Reactivate|Resume|Continue|Confirm)/i).last().click();
 
   // Step 5: back to campable — "Pro until" text should be gone
   await page.goto("/");

@@ -16,22 +16,17 @@ test("4th watch attempt opens UpgradeModal with watch_limit copy", async ({ page
   // modal re-appears after some action on the landing page.
   await skipOnboarding(page);
 
-  // Use the structured search form's name filter — bypasses the
-  // natural-language search path (which requires ANTHROPIC_API_KEY,
-  // not always set on staging).
-  await page.getByRole("textbox", { name: "Campground name filter" }).fill("Ohanapecosh");
+  // Use the structured search form (no name filter) so we get a broad
+  // result set with actual per-campground Watch buttons. Default state
+  // (Seattle/WA, ~30 days) reliably returns multiple results with
+  // availability and per-result Watch buttons.
   await page.getByRole("button", { name: "Search", exact: true }).click();
 
-  // Wait until the search has completed (the "Checked N campgrounds"
-  // status appears regardless of whether results came back).
-  await expect(page.getByText(/Checked \d+ campground/i)).toBeVisible({ timeout: 30_000 });
-
-  // Use the "Watch this search" CTA which creates a watch from the
-  // search params themselves — works even when search returned 0
-  // matching availability (Ohanapecosh often has 0 free sites). The
-  // backend's watch-creation 402 fires regardless of how the watch
-  // was constructed.
-  await page.getByRole("button", { name: "Watch this search" }).click({ force: true });
+  // Wait for results to load. Per-result "Watch" buttons appear when
+  // at least one campground has availability.
+  const watchBtn = page.getByRole("button", { name: "Watch", exact: true }).first();
+  await watchBtn.waitFor({ state: "visible", timeout: 45_000 });
+  await watchBtn.click({ force: true });
 
   // 402 → UpgradeModal with watch-limit headline
   await expect(page.getByRole("heading", { name: "Upgrade for unlimited watches" })).toBeVisible();
