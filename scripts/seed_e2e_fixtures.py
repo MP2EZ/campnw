@@ -96,7 +96,7 @@ def upsert_user(
     subscription_status: str = "free",
     stripe_customer_id: str = "",
     subscription_id: str = "",
-    subscription_expires_at: str | None = None,
+    subscription_expires_at: str = "",
 ) -> int:
     row = conn.execute(
         "SELECT id FROM users WHERE email = ?", (email,)
@@ -191,7 +191,7 @@ def main() -> int:
                 subscription_status=status,
                 stripe_customer_id="cus_e2e_fixture_pro" if status == "pro" else "",
                 subscription_id="sub_e2e_fixture_pro" if status == "pro" else "",
-                subscription_expires_at=PRO_EXPIRES if status == "pro" else None,
+                subscription_expires_at=PRO_EXPIRES if status == "pro" else "",
             )
             if watch_count:
                 ensure_watches(conn, user_id, watch_count)
