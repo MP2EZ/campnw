@@ -30,6 +30,12 @@ env:
   STAGING_APP: campnw-staging
   STAGING_URL: https://campnw-staging.fly.dev
 
+# Serialize concurrent runs — they share one Fly staging app, and two
+# parallel deploys race on the same machine.
+concurrency:
+  group: playwright-staging
+  cancel-in-progress: false
+
 jobs:
   smoke:
     if: github.event_name == 'pull_request'
@@ -111,10 +117,14 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: dev
+        # No explicit ref — defaults to github.ref. For schedule that's
+        # the default branch (dev); for workflow_dispatch it's whatever
+        # branch the dispatch targeted.
 
       - uses: actions/setup-node@v4
         with:
