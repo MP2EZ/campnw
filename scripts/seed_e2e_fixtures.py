@@ -215,7 +215,22 @@ def main() -> int:
                 ensure_watches(conn, user_id, watch_count)
             if planner_count:
                 ensure_planner_sessions(conn, user_id, planner_count)
+            # DIAGNOSTIC: read back the row immediately to confirm INSERT
+            # actually wrote the expected subscription_status.
+            verify = conn.execute(
+                "SELECT id, substr(supabase_id, 1, 8), subscription_status FROM users WHERE email = ?",
+                (email,),
+            ).fetchone()
+            print(f"    verified: id={verify[0]} sup_id={verify[1]}... status={verify[2]}")
         conn.commit()
+        # DIAGNOSTIC: verify rows still have expected status AFTER commit
+        for slug, status, _, _ in fixtures:
+            email = f"{PREFIX}{slug}@maestro.test"
+            verify = conn.execute(
+                "SELECT id, substr(supabase_id, 1, 8), subscription_status FROM users WHERE email = ?",
+                (email,),
+            ).fetchone()
+            print(f"    post-commit {slug}: id={verify[0] if verify else None} sup_id={verify[1] + '...' if verify else None} status={verify[2] if verify else None}")
     finally:
         conn.close()
     print("✓ E2E fixtures seeded")
