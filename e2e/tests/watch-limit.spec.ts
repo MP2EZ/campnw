@@ -12,6 +12,8 @@ import { loginAsFixture, skipOnboarding } from "../fixtures/auth";
  */
 test("4th watch attempt opens UpgradeModal with watch_limit copy", async ({ page }) => {
   await loginAsFixture(page, "free-3watches");
+  // skipOnboarding called inside loginAsFixture; call again in case the
+  // modal re-appears after some action on the landing page.
   await skipOnboarding(page);
 
   // Use the structured search form's name filter — bypasses the

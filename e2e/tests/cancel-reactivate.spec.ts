@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { signupFresh } from "../fixtures/auth";
+import { signupFresh, skipOnboarding } from "../fixtures/auth";
 import { payWithCard, waitForProBadge } from "../fixtures/stripe";
 
 /**
@@ -23,6 +23,7 @@ test("New Pro user can cancel and reactivate via Customer Portal", async ({ page
   // Step 1: signup + upgrade (same as smoke flow)
   await signupFresh(page, { displayName: "E2E Cancel" });
   await page.goto("/pricing");
+  await skipOnboarding(page);
   await page.getByRole("button", { name: "Upgrade to Pro" }).click({ force: true });
   await expect(page).toHaveURL(/checkout\.stripe\.com/, { timeout: 30_000 });
   await payWithCard(page);

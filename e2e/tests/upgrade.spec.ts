@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { signupFresh, skipOnboarding } from "../fixtures/auth";
+
 import { payWithCard, waitForProBadge } from "../fixtures/stripe";
 
 /**
@@ -17,9 +18,10 @@ test("anonymous signup → upgrade → assert PRO badge", async ({ page }) => {
   await signupFresh(page, { displayName: "E2E Smoke" });
 
   await page.goto("/pricing");
+  // Onboarding can re-trigger after navigation; dismiss again.
+  await skipOnboarding(page);
   // force: true bypasses Playwright's hit-test actionability check, which
-  // intermittently fails on this button for the same reason as the
-  // onboarding Skip button.
+  // intermittently fails on this button.
   await page.getByRole("button", { name: "Upgrade to Pro" }).click({ force: true });
 
   // Stripe Checkout redirect — wait for the Checkout origin

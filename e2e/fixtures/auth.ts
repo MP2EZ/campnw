@@ -76,19 +76,15 @@ export async function loginAsFixture(
  * before they can navigate to /pricing. No-op if the modal isn't visible.
  */
 export async function skipOnboarding(page: Page): Promise<void> {
-  // Onboarding modal appears AFTER /api/auth/me returns. Race condition
-  // between auth modal close and onboarding modal render — modal may
-  // not be visible immediately, may pop up a few seconds later.
-  // Extended probe to 10s to absorb that variance.
+  // Onboarding modal appears after /api/auth/me returns + BillingProvider
+  // sync — can be 5-15s after auth modal closes, and can re-trigger
+  // after navigation. This helper is safe to call multiple times.
   const onboard = page.getByText("Welcome to campable");
   for (let step = 0; step < 2; step += 1) {
-    const visible = await onboard.isVisible({ timeout: 10_000 }).catch(() => false);
+    const visible = await onboard.isVisible({ timeout: 15_000 }).catch(() => false);
     if (!visible) return;
-    // force: true bypasses Playwright's hit-test actionability check.
-    // The Skip button is inside .onboarding-modal which sits on top of
-    // .watch-overlay (also role=dialog). Hit-testing intermittently
-    // resolves to the overlay, not the button.
     await page.getByRole("button", { name: "Skip" }).click({ force: true });
-    await page.waitForTimeout(500);
+    // Wait for the modal to actually go away before next iteration
+    await onboard.waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
   }
 }
