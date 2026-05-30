@@ -73,19 +73,30 @@ def admin_create_user(email: str) -> str:
     except HTTPError as e:
         if e.code != 422:
             raise
-        lookup = urlrequest.Request(
-            f"{SUPABASE_URL}/auth/v1/admin/users?email={email}",
-            headers={
-                "apikey": SERVICE_ROLE,
-                "Authorization": f"Bearer {SERVICE_ROLE}",
-            },
-        )
-        with urlrequest.urlopen(lookup) as resp:
-            body = json.loads(resp.read())
-        users = body.get("users", [])
-        if not users:
-            raise RuntimeError(f"User {email} exists per 422 but not findable")
-        return users[0]["id"]
+        # Supabase Admin GET /admin/users?email=... does NOT filter by
+        # email — it returns the first page of users regardless of the
+        # query param. Paginate and filter client-side instead.
+        page = 1
+        while True:
+            lookup = urlrequest.Request(
+                f"{SUPABASE_URL}/auth/v1/admin/users?page={page}&per_page=200",
+                headers={
+                    "apikey": SERVICE_ROLE,
+                    "Authorization": f"Bearer {SERVICE_ROLE}",
+                },
+            )
+            with urlrequest.urlopen(lookup) as resp:
+                body = json.loads(resp.read())
+            users = body.get("users", [])
+            if not users:
+                break
+            for u in users:
+                if (u.get("email") or "").lower() == email.lower():
+                    return u["id"]
+            if len(users) < 200:
+                break
+            page += 1
+        raise RuntimeError(f"User {email} exists per 422 but not found across pages")
 
 
 def upsert_user(
@@ -179,6 +190,13 @@ def main() -> int:
         ("pro", "pro", 0, 0),
     ]
     conn = sqlite3.connect(DB_PATH)
+
+    # Clean up any pre-existing fixture rows. ON DELETE CASCADE clears
+    # their watches and planner_sessions. Idempotent: no-op on a fresh
+    # volume. Necessary on volumes that ran a buggy pre-2026-05-30
+    # version of this script that wrote rows with wrong supabase_ids.
+    conn.execute(f"DELETE FROM users WHERE email LIKE '{PREFIX}%'")
+    conn.commit()
     try:
         for slug, status, watch_count, planner_count in fixtures:
             email = f"{PREFIX}{slug}@maestro.test"
