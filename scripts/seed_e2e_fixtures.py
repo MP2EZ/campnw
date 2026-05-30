@@ -164,6 +164,15 @@ def ensure_planner_sessions(
 
 
 def main() -> int:
+    # Bootstrap schema + run migrations by instantiating WatchDB once.
+    # On a fresh staging volume the users/watches/planner_sessions tables
+    # don't exist yet — FastAPI normally creates them at startup. The
+    # seed script runs over flyctl ssh without going through FastAPI,
+    # so we trigger the same bootstrap here.
+    from pnw_campsites.monitor.db import WatchDB
+
+    WatchDB(DB_PATH).close()
+
     fixtures = [
         ("free-3watches", "free", 3, 0),
         ("free-3planner", "free", 0, 3),
