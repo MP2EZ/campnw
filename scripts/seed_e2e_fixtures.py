@@ -39,7 +39,7 @@ from urllib.error import HTTPError
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 SERVICE_ROLE = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 PASSWORD = os.environ["E2E_FIXTURE_PASSWORD"]
-DB_PATH = os.environ.get("CAMPABLE_DB_PATH", "/app/data/registry.db")
+DB_PATH = os.environ.get("CAMPABLE_DB_PATH", "/app/data/watches.db")
 PREFIX = os.environ.get("E2E_FIXTURE_PREFIX", "e2e-fixture-")
 
 NOW = datetime.now(timezone.utc)
