@@ -121,7 +121,7 @@ export default function Privacy() {
             Under GDPR (EU/UK) and CCPA (California) you have the right to
             access, correct, delete, or export your data, and to object to
             certain processing. Email{" "}
-            <a href="mailto:hello@palouselabs.com">hello@palouselabs.com</a>{" "}
+            <a href="mailto:hello@campable.co">hello@campable.co</a>{" "}
             and we&rsquo;ll act on it within 30 days. Account deletion is
             also available directly in the user menu.
           </p>
@@ -161,7 +161,7 @@ export default function Privacy() {
           <h2 id="contact-heading">Contact</h2>
           <p>
             Privacy questions or data requests:{" "}
-            <a href="mailto:hello@palouselabs.com">hello@palouselabs.com</a>.
+            <a href="mailto:hello@campable.co">hello@campable.co</a>.
             Replies come from a real human.
           </p>
         </section>

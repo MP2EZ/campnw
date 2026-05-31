@@ -9,7 +9,7 @@ export function Footer() {
           <Link to="/pricing">Pricing</Link>
           <Link to="/privacy">Privacy</Link>
           <Link to="/terms">Terms</Link>
-          <a href="mailto:hello@palouselabs.com">Contact</a>
+          <a href="mailto:hello@campable.co">Contact</a>
         </nav>
         <p className="site-footer-meta">© {new Date().getFullYear()} Campable</p>
       </div>

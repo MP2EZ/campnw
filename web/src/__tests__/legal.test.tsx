@@ -43,11 +43,11 @@ describe("Privacy page", () => {
   test("links to the support email", () => {
     renderPage(<Privacy />);
     const mailtos = screen.getAllByRole("link", {
-      name: /hello@palouselabs\.com/i,
+      name: /hello@campable\.co/i,
     });
     expect(mailtos.length).toBeGreaterThan(0);
     expect(mailtos[0].getAttribute("href")).toBe(
-      "mailto:hello@palouselabs.com",
+      "mailto:hello@campable.co",
     );
   });
 });

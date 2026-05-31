@@ -28,7 +28,7 @@ describe("Footer", () => {
         "/pricing",
         "/privacy",
         "/terms",
-        "mailto:hello@palouselabs.com",
+        "mailto:hello@campable.co",
       ]),
     );
   });
