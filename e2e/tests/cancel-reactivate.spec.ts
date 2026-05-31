@@ -53,10 +53,11 @@ test("New Pro user can cancel and reactivate via Customer Portal", async ({ page
   // Step 4: reactivate via Portal
   await page.getByRole("button", { name: "Manage billing" }).click();
   await expect(page).toHaveURL(/billing\.stripe\.com/, { timeout: 30_000 });
-  // Stripe Portal reactivation: tighter regex to actual reactivate
-  // buttons (avoiding "Don't cancel" / "Continue your X" false matches).
-  await page.getByText(/(Renew subscription|Reactivate)/i).first().click();
-  // Wait for the action to complete (Renewing… loading state → final state)
+  // Stripe Portal reactivation: regex must match whatever button initiates
+  // the reactivation. Previous run trace showed the click hit an element
+  // that became <span>Renewing…</span> — broader regex matched it.
+  await page.getByText(/(Renew|Reactivate|Resume|Continue|Don.t cancel)/i).first().click();
+  // Wait for Renewing… loading → finished state
   await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
   await page.waitForTimeout(5000);  // extra buffer for webhook delivery
 
