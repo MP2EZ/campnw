@@ -1639,10 +1639,28 @@ That's the gap v1.41 fills. Five real bugs from v1.4 validation map directly to 
 
 ---
 
-## v1.42 "Site Polish + Legal Footing"
+## v1.42 "Site Polish + Legal Footing" [SHIPPED 2026-05-31]
 
 ### Theme
 Add the site pages v1.4 deferred and that v1.45 (Apple App Store) will require regardless. Privacy Policy + Terms unblock Stripe live-mode review. About + Contact give trust signals that convert fence-sitters on /pricing. Footer ties everything together. ~1-2 days of focused work; the legal text comes from a generator (Termly or similar) and the user customizes the specifics, so most of the effort is page structure + content writing, not legal drafting.
+
+### Post-ship Status (2026-05-31)
+
+**Shipped and deployed.** Three PRs through `feat/chore` → `dev` → `main` release: PR #54 (legal pages + footer + routes + tests), PR #55 (copy pass removing em-dashes and AI-pattern tells from About, Privacy, Terms), PR #56 (support email swap to `hello@campable.co`). Release PR #57 merged into `main` at `4a6352e` triggering Fly deploy. Verified post-deploy: `/privacy`, `/terms`, `/about` all return 200; bundle hash flipped (`index-DMMAvE1u.js` → `index-BpX3omL_.js`); `hello@campable.co` and `site-footer` class present in the served bundle.
+
+**Decisions that diverged from the original entry:**
+- Hand-written legal text instead of Termly. Voice consistency with About/Pricing wins; honest disclosure of actual services (Supabase, Stripe, PostHog, Mapbox, Visual Crossing, Cloudflare, Fly) is more legally defensible than boilerplate "service providers" language.
+- No version string in the footer. `package.json` is `0.0.0` and the site is continuously deployed; the number would be noise.
+- Cloudflare RUM disabled in CF dashboard during this ship since PostHog already captures Core Web Vitals. Removes a beacon the operator wasn't reading and keeps the Privacy disclosure clean (Cloudflare's only listed role is now DNS + TLS).
+- About page was already shipped early (commit `1cd555a`); v1.42 added its missing contact mailto during the copy pass.
+
+**One real bug surfaced and fixed during self-review:** original Privacy draft claimed Google/Apple OAuth, but `useAuth.ts:107` only wires `signInWithPassword` (v1.36 OAuth not yet shipped). Removed the false claim before merge.
+
+**Out-of-code follow-ups (operator-side):**
+- Stripe Dashboard → Settings → Business → Public details: paste `https://campable.co/privacy` + `/terms`, set support email to `hello@campable.co`, support URL `https://campable.co/about`
+- Stripe Dashboard → Settings → Billing → Customer Portal: add Privacy + Terms URLs
+- Test that `hello@campable.co` actually delivers (send from outside, confirm receipt)
+- Stripe live-mode activation (still test-mode keys per v1.4 post-ship notes) when ready to accept real money
 
 Sequencing: realistically wants to happen before live Stripe mode activates (Stripe flags missing Privacy/ToS on subscription products) and before v1.45 (Apple requires a Privacy Policy URL at submission). Can be done in parallel with v1.41 since they touch different surfaces.
 
