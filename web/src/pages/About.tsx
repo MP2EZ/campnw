@@ -61,7 +61,7 @@ export default function About() {
           </p>
           <p>
             If something&rsquo;s broken or could be better, email{" "}
-            <a href="mailto:hello@palouselabs.com">hello@palouselabs.com</a>.
+            <a href="mailto:hello@campable.co">hello@campable.co</a>.
             Replies come from a real human.
           </p>
         </section>

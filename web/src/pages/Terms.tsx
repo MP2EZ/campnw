@@ -43,7 +43,7 @@ export default function Terms() {
           <h2 id="refund-heading">Refund policy</h2>
           <p>
             If Pro isn&rsquo;t doing what you wanted, email{" "}
-            <a href="mailto:hello@palouselabs.com">hello@palouselabs.com</a>{" "}
+            <a href="mailto:hello@campable.co">hello@campable.co</a>{" "}
             within 30 days of charge and we&rsquo;ll refund it without forms
             or follow-up questions. After 30 days, you can cancel in one
             click from the Stripe portal. You won&rsquo;t be charged again,
@@ -131,7 +131,7 @@ export default function Terms() {
           <p>
             Questions about these terms, the refund policy, or anything
             else:{" "}
-            <a href="mailto:hello@palouselabs.com">hello@palouselabs.com</a>.
+            <a href="mailto:hello@campable.co">hello@campable.co</a>.
           </p>
         </section>
       </main>

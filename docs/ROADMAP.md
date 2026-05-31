@@ -1654,7 +1654,7 @@ Sequencing: realistically wants to happen before live Stripe mode activates (Str
 | Privacy Policy (/privacy) | S | Hand-written in Campable voice. See Architecture Decisions for why Termly was rejected. Honest disclosure of every third party that touches user data (Supabase, Stripe, PostHog, Mapbox, Visual Crossing, Cloudflare, Fly), retention policy, and GDPR/CCPA rights. |
 | Terms of Service (/terms) | S | Hand-written. $5/mo subscription terms, explicit 30-day refund policy (per Stripe's preference), liability limit, governing law (Washington), right to terminate abusive accounts. Linked from /pricing. |
 | Footer component | S | New `<Footer>` rendered site-wide outside `<Routes>`. Links: About, Pricing, Privacy, Terms, Contact (mailto). © year only. Version dropped because package.json is 0.0.0 and the site is continuously deployed. |
-| Contact email | XS | `hello@palouselabs.com` already wired. Mailto in footer and on Privacy/Terms contact sections. |
+| Contact email | XS | `hello@campable.co` mailto in footer and on About/Privacy/Terms contact sections. |
 | Stripe Business profile config | XS | Paste Privacy + ToS URLs into Stripe Dashboard → Settings → Public details. Required for live-mode review. |
 | Stripe Customer Portal links | XS | Customer Portal config page → add Terms + Privacy URLs so the cancel/manage flow shows them. |
 | Apple App Store URL prep | XS | Confirm /privacy URL renders in Helmet meta + is reachable for Apple's submission crawler. (v1.45 will actually submit; v1.42 just has the URL ready.) |
