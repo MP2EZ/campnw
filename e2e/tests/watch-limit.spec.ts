@@ -22,9 +22,10 @@ test("4th watch attempt opens UpgradeModal with watch_limit copy", async ({ page
   // availability and per-result Watch buttons.
   await page.getByRole("button", { name: "Search", exact: true }).click();
 
-  // Wait for results to load. Per-result "Watch" buttons appear when
-  // at least one campground has availability.
-  const watchBtn = page.getByRole("button", { name: "Watch", exact: true }).first();
+  // Wait for results to load. The Watch button has class .watch-cta-btn
+  // (more specific than getByRole — the outer result card is ALSO a
+  // button, which can intercept clicks).
+  const watchBtn = page.locator(".watch-cta-btn").first();
   await watchBtn.waitFor({ state: "visible", timeout: 45_000 });
   await watchBtn.click({ force: true });
 
