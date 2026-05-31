@@ -40,13 +40,13 @@ v1.34   [SHIPPED]  Weather Context      — Typical temps + precipitation on sea
 v1.35   [SHIPPED]  Source Photos        — Campground photos from RIDB/RA + SVG postcard placeholder for missing sources
 v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
 v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)
-v1.41   ------->   Maestro E2E          — End-to-end browser flows in Maestro (upgrade, watch limit, planner limit). Shared tooling with Being mobile.
+v1.41   ------->   Playwright E2E       — End-to-end browser flows in Playwright (upgrade, watch limit, planner limit, cancel/reactivate).
 v1.42   ------->   Site Polish + Legal  — About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.
 v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
-Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product (code shipped + validated in Stripe test mode 2026-05-28; live keys + Stripe Customer Portal config still pending — see v1.4 Post-ship Status), v1.41 stands up Maestro E2E coverage (the 5 production bugs hit during v1.4 validation would have been caught by a single upgrade-flow smoke test), v1.42 adds the site pages v1.4 deferred (About + Privacy + Terms + footer — required for Stripe live-mode review and Apple App Store submission), v1.45 wraps the app for iOS + Android via Capacitor (sequenced after v1.4 so monetization is validated on the web before committing to App Store review cycles). v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
+Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product (code shipped + validated in Stripe test mode 2026-05-28; live keys + Stripe Customer Portal config still pending — see v1.4 Post-ship Status), v1.41 stands up Playwright E2E coverage (the 5 production bugs hit during v1.4 validation would have been caught by a single upgrade-flow smoke test — original plan was Maestro Web Beta, pivoted after Phase 0 spike found ~14min iframe lookups; see v1.41 entry), v1.42 adds the site pages v1.4 deferred (About + Privacy + Terms + footer — required for Stripe live-mode review and Apple App Store submission), v1.45 wraps the app for iOS + Android via Capacitor (sequenced after v1.4 so monetization is validated on the web before committing to App Store review cycles). v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -1537,81 +1537,92 @@ Premature monetization — if v1.3 hasn't generated meaningful organic traffic, 
 **Deferred (not blocking ship)**:
 - Grandfather migration script for users with >3 watches at activation time — irrelevant pre-launch with no real users; a small one-shot if any real users land in this state post-launch
 - Announcement email (per v0.95 spec, "one honest email about Pro")
-- v1.41 Maestro E2E suite would have caught 4 of the 5 production bugs above with a single upgrade-flow smoke test (see v1.41 entry)
+- v1.41 Playwright E2E suite would have caught 4 of the 5 production bugs above with a single upgrade-flow smoke test (see v1.41 entry)
 
 ---
 
-## v1.41 "Maestro E2E"
+## v1.41 "Playwright E2E"
 
 ### Theme
-Stand up end-to-end browser test coverage that mirrors real production failure patterns, using Maestro Web (the same DSL already in use for the Being mobile app). A single upgrade-flow smoke test would have caught 4 of the 5 bugs hit during v1.4 validation in seconds rather than hours. Single tool covers campable.co today AND v1.45's Capacitor-wrapped iOS/Android app later — no separate E2E stack to learn or maintain.
+Stand up end-to-end browser test coverage that mirrors real production failure patterns, using Playwright. A single upgrade-flow smoke test would have caught 4 of the 5 bugs hit during v1.4 validation in seconds rather than hours.
+
+Original v1.41 plan chose Maestro Web Beta for cognitive consistency with the Being mobile app. Phase 0 spike against `campable.co` (2026-05-29) validated framework capability — all interaction patterns work — but **each cross-origin Stripe iframe element lookup took ~14 minutes** in Maestro Web Beta 2.6.0. Full upgrade smoke would have run 90+ min/run. Unusable for CI gating. Pivoted to Playwright. Full post-mortem under Architecture Decisions below.
 
 ### Features
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| Maestro CLI setup (self-hosted, free) | XS | `.maestro/` directory at repo root with config + shared env. Runs via Maestro CLI in GitHub Actions (uses existing CI minutes, $0/mo). Skip Maestro Cloud until at least one paying Pro subscriber exists. |
+| Playwright setup (self-hosted, free) | XS | `e2e/` directory at repo root with `package.json`, `playwright.config.ts`, shared fixtures. Runs via `@playwright/test` in GitHub Actions (uses existing CI minutes, $0/mo). |
 | Flow 1 — Upgrade smoke test | M | Anonymous → signup → /pricing → Upgrade to Pro → Stripe Checkout with `4242 4242 4242 4242` → assert PRO badge in header. Single flow that would have caught the missing VITE_PUBLIC_SUPABASE env vars, the CSP scheme bug, the modal width regression, and the useAuth race. |
-| Flow 2 — Watch limit smoke test | S | Free user → create 3 watches → 4th attempt → assert UpgradeModal opens with reason=watch_limit. Validates the 402 → modal flow. |
-| Flow 3 — Planner limit smoke test | S | Free user → start 3 trip planner sessions → 4th → assert UpgradeModal opens with reason=planner_limit. |
-| Flow 4 — Cancel + reactivate | M | Pro user → Manage billing → Cancel → assert `subscription_expires_at` rendered in BillingSettings → Reactivate → assert "Pro until X" text removed. Webhook → DB → UI loop validation. |
-| Staging URL strategy | S | Fly preview branches per PR (preferred — auto-deployed, real DB, isolated) OR a dedicated `staging.campable.co` Fly app with separate DB volume. Tests don't run against `campable.co` production. |
-| Email confirmation toggle for test | XS | Supabase project → Authentication → Providers → Email → disable "Confirm email" for the staging project so tests can sign in without inbox round-trip. |
-| CI integration | S | GitHub Actions job that installs Maestro CLI and runs the smoke flow on every PR (~2 min), nightly cron for all flows. Failures live in Actions logs + uploaded screenshot artifacts. No external cloud service. |
+| Flow 2 — Watch limit smoke test | S | Free user → create 4th watch (3 seeded) → assert UpgradeModal opens with reason=watch_limit. Validates the 402 → modal flow. |
+| Flow 3 — Planner limit smoke test | S | Free user → submit 4th planner prompt (3 sessions seeded this month) → assert UpgradeModal opens with reason=planner_limit. |
+| Flow 4 — Cancel + reactivate | M | Pro user → Manage billing → Stripe Customer Portal → Cancel → assert `subscription_expires_at` rendered in BillingSettings → Reactivate → assert "Pro until X" text removed. Webhook → DB → UI loop validation. |
+| Staging URL strategy | S | Fly preview branches per PR (auto-deployed, real DB, isolated) plus a long-lived `campnw-staging` app for nightly runs. Tests never hit `campable.co` production. |
+| Fixture seeding script | S | `scripts/seed_e2e_fixtures.py` creates 3 fixture users idempotently via Supabase Admin API + SQLite UPSERT. Runs in CI via `flyctl ssh console`. |
+| Email confirmation off in prod Supabase | XS | Already configured (verified during Phase 0 spike). Saved to memory so future sessions don't propose email-verification waits. |
+| CI integration | S | GitHub Actions job (`playwright.yml`) installs Playwright + Chromium and runs the smoke flow on every PR (~60s), nightly cron for all flows. Failures upload Playwright HTML report + trace as artifact. |
 
 ### Architecture Decisions
 
-**Maestro over Playwright/Cypress.** Solo dev already running Maestro on Being for mobile flows. Shared DSL, shared mental model. The maturity gap on web is real (Maestro Web is newer than Playwright) but cognitive consistency wins for small teams. If we ever scale to a multi-engineer testing team, revisit.
+**Playwright after Maestro Web Beta failed Phase 0 perf bar.** Phase 0 spike (2026-05-29) against `campable.co` confirmed Maestro Web 2.6.0 _can_ drive the full flow (signup, tap-then-inputText for React-controlled inputs, onboarding modal skip via `runFlow: when:`, cross-origin Stripe iframe pierce). The fatal finding from `~/.maestro/tests/2026-05-29_130340/maestro.log`: every iframe element lookup took **~14 minutes** (visible in the gap between RUNNING and "Refreshed element" log lines). A complete upgrade flow would have run 90+ min/run — unusable for CI smoke gates. Playwright's `frameLocator` handles cross-origin iframes in <5s. Cognitive-consistency-with-Being argument loses when web tests need a separate tool anyway. **Follow-up:** file upstream perf issue at github.com/mobile-dev-inc/maestro with the log timestamps.
 
-**Self-hosted (GitHub Actions), not Maestro Cloud.** $0/mo until revenue exists. Maestro Cloud's parallelism + retained failure screenshots are real wins but cost ~$20/mo (solo tier), which compounds against runway when the app produces zero revenue. GitHub Actions already runs Campable's other CI (test, security, lighthouse, bundle-size); adding a Maestro job uses the same already-paid-for minutes. **Revisit Maestro Cloud once monthly Pro revenue covers it 2-3×** (i.e., 4+ paying subscribers at $5/mo).
+**Self-hosted (GitHub Actions), not a paid runner.** $0/mo until revenue justifies otherwise. GitHub Actions already runs Campable's other CI (test, security, lighthouse, bundle-size); adding a Playwright job uses the same already-paid-for minutes.
 
-**Staging environment, not production.** Tests like "cancel subscription" can't run against real production without polluting metrics (and burning a test user account every cycle). Use Fly preview deployments per PR — each PR gets its own ephemeral URL, isolated DB, isolated Stripe test keys. After PR merges, the preview is torn down automatically. Fly preview branches auto-suspend when idle = $0/mo standing cost.
+**Staging environment, not production.** Tests like "cancel subscription" pollute metrics and burn test users when run against prod. Fly preview deployments per PR (ephemeral URL, isolated DB, isolated Stripe test keys). Auto-suspend on idle = $0/mo standing cost.
 
-**Test mode Stripe keys only.** E2E tests never touch live-mode Stripe. The `4242 4242 4242 4242` test card flow is fast, deterministic, and free; live-mode tests would be slow, charge real money, and trigger real fraud detection.
+**Test mode Stripe keys only.** E2E never touches live-mode Stripe. The `4242 4242 4242 4242` test card is fast, deterministic, and free.
 
-**iframe handling for Stripe Checkout card field.** Maestro Web supports iframe interaction but with slightly different syntax than top-level elements. Plan a ~30 min spike at start of implementation to confirm the card-field flow works before committing to the full suite.
+**`data-testid` selectively, not blanket.** Only on form inputs where the visible-text/label selectors are unreliable for automation (`email-input`, `password-input`, `display-name-input` in AuthModal). Everything else uses visible text + role + CSS class. Keeps production code clean.
+
+**Fixture seeding via Python, not SQL.** Supabase auth user creation requires HTTP Admin API calls — pure SQL can't do that. `scripts/seed_e2e_fixtures.py` does both layers (HTTP for auth, SQLite for app).
 
 ### Files Changed
 
 **New:**
-- `.maestro/config.yaml` — base config (timeouts, default URL)
-- `.maestro/flows/upgrade.yaml` — Flow 1
-- `.maestro/flows/watch-limit.yaml` — Flow 2
-- `.maestro/flows/planner-limit.yaml` — Flow 3
-- `.maestro/flows/cancel-reactivate.yaml` — Flow 4
-- `.github/workflows/maestro.yml` — CI integration
+- `e2e/package.json` — Playwright deps only (separate from `web/`)
+- `e2e/playwright.config.ts` — base URL via `E2E_BASE_URL` env, retries, traces, reporter
+- `e2e/tsconfig.json` — standalone TS config
+- `e2e/fixtures/auth.ts` — `signupFresh()`, `loginAsFixture()`, `skipOnboarding()`
+- `e2e/fixtures/stripe.ts` — `payWithCard()`, `waitForProBadge()`
+- `e2e/tests/upgrade.spec.ts` — Flow 1
+- `e2e/tests/watch-limit.spec.ts` — Flow 2
+- `e2e/tests/planner-limit.spec.ts` — Flow 3
+- `e2e/tests/cancel-reactivate.spec.ts` — Flow 4
+- `e2e/.gitignore` — ignore reports + trace artifacts
+- `.github/workflows/playwright.yml` — CI integration
+- `scripts/seed_e2e_fixtures.py` — fixture user seeding (Supabase Admin API + SQLite)
 
 **Modified:**
-- `fly.toml` — preview deploy config (or new `fly.staging.toml` if going the dedicated staging route)
+- `web/src/components/AuthModal.tsx` — `data-testid` on email/password/display-name inputs
 
 **External config:**
-- Supabase project for staging (could be the same project with confirmation toggled off, OR a separate staging project — recommended for isolation)
-- Stripe test-mode keys for staging (same keys as current v1.4 production-test-mode setup are fine)
-- No Maestro Cloud account needed (self-hosted via GitHub Actions)
+- Long-lived `campnw-staging` Fly app for nightly runs (TODO: create)
+- Stripe test-mode keys reused from v1.4
+- Repo secrets: `E2E_FIXTURE_PASSWORD`, `SUPABASE_SERVICE_ROLE_KEY`
 
 ### Quality Bar
 
-- Smoke test (Flow 1) runs in < 90s end-to-end
+- Smoke test (Flow 1) runs in **< 60s** end-to-end (realistic with Playwright; was <90s with Maestro)
 - All four flows pass on `dev` HEAD
-- CI failure uploads a screenshot of the failing step as a GitHub Actions artifact
-- Each flow uses a fresh randomly-generated test account (no state bleed between runs)
+- CI failure uploads the Playwright HTML report + trace as a GitHub Actions artifact (interactive trace viewer makes failures self-diagnosable)
+- Flow 1 generates a fresh randomly-emailed user per run; Flows 2-4 use idempotent fixtures
 - **Monthly infrastructure cost: $0** (GitHub Actions free minutes + Fly preview branches auto-suspend)
 
 ### Dependencies
 
 - v1.4 shipped (we're testing v1.4's flows)
-- Fly preview deployments enabled (configuration on the Fly side, ~30 min)
-- Supabase staging project OR confirmation toggle disabled on prod project for test email domain
+- Fly preview deployments enabled (configuration on the Fly side)
+- Email confirmation off in prod Supabase (already verified during Phase 0)
 
 ### Key Risks
 
 | Risk | Mitigation |
 |------|------------|
-| Maestro Web maturity gap vs Playwright | Run a 30-min spike with the iframe interaction case before committing. If it doesn't work cleanly, fall back to Playwright with the same flow structure — the YAML translates conceptually. |
-| Staging deploys add infra cost | Fly preview branches auto-suspend when idle ($0 standing cost). Maestro runs via self-hosted GitHub Actions ($0 — uses already-paid CI minutes). Total monthly cost target: $0. Revisit Maestro Cloud only when revenue covers it 2-3×. |
-| Test account email collision | Use `maestro-{random-uuid}@example.com` per run. Optionally clean up via Supabase admin API after test completion. |
-| Flow brittleness from Stripe Checkout UI changes | Stripe's Checkout UI is stable across years but does occasionally rev. If a flow breaks, fix that single flow — don't add wrapper layers that "future-proof" against hypothetical changes. |
-| Live-mode bugs missed by test-mode tests | Test mode covers ~95% of real flows. Risks not covered: real fraud detection, real bank decline codes, real refund processing. These need a manual smoke test the first time a live transaction goes through. |
+| Stripe Checkout UI changes | Stripe's Checkout UI is stable across years but does occasionally rev (modern variant now wraps the card form inside a "Card" radio under payment-method tabs — discovered during Phase 0 spike and handled in `fixtures/stripe.ts`). If a flow breaks, fix that single fixture — don't add wrapper layers that "future-proof" against hypothetical changes. |
+| Fixture user drift if schema changes | `scripts/seed_e2e_fixtures.py` is idempotent and re-runnable. Schema changes invalidate fixtures; rerun seed = fixed. |
+| Test account email collision | Flow 1 uses `e2e-fresh-{timestamp}-{random}@maestro.test` per run. Flows 2-4 use stable fixtures named by purpose. |
+| Live-mode bugs missed by test-mode tests | Test mode covers ~95% of real flows. Risks not covered: real fraud detection, real bank decline codes, real refund processing. Need a manual smoke when first live transaction goes through. |
+| Maestro Web perf regression doesn't affect Playwright | Playwright's iframe handling is mature and used by thousands of projects — not at risk of the same beta perf trap. |
 
 ### What v1.41 catches that v1.4's 1202 tests don't
 

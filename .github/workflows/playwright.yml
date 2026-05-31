@@ -1,0 +1,208 @@
+name: Playwright E2E
+
+# Runs Playwright flows against a single long-lived staging app
+# (campnw-staging.fly.dev). Each PR's smoke job deploys the PR branch
+# to staging, seeds fixtures, and runs the upgrade smoke flow.
+# Nightly cron deploys the current dev HEAD and runs all four flows.
+#
+# Why single staging instead of preview-per-PR:
+#   - Stripe test-mode webhooks deliver to ONE configured URL, so
+#     N preview apps can't all receive webhook events anyway
+#   - Solo dev → no concurrent PR mutex needed
+#   - One Fly app instead of N (cleaner dashboard, simpler secrets)
+#
+# Required repo secrets:
+#   FLY_API_TOKEN                    (org-scoped — deploys to staging)
+#   E2E_FIXTURE_PASSWORD             (shared password for fixture users)
+#   SUPABASE_SERVICE_ROLE_KEY        (admin JWT for fixture seeding)
+#   VITE_PUBLIC_SUPABASE_URL         (existing — build-time + seed env)
+#   VITE_PUBLIC_SUPABASE_ANON_KEY    (existing — build-time)
+#   VITE_PUBLIC_POSTHOG_PROJECT_TOKEN (existing — build-time)
+
+on:
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: '0 8 * * *'   # nightly 08:00 UTC
+  workflow_dispatch:
+
+env:
+  STAGING_APP: campnw-staging
+  STAGING_URL: https://campnw-staging.fly.dev
+
+# Serialize concurrent runs — they share one Fly staging app, and two
+# parallel deploys race on the same machine.
+concurrency:
+  group: playwright-staging
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build frontend
+        working-directory: web
+        env:
+          VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ secrets.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN }}
+          VITE_PUBLIC_POSTHOG_HOST: https://eu.i.posthog.com
+          VITE_PUBLIC_SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
+          VITE_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.VITE_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy design tokens for SEO pages
+        run: cp web/src/tokens.css src/pnw_campsites/seo-static/tokens.css
+
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2
+
+      - name: Deploy PR branch to staging
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy --remote-only --app "$STAGING_APP"
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null "$STAGING_URL/healthz"; then
+              echo "Staging ready"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Staging never became healthy"
+          exit 1
+
+      - name: Seed E2E fixtures
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          E2E_FIXTURE_PASSWORD: ${{ secrets.E2E_FIXTURE_PASSWORD }}
+        run: |
+          # SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are already Fly
+          # secrets on campnw-staging (mirrored from prod/.env). Only
+          # E2E_FIXTURE_PASSWORD needs to be passed inline.
+          flyctl ssh console -a "$STAGING_APP" \
+            -C "env E2E_FIXTURE_PASSWORD='$E2E_FIXTURE_PASSWORD' python scripts/seed_e2e_fixtures.py"
+
+      - name: Install Playwright + browser
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run smoke flow
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: ${{ env.STAGING_URL }}
+          E2E_FIXTURE_PASSWORD: ${{ secrets.E2E_FIXTURE_PASSWORD }}
+          CI: "true"
+        run: npx playwright test tests/upgrade.spec.ts
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-smoke
+          path: e2e/playwright-report/
+          retention-days: 14
+
+  nightly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        # No explicit ref — defaults to github.ref. For schedule that's
+        # the default branch (dev); for workflow_dispatch it's whatever
+        # branch the dispatch targeted.
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build frontend
+        working-directory: web
+        env:
+          VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ secrets.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN }}
+          VITE_PUBLIC_POSTHOG_HOST: https://eu.i.posthog.com
+          VITE_PUBLIC_SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
+          VITE_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.VITE_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy design tokens for SEO pages
+        run: cp web/src/tokens.css src/pnw_campsites/seo-static/tokens.css
+
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2
+
+      - name: Deploy dev HEAD to staging
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy --remote-only --app "$STAGING_APP"
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null "$STAGING_URL/healthz"; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+      - name: Seed E2E fixtures
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          E2E_FIXTURE_PASSWORD: ${{ secrets.E2E_FIXTURE_PASSWORD }}
+        run: |
+          # SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are already Fly
+          # secrets on campnw-staging (mirrored from prod/.env). Only
+          # E2E_FIXTURE_PASSWORD needs to be passed inline.
+          flyctl ssh console -a "$STAGING_APP" \
+            -C "env E2E_FIXTURE_PASSWORD='$E2E_FIXTURE_PASSWORD' python scripts/seed_e2e_fixtures.py"
+
+      - name: Install Playwright + browser
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run all flows
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: ${{ env.STAGING_URL }}
+          E2E_FIXTURE_PASSWORD: ${{ secrets.E2E_FIXTURE_PASSWORD }}
+          CI: "true"
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-nightly
+          path: e2e/playwright-report/
+          retention-days: 30
+
+      - name: Open issue on nightly failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = new Date().toISOString().split('T')[0];
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly Playwright E2E failed (${date})`,
+              body: `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nThe Playwright HTML report + trace are attached as the run's artifact.`,
+              labels: ['e2e-failure'],
+            });
