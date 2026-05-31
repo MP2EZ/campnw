@@ -22,12 +22,13 @@ test("4th watch attempt opens UpgradeModal with watch_limit copy", async ({ page
   // availability and per-result Watch buttons.
   await page.getByRole("button", { name: "Search", exact: true }).click();
 
-  // Wait for results to load. The Watch button has class .watch-cta-btn
-  // (more specific than getByRole — the outer result card is ALSO a
-  // button, which can intercept clicks).
+  // Wait for results to load. The Watch button has class .watch-cta-btn.
   const watchBtn = page.locator(".watch-cta-btn").first();
   await watchBtn.waitFor({ state: "visible", timeout: 45_000 });
-  await watchBtn.click({ force: true });
+  // Scroll into view + real click (no force) so Playwright's actionability
+  // checks run — we need to know the click is hitting the right element.
+  await watchBtn.scrollIntoViewIfNeeded();
+  await watchBtn.click();
 
   // 402 → UpgradeModal with watch-limit headline
   await expect(page.getByRole("heading", { name: "Upgrade for unlimited watches" })).toBeVisible();

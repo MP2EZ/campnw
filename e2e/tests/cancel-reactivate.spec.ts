@@ -53,14 +53,12 @@ test("New Pro user can cancel and reactivate via Customer Portal", async ({ page
   // Step 4: reactivate via Portal
   await page.getByRole("button", { name: "Manage billing" }).click();
   await expect(page).toHaveURL(/billing\.stripe\.com/, { timeout: 30_000 });
-  // Stripe Portal reactivation: a single click fires the mutation.
-  // Wait for the loading state to clear before navigating away —
-  // otherwise the backend webhook may not arrive in time for the
-  // final assertion.
-  await page.getByText(/(Renew|Reactivate|Resume|Don.t cancel|Continue your)/i).first().click();
+  // Stripe Portal reactivation: tighter regex to actual reactivate
+  // buttons (avoiding "Don't cancel" / "Continue your X" false matches).
+  await page.getByText(/(Renew subscription|Reactivate)/i).first().click();
+  // Wait for the action to complete (Renewing… loading state → final state)
   await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
-  // Extra buffer for webhook delivery
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(5000);  // extra buffer for webhook delivery
 
   // Step 5: back to campable — "Pro until" text should be gone
   await page.goto("/");
