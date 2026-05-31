@@ -39,12 +39,14 @@ v1.33   ------->   Supabase Auth        — Replace custom auth with Supabase, B
 v1.34   [SHIPPED]  Weather Context      — Typical temps + precipitation on search results via Visual Crossing
 v1.35   [SHIPPED]  Source Photos        — Campground photos from RIDB/RA + SVG postcard placeholder for missing sources
 v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
-v1.4    ------->   Monetization Launch  — Pro tier gate, payment, freemium conversion flows
+v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)
+v1.41   [SHIPPED]  Playwright E2E       — Playwright E2E suite — smoke + watch/planner limits + cancel — 4/4 nightly green (2026-05-31)
+v1.42   ------->   Site Polish + Legal  — About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.
 v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
-Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product (note: v0.95's billing prototype lives on the abandoned `feature/monetization` branch — v1.4 will reference but not merge it, see the v1.4 entry for details), v1.45 wraps the app for iOS + Android via Capacitor (sequenced after v1.4 so monetization is validated on the web before committing to App Store review cycles). v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
+Each milestone is a shippable increment with clear user value. v1.33 establishes production auth (Supabase), v1.34 adds weather context to search results, v1.35 enriches result cards with source-site photos (engagement input to monetization), v1.36 adds OAuth sign-in, v1.4 transitions campable from personal tool to public product (code shipped + validated in Stripe test mode 2026-05-28; live keys + Stripe Customer Portal config still pending — see v1.4 Post-ship Status), v1.41 stands up Playwright E2E coverage (the 5 production bugs hit during v1.4 validation would have been caught by a single upgrade-flow smoke test — original plan was Maestro Web Beta, pivoted after Phase 0 spike found ~14min iframe lookups; see v1.41 entry), v1.42 adds the site pages v1.4 deferred (About + Privacy + Terms + footer — required for Stripe live-mode review and Apple App Store submission), v1.45 wraps the app for iOS + Android via Capacitor (sequenced after v1.4 so monetization is validated on the web before committing to App Store review cycles). v2.0 (Predictions+) deferred until Q1 2027 — data collection running since v0.5, quality improves with time.
 
 ---
 
@@ -1479,7 +1481,7 @@ Enable Google, Apple, and GitHub sign-in. Supabase infrastructure from v1.33 alr
 
 ---
 
-## v1.4 "Monetization Launch"
+## v1.4 "Monetization Launch" [SHIPPED 2026-05-28]
 
 ### Theme
 Turn traffic into revenue. v1.3's SEO pages bring organic visitors. v1.4 gates the pro features (watches, alerts, trips) behind a subscription and builds the conversion flows that move free users to paid. The v0.95 billing prototype on `feature/monetization` is preserved as a reference but will not be merged — v1.4 rebuilds against post-v1.33 Supabase auth and the post-v1.27/v1.29 design system. See Implementation Approach below.
@@ -1510,6 +1512,218 @@ v0.95's full monetization layer was built on `feature/monetization` (March 2026)
 
 ### Key Risk
 Premature monetization — if v1.3 hasn't generated meaningful organic traffic, gating features could hurt growth. Monitor Search Console data from v1.3 before activating gates. Auth must be stable (v1.33/v1.36) before tying subscription state to user accounts.
+
+### Post-ship Status (2026-05-28)
+
+**Code complete + validated in Stripe test mode.** Six commits on `feat/v1.4-billing-foundation` shipped through `dev → main` in the order: roadmap reconciliation (slice 0) → schema + billing module + 31 tests (slice 1) → self-review fixes (slice 2.0) → HTTP routes + watch cap (slice 2 main) → frontend (slice 3) → planner gating + 5-min Pro polling (slice 4). Plus 6 follow-up PRs for production bugs surfaced during end-to-end validation. **1202 tests passing** across backend (999) + frontend (203).
+
+**End-to-end test mode flow validated** in production browser (via Chrome DevTools MCP, 2026-05-28): test account signup → /pricing renders Upgrade button → Stripe Checkout completes with `4242 4242 4242 4242` → PRO badge appears → `/api/billing/status` returns `is_pro:true` → cancel at period end via Customer Portal → `subscription_expires_at` populates with period end → reactivate → expires_at cleared → re-cancel → expires_at re-populates.
+
+**Five real bugs surfaced during validation** (all fixed):
+1. `VITE_PUBLIC_SUPABASE_*` not forwarded to the deploy workflow's build step → production bundle baked in `localhost:54321` fallback → "Failed to fetch" on signup. Fix: PR #25/#26.
+2. `SUPABASE_URL` Fly secret set without `https://` prefix → CSP `connect-src` malformed → blocked. Defensive fix: PR #35 added `_supabase_csp_origin()` that prepends scheme.
+3. Modal drawer width media query missing `max-width: none` override → narrow viewports kept the desktop cap. Fix: PR #27/#28 (initial), #29/#30 (cascade specificity follow-up).
+4. `useAuth` INITIAL_SESSION race condition → returning users stuck on "Loading…" forever. Fix: PR #31/#32 calls `getSession()` on mount explicitly.
+5. Stripe API version `2026-03-25.dahlia` moved `current_period_end` from subscription root to `items.data[0]` → `subscription_expires_at` empty after cancel. Fix: PR #33/#34 added `_current_period_end()` helper checking both locations.
+
+**Live mode activation — still operational/pending.** Currently running on Stripe test-mode keys. To start accepting real money:
+- Replace `STRIPE_SECRET_KEY` with `sk_live_...` from Stripe Dashboard (live mode → Developers → API keys)
+- Create a NEW webhook endpoint in live mode (Dashboard → Webhooks → Add endpoint, URL = `https://campable.co/api/billing/webhook`, same 4 event types as test mode) and replace `STRIPE_WEBHOOK_SECRET` with its `whsec_...`
+- Create a live-mode price for "Campable Pro" at $5/mo and replace `STRIPE_PRO_PRICE_ID` with the new `price_live_...` ID
+- Activate Stripe account in Dashboard: business verification (LLC docs, EIN), bank account for payouts, decide on tax (Stripe Tax at $0.50/transaction OR self-managed)
+- Configure Customer Portal for live mode (Dashboard → Settings → Billing → Customer Portal): allow cancel, allow payment-method update; same config that already worked in test mode
+- Optional: brief Terms of Service link in footer (Stripe flags missing terms on live-mode review for some accounts)
+
+**Deferred (not blocking ship)**:
+- Grandfather migration script for users with >3 watches at activation time — irrelevant pre-launch with no real users; a small one-shot if any real users land in this state post-launch
+- Announcement email (per v0.95 spec, "one honest email about Pro")
+- v1.41 Playwright E2E suite would have caught 4 of the 5 production bugs above with a single upgrade-flow smoke test (see v1.41 entry)
+
+---
+
+## v1.41 "Playwright E2E" [SHIPPED 2026-05-31]
+
+### Theme
+Stand up end-to-end browser test coverage that mirrors real production failure patterns, using Playwright. A single upgrade-flow smoke test would have caught 4 of the 5 bugs hit during v1.4 validation in seconds rather than hours.
+
+Original v1.41 plan chose Maestro Web Beta for cognitive consistency with the Being mobile app. Phase 0 spike against `campable.co` (2026-05-29) validated framework capability — all interaction patterns work — but **each cross-origin Stripe iframe element lookup took ~14 minutes** in Maestro Web Beta 2.6.0. Full upgrade smoke would have run 90+ min/run. Unusable for CI gating. Pivoted to Playwright. Full post-mortem under Architecture Decisions below.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| Playwright setup (self-hosted, free) | XS | `e2e/` directory at repo root with `package.json`, `playwright.config.ts`, shared fixtures. Runs via `@playwright/test` in GitHub Actions (uses existing CI minutes, $0/mo). |
+| Flow 1 — Upgrade smoke test | M | Anonymous → signup → /pricing → Upgrade to Pro → Stripe Checkout with `4242 4242 4242 4242` → assert PRO badge in header. Single flow that would have caught the missing VITE_PUBLIC_SUPABASE env vars, the CSP scheme bug, the modal width regression, and the useAuth race. |
+| Flow 2 — Watch limit smoke test | S | Free user → create 4th watch (3 seeded) → assert UpgradeModal opens with reason=watch_limit. Validates the 402 → modal flow. |
+| Flow 3 — Planner limit smoke test | S | Free user → submit 4th planner prompt (3 sessions seeded this month) → assert UpgradeModal opens with reason=planner_limit. |
+| Flow 4 — Cancel + reactivate | M | Pro user → Manage billing → Stripe Customer Portal → Cancel → assert `subscription_expires_at` rendered in BillingSettings → Reactivate → assert "Pro until X" text removed. Webhook → DB → UI loop validation. |
+| Staging URL strategy | S | Fly preview branches per PR (auto-deployed, real DB, isolated) plus a long-lived `campnw-staging` app for nightly runs. Tests never hit `campable.co` production. |
+| Fixture seeding script | S | `scripts/seed_e2e_fixtures.py` creates 3 fixture users idempotently via Supabase Admin API + SQLite UPSERT. Runs in CI via `flyctl ssh console`. |
+| Email confirmation off in prod Supabase | XS | Already configured (verified during Phase 0 spike). Saved to memory so future sessions don't propose email-verification waits. |
+| CI integration | S | GitHub Actions job (`playwright.yml`) installs Playwright + Chromium and runs the smoke flow on every PR (~60s), nightly cron for all flows. Failures upload Playwright HTML report + trace as artifact. |
+
+### Architecture Decisions
+
+**Playwright after Maestro Web Beta failed Phase 0 perf bar.** Phase 0 spike (2026-05-29) against `campable.co` confirmed Maestro Web 2.6.0 _can_ drive the full flow (signup, tap-then-inputText for React-controlled inputs, onboarding modal skip via `runFlow: when:`, cross-origin Stripe iframe pierce). The fatal finding from `~/.maestro/tests/2026-05-29_130340/maestro.log`: every iframe element lookup took **~14 minutes** (visible in the gap between RUNNING and "Refreshed element" log lines). A complete upgrade flow would have run 90+ min/run — unusable for CI smoke gates. Playwright's `frameLocator` handles cross-origin iframes in <5s. Cognitive-consistency-with-Being argument loses when web tests need a separate tool anyway. **Follow-up:** file upstream perf issue at github.com/mobile-dev-inc/maestro with the log timestamps.
+
+**Self-hosted (GitHub Actions), not a paid runner.** $0/mo until revenue justifies otherwise. GitHub Actions already runs Campable's other CI (test, security, lighthouse, bundle-size); adding a Playwright job uses the same already-paid-for minutes.
+
+**Staging environment, not production.** Tests like "cancel subscription" pollute metrics and burn test users when run against prod. Fly preview deployments per PR (ephemeral URL, isolated DB, isolated Stripe test keys). Auto-suspend on idle = $0/mo standing cost.
+
+**Test mode Stripe keys only.** E2E never touches live-mode Stripe. The `4242 4242 4242 4242` test card is fast, deterministic, and free.
+
+**`data-testid` selectively, not blanket.** Only on form inputs where the visible-text/label selectors are unreliable for automation (`email-input`, `password-input`, `display-name-input` in AuthModal). Everything else uses visible text + role + CSS class. Keeps production code clean.
+
+**Fixture seeding via Python, not SQL.** Supabase auth user creation requires HTTP Admin API calls — pure SQL can't do that. `scripts/seed_e2e_fixtures.py` does both layers (HTTP for auth, SQLite for app).
+
+### Files Changed
+
+**New:**
+- `e2e/package.json` — Playwright deps only (separate from `web/`)
+- `e2e/playwright.config.ts` — base URL via `E2E_BASE_URL` env, retries, traces, reporter
+- `e2e/tsconfig.json` — standalone TS config
+- `e2e/fixtures/auth.ts` — `signupFresh()`, `loginAsFixture()`, `skipOnboarding()`
+- `e2e/fixtures/stripe.ts` — `payWithCard()`, `waitForProBadge()`
+- `e2e/tests/upgrade.spec.ts` — Flow 1
+- `e2e/tests/watch-limit.spec.ts` — Flow 2
+- `e2e/tests/planner-limit.spec.ts` — Flow 3
+- `e2e/tests/cancel-reactivate.spec.ts` — Flow 4
+- `e2e/.gitignore` — ignore reports + trace artifacts
+- `.github/workflows/playwright.yml` — CI integration
+- `scripts/seed_e2e_fixtures.py` — fixture user seeding (Supabase Admin API + SQLite)
+
+**Modified:**
+- `web/src/components/AuthModal.tsx` — `data-testid` on email/password/display-name inputs
+
+**External config:**
+- Long-lived `campnw-staging` Fly app for nightly runs (TODO: create)
+- Stripe test-mode keys reused from v1.4
+- Repo secrets: `E2E_FIXTURE_PASSWORD`, `SUPABASE_SERVICE_ROLE_KEY`
+
+### Quality Bar
+
+- Smoke test (Flow 1) runs in **< 60s** end-to-end (realistic with Playwright; was <90s with Maestro)
+- All four flows pass on `dev` HEAD
+- CI failure uploads the Playwright HTML report + trace as a GitHub Actions artifact (interactive trace viewer makes failures self-diagnosable)
+- Flow 1 generates a fresh randomly-emailed user per run; Flows 2-4 use idempotent fixtures
+- **Monthly infrastructure cost: $0** (GitHub Actions free minutes + Fly preview branches auto-suspend)
+
+### Dependencies
+
+- v1.4 shipped (we're testing v1.4's flows)
+- Fly preview deployments enabled (configuration on the Fly side)
+- Email confirmation off in prod Supabase (already verified during Phase 0)
+
+### Key Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Stripe Checkout UI changes | Stripe's Checkout UI is stable across years but does occasionally rev (modern variant now wraps the card form inside a "Card" radio under payment-method tabs — discovered during Phase 0 spike and handled in `fixtures/stripe.ts`). If a flow breaks, fix that single fixture — don't add wrapper layers that "future-proof" against hypothetical changes. |
+| Fixture user drift if schema changes | `scripts/seed_e2e_fixtures.py` is idempotent and re-runnable. Schema changes invalidate fixtures; rerun seed = fixed. |
+| Test account email collision | Flow 1 uses `e2e-fresh-{timestamp}-{random}@maestro.test` per run. Flows 2-4 use stable fixtures named by purpose. |
+| Live-mode bugs missed by test-mode tests | Test mode covers ~95% of real flows. Risks not covered: real fraud detection, real bank decline codes, real refund processing. Need a manual smoke when first live transaction goes through. |
+| Maestro Web perf regression doesn't affect Playwright | Playwright's iframe handling is mature and used by thousands of projects — not at risk of the same beta perf trap. |
+
+### What v1.41 catches that v1.4's 1202 tests don't
+
+The unit tests we added in v1.4 lock in code behavior. They CAN'T catch:
+- Build-time env var omissions (VITE_PUBLIC_* bug)
+- CSP construction at the middleware layer with real Supabase domain
+- React effect timing bugs in production (useAuth race surfaced from live network behavior)
+- CSS specificity bugs across responsive breakpoints
+- Cross-tab Supabase session sync
+- Real Stripe Checkout iframe behavior
+- Webhook delivery from real Stripe in real network conditions
+
+That's the gap v1.41 fills. Five real bugs from v1.4 validation map directly to flows here.
+
+---
+
+## v1.42 "Site Polish + Legal Footing"
+
+### Theme
+Add the site pages v1.4 deferred and that v1.45 (Apple App Store) will require regardless. Privacy Policy + Terms unblock Stripe live-mode review. About + Contact give trust signals that convert fence-sitters on /pricing. Footer ties everything together. ~1-2 days of focused work; the legal text comes from a generator (Termly or similar) and the user customizes the specifics, so most of the effort is page structure + content writing, not legal drafting.
+
+Sequencing: realistically wants to happen before live Stripe mode activates (Stripe flags missing Privacy/ToS on subscription products) and before v1.45 (Apple requires a Privacy Policy URL at submission). Can be done in parallel with v1.41 since they touch different surfaces.
+
+### Features
+
+| Feature | Size | Description |
+|---------|------|-------------|
+| About page (/about) | M | _Shipped early, ahead of v1.42._ Honest first-person voice matching the Pricing page. Covers: what Campable does, why it exists, who's behind it, how it's funded, where data comes from, what's coming. Trust signal for fence-sitters on /pricing. |
+| Privacy Policy (/privacy) | S | Hand-written in Campable voice. See Architecture Decisions for why Termly was rejected. Honest disclosure of every third party that touches user data (Supabase, Stripe, PostHog, Mapbox, Visual Crossing, Cloudflare, Fly), retention policy, and GDPR/CCPA rights. |
+| Terms of Service (/terms) | S | Hand-written. $5/mo subscription terms, explicit 30-day refund policy (per Stripe's preference), liability limit, governing law (Washington), right to terminate abusive accounts. Linked from /pricing. |
+| Footer component | S | New `<Footer>` rendered site-wide outside `<Routes>`. Links: About, Pricing, Privacy, Terms, Contact (mailto). © year only. Version dropped because package.json is 0.0.0 and the site is continuously deployed. |
+| Contact email | XS | `hello@campable.co` mailto in footer and on About/Privacy/Terms contact sections. |
+| Stripe Business profile config | XS | Paste Privacy + ToS URLs into Stripe Dashboard → Settings → Public details. Required for live-mode review. |
+| Stripe Customer Portal links | XS | Customer Portal config page → add Terms + Privacy URLs so the cancel/manage flow shows them. |
+| Apple App Store URL prep | XS | Confirm /privacy URL renders in Helmet meta + is reachable for Apple's submission crawler. (v1.45 will actually submit; v1.42 just has the URL ready.) |
+
+### Architecture Decisions
+
+**Generator over hand-rolled legal text.** Termly (or similar) generates compliant baselines that update as regulations change. For a $5/mo solo SaaS, this is the right cost/risk balance — pay a lawyer when you have 100 paying customers, not 1. Customize the generator output for the parts specific to Campable (third-party services list, retention windows, jurisdiction), don't write from scratch.
+
+**Footer as a global component.** Rendered in `main.tsx` or App.tsx outside `<Routes>` so it appears on every page including /pricing, /trips, /plan, and the legal pages themselves. No per-route opt-out.
+
+**Voice continues from Pricing page.** Honest, direct, no marketing puffery. "Built by one person" angle works because it's true. Conversion lift comes from credibility, not slickness.
+
+**Defer cookie banner.** EU PostHog tracking technically needs a banner for GDPR consent, but enforcement against small US SaaS is near-zero and the UX cost is real. Document the deferral here so we revisit when EU traffic > 5% of total (measured via PostHog).
+
+### Files Changed
+
+**New frontend:**
+- `web/src/pages/About.tsx` — written from scratch matching Pricing voice
+- `web/src/pages/Privacy.tsx` — Termly-generated text in React component shell
+- `web/src/pages/Terms.tsx` — same pattern
+- `web/src/components/Footer.tsx` — global footer
+- `web/src/App.css` — `.about-page`, `.legal-page`, `.site-footer` styles
+
+**Modified frontend:**
+- `web/src/App.tsx` — register /about, /privacy, /terms routes; render <Footer/> outside Routes
+- `web/src/main.tsx` — possibly footer mount if not in App.tsx
+
+**Non-code:**
+- Stripe Dashboard → Settings → Public details (paste URLs)
+- Stripe Dashboard → Settings → Billing → Customer Portal (paste URLs)
+- Optional: support@campable.co email forwarding setup (Fastmail / Google Workspace / Cloudflare Email Routing)
+
+### Testing Strategy
+
+**Automated (Vitest):**
+- About / Privacy / Terms components render with correct headings
+- Footer renders all expected links and the year matches current
+- Routes resolve and lazy-load
+
+**Manual (~10 min):**
+- Smoke test all 4 pages in both themes (dark + light)
+- Lighthouse a11y pass on each
+- Confirm WCAG 2.1 AA contrast on legal text (often a sneaky regression)
+- Confirm Privacy URL is reachable from a fresh browser session (no auth wall)
+
+### Dependencies
+
+- v1.4 shipped (we have a real product and billing flow to legally cover)
+- Termly account (free tier sufficient) OR equivalent generator
+- Decision on support email address
+
+### Quality Bar
+
+- All pages WCAG 2.1 AA
+- Mobile-responsive at 375px viewport
+- Privacy Policy URL added to Stripe Business profile
+- Privacy Policy URL added to Customer Portal links
+- Privacy Policy honestly discloses each third-party service that handles user data
+- No marketing copy lifted from generic templates ("we are committed to your privacy" etc.) — keep the Campable voice
+
+### Key Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Templates miss state-specific nuance | Templates are deliberately generic. For higher-revenue future state (>$10K/mo) consider a brief lawyer review specific to WA LLC operations |
+| Cookie banner deferral risk if EU traffic grows | Measure EU traffic in PostHog quarterly; banner becomes priority if EU > 5% |
+| About-page voice drifts into marketing | Have the user read it back as if they were a skeptical Hacker News commenter before merging |
+| Privacy Policy gets stale as third parties change | Re-audit annually OR when adding any new third-party service; Termly handles regulatory drift but not service-list updates |
+| Stripe Business profile review timing | Live mode activation may stall if the profile review is slow. Submit Privacy + ToS URLs ASAP after v1.42 deploys, even if not yet ready to flip live keys |
 
 ---
 

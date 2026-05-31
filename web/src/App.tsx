@@ -33,6 +33,10 @@ const MapView = lazy(() => import("./pages/MapView"));
 const TripsPage = lazy(() => import("./pages/TripsPage"));
 const TripDetail = lazy(() => import("./pages/TripDetail"));
 const Pricing = lazy(() => import("./pages/Pricing"));
+const About = lazy(() => import("./pages/About"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Terms = lazy(() => import("./pages/Terms"));
+import { Footer } from "./components/Footer";
 
 import "./tokens.css";
 import "./App.css";
@@ -963,6 +967,9 @@ export default function App() {
         <Route path="/trips" element={<TripsPage />} />
         <Route path="/trips/:tripId" element={<TripDetail />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="/" element={
           <main id="main-content">
           <div className="mode-tabs" role="tablist" aria-label="Discovery mode">
@@ -1201,6 +1208,7 @@ export default function App() {
       </Routes>
       </Suspense>
       </ErrorBoundary>
+      <Footer />
     </div>
     </SearchContext.Provider>
   );

@@ -7,711 +7,980 @@
 <style>
   :root {
     --bg: #1a1c1e;
-    --bg-card: #23262a;
-    --bg-card-shipped: #1f2225;
-    --bg-card-current: #2b231a;
-    --text: #e8eaed;
-    --text-muted: #9ca3af;
-    --text-dim: #6b7280;
-    --border: #2d3338;
-    --border-shipped: #2d6a4f;
-    --border-current: #d4722a;
-    --border-future: #6b7280;
-    --accent-shipped: #2d6a4f;
-    --accent-built: #b58a3f;
-    --accent-current: #d4722a;
-    --accent-future: #6b7280;
+    --bg-elev: #22262a;
+    --bg-card: #262b30;
+    --border: #353b42;
+    --text: #e6e9ec;
+    --text-dim: #9aa3ab;
+    --text-mute: #6b7280;
+    --forest-deep: #1b3a2a;
+    --forest: #2d6a4f;
+    --forest-light: #52b788;
+    --moss: #74c69d;
+    --ember: #d4722a;
+    --ember-glow: rgba(212, 114, 42, 0.35);
+    --ridge: #6b7280;
     --size-xs: #6b7280;
     --size-s: #2563eb;
     --size-m: #d97706;
     --size-l: #dc2626;
   }
-
   * { box-sizing: border-box; }
-
-  body {
+  html, body {
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     margin: 0;
     padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     line-height: 1.5;
     font-size: 15px;
   }
-
   .container {
-    max-width: 980px;
+    max-width: 960px;
     margin: 0 auto;
     padding: 32px 20px 80px;
   }
-
-  header {
+  header.page-header {
     border-bottom: 1px solid var(--border);
     padding-bottom: 24px;
-    margin-bottom: 32px;
+    margin-bottom: 36px;
   }
-
   h1 {
-    margin: 0 0 8px;
-    font-size: 32px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-size: 2rem;
+    margin: 0 0 6px;
+    color: var(--moss);
+    letter-spacing: -0.01em;
   }
-
   .subtitle {
-    color: var(--text-muted);
-    font-size: 14px;
+    color: var(--text-dim);
+    font-size: 0.9rem;
     margin: 0 0 18px;
   }
-
-  .summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 24px;
-    margin-top: 16px;
-  }
-
-  .summary-stat {
+  .overall-progress {
     display: flex;
     flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
   }
-
-  .summary-stat .num {
-    font-size: 24px;
-    font-weight: 700;
-    line-height: 1;
+  .overall-progress .label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-dim);
   }
-
-  .summary-stat .label {
-    font-size: 11px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-top: 4px;
-  }
-
-  .overall-bar {
-    margin-top: 18px;
-    background: var(--border);
-    border-radius: 999px;
+  .overall-progress .label strong { color: var(--text); }
+  .pbar {
     height: 8px;
+    background: var(--bg-elev);
+    border-radius: 4px;
     overflow: hidden;
-    max-width: 480px;
+    border: 1px solid var(--border);
   }
-
-  .overall-bar-fill {
-    background: var(--accent-shipped);
+  .pbar > div {
     height: 100%;
-    border-radius: 999px;
+    background: linear-gradient(90deg, var(--forest), var(--forest-light));
+    border-radius: 4px;
   }
-
   .timeline {
     position: relative;
-    padding-left: 24px;
+    padding-left: 32px;
   }
-
   .timeline::before {
     content: "";
     position: absolute;
-    left: 7px;
+    left: 11px;
     top: 8px;
     bottom: 8px;
     width: 2px;
     background: var(--border);
   }
-
   .milestone {
     position: relative;
-    margin-bottom: 14px;
+    margin-bottom: 18px;
   }
-
-  .milestone::before {
-    content: "";
+  .node {
     position: absolute;
-    left: -24px;
+    left: -32px;
     top: 14px;
-    width: 16px;
-    height: 16px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: var(--bg);
-    border: 2px solid var(--border-future);
-    box-sizing: border-box;
+    border: 2px solid var(--ridge);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: var(--bg);
+    font-weight: 700;
     z-index: 1;
   }
-
-  .milestone.shipped::before {
-    background: var(--accent-shipped);
-    border-color: var(--accent-shipped);
+  .milestone.shipped .node {
+    background: var(--forest);
+    border-color: var(--forest);
+    color: #fff;
   }
-
-  .milestone.built::before {
+  .milestone.current .node {
+    background: var(--ember);
+    border-color: var(--ember);
+    color: #fff;
+    box-shadow: 0 0 0 4px var(--ember-glow);
+  }
+  .milestone.future .node {
     background: var(--bg);
-    border-color: var(--accent-built);
-    box-shadow: 0 0 0 3px rgba(181, 138, 63, 0.18);
+    border-color: var(--ridge);
+    color: var(--ridge);
   }
-
-  .milestone.current::before {
-    background: var(--accent-current);
-    border-color: var(--accent-current);
-    box-shadow: 0 0 0 4px rgba(212, 114, 42, 0.25);
-  }
-
-  .milestone.future::before {
-    background: var(--bg);
-    border-color: var(--border-future);
-  }
-
-  .card {
+  details {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-left: 3px solid var(--border-future);
     border-radius: 8px;
-    padding: 14px 18px;
-    transition: border-color 0.15s ease;
+    overflow: hidden;
+    transition: border-color 0.15s;
   }
-
-  .milestone.shipped .card {
-    background: var(--bg-card-shipped);
-    border-left-color: var(--border-shipped);
+  .milestone.shipped > details {
+    border-left: 3px solid var(--forest);
   }
-
-  .milestone.built .card {
-    border-left-color: var(--accent-built);
-    background: linear-gradient(180deg, rgba(181, 138, 63, 0.04), var(--bg-card));
+  .milestone.current > details {
+    border-left: 3px solid var(--ember);
+    box-shadow: 0 0 0 1px var(--ember-glow), 0 4px 24px rgba(212, 114, 42, 0.15);
   }
-
-  .milestone.current .card {
-    background: var(--bg-card-current);
-    border-left-color: var(--border-current);
-    box-shadow: 0 0 24px rgba(212, 114, 42, 0.12);
+  .milestone.future > details {
+    border-left: 3px solid var(--ridge);
   }
-
-  details {
-    margin: 0;
-  }
-
   summary {
-    cursor: pointer;
     list-style: none;
+    cursor: pointer;
+    padding: 14px 18px;
     display: flex;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
+    user-select: none;
   }
-
   summary::-webkit-details-marker { display: none; }
-  summary::marker { content: ""; }
-
-  summary::after {
-    content: "▸";
-    color: var(--text-dim);
-    font-size: 11px;
-    margin-left: auto;
-    transition: transform 0.15s ease;
+  summary::before {
+    content: "\25B8";
+    color: var(--text-mute);
+    font-size: 0.8rem;
+    transition: transform 0.12s;
+    display: inline-block;
   }
-
-  details[open] > summary::after {
-    transform: rotate(90deg);
-  }
-
-  .version-badge {
-    font-family: "SF Mono", Menlo, Consolas, monospace;
-    font-size: 12px;
-    font-weight: 600;
-    background: rgba(255,255,255,0.06);
+  details[open] > summary::before { transform: rotate(90deg); }
+  .v-badge {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
     padding: 3px 8px;
     border-radius: 4px;
-    letter-spacing: 0.02em;
-    flex-shrink: 0;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    color: var(--text);
+    white-space: nowrap;
   }
-
-  .status-pill {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 2px 7px;
-    border-radius: 3px;
-    color: white;
-    flex-shrink: 0;
-  }
-
-  .status-pill.shipped { background: var(--accent-shipped); }
-  .status-pill.built { background: var(--accent-built); }
-  .status-pill.current { background: var(--accent-current); }
-  .status-pill.future { background: var(--accent-future); }
-
-  .milestone-name {
+  .milestone.shipped .v-badge { color: var(--moss); border-color: var(--forest); }
+  .milestone.current .v-badge { color: var(--ember); border-color: var(--ember); }
+  .m-name {
     font-weight: 600;
-    font-size: 15px;
+    color: var(--text);
+    font-size: 0.98rem;
   }
-
-  .milestone-desc {
-    color: var(--text-muted);
-    font-size: 13px;
-    margin: 8px 0 0;
-    line-height: 1.5;
+  .m-desc {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    flex-basis: 100%;
+    margin-top: 4px;
+    margin-left: 0;
   }
-
-  .milestone.shipped .milestone-name { color: var(--text-muted); font-weight: 500; }
-  .milestone.shipped .milestone-desc { color: var(--text-dim); font-size: 12px; }
-
-  .card-body {
-    margin-top: 14px;
-    padding-top: 14px;
+  .status-pill {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .status-pill.shipped { background: var(--forest-deep); color: var(--moss); }
+  .status-pill.current { background: rgba(212, 114, 42, 0.18); color: var(--ember); }
+  .status-pill.future { background: #2a2f35; color: var(--text-dim); }
+  .body {
+    padding: 0 18px 18px;
     border-top: 1px solid var(--border);
+    padding-top: 14px;
   }
-
-  .feature-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
+  .body .mini-progress {
+    margin-bottom: 14px;
   }
-
-  .feature-list li {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 6px 0;
-    font-size: 13px;
-    line-height: 1.45;
-  }
-
-  .feature-status {
-    flex-shrink: 0;
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-top: 3px;
-    width: 14px;
-  }
-
-  .feature-status.done { color: var(--accent-shipped); }
-
-  .size-badge {
-    font-family: "SF Mono", Menlo, Consolas, monospace;
-    font-size: 9px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 2px;
-    color: white;
-    flex-shrink: 0;
-    margin-top: 3px;
-  }
-
-  .size-XS { background: var(--size-xs); }
-  .size-S { background: var(--size-s); }
-  .size-M { background: var(--size-m); }
-  .size-L { background: var(--size-l); }
-
-  .feature-name { font-weight: 500; }
-  .feature-text { color: var(--text-muted); }
-
-  .progress-bar {
-    background: var(--border);
-    border-radius: 999px;
-    height: 4px;
-    overflow: hidden;
-    margin: 10px 0 4px;
-  }
-
-  .progress-bar-fill {
-    height: 100%;
-    background: var(--accent-shipped);
-    border-radius: 999px;
-  }
-
-  .milestone.current .progress-bar-fill { background: var(--accent-current); }
-  .milestone.built .progress-bar-fill { background: var(--accent-built); }
-
-  .progress-meta {
-    font-size: 11px;
-    color: var(--text-dim);
+  .body .mini-progress .label {
     display: flex;
     justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-bottom: 4px;
   }
-
-  .risks {
-    margin-top: 14px;
-  }
-
-  .risks > summary {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-weight: 500;
-    padding: 6px 0;
-  }
-
-  .risks-list {
+  .features {
     list-style: none;
-    padding: 6px 0 0 0;
-    margin: 0;
+    padding: 0;
+    margin: 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
-
-  .risks-list li {
-    font-size: 12px;
-    color: var(--text-muted);
-    padding: 5px 0 5px 14px;
-    position: relative;
-    line-height: 1.5;
+  .features li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 8px 10px;
+    background: var(--bg-elev);
+    border-radius: 6px;
+    font-size: 0.88rem;
   }
-
-  .risks-list li::before {
-    content: "⚠";
-    position: absolute;
-    left: 0;
-    color: var(--accent-current);
-    font-size: 11px;
+  .check {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    margin-top: 1px;
   }
-
-  .status-note {
-    background: rgba(181, 138, 63, 0.08);
-    border-left: 2px solid var(--accent-built);
-    padding: 10px 14px;
-    border-radius: 0 4px 4px 0;
-    margin: 12px 0;
-    font-size: 12px;
-    color: var(--text-muted);
-    line-height: 1.55;
-  }
-
-  .status-note strong { color: var(--text); }
-
-  .section-heading {
-    font-size: 12px;
+  .check.done { background: var(--forest); color: #fff; }
+  .check.open { background: transparent; border: 1.5px solid var(--ridge); color: transparent; }
+  .feat-body { flex: 1; min-width: 0; }
+  .feat-name {
     font-weight: 600;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin: 16px 0 8px;
+    color: var(--text);
+    margin-right: 8px;
   }
-
-  .group-heading {
-    font-size: 11px;
+  .feat-desc {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    margin-top: 2px;
+  }
+  .size-badge {
+    display: inline-block;
+    font-size: 0.65rem;
     font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+  .size-xs { background: var(--size-xs); }
+  .size-s  { background: var(--size-s); }
+  .size-m  { background: var(--size-m); }
+  .size-l  { background: var(--size-l); }
+  .info-block {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--bg-elev);
+    border-left: 2px solid var(--border);
+    border-radius: 0 6px 6px 0;
+    font-size: 0.85rem;
+  }
+  .info-block .heading {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  .info-block.cost { border-left-color: var(--forest-light); }
+  .risks {
+    margin-top: 12px;
+    background: var(--bg-elev);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .risks summary {
+    padding: 10px 12px;
+    font-size: 0.82rem;
     color: var(--text-dim);
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin: 28px 0 12px;
-    padding-left: 4px;
+    letter-spacing: 0.05em;
+    font-weight: 600;
   }
-
-  .group-heading:first-of-type { margin-top: 0; }
-
-  footer {
-    margin-top: 40px;
-    text-align: center;
+  .risks .risk-body {
+    padding: 0 12px 12px;
+    color: var(--text);
+    font-size: 0.85rem;
+  }
+  .risks .risk-body p { margin: 6px 0; }
+  .legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 0.75rem;
     color: var(--text-dim);
-    font-size: 11px;
+    margin-top: 16px;
   }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 
-  @media (max-width: 600px) {
+  @media (max-width: 500px) {
     .container { padding: 20px 14px 60px; }
-    h1 { font-size: 24px; }
-    summary { gap: 8px; }
-    .milestone-name { font-size: 14px; }
-    .summary { gap: 16px; }
+    h1 { font-size: 1.5rem; }
+    .timeline { padding-left: 26px; }
+    .node { left: -26px; width: 20px; height: 20px; top: 12px; }
+    .timeline::before { left: 9px; }
+    summary { padding: 12px 14px; gap: 8px; }
+    .body { padding: 12px 14px 14px; }
+    .v-badge { font-size: 0.72rem; }
+    .m-name { font-size: 0.92rem; }
   }
 
   @media print {
-    body { background: white; color: black; }
-    .card { background: white !important; border-color: #ccc; box-shadow: none !important; }
-    details { display: block; }
-    details > summary::after { display: none; }
-    details > *:not(summary) { display: block !important; }
-    .milestone-desc, .feature-text, .risks-list li, .status-note { color: #555 !important; }
-    .timeline::before { background: #ccc; }
+    html, body { background: #fff; color: #000; }
+    .container { max-width: 100%; padding: 0; }
+    h1 { color: #000; }
+    .subtitle { color: #444; }
+    details { background: #fff; border: 1px solid #999; box-shadow: none !important; }
+    .body, .info-block, .risks, .features li { background: #f6f6f6 !important; color: #000; }
+    .milestone .node { background: #fff !important; color: #000 !important; border-color: #000 !important; box-shadow: none !important; }
+    .milestone.shipped .node, .milestone.current .node { background: #000 !important; color: #fff !important; }
+    details > summary::before { display: none; }
+    details { page-break-inside: avoid; }
+    .v-badge { background: #fff; color: #000; border-color: #000; }
+    .status-pill, .size-badge { border: 1px solid #000; color: #000 !important; background: #fff !important; }
   }
 </style>
 </head>
 <body>
 <div class="container">
-  <header>
+  <header class="page-header">
     <h1>Campable Roadmap</h1>
-    <p class="subtitle">v0.2.1 → v2.0 · Generated 2026-05-25</p>
-    <div class="summary">
-      <div class="summary-stat"><span class="num">34</span><span class="label">Total Milestones</span></div>
-      <div class="summary-stat"><span class="num" style="color: var(--accent-shipped);">28</span><span class="label">Shipped</span></div>
-      <div class="summary-stat"><span class="num" style="color: var(--accent-built);">1</span><span class="label">Built (Not Merged)</span></div>
-      <div class="summary-stat"><span class="num" style="color: var(--accent-current);">1</span><span class="label">In Progress</span></div>
-      <div class="summary-stat"><span class="num" style="color: var(--accent-future);">4</span><span class="label">Planned</span></div>
+    <p class="subtitle">Generated 2026-05-29 &middot; Source: <code>docs/ROADMAP.md</code></p>
+    <div class="overall-progress">
+      <div class="label"><span>Overall progress</span><strong>27 of 37 milestones shipped (73%)</strong></div>
+      <div class="pbar"><div style="width: 73%"></div></div>
     </div>
-    <div class="overall-bar"><div class="overall-bar-fill" style="width: 82%;"></div></div>
-    <p class="subtitle" style="margin-top: 6px;">82% complete · Current focus: v1.33 Supabase Auth</p>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--forest)"></span> Shipped</span>
+      <span><span class="swatch" style="background: var(--ember)"></span> In progress</span>
+      <span><span class="swatch" style="background: var(--ridge)"></span> Future</span>
+      <span><span class="size-badge size-xs">XS</span></span>
+      <span><span class="size-badge size-s">S</span></span>
+      <span><span class="size-badge size-m">M</span></span>
+      <span><span class="size-badge size-l">L</span></span>
+    </div>
   </header>
 
   <div class="timeline">
 
-    <div class="group-heading">Foundation (v0.x)</div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.1</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Foundation</span></summary><p class="milestone-desc">Multi-provider search, CLI watches, dashboard</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.2</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Watches on the Web</span></summary><p class="milestone-desc">Web-based watch management, dark mode</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.2.1</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Hardening</span></summary><p class="milestone-desc">Security fixes, Level A a11y failures, perf wins</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.3</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Calendar &amp; Polish</span></summary><p class="milestone-desc">Calendar heat map, SSE streaming, shareable links</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.4</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Accounts</span></summary><p class="milestone-desc">User accounts, saved preferences, persistent watches</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.45</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Testing</span></summary><p class="milestone-desc">346 tests, CI gating, 82% coverage</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.5</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Background Engine</span></summary><p class="milestone-desc">Server-side polling, web push, registry auto-enrichment</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.6</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Smart Search</span></summary><p class="milestone-desc">Zero-result recovery, date shifting, search diagnostics</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.7</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Oregon + Delight</span></summary><p class="milestone-desc">Vibe descriptions, contextual notifications (OR provider deferred)</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.8a</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Trip Planner MVP</span></summary><p class="milestone-desc">Conversational AI planner with tool calling</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.8b</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Trip Planner Polish</span></summary><p class="milestone-desc">Streaming, itinerary cards, shareable links</p></details></div></div>
-
-    <div class="milestone built">
-      <div class="card">
-        <details open>
-          <summary>
-            <span class="version-badge">v0.95</span>
-            <span class="status-pill built">Built*</span>
-            <span class="milestone-name">Monetization</span>
-          </summary>
-          <p class="milestone-desc">Free/Pro tiers, Stripe billing — built on <code>feature/monetization</code> (NOT merged, stale Mar 2026)</p>
-          <div class="card-body">
-            <div class="status-note">
-              <strong>Status (2026-05-25):</strong> Implementation completed on <code>feature/monetization</code> (6 commits, last touched 2026-03-29) and integrated against <code>main</code> through v1.0. The branch was never merged back to <code>dev</code>. Since March 2026, <code>dev</code> has moved 242 commits ahead — most critically v1.33 Supabase Auth, which replaced the custom-cookie user model. Preserved as reference for v1.4 rebuild; will not be merged.
-            </div>
-            <div class="section-heading">Built but unmerged features</div>
-            <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Payment provider integration</span> · <span class="feature-text">Stripe hosted checkout + customer portal + webhook handler</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Subscription schema + entitlements</span> · <span class="feature-text">subscription_status, subscription_events audit table, webhook event dedup</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Watch limit enforcement</span> · <span class="feature-text">HTTP 402 + upgrade URL; 5-min polling for Pro</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Trip planner gating</span> · <span class="feature-text">3 free / 20 Pro sessions per month</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Pricing page, upgrade modal, billing settings</span> · <span class="feature-text">All UI components (predate v1.27/v1.29 design system)</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Downgrade + grandfather logic</span> · <span class="feature-text">30-day grandfather window; watches paused not deleted</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Webhook security + audit trail</span> · <span class="feature-text">HMAC raw-byte signature verification, idempotency via stripe_events</span></span></li>
-            </ul>
-            <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>0 of 7 shipped to prod</span><span>built but unmerged</span></div>
-          </div>
-        </details>
-      </div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.1</span>
+          <span class="m-name">Foundation</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Multi-provider search, CLI watches, dashboard</span>
+        </summary>
+      </details>
     </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.96</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Registry + Infra</span></summary><p class="milestone-desc">Registry expansion, bundle audit, Lighthouse CI</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.2</span>
+          <span class="m-name">Watches on the Web</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Web-based watch management, dark mode</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.97</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Map + Power User</span></summary><p class="milestone-desc">Map view, keyboard shortcuts, lazy loading</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.2.1</span>
+          <span class="m-name">Hardening</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Security fixes, Level A a11y failures, perf wins</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.98</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Quality Hardening</span></summary><p class="milestone-desc">WCAG AA contrast, focus styles, ErrorBoundary, CI a11y</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.3</span>
+          <span class="m-name">Calendar &amp; Polish</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Calendar heat map, SSE streaming, shareable links</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v0.99</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Pre-launch Audit</span></summary><p class="milestone-desc">Security headers, CSP, login rate limit, lazy loading, CVE CI</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.4</span>
+          <span class="m-name">Accounts</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">User accounts, saved preferences, persistent watches</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="group-heading">v1.x — Public Product</div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.45</span>
+          <span class="m-name">Testing</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">346 tests, CI gating, 82% coverage</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.0</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">campnw 1.0</span></summary><p class="milestone-desc">OR State Parks, recs, collapsible form, hamburger, polish</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.5</span>
+          <span class="m-name">Background Engine</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Server-side polling, web push, registry auto-enrichment</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.1</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Better Search + Coverage</span></summary><p class="milestone-desc">NL search, registry expansion (MT/WY/NorCal), AI summaries</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.6</span>
+          <span class="m-name">Smart Search</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Zero-result recovery, date shifting, search diagnostics</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.15</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Brand + Identity</span></summary><p class="milestone-desc">Logo, palette, voice, og:image, notification copy</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.7</span>
+          <span class="m-name">Oregon + Delight</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Vibe descriptions, contextual notifications</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.2</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Trips + Watches</span></summary><p class="milestone-desc">Trip object, template watches, sharing, onboarding</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.8a</span>
+          <span class="m-name">Trip Planner MVP</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Conversational AI planner with tool calling</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.26</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Hardening</span></summary><p class="milestone-desc">History compaction, DB backup, SEC-10, re-enrichment · 2026-03-31</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.8b</span>
+          <span class="m-name">Trip Planner Polish</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Streaming, itinerary cards, shareable links</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.27</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">UX Polish</span></summary><p class="milestone-desc">Blue heatmap, teal WA, date picker, NL search, icons, filters · 2026-04-04</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.95</span>
+          <span class="m-name">Monetization (built, not merged)</span>
+          <span class="status-pill shipped">Built</span>
+          <span class="m-desc">Free/Pro tiers, Stripe billing &mdash; stale Mar 2026, rebuilt in v1.4</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.28</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Watch Reliability</span></summary><p class="milestone-desc">Watch source persistence, N+1 fix, SSE batching, perf · 2026-04-05</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.96</span>
+          <span class="m-name">Registry + Infra</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Registry expansion, bundle audit, Lighthouse CI</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.29</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Brand + Polish</span></summary><p class="milestone-desc">Madrona logo, og:image, LLM analytics, registry cleanup, itinerary cards · 2026-04-07</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.97</span>
+          <span class="m-name">Map + Power User</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Map view, keyboard shortcuts, lazy loading</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.3</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">SEO + Discoverability</span></summary><p class="milestone-desc">Campground profile pages, sitemap, structured data, Cloudflare · 2026-04-08</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.98</span>
+          <span class="m-name">Quality Hardening</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">WCAG AA contrast, focus styles, ErrorBoundary, CI a11y</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.31</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Audit Fixes</span></summary><p class="milestone-desc">Security hardening, perf optimizations, WCAG AA compliance · 2026-04-09</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v0.99</span>
+          <span class="m-name">Pre-launch Audit</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Security headers, CSP, login rate limit, lazy loading, CVE CI</span>
+        </summary>
+      </details>
+    </div>
 
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.32</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Accurate Drive Times</span></summary><p class="milestone-desc">Mapbox routing, drive_times table, tiered search lookup · 2026-04-13</p></details></div></div>
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.0</span>
+          <span class="m-name">campnw 1.0</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">OR State Parks, recs, collapsible form, hamburger, polish</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.1</span>
+          <span class="m-name">Better Search</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">NL search, registry expansion (MT/WY/NorCal), AI summaries</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.15</span>
+          <span class="m-name">Brand + Identity</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Logo, palette, voice, og:image, notification copy</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.2</span>
+          <span class="m-name">Trips + Watches</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Trip object, template watches, sharing, onboarding</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.26</span>
+          <span class="m-name">Hardening</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">History compaction, DB backup, SEC-10, re-enrichment</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.27</span>
+          <span class="m-name">UX Polish</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Blue heatmap, teal WA, date picker, NL search, icons, filters</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.28</span>
+          <span class="m-name">Watch Reliability</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Watch source persistence, N+1 fix, SSE batching, perf</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.29</span>
+          <span class="m-name">Brand + Polish</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Madrona logo, og:image, LLM analytics, registry cleanup, itinerary cards</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.3</span>
+          <span class="m-name">SEO + Discoverability</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Campground profile pages, sitemap, structured data, Cloudflare</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.31</span>
+          <span class="m-name">Audit Fixes</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Security hardening, perf optimizations, WCAG AA compliance</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.32</span>
+          <span class="m-name">Accurate Drive Times</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Mapbox routing, drive_times table, tiered search lookup</span>
+        </summary>
+      </details>
+    </div>
 
     <div class="milestone current">
-      <div class="card">
-        <details open>
-          <summary>
-            <span class="version-badge">v1.33</span>
-            <span class="status-pill current">In Progress</span>
-            <span class="milestone-name">Supabase Auth</span>
-          </summary>
-          <p class="milestone-desc">Replace custom auth with Supabase, Bearer tokens, auto-provisioning. Auth in Supabase, profile in SQLite keyed by supabase_id.</p>
-          <div class="card-body">
-            <div class="section-heading">Features</div>
-            <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Supabase project setup</span> · <span class="feature-text">us-west region, redirect URLs, secrets</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Backend JWT swap</span> · <span class="feature-text">PyJWT validation, SUPABASE_JWT_SECRET, ~0.5ms local decode</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">User auto-provisioning</span> · <span class="feature-text">supabase_id column, zero FK migration on watches/trips</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Remove custom auth routes</span> · <span class="feature-text">Drop signup/login/logout, remove bcrypt</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Frontend Supabase client</span> · <span class="feature-text">@supabase/supabase-js, keep AuthContextValue interface</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Bearer token pattern</span> · <span class="feature-text">authFetch() wrapper, Authorization header</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Anonymous session migration</span> · <span class="feature-text">Migrate campnw_session cookies to user accounts</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">CSP + Account deletion updates</span> · <span class="feature-text">Supabase connect-src, admin API user delete</span></span></li>
-            </ul>
-            <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>In progress</span><span>0 of 8 shipped</span></div>
-            <details class="risks">
-              <summary>Key Risks</summary>
-              <ul class="risks-list">
-                <li>Supabase availability becomes a dependency for login (not for ongoing sessions). Anonymous mode is unaffected.</li>
-              </ul>
-            </details>
+      <div class="node">&rarr;</div>
+      <details open>
+        <summary>
+          <span class="v-badge">v1.33</span>
+          <span class="m-name">Supabase Auth</span>
+          <span class="status-pill current">In progress</span>
+          <span class="m-desc">Replace custom auth with Supabase, Bearer tokens, auto-provisioning</span>
+        </summary>
+        <div class="body">
+          <div class="mini-progress">
+            <div class="label"><span>Feature progress</span><strong>0 / 9</strong></div>
+            <div class="pbar"><div style="width: 0%"></div></div>
           </div>
-        </details>
-      </div>
-    </div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.34</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Weather Context</span></summary><p class="milestone-desc">Typical temps + precipitation on search results via Visual Crossing · 2026-05-16</p></details></div></div>
-
-    <div class="milestone shipped"><div class="card"><details><summary><span class="version-badge">v1.35</span><span class="status-pill shipped">Shipped</span><span class="milestone-name">Source Photos</span></summary><p class="milestone-desc">Campground photos from RIDB/RA + SVG postcard placeholder · 2026-05-16 (7 of 8 features; URL verification cron deferred, PostHog alert in place)</p></details></div></div>
-
-    <div class="group-heading">Planned</div>
-
-    <div class="milestone future">
-      <div class="card">
-        <details open>
-          <summary>
-            <span class="version-badge">v1.36</span>
-            <span class="status-pill future">Planned</span>
-            <span class="milestone-name">OAuth Login</span>
-          </summary>
-          <p class="milestone-desc">GitHub, Google, Apple sign-in via Supabase. GitHub ships immediately; Google/Apple blocked on LLC + dev accounts.</p>
-          <div class="card-body">
-            <div class="section-heading">Features</div>
-            <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">GitHub OAuth provider</span> · <span class="feature-text">Free, no paid account, ~5 min setup — can ship immediately</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Google OAuth provider</span> · <span class="feature-text">Cloud Console setup; blocked on LLC</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Apple OAuth provider</span> · <span class="feature-text">Services ID + private key; blocked on LLC + $99/yr</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">OAuth buttons in AuthModal</span> · <span class="feature-text">Above email/password form, signInWithOAuth call</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Apple display name capture</span> · <span class="feature-text">Apple only sends name on first sign-in</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Email-linking UX</span> · <span class="feature-text">Auto-link OAuth to existing email/password accounts</span></span></li>
-            </ul>
-            <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>0 of 6 shipped</span><span>GitHub unblocked; Google/Apple gated on accounts</span></div>
-            <details class="risks">
-              <summary>Key Risks</summary>
-              <ul class="risks-list">
-                <li>Google/Apple accounts not ready — ship GitHub OAuth first, others independent</li>
-                <li>Google consent screen testing mode (100-user cap) — submit for verification before launch</li>
-                <li>Apple only sends name once — capture in auto-provisioning, fallback to profile settings</li>
-              </ul>
-            </details>
+          <ul class="features">
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Supabase project setup</span><span class="size-badge size-s">S</span><div class="feat-desc">Create project (us-west region), configure redirect URLs, note secrets.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Backend JWT swap</span><span class="size-badge size-m">M</span><div class="feat-desc">Replace custom HS256 validation with Supabase JWT via PyJWT. Local decode (~0.5ms), no per-request network.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">User auto-provisioning</span><span class="size-badge size-s">S</span><div class="feat-desc">supabase_id column on users; create local record on first authenticated call. Zero FK migration.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Remove custom auth routes</span><span class="size-badge size-m">M</span><div class="feat-desc">Delete signup/login/logout, keep profile CRUD. Drop bcrypt.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Frontend Supabase client</span><span class="size-badge size-m">M</span><div class="feat-desc">@supabase/supabase-js. Replace useAuth internals, keep AuthContextValue interface.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Bearer token pattern</span><span class="size-badge size-m">M</span><div class="feat-desc">Replace cookie auth with Authorization: Bearer header. New authFetch() wrapper.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Anonymous session migration</span><span class="size-badge size-s">S</span><div class="feat-desc">Migrate watches from session cookie via existing migrate_watches_to_user().</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">CSP update</span><span class="size-badge size-s">S</span><div class="feat-desc">Add Supabase project ref to connect-src.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Account deletion update</span><span class="size-badge size-s">S</span><div class="feat-desc">DELETE /api/auth/me also calls Supabase admin API to delete user.</div></div></li>
+          </ul>
+          <div class="info-block cost">
+            <div class="heading">Cost</div>
+            Supabase free tier. ~$0/mo. Backend ~150 LOC changed; frontend ~110 LOC.
           </div>
-        </details>
-      </div>
-    </div>
-
-    <div class="milestone future">
-      <div class="card">
-        <details open>
-          <summary>
-            <span class="version-badge">v1.4</span>
-            <span class="status-pill future">Planned</span>
-            <span class="milestone-name">Monetization Launch</span>
-          </summary>
-          <p class="milestone-desc">Pro tier gate, payment, freemium conversion flows. Rebuilt against current architecture; <code>feature/monetization</code> branch as reference.</p>
-          <div class="card-body">
-            <div class="status-note">
-              <strong>Implementation Approach:</strong> v0.95's monetization layer was built on <code>feature/monetization</code> (Mar 2026) but never merged. Since then v1.33 Supabase Auth and v1.27/v1.29 design system work have made the branch obsolete. v1.4 will rebuild against current architecture using the branch as reference: lift <code>billing.py</code> + adapt; rewrite routes against <code>routes/</code> pattern; reuse schema names + grandfather logic; rebuild frontend against current <code>tokens.css</code>; tests first.
+          <details class="risks">
+            <summary>Key risks</summary>
+            <div class="risk-body">
+              <p>Supabase availability becomes a dependency for login (not for ongoing sessions &mdash; local JWT validation works offline). Existing valid tokens continue working until expiry (1 hour default). Anonymous mode is unaffected.</p>
             </div>
-            <div class="section-heading">Features</div>
-            <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Freemium gate activation</span> · <span class="feature-text">Free: search/discovery/profiles. Pro: watches (&gt;3), alerts, trip planner, sharing</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Landing page</span> · <span class="feature-text">SEO-optimized homepage, multi-source value prop, free→pro ladder</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Upgrade flows from SEO pages</span> · <span class="feature-text">"Check Live Availability" / "Set up Alerts" CTAs</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Conversion analytics</span> · <span class="feature-text">PostHog funnel: SEO → search → watch → upgrade</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Pricing page</span> · <span class="feature-text">Clear free vs pro comparison, accessible both themes</span></span></li>
-            </ul>
-            <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>0 of 5 shipped</span><span>blocked by v1.36 + v1.3</span></div>
-            <details class="risks">
-              <summary>Key Risks</summary>
-              <ul class="risks-list">
-                <li>Premature monetization if v1.3 hasn't generated meaningful organic traffic — gates could hurt growth</li>
-                <li>Auth must be stable (v1.33/v1.36) before tying subscription state to user accounts</li>
-              </ul>
-            </details>
-          </div>
-        </details>
-      </div>
+          </details>
+        </div>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.34</span>
+          <span class="m-name">Weather Context</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Typical temps + precipitation on search results via Visual Crossing</span>
+        </summary>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.35</span>
+          <span class="m-name">Source Photos</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Campground photos from RIDB/RA + SVG postcard placeholder for missing sources</span>
+        </summary>
+      </details>
     </div>
 
     <div class="milestone future">
-      <div class="card">
-        <details open>
-          <summary>
-            <span class="version-badge">v1.45</span>
-            <span class="status-pill future">Planned</span>
-            <span class="milestone-name">Native Apps</span>
-          </summary>
-          <p class="milestone-desc">Capacitor shell wrapping the existing React app — iOS App Store + Google Play. Sequenced after v1.4 so monetization is validated on web before App Store review cycles.</p>
-          <div class="card-body">
-            <div class="section-heading">Features</div>
-            <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Capacitor scaffolding</span> · <span class="feature-text">ios/ + android/ generated, Vite build bundled into native</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-L">L</span><span><span class="feature-name">Native push (APNs + FCM)</span> · <span class="feature-text">Swap VAPID/SW push; new device_push_tokens table + dispatcher</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Native geolocation</span> · <span class="feature-text">True GPS for "campgrounds near me" with web fallback</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Bundled registry snapshot</span> · <span class="feature-text">1,370 campgrounds in IPA/APK (~2-5MB), offline browse</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Local watch state</span> · <span class="feature-text">SQLite mirror, sync on foreground, last-write-wins</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Bearer auth migration completion</span> · <span class="feature-text">@capacitor/preferences for JWT (not localStorage)</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Service worker gating</span> · <span class="feature-text">Disable SW on Capacitor.isNativePlatform()</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Universal Links / App Links</span> · <span class="feature-text">apple-app-site-association + assetlinks.json from Fly</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">In-app account deletion</span> · <span class="feature-text">Apple Guideline 5.1.1(v) requirement</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Native share sheet</span> · <span class="feature-text">@capacitor/share for trip/campground sharing</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Icons + splash screens</span> · <span class="feature-text">All iOS sizes + Android adaptive icon from Madrona assets</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">App Store / Play Store metadata</span> · <span class="feature-text">Screenshots (6.7"/6.9"/iPad), descriptions, privacy labels</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Sentry crash reporting</span> · <span class="feature-text">@sentry/capacitor for native + WebView traces</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Xcode Cloud + Play Console CI</span> · <span class="feature-text">Auto-build from main, native TestFlight delivery</span></span></li>
-            </ul>
-            <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>0 of 14 shipped</span><span>~4-6 weeks to first TestFlight</span></div>
-            <details class="risks">
-              <summary>Key Risks</summary>
-              <ul class="risks-list">
-                <li>Web Push (VAPID/SW) doesn't work in WKWebView — APNs/FCM swap is v1.0 critical path, not follow-on</li>
-                <li>First TestFlight review takes 2-7 days; rejections add another cycle — front-load Apple scrutiny areas</li>
-                <li>Map tiles unusable offline — decide v1: online-only with messaging or MapLibre + MBTiles bundle</li>
-                <li>iOS WKWebView purges localStorage under pressure — migrate critical state to @capacitor/preferences</li>
-                <li>Apple 4.2 "repackaged website" rejection — bundled registry + native push + geo + share + account deletion needed to clear</li>
-                <li>In-app purchases NOT in v1.45 scope — subscription billing stays web-only; native IAP is v1.5+ decision</li>
-              </ul>
-            </details>
+      <div class="node">&#9675;</div>
+      <details open>
+        <summary>
+          <span class="v-badge">v1.36</span>
+          <span class="m-name">OAuth Login</span>
+          <span class="status-pill future">Planned</span>
+          <span class="m-desc">Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/dev accounts)</span>
+        </summary>
+        <div class="body">
+          <div class="mini-progress">
+            <div class="label"><span>Feature progress</span><strong>0 / 6</strong></div>
+            <div class="pbar"><div style="width: 0%"></div></div>
           </div>
-        </details>
-      </div>
+          <ul class="features">
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">GitHub OAuth provider</span><span class="size-badge size-s">S</span><div class="feat-desc">Configure in Supabase + GitHub Developer Settings. Free, can ship immediately.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Google OAuth provider</span><span class="size-badge size-s">S</span><div class="feat-desc">Google Cloud Console: consent screen, client ID + secret, redirect URL. Blocked on LLC.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Apple OAuth provider</span><span class="size-badge size-s">S</span><div class="feat-desc">Apple Developer: Services ID, domain verification, private key. Blocked on LLC + $99/yr.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">OAuth buttons in AuthModal</span><span class="size-badge size-s">S</span><div class="feat-desc">"Continue with GitHub/Google/Apple" above email form.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Apple display name capture</span><span class="size-badge size-s">S</span><div class="feat-desc">Apple only sends name on first sign-in. Capture from user_metadata during provisioning.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Email-linking UX</span><span class="size-badge size-s">S</span><div class="feat-desc">When OAuth email matches existing account, Supabase auto-links. Surface clear message.</div></div></li>
+          </ul>
+          <div class="info-block cost">
+            <div class="heading">Cost</div>
+            ~30 lines frontend. Apple Developer membership $99/yr (when activated). GitHub free.
+          </div>
+          <details class="risks">
+            <summary>Key risks</summary>
+            <div class="risk-body">
+              <p><strong>Google/Apple accounts not ready:</strong> ship GitHub first (no blockers), add Google/Apple as accounts come online &mdash; each provider is independent.</p>
+              <p><strong>Google consent screen in testing mode:</strong> submit for verification before launch; requires privacy policy on campable.co.</p>
+              <p><strong>Apple only sends name once:</strong> capture in auto-provisioning; fallback to user-set name in profile settings.</p>
+            </div>
+          </details>
+        </div>
+      </details>
+    </div>
+
+    <div class="milestone shipped">
+      <div class="node">&#10003;</div>
+      <details>
+        <summary>
+          <span class="v-badge">v1.4</span>
+          <span class="m-name">Monetization Launch</span>
+          <span class="status-pill shipped">Shipped</span>
+          <span class="m-desc">Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)</span>
+        </summary>
+      </details>
     </div>
 
     <div class="milestone future">
-      <div class="card">
-        <details open>
-          <summary>
-            <span class="version-badge">v2.0</span>
-            <span class="status-pill future">Planned</span>
-            <span class="milestone-name">Predictions+</span>
-          </summary>
-          <p class="milestone-desc">Statistical prediction model, anomaly alerts, post-mortems. Needs 9-12 months polling data — targeting ~Q1 2027.</p>
-          <div class="card-body">
-            <div class="section-heading">Features</div>
-            <ul class="feature-list">
-              <li><span class="feature-status">○</span><span class="size-badge size-L">L</span><span><span class="feature-name">Statistical prediction model</span> · <span class="feature-text">Time-series on polling history + booking window detection</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Predictive availability display</span> · <span class="feature-text">"Typically frees up X days before" with confidence bands</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-S">S</span><span><span class="feature-name">Prediction confidence display</span> · <span class="feature-text">"Still learning" cold start state</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Smart notification scoring</span> · <span class="feature-text">"Usually books within 30 min" urgency hints</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">Anomaly-based deal alerts</span> · <span class="feature-text">Pro-only, Haiku-narrated with historical context</span></span></li>
-              <li><span class="feature-status">○</span><span class="size-badge size-M">M</span><span><span class="feature-name">"Why did I miss it?" post-mortem</span> · <span class="feature-text">Haiku-narrated timing analysis + tuning suggestions</span></span></li>
-            </ul>
-            <div class="progress-bar"><div class="progress-bar-fill" style="width: 0%;"></div></div>
-            <div class="progress-meta"><span>0 of 6 shipped</span><span>~Q1 2027 — data collection running since v0.5</span></div>
+      <div class="node">&#9675;</div>
+      <details open>
+        <summary>
+          <span class="v-badge">v1.41</span>
+          <span class="m-name">Playwright E2E</span>
+          <span class="status-pill future">Planned</span>
+          <span class="m-desc">End-to-end browser flows in Playwright (upgrade, watch limit, planner limit, cancel/reactivate). Rescoped from Maestro Web Beta after Phase 0 spike found ~14min iframe lookups.</span>
+        </summary>
+        <div class="body">
+          <div class="mini-progress">
+            <div class="label"><span>Feature progress</span><strong>0 / 8</strong></div>
+            <div class="pbar"><div style="width: 0%"></div></div>
           </div>
-        </details>
-      </div>
+          <ul class="features">
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Playwright setup (self-hosted, free)</span><span class="size-badge size-xs">XS</span><div class="feat-desc">e2e/ directory with package.json, playwright.config.ts, shared fixtures. Runs via @playwright/test in GitHub Actions.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Flow 1 &mdash; Upgrade smoke test</span><span class="size-badge size-m">M</span><div class="feat-desc">Anonymous &rarr; signup &rarr; /pricing &rarr; Stripe Checkout with 4242 4242 4242 4242 &rarr; PRO badge. Catches 4 of 5 v1.4 production bugs.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Flow 2 &mdash; Watch limit smoke test</span><span class="size-badge size-s">S</span><div class="feat-desc">Free user creates 4th watch &rarr; UpgradeModal opens with reason=watch_limit.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Flow 3 &mdash; Planner limit smoke test</span><span class="size-badge size-s">S</span><div class="feat-desc">Free user submits 4th planner prompt &rarr; UpgradeModal opens with reason=planner_limit.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Flow 4 &mdash; Cancel + reactivate</span><span class="size-badge size-m">M</span><div class="feat-desc">Pro user &rarr; Customer Portal &rarr; Cancel &rarr; subscription_expires_at rendered &rarr; Reactivate &rarr; cleared. Webhook &rarr; DB &rarr; UI loop validation.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Staging URL strategy + fixture seeding</span><span class="size-badge size-s">S</span><div class="feat-desc">Fly preview branches per PR + long-lived campnw-staging for nightly runs. Tests never hit production. scripts/seed_e2e_fixtures.py via Supabase Admin API + SQLite.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Email confirmation off in prod Supabase</span><span class="size-badge size-xs">XS</span><div class="feat-desc">Already configured. Saved to memory so future sessions don't propose email-verification waits.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">CI integration</span><span class="size-badge size-s">S</span><div class="feat-desc">GitHub Actions playwright.yml: smoke on every PR (~60s), nightly cron for all flows. Failures upload HTML report + trace.</div></div></li>
+          </ul>
+          <div class="info-block cost">
+            <div class="heading">Cost</div>
+            <strong>$0/mo</strong> infrastructure. GitHub Actions free minutes + Fly preview branches auto-suspend. Stripe test-mode only.
+          </div>
+          <details class="risks">
+            <summary>Key risks</summary>
+            <div class="risk-body">
+              <p><strong>Stripe Checkout UI changes:</strong> stable but does occasionally rev. Fix the single fixture rather than adding wrapper layers.</p>
+              <p><strong>Fixture user drift on schema changes:</strong> scripts/seed_e2e_fixtures.py is idempotent &mdash; rerun seed = fixed.</p>
+              <p><strong>Test account email collision:</strong> Flow 1 uses timestamped random email per run; Flows 2-4 use stable purpose-named fixtures.</p>
+              <p><strong>Live-mode bugs missed by test-mode tests:</strong> ~95% coverage. Real fraud detection, bank declines, refund processing need manual smoke when first live transaction lands.</p>
+              <p><strong>Maestro Web perf regression doesn't affect Playwright:</strong> Playwright's iframe handling is mature and not at risk of the same beta perf trap.</p>
+            </div>
+          </details>
+        </div>
+      </details>
+    </div>
+
+    <div class="milestone future">
+      <div class="node">&#9675;</div>
+      <details open>
+        <summary>
+          <span class="v-badge">v1.42</span>
+          <span class="m-name">Site Polish + Legal Footing</span>
+          <span class="status-pill future">Planned</span>
+          <span class="m-desc">About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.</span>
+        </summary>
+        <div class="body">
+          <div class="mini-progress">
+            <div class="label"><span>Feature progress</span><strong>0 / 8</strong></div>
+            <div class="pbar"><div style="width: 0%"></div></div>
+          </div>
+          <ul class="features">
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">About page (/about)</span><span class="size-badge size-m">M</span><div class="feat-desc">Honest first-person voice matching Pricing. What Campable does, why, who's behind it, how funded. Trust signal for fence-sitters.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Privacy Policy (/privacy)</span><span class="size-badge size-s">S</span><div class="feat-desc">Termly-generated, customized for Supabase + PostHog + Stripe + Mapbox + Visual Crossing. GDPR/CCPA-aware.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Terms of Service (/terms)</span><span class="size-badge size-s">S</span><div class="feat-desc">Termly-generated for $5/mo subscription + refund policy. WA jurisdiction.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Footer component</span><span class="size-badge size-s">S</span><div class="feat-desc">Site-wide footer: About, Pricing, Privacy, Terms, GitHub, contact email. Auto year + version from package.json.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Contact email</span><span class="size-badge size-xs">XS</span><div class="feat-desc">support@campable.co mailto in footer. Stripe wants a support contact for activation.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Stripe Business profile config</span><span class="size-badge size-xs">XS</span><div class="feat-desc">Paste Privacy + ToS URLs into Stripe Dashboard. Required for live-mode review.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Stripe Customer Portal links</span><span class="size-badge size-xs">XS</span><div class="feat-desc">Add Terms + Privacy URLs so cancel/manage flow shows them.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Apple App Store URL prep</span><span class="size-badge size-xs">XS</span><div class="feat-desc">Confirm /privacy renders in Helmet meta + reachable for Apple's submission crawler.</div></div></li>
+          </ul>
+          <div class="info-block cost">
+            <div class="heading">Cost</div>
+            Termly free tier. ~1-2 days focused work. Most effort is page structure + voice matching, not legal drafting.
+          </div>
+          <details class="risks">
+            <summary>Key risks</summary>
+            <div class="risk-body">
+              <p><strong>Templates miss state-specific nuance:</strong> generic by design. Brief lawyer review when revenue &gt; $10K/mo for WA LLC specifics.</p>
+              <p><strong>Cookie banner deferral:</strong> measure EU traffic in PostHog quarterly; banner becomes priority if EU &gt; 5%.</p>
+              <p><strong>About-page voice drifts into marketing:</strong> read it back as a skeptical Hacker News commenter before merging.</p>
+              <p><strong>Privacy Policy gets stale as third parties change:</strong> re-audit annually OR when adding any new third-party service.</p>
+              <p><strong>Stripe Business profile review timing:</strong> live-mode activation may stall. Submit Privacy + ToS URLs ASAP after deploy.</p>
+            </div>
+          </details>
+        </div>
+      </details>
+    </div>
+
+    <div class="milestone future">
+      <div class="node">&#9675;</div>
+      <details open>
+        <summary>
+          <span class="v-badge">v1.45</span>
+          <span class="m-name">Native Apps</span>
+          <span class="status-pill future">Planned</span>
+          <span class="m-desc">Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry</span>
+        </summary>
+        <div class="body">
+          <div class="mini-progress">
+            <div class="label"><span>Feature progress</span><strong>0 / 13</strong></div>
+            <div class="pbar"><div style="width: 0%"></div></div>
+          </div>
+          <ul class="features">
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Capacitor scaffolding</span><span class="size-badge size-m">M</span><div class="feat-desc">npx cap init + ios/android. Vite build bundled into native projects on each release.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Native push notifications</span><span class="size-badge size-l">L</span><div class="feat-desc">@capacitor/push-notifications. APNs + FCM. New device_push_tokens table. Server-side dispatcher per token type.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Native geolocation</span><span class="size-badge size-s">S</span><div class="feat-desc">@capacitor/geolocation for true GPS-based "near me" search. Falls back to IP geo.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Bundled registry snapshot</span><span class="size-badge size-m">M</span><div class="feat-desc">assets/registry.db in IPA/APK (~2-5MB). Capacitor SQLite for offline search. Refresh on launch.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Local watch state</span><span class="size-badge size-m">M</span><div class="feat-desc">Mirror watches to local SQLite. Sync on foreground. Last-write-wins conflict resolution. Availability still live.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Auth Bearer migration completion</span><span class="size-badge size-s">S</span><div class="feat-desc">All /api/* uses Bearer. JWT in @capacitor/preferences (WKWebView purges localStorage).</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Service worker gating</span><span class="size-badge size-s">S</span><div class="feat-desc">Wrap SW registration in !Capacitor.isNativePlatform(). SWs flaky in WKWebView.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Universal Links / App Links</span><span class="size-badge size-s">S</span><div class="feat-desc">Serve apple-app-site-association and assetlinks.json from Fly. Map share URLs to native deep links.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">In-app account deletion</span><span class="size-badge size-s">S</span><div class="feat-desc">Apple Guideline 5.1.1(v). Wire Supabase user deletion to UserMenu settings.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Native share sheet</span><span class="size-badge size-s">S</span><div class="feat-desc">@capacitor/share for trip/campground sharing.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">App icons + splash screens</span><span class="size-badge size-s">S</span><div class="feat-desc">All iOS + Android adaptive icon + splash from Madrona brand. Tool: @capacitor/assets.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">App Store / Play Store metadata</span><span class="size-badge size-m">M</span><div class="feat-desc">Screenshots, descriptions, keywords, privacy URLs, privacy nutrition labels.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Sentry crash reporting + CI/CD</span><span class="size-badge size-m">M</span><div class="feat-desc">@sentry/capacitor for native + WebView crashes. Xcode Cloud + Play Console internal track.</div></div></li>
+          </ul>
+          <div class="info-block cost">
+            <div class="heading">Cost</div>
+            Apple Developer $99/yr. Google Play $25 one-time. Sentry free tier. Xcode Cloud 25 free build-hrs/mo. Realistic timeline: 4-6 weeks calendar for solo dev new to Capacitor.
+          </div>
+          <details class="risks">
+            <summary>Key risks</summary>
+            <div class="risk-body">
+              <p><strong>Web Push doesn't work in WKWebView:</strong> APNs/FCM swap is critical path, not follow-on. Build server-side dispatcher.</p>
+              <p><strong>TestFlight review 2-7 days, rejections add cycles:</strong> front-load privacy labels, account deletion, push permission copy. Ship Android first to find non-Apple bugs cheaply.</p>
+              <p><strong>Map tiles unusable offline:</strong> decide v1 &mdash; online-only with explicit empty state, OR MapLibre + MBTiles (~30-50MB PNW bundle). Don't silently defer.</p>
+              <p><strong>WKWebView purges localStorage:</strong> migrate JWT, watch cache, prefs to @capacitor/preferences before TestFlight.</p>
+              <p><strong>Apple 4.2 rejection ("repackaged website"):</strong> low risk if we ship registry + push + GPS + share + deletion. High if we cut any to save time.</p>
+              <p><strong>Capacitor + Vite build drift:</strong> lock Capacitor major. Run npx cap sync in CI on every PR touching web/.</p>
+              <p><strong>In-app purchases not in scope:</strong> billing stays web-only at v1.45. Native IAP is v1.5+ (Apple 15-30% rev share + receipt validation).</p>
+              <p><strong>Realistic timeline drift:</strong> don't promise dates externally until first TestFlight build is in Apple's hands.</p>
+            </div>
+          </details>
+        </div>
+      </details>
+    </div>
+
+    <div class="milestone future">
+      <div class="node">&#9675;</div>
+      <details open>
+        <summary>
+          <span class="v-badge">v2.0</span>
+          <span class="m-name">Predictions+</span>
+          <span class="status-pill future">~Q1 2027</span>
+          <span class="m-desc">Statistical model, anomaly alerts, post-mortems (needs 9-12 months polling data)</span>
+        </summary>
+        <div class="body">
+          <div class="mini-progress">
+            <div class="label"><span>Feature progress</span><strong>0 / 6</strong></div>
+            <div class="pbar"><div style="width: 0%"></div></div>
+          </div>
+          <ul class="features">
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Statistical prediction model</span><span class="size-badge size-l">L</span><div class="feat-desc">Time-series analysis on availability_history: median days-before cancellations, confidence intervals, booking window detection per-campground.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Availability prediction display</span><span class="size-badge size-l">L</span><div class="feat-desc">"Sites typically free up X-Y days before" with confidence band. Cold start: "still learning." Integrates into result cards + check view.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Prediction confidence display</span><span class="size-badge size-s">S</span><div class="feat-desc">Visual confidence (low/medium/high) based on sample size. Transparent about data limitations.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Smart notification scoring</span><span class="size-badge size-m">M</span><div class="feat-desc">When a watch fires, attach urgency: "Usually books within 30 minutes" vs "Typically stays open for hours."</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">Anomaly-based deal alerts</span><span class="size-badge size-m">M</span><div class="feat-desc">Detect statistically unusual availability against seasonal baseline. Pro-only. Haiku narrates with historical context.</div></div></li>
+            <li><span class="check open">&#9675;</span><div class="feat-body"><span class="feat-name">"Why did I miss it?" post-mortem</span><span class="size-badge size-m">M</span><div class="feat-desc">Timing analysis + Haiku-narrated actionable tuning suggestions when watched sites open and re-book before user acts.</div></div></li>
+          </ul>
+          <div class="info-block cost">
+            <div class="heading">Cost</div>
+            Anthropic Haiku for anomaly narration + post-mortems (already integrated). Statistical model is local Python. No new infrastructure.
+          </div>
+          <details class="risks">
+            <summary>Key risks</summary>
+            <div class="risk-body">
+              <p><strong>Data quality and sample size for less-popular campgrounds.</strong> v1.2's pattern extraction serves as early validation.</p>
+            </div>
+          </details>
+        </div>
+      </details>
     </div>
 
   </div>
-
-  <footer>
-    Generated 2026-05-25 · Source: <code>docs/ROADMAP.md</code> · Regenerate with <code>/roadmap</code>
-  </footer>
 </div>
 </body>
 </html>
