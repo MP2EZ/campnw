@@ -1650,11 +1650,11 @@ Sequencing: realistically wants to happen before live Stripe mode activates (Str
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| About page (/about) | M | Honest first-person voice matching the Pricing page. Covers: what Campable does, why it exists, who's behind it, how it's funded, where data comes from, what's coming. Trust signal for fence-sitters on /pricing. |
-| Privacy Policy (/privacy) | S | Termly-generated, customized for actual data flow: Supabase (auth), PostHog (analytics), Stripe (billing), Mapbox (drive-time geocoding), Visual Crossing (weather). Honest disclosure of what's collected, retained, and shared. GDPR/CCPA-aware language. |
-| Terms of Service (/terms) | S | Termly-generated, customized for $5/mo subscription + refund policy. Liability limit, governing jurisdiction (Washington), right to terminate abusive accounts. Embed refund policy explicitly per Stripe's preference. |
-| Footer component | S | New `<Footer>` rendered site-wide. Links: About, Pricing, Privacy, Terms, GitHub repo, contact email. Includes © year + version (auto-pulled from package.json). |
-| Contact email | XS | `support@campable.co` (or chosen address) mailto in footer. Stripe wants a support contact for activation. |
+| About page (/about) | M | _Shipped early, ahead of v1.42._ Honest first-person voice matching the Pricing page. Covers: what Campable does, why it exists, who's behind it, how it's funded, where data comes from, what's coming. Trust signal for fence-sitters on /pricing. |
+| Privacy Policy (/privacy) | S | Hand-written in Campable voice (not Termly — see Architecture Decisions). Honest disclosure of every third party that touches user data (Supabase, Stripe, PostHog, Mapbox, Visual Crossing, Cloudflare, Fly), retention policy, and GDPR/CCPA rights. |
+| Terms of Service (/terms) | S | Hand-written. $5/mo subscription terms, explicit 30-day refund policy (per Stripe's preference), liability limit, governing law (Washington), right to terminate abusive accounts. Linked from /pricing. |
+| Footer component | S | New `<Footer>` rendered site-wide outside `<Routes>`. Links: About, Pricing, Privacy, Terms, Contact (mailto). © year only — version dropped (continuously deployed, package.json is 0.0.0, no semver discipline to display). |
+| Contact email | XS | `hello@palouselabs.com` already wired. Mailto in footer and on Privacy/Terms contact sections. |
 | Stripe Business profile config | XS | Paste Privacy + ToS URLs into Stripe Dashboard → Settings → Public details. Required for live-mode review. |
 | Stripe Customer Portal links | XS | Customer Portal config page → add Terms + Privacy URLs so the cancel/manage flow shows them. |
 | Apple App Store URL prep | XS | Confirm /privacy URL renders in Helmet meta + is reachable for Apple's submission crawler. (v1.45 will actually submit; v1.42 just has the URL ready.) |
