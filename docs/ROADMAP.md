@@ -40,7 +40,7 @@ v1.34   [SHIPPED]  Weather Context      — Typical temps + precipitation on sea
 v1.35   [SHIPPED]  Source Photos        — Campground photos from RIDB/RA + SVG postcard placeholder for missing sources
 v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
 v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)
-v1.41   ------->   Playwright E2E       — End-to-end browser flows in Playwright (upgrade, watch limit, planner limit, cancel/reactivate).
+v1.41   [SHIPPED]  Playwright E2E       — Playwright E2E suite — smoke + watch/planner limits + cancel — 4/4 nightly green (2026-05-31)
 v1.42   ------->   Site Polish + Legal  — About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.
 v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
@@ -1541,7 +1541,7 @@ Premature monetization — if v1.3 hasn't generated meaningful organic traffic, 
 
 ---
 
-## v1.41 "Playwright E2E"
+## v1.41 "Playwright E2E" [SHIPPED 2026-05-31]
 
 ### Theme
 Stand up end-to-end browser test coverage that mirrors real production failure patterns, using Playwright. A single upgrade-flow smoke test would have caught 4 of the 5 bugs hit during v1.4 validation in seconds rather than hours.
