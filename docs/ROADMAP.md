@@ -1,7 +1,7 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
 **Last updated:** May 2026
-**Current version:** v1.34 shipped (deployed at campable.co; weather cache warmup completing)
+**Current version:** v1.34 shipped (deployed at campable.co; weather cache fully warmed Apr–Oct 2026-06-12)
 
 ---
 
@@ -1199,6 +1199,12 @@ Supabase availability becomes a dependency for login (not for ongoing sessions �
 
 ## v1.34 "Weather Context" [SHIPPED 2026-05-16]
 
+### Post-ship Status [cache fully warmed 2026-06-12]
+Code shipped 2026-05-16; the cache warmup ran as a long tail on the free tier and completed 2026-06-12. **Shipped reality differs from the plan below:**
+- **Window: Apr–Oct (7 months), not 12.** Shoulder/winter months are mostly NYR or snowed-in at PNW elevations — weather badges there would decorate dates nobody can book. Source of truth: `SEASON_MONTHS` in `providers/weather.py`.
+- **36,176 records, not ~16,400.** 1,300 unique rounded coordinates × 4 sample days/month (1, 8, 15, 22) × 7 months. The plan assumed one record per campground-month; the warmup samples 4 days/month for intra-month resolution.
+- **Synced to the Fly volume** via `scripts/sync-registry.sh` (registry.db is reference data; user/watch state lives separately in `watches.db`, untouched by the sync).
+
 ### Theme
 Show typical weather (high/low temps, precipitation probability) on search results so users can factor climate into campground selection. This is a **discovery-time** feature — "is it going to be freezing at night there in May?" — not a post-booking packing list (which was rejected as low-impact). Weather context turns campable from a pure availability tool into a trip-planning tool that helps you pick the *right* campground, not just an *available* one.
 
@@ -1749,6 +1755,55 @@ Sequencing: realistically wants to happen before live Stripe mode activates (Str
 
 ### Theme
 Wrap the existing React app in a Capacitor shell and ship to the iOS App Store and Google Play Store. Capacitor lets us keep the entire web codebase as the UI layer while adding native capabilities (APNs/FCM push, GPS, offline registry) that satisfy Apple's "Minimum Functionality" guideline (4.2) and make the app actually useful at the campground — where users frequently have no cell signal. This is not a port; it's a thin native shell + native plugins + a re-architected data layer that respects three different freshness models (registry = local, watches = local-with-sync, availability = online-only). Slotted after v1.4 so the monetization model is validated on the web (cheap iteration) before committing to App Store review cycles.
+
+The Features table below is the **eventual full target** (App Store + Play Store, push, offline, IAP-free monetization). The first executable slice is much smaller and is scoped under "First Milestone" immediately below.
+
+---
+
+### First Milestone — Internal TestFlight (iOS only, Option A) [PLANNED]
+
+**Goal:** Get a bundled iOS build of Campable onto a real iPhone via **internal** TestFlight (≤100 of our own testers, **no App Review**). Validates the toolchain and the web-in-WebView port without solving monetization, push, or offline.
+
+**Decisions (locked 2026-06-07):**
+- **Option A — no In-App Purchase.** Apple requires StoreKit IAP for digital subs sold *inside* the app and takes 15–30%. The app sells nothing; Pro features show "manage your subscription at campable.co" (opens system browser via `@capacitor/browser`). Sidesteps IAP integration + the biggest review-rejection risk. Internal TestFlight has no review, so anti-steering rules don't bite at this stage.
+- **Internal TestFlight only.** External testers require Beta App Review (≈ full review); deferred. App Store submission deferred.
+- **Bundled assets, not `server.url`.** Load the Vite build from the local bundle (`capacitor://localhost`). A one-time `server.url=https://campable.co` boot is allowed only as a 5-minute simulator sanity check, never shipped.
+
+**Why the port is small (grounded in current code, 2026-06-07):**
+- **CSP is HTTP-header-only** (no `<meta>` CSP in `web/index.html`) → the bundled app loads `index.html` as a local file with no server headers → **no CSP origin allowlist work needed** in the native context. Web header-based CSP is untouched.
+- **`API_BASE` seam already exists** (`web/src/api.ts:3`: `import.meta.env.DEV ? "http://localhost:8000" : ""`). Every call routes through `${API_BASE}/api/...`, so making native calls absolute is a one-line branch → `https://campable.co`.
+- **Apple's hard gates are already done:** `DELETE /api/auth/me` exists (`routes/auth.py:106`) and is surfaced in `UserMenu` (5.1.1(v) account deletion ✅); Privacy Policy URL shipped v1.42 (`campable.co/privacy` ✅); `Authorization: Bearer` already sent (`api.ts:26`, v1.33 groundwork ✅).
+
+**Change-list:**
+
+| Area | Change | File |
+|------|--------|------|
+| Backend | Add `capacitor://localhost` to CORS allowlist (explicit list required — `allow_credentials=True` forbids `*`). Small PR → dev → main. | `src/pnw_campsites/api.py` (`_cors_origins`) |
+| Frontend | `API_BASE` gains a native branch → `https://campable.co` (via `Capacitor.isNativePlatform()` / `VITE_NATIVE` flag) | `web/src/api.ts:3` |
+| Frontend | Supabase client `storage` adapter → `@capacitor/preferences` (web falls back to localStorage). Prevents WKWebView storage-pressure logout. | `web/src/lib/supabase.ts:8` |
+| Frontend | Gate `serviceWorker.register` behind `!isNativePlatform()` | `web/src/main.tsx:35` |
+| Frontend | Native upgrade CTA → "Manage at campable.co", opens system browser. This *is* Option A. | Pricing / upgrade UI |
+| Native | Capacitor scaffold (`@capacitor/core`, `cli`, `ios`), `cap add ios`, config, `@capacitor/assets` icons/splash from 1024² Madrona source, `Info.plist` `ITSAppUsesNonExemptEncryption=false` | new `ios/`, `capacitor.config.ts` |
+
+All frontend changes are **additive and native-gated** — the web bundle is byte-identical on web, so they can ship to dev/main safely before the app exists.
+
+**Execution sequence (isolates the one scary unknown — Apple signing):**
+1. **Simulator** (no signing, free): scaffold + bundle → run in iOS Simulator. Catches all web-in-WebView issues (CORS, API base, auth, Leaflet/Mapbox) with zero Apple variables. Optional 5-min `server.url` control boot first.
+2. **Tethered device** (first signing): run on a real iPhone via Xcode automatic signing. Adds only the dev-cert/provisioning variable.
+3. **Archive → upload → internal TestFlight** (full pipeline): distribution signing, App Store Connect record, upload, processing, install. Highest first-timer variance — budget a full day for Xcode/provisioning friction.
+
+**Bundle ID:** `com.palouselabs.campable` (recommended — groups future LLC apps like `com.palouselabs.being` under one namespace). **Permanent once the App Store Connect record is created — confirm before creating it.**
+
+**Risks:**
+1. Apple toolchain (signing/provisioning/upload) — not code, pure first-timer friction. Mitigated by the simulator→device→TestFlight progression.
+2. Anonymous watch-migration cookie (`credentials:"include"` + `campnw_session`) won't cross from `capacitor://localhost` to campable.co (WKWebView blocks third-party cookies). Non-issue for an internal, signed-in tester; revisit for public.
+3. JWT localStorage purge — mitigated by the `@capacitor/preferences` swap.
+
+**Deferred (NOT needed for internal TestFlight):** push notifications (APNs / `device_push_tokens` — biggest deferred chunk), universal/deep links, bundled offline registry, native geolocation, Android, IAP (Option A = none), external TestFlight + Beta App Review, full App Privacy nutrition labels (minimal section filled to upload; comprehensive labels wait for public).
+
+**Prereqs:** Xcode installed, a physical iPhone, Apple Developer account (✅ approved 2026-06-07). **Estimate:** 2–3 focused days, variance entirely in step 3.
+
+---
 
 ### Features
 

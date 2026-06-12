@@ -6,6 +6,7 @@ import { HelmetProvider } from 'react-helmet-async'
 import App from './App.tsx'
 import { AuthProvider } from './hooks/useAuth'
 import { BillingProvider } from './hooks/useBilling'
+import { Capacitor } from '@capacitor/core'
 
 // axe-core accessibility checks in development only
 if (import.meta.env.DEV) {
@@ -30,7 +31,8 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Register service worker for push notifications
-if ("serviceWorker" in navigator) {
+// Register service worker for push notifications (web only). SWs are flaky in
+// WKWebView and redundant once native push lands; native uses APNs instead.
+if (!Capacitor.isNativePlatform() && "serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }

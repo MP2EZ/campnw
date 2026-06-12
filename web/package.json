@@ -12,6 +12,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/ios": "^8.4.0",
+    "@capacitor/preferences": "^8.0.1",
     "@posthog/react": "^1.8.2",
     "@supabase/supabase-js": "^2.103.0",
     "leaflet": "^1.9.4",
@@ -25,6 +29,8 @@
   },
   "devDependencies": {
     "@axe-core/react": "^4.11.1",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.4.0",
     "@eslint/js": "^9.39.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

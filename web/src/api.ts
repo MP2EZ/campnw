@@ -1,6 +1,14 @@
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "./lib/supabase";
 
-const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
+// Native (Capacitor) builds load from capacitor://localhost, so relative
+// URLs would resolve against the local bundle. Point them at production.
+// Web is unchanged: localhost in dev, same-origin relative in prod.
+const API_BASE = Capacitor.isNativePlatform()
+  ? "https://campable.co"
+  : import.meta.env.DEV
+    ? "http://localhost:8000"
+    : "";
 
 // ---------------------------------------------------------------------------
 // Event tracking
