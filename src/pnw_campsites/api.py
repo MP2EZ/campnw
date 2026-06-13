@@ -390,6 +390,10 @@ app = FastAPI(title="PNW Campsites", lifespan=lifespan)
 _cors_origins = os.getenv(
     "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5177,http://localhost:3000"
 ).split(",")
+# Capacitor native shells (v1.45) request from a fixed local origin, not
+# campable.co. Always allow them regardless of ALLOWED_ORIGINS so the iOS/Android
+# app can reach the API. iOS bundled = capacitor://localhost; Android = https://localhost.
+_cors_origins += ["capacitor://localhost", "https://localhost"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
