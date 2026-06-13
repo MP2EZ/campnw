@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.palouselabs.campable",
+  appId: "co.campable.app",
   appName: "Campable",
   // Vite production build output. `npx cap sync` copies this into the native
   // project. No `server.url` — assets are bundled and served from

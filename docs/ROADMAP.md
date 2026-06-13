@@ -1792,7 +1792,7 @@ All frontend changes are **additive and native-gated** — the web bundle is byt
 2. **Tethered device** (first signing): run on a real iPhone via Xcode automatic signing. Adds only the dev-cert/provisioning variable.
 3. **Archive → upload → internal TestFlight** (full pipeline): distribution signing, App Store Connect record, upload, processing, install. Highest first-timer variance — budget a full day for Xcode/provisioning friction.
 
-**Bundle ID:** `com.palouselabs.campable` (recommended — groups future LLC apps like `com.palouselabs.being` under one namespace). **Permanent once the App Store Connect record is created — confirm before creating it.**
+**Bundle ID:** `co.campable.app` (reverse-DNS of `campable.co`, matching the sibling Being app's `fyi.being.app` convention — domain-namespaced per product, not entity-namespaced). **Permanent once the App Store Connect record is created.**
 
 **Risks:**
 1. Apple toolchain (signing/provisioning/upload) — not code, pure first-timer friction. Mitigated by the simulator→device→TestFlight progression.
