@@ -1801,6 +1801,8 @@ All frontend changes are **additive and native-gated** — the web bundle is byt
 
 **Deferred (NOT needed for internal TestFlight):** push notifications (APNs / `device_push_tokens` — biggest deferred chunk), universal/deep links, bundled offline registry, native geolocation, Android, IAP (Option A = none), external TestFlight + Beta App Review, full App Privacy nutrition labels (minimal section filled to upload; comprehensive labels wait for public).
 
+**Known issue (follow-up, non-blocking):** `ios.contentInset: "always"` fixes the at-rest top inset (header clears the status bar / Dynamic Island), but on scroll, content still bleeds slightly behind the status bar strip. `env(safe-area-inset-*)` only reports non-zero with `contentInset` set, and a CSS mask / sticky-header attempt collided with the header's z-index. Cosmetic only — does not block internal TestFlight. Revisit with the `@capacitor/status-bar` overlay API (or Capacitor's newer core `SystemBars.setOverlay`, not yet in 8.4.0) for a clean non-overlapping status bar.
+
 **Prereqs:** Xcode installed, a physical iPhone, Apple Developer account (✅ approved 2026-06-07). **Estimate:** 2–3 focused days, variance entirely in step 3.
 
 ---

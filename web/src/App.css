@@ -169,7 +169,15 @@ h1, h2, h3, .result-header h3, .search-summary-text {
 .app {
   max-width: var(--max-w-app);
   margin: 0 auto;
-  padding: var(--space-5) var(--space-4);
+  /* Add the device safe-area insets to the base padding. env() is 0 in normal
+     browsers (web layout unchanged) and non-zero in the native WebView / notched
+     PWAs — keeps content clear of the status bar, Dynamic Island, and home
+     indicator. Requires viewport-fit=cover in index.html. */
+  padding:
+    calc(var(--space-5) + env(safe-area-inset-top))
+    calc(var(--space-4) + env(safe-area-inset-right))
+    calc(var(--space-5) + env(safe-area-inset-bottom))
+    calc(var(--space-4) + env(safe-area-inset-left));
 }
 
 header {
@@ -1050,6 +1058,9 @@ header p {
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-hover);
   position: sticky;
+  /* contentInset insets the scroll view for the safe area on native, so top:0
+     already lands below the status bar; no env() offset needed (and adding it
+     double-insets). */
   top: 0;
   z-index: var(--z-sticky);
 }
