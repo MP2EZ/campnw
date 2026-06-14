@@ -1058,8 +1058,10 @@ header p {
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-hover);
   position: sticky;
-  /* Stick below the status bar / Dynamic Island on native; 0 on web. */
-  top: env(safe-area-inset-top);
+  /* contentInset insets the scroll view for the safe area on native, so top:0
+     already lands below the status bar; no env() offset needed (and adding it
+     double-insets). */
+  top: 0;
   z-index: var(--z-sticky);
 }
 
