@@ -1760,9 +1760,11 @@ The Features table below is the **eventual full target** (App Store + Play Store
 
 ---
 
-### First Milestone — Internal TestFlight (iOS only, Option A) [PLANNED]
+### First Milestone — Internal TestFlight (iOS only, Option A) [SHIPPED 2026-06-14]
 
 **Goal:** Get a bundled iOS build of Campable onto a real iPhone via **internal** TestFlight (≤100 of our own testers, **no App Review**). Validates the toolchain and the web-in-WebView port without solving monetization, push, or offline.
+
+**Achieved 2026-06-14.** Build 1.0 (1), bundle id `co.campable.app`, uploaded and installed on a real iPhone via TestFlight internal testing. Gauntlet along the way: Capacitor 8 SPM scaffold, CORS for `capacitor://localhost`, the `API_BASE`/Supabase-storage/SW/billing native gates, two CI fixes (api.ts chunk split + PyJWT/npm CVE cleanup), the iOS safe-area top inset (`ios.contentInset: "always"`; scroll-bleed parked as a documented follow-up), recurring SPM-artifact resolution, device registration for signing, and cross-Apple-ID tester setup (developer account signs; personal Apple ID installs via TestFlight after being added under Users and Access). `DEVELOPMENT_TEAM` (KN6FDLG98K) committed to the Xcode project so future builds auto-sign.
 
 **Decisions (locked 2026-06-07):**
 - **Option A — no In-App Purchase.** Apple requires StoreKit IAP for digital subs sold *inside* the app and takes 15–30%. The app sells nothing; Pro features show "manage your subscription at campable.co" (opens system browser via `@capacitor/browser`). Sidesteps IAP integration + the biggest review-rejection risk. Internal TestFlight has no review, so anti-steering rules don't bite at this stage.
