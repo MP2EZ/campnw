@@ -43,6 +43,7 @@ v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Porta
 v1.41   [SHIPPED]  Playwright E2E       — Playwright E2E suite — smoke + watch/planner limits + cancel — 4/4 nightly green (2026-05-31)
 v1.42   ------->   Site Polish + Legal  — About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.
 v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
+v1.47   ------->   Prod Monitoring      — Real /healthz (DB probe) + daily read-only prod smoke + UptimeRobot. Catches live-site outages the staging gate can't. See docs/MONITORING.md
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
