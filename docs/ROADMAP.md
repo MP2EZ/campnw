@@ -43,7 +43,7 @@ v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Porta
 v1.41   [SHIPPED]  Playwright E2E       — Playwright E2E suite — smoke + watch/planner limits + cancel — 4/4 nightly green (2026-05-31)
 v1.42   ------->   Site Polish + Legal  — About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.
 v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
-v1.47   ------->   Prod Monitoring      — Real /healthz (DB probe) + daily read-only prod smoke + UptimeRobot. Catches live-site outages the staging gate can't. See docs/MONITORING.md
+v1.47   ------->   Prod Monitoring      — Real /healthz (DB probe) + daily read-only prod smoke + UptimeRobot. ⚠️ NEEDS MANUAL SETUP FIRST (Resend key + UptimeRobot) — see v1.47 section / docs/MONITORING.md
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -1943,6 +1943,48 @@ All frontend changes are **additive and native-gated** — the web bundle is byt
 | Capacitor + Vite build pipeline drift over time | Lock Capacitor major version. Run `npx cap sync` in CI on every PR touching `web/`. Document in CLAUDE.md. |
 | In-app purchases not part of v1.45 scope | Subscription billing stays web-only at v1.45. Native IAP is a v1.5+ decision — Apple takes 15-30% revenue share and adds complex receipt validation. Defer until web monetization metrics justify it. |
 | Realistic timeline: 4-6 weeks calendar for solo dev new to Capacitor | Don't promise dates externally until first TestFlight build is in Apple's hands. Screenshots/metadata always take longer than estimated. |
+
+---
+
+## v1.47 "Prod Monitoring"
+
+### Theme
+Know the *live* site is broken before a user tells us. The nightly Playwright run is a release gate against **staging** — it never touches production — and PostHog is passive, so a 3am Fly/Supabase/TLS failure is invisible until someone gets hurt. v1.47 adds active synthetic checks against prod: a real `/healthz` (DB probe), a read-only daily smoke, and an external 5-min pinger. Full detail: `docs/MONITORING.md`.
+
+### ⚠️ DO THIS FIRST — manual setup (nothing alerts until these are set)
+
+The code is shipped, but the alerting path is inert without repo config and the external pinger. ~10 minutes total, both on your side.
+
+**1. Resend email alerts** — *Settings → Secrets and variables → Actions*:
+
+| Kind | Name | Value |
+|------|------|-------|
+| **Secret** | `RESEND_API_KEY` | Resend API key (create at <https://resend.com> → API Keys) |
+| Variable | `ALERT_EMAIL_TO` | your Outlook address, e.g. `you@palouselabs.com` |
+| Variable | `ALERT_EMAIL_FROM` | *(optional)* default `Campable Monitor <alerts@campable.co>` — **the domain must be verified in Resend**, or set this to one that is |
+
+If `RESEND_API_KEY` / `ALERT_EMAIL_TO` are unset the email step skips with a warning and the GitHub issue (`prod-down`) still fires — degraded, not silent, but you won't get pushed to.
+
+**2. UptimeRobot** (~5 min) — free account → Add New Monitor → HTTP(s), `https://campable.co/healthz`, 5-minute interval, **keyword monitoring** alerting when the body does *not* contain `"status":"ok"` (so a 503 or a wrong-shaped body both trip it, not just a dead connection). Alert contact = same Outlook address.
+
+**3. Verify the green path** — *Actions → Prod Monitor → Run workflow* (manual dispatch) once v1.47 is on prod. Then temporarily break a selector in `e2e/tests/prod-smoke.spec.ts` on a scratch branch to confirm the email + issue actually fire. An alert channel you've never seen fire is not a monitor.
+
+> Sequencing: `/healthz` only exists on prod after v1.47 rides `dev → main`. Until then point UptimeRobot at `https://campable.co/` for plain reachability and switch the URL after the release deploys.
+
+### What shipped
+
+| Change | File |
+|--------|------|
+| Real `/healthz` — pings SQLite, returns `{status, db, version}`, 503 when DB unreachable | `src/pnw_campsites/api.py` |
+| Tests for ok + degraded paths | `tests/test_api_endpoints.py` |
+| Read-only, non-mutating prod smoke (homepage, search API, pricing, SEO index) | `e2e/tests/prod-smoke.spec.ts` |
+| Daily 15:00 UTC monitor → Resend email + `prod-down` GitHub issue on failure | `.github/workflows/prod-monitor.yml` |
+| Four-layer model + setup instructions | `docs/MONITORING.md` |
+
+### Notes
+
+- The prod smoke is **strictly non-mutating** — no signup, no Stripe, no writes — which is what makes it safe to aim at production. The four flows in `e2e/tests/` do mutate and stay pointed at staging.
+- Side effect worth knowing: the deploy wait-loop's `curl .../healthz` was previously false-green — `/healthz` fell through to the SPA catch-all and returned `index.html` with a 200, so the deploy gate passed even mid-DB-outage. The explicit route fixes that consumer too.
 
 ---
 
