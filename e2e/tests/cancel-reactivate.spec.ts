@@ -1,6 +1,14 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { signupFresh, skipOnboarding } from "../fixtures/auth";
 import { payWithCard, waitForProBadge } from "../fixtures/stripe";
+
+/** Resolves true if the locator becomes visible in time, false if it never does. */
+async function appears(locator: Locator, timeout = 10_000): Promise<boolean> {
+  return locator.waitFor({ state: "visible", timeout }).then(
+    () => true,
+    () => false,
+  );
+}
 
 /**
  * Flow 4 — Cancel via Stripe Customer Portal.
@@ -36,30 +44,37 @@ test("New Pro user can cancel via Customer Portal", async ({ page }) => {
   await page.getByRole("button", { name: "Manage billing" }).click();
   await expect(page).toHaveURL(/billing\.stripe\.com/, { timeout: 30_000 });
 
-  // Stripe Portal cancel flow, as of 2026-08:
-  //   portal home → "Cancel subscription"
-  //   → "Confirm cancellation" page → "Cancel subscription"
-  //   → "Cancel your subscription" survey modal → "Continue to cancellation"
+  // Stripe Portal cancel flow, as observed 2026-08:
+  //   portal home "Cancel subscription"
+  //     -> "Confirm cancellation" page, which opens a "Cancel your
+  //        subscription" reason-survey modal on top of itself
+  //     -> modal "Continue to cancellation" dismisses the survey
+  //     -> confirm page "Cancel subscription" finalises
   //
-  // Deliberately no ordinal locators (.first()/.last()) past the first step.
-  // The modal renders the confirm page's button underneath it, still visible
-  // and enabled but pointer-blocked by Stripe's overlay layer, so ordinals
-  // silently re-bind to an unclickable node.
+  // Order matters: the survey modal leaves the confirm button visible and
+  // enabled but pointer-blocked underneath Stripe's overlay layer, so it must
+  // be dismissed first. That also rules out ordinal locators past the entry
+  // click — .first()/.last() silently re-bind to the unclickable node.
+  //
+  // Both Portal-side steps are best-effort. Stripe toggles the survey via a
+  // Portal setting and has reshaped this flow before, so a missing step
+  // shouldn't fail the run. The authoritative assertion is the "Pro until"
+  // check below: it can't pass unless cancellation really propagated, so
+  // skipping a step here can produce a false failure but never a false pass.
   await page.getByText("Cancel subscription", { exact: true }).first().click();
-
   await expect(page.getByText("Confirm cancellation")).toBeVisible({ timeout: 15_000 });
-  await page.getByRole("button", { name: "Cancel subscription" }).click();
 
-  // The reason survey is a Portal setting Stripe can toggle, so treat it as
-  // optional rather than letting its absence fail the run. The reason select
-  // itself is optional — "Continue to cancellation" is enabled without it.
   const survey = page.getByRole("alertdialog", { name: /cancel your subscription/i });
-  const surveyAppeared = await survey
-    .waitFor({ state: "visible", timeout: 10_000 })
-    .then(() => true, () => false);
-  if (surveyAppeared) {
+  if (await appears(survey)) {
+    // The reason select is optional — "Continue to cancellation" is enabled
+    // without choosing one.
     await survey.getByRole("button", { name: "Continue to cancellation" }).click();
     await expect(survey).toBeHidden({ timeout: 15_000 });
+  }
+
+  const confirmCancel = page.getByRole("button", { name: "Cancel subscription" });
+  if (await appears(confirmCancel)) {
+    await confirmCancel.click();
   }
 
   // Step 3: back to campable — webhook → DB → UI loop validation.
