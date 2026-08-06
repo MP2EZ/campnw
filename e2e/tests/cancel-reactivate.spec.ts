@@ -77,6 +77,14 @@ test("New Pro user can cancel via Customer Portal", async ({ page }) => {
     await confirmCancel.click();
   }
 
+  // Wait for the Portal to actually record the cancellation before leaving.
+  // Stripe returns to the Portal home page once it has, so the confirm page's
+  // heading going away is the state transition to wait on — no dependency on
+  // Stripe's post-cancel wording. Without this the goto() below fires
+  // immediately after the click and can abort the in-flight cancel request,
+  // which surfaces confusingly as a missing "Pro until" further down.
+  await expect(page.getByText("Confirm cancellation")).toBeHidden({ timeout: 30_000 });
+
   // Step 3: back to campable — webhook → DB → UI loop validation.
   // This is the assertion that matters: it covers our own
   // Stripe → webhook → DB → BillingProvider chain rather than Stripe's copy,
