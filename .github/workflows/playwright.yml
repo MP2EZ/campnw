@@ -193,16 +193,48 @@ jobs:
           path: e2e/playwright-report/
           retention-days: 30
 
-      - name: Open issue on nightly failure
+      - name: Report nightly failure
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
+            // Reuse the open report rather than filing a fresh issue every
+            // night. This step used to create unconditionally, so a single
+            // unfixed failure (the Stripe Portal cancel flow, red from
+            // 2026-06-28) compounded into 71 duplicate issues before anyone
+            // looked. One issue per outage, one comment per run.
+            const { owner, repo } = context.repo;
             const date = new Date().toISOString().split('T')[0];
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `Nightly Playwright E2E failed (${date})`,
-              body: `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nThe Playwright HTML report + trace are attached as the run's artifact.`,
-              labels: ['e2e-failure'],
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const artifactNote =
+              "The Playwright HTML report + trace are attached as the run's artifact.";
+
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              labels: 'e2e-failure',
+              state: 'open',
+              sort: 'created',
+              direction: 'desc',
+              per_page: 1,
             });
+
+            if (openIssues.length > 0) {
+              const existing = openIssues[0];
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body: `Still failing as of ${date}: ${runUrl}\n\n${artifactNote}`,
+              });
+              core.notice(`Nightly still failing — commented on #${existing.number}`);
+            } else {
+              const { data: created } = await github.rest.issues.create({
+                owner,
+                repo,
+                title: 'Nightly Playwright E2E failing',
+                body: `First failing run (${date}): ${runUrl}\n\n${artifactNote}\n\nThis issue is reused for subsequent nightly failures — close it once the suite is green again.`,
+                labels: ['e2e-failure'],
+              });
+              core.notice(`Nightly failed — opened #${created.number}`);
+            }
