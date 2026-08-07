@@ -1,7 +1,7 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
-**Last updated:** May 2026
-**Current version:** v1.34 shipped (deployed at campable.co; weather cache fully warmed Apr–Oct 2026-06-12)
+**Last updated:** June 2026
+**Current version:** v1.34 shipped (deployed at campable.co; weather cache fully warmed Apr–Oct 2026-06-12). v1.45 first milestone — internal iOS TestFlight — SHIPPED 2026-06-14.
 
 ---
 
@@ -42,7 +42,7 @@ v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Goo
 v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)
 v1.41   [SHIPPED]  Playwright E2E       — Playwright E2E suite — smoke + watch/planner limits + cancel — 4/4 nightly green (2026-05-31)
 v1.42   ------->   Site Polish + Legal  — About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.
-v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
+v1.45   ~PARTIAL~  Native Apps          — Internal iOS TestFlight SHIPPED 2026-06-14 (Capacitor shell); App Store + Play + native push/GPS/offline registry in progress
 v1.47   ------->   Prod Monitoring      — Real /healthz (DB probe) + daily read-only prod smoke + UptimeRobot. ⚠️ NEEDS MANUAL SETUP FIRST (Resend key + UptimeRobot) — see v1.47 section / docs/MONITORING.md
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
@@ -1752,7 +1752,7 @@ Sequencing: realistically wants to happen before live Stripe mode activates (Str
 
 ---
 
-## v1.45 "Native Apps"
+## v1.45 "Native Apps" [PARTIAL — internal iOS TestFlight SHIPPED 2026-06-14]
 
 ### Theme
 Wrap the existing React app in a Capacitor shell and ship to the iOS App Store and Google Play Store. Capacitor lets us keep the entire web codebase as the UI layer while adding native capabilities (APNs/FCM push, GPS, offline registry) that satisfy Apple's "Minimum Functionality" guideline (4.2) and make the app actually useful at the campground — where users frequently have no cell signal. This is not a port; it's a thin native shell + native plugins + a re-architected data layer that respects three different freshness models (registry = local, watches = local-with-sync, availability = online-only). Slotted after v1.4 so the monetization model is validated on the web (cheap iteration) before committing to App Store review cycles.
@@ -1761,9 +1761,11 @@ The Features table below is the **eventual full target** (App Store + Play Store
 
 ---
 
-### First Milestone — Internal TestFlight (iOS only, Option A) [PLANNED]
+### First Milestone — Internal TestFlight (iOS only, Option A) [SHIPPED 2026-06-14]
 
 **Goal:** Get a bundled iOS build of Campable onto a real iPhone via **internal** TestFlight (≤100 of our own testers, **no App Review**). Validates the toolchain and the web-in-WebView port without solving monetization, push, or offline.
+
+**Achieved 2026-06-14.** Build 1.0 (1), bundle id `co.campable.app`, uploaded and installed on a real iPhone via TestFlight internal testing. Gauntlet along the way: Capacitor 8 SPM scaffold, CORS for `capacitor://localhost`, the `API_BASE`/Supabase-storage/SW/billing native gates, two CI fixes (api.ts chunk split + PyJWT/npm CVE cleanup), the iOS safe-area top inset (`ios.contentInset: "always"`; scroll-bleed parked as a documented follow-up), recurring SPM-artifact resolution, device registration for signing, and cross-Apple-ID tester setup (developer account signs; personal Apple ID installs via TestFlight after being added under Users and Access). `DEVELOPMENT_TEAM` (KN6FDLG98K) committed to the Xcode project so future builds auto-sign.
 
 **Decisions (locked 2026-06-07):**
 - **Option A — no In-App Purchase.** Apple requires StoreKit IAP for digital subs sold *inside* the app and takes 15–30%. The app sells nothing; Pro features show "manage your subscription at campable.co" (opens system browser via `@capacitor/browser`). Sidesteps IAP integration + the biggest review-rejection risk. Internal TestFlight has no review, so anti-steering rules don't bite at this stage.

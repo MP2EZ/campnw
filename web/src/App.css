@@ -162,6 +162,48 @@ input, select, textarea, button {
   font: inherit;
 }
 
+/* ─── Touch interaction baseline (v1.46) ──────────────────────────────
+   Native-app feel in the Capacitor WKWebView. These properties are inert
+   on pointer devices, so desktop web rendering is unchanged. */
+button,
+a,
+[role="button"],
+label,
+summary,
+input[type="checkbox"],
+input[type="radio"],
+select {
+  /* Kill the 300ms double-tap-zoom delay and the gray iOS tap flash. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Suppress the iOS long-press callout + accidental text selection on UI
+   chrome. Excludes text content and form fields, which need selection.
+
+   Touch-scoped on purpose: unlike touch-action and tap-highlight-color
+   above, user-select is NOT inert on pointer devices — applied globally it
+   would stop desktop users selecting the text of any link or button, e.g.
+   copying a campground name or a booking link. */
+@media (hover: none) {
+  button,
+  a,
+  [role="button"],
+  .header-btn,
+  .tag-btn {
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+/* Pressed-state feedback. Touch devices get no :hover, so without this a
+   tap has no visual confirmation. Subtle; desktop click benefits too. */
+button:active:not(:disabled),
+[role="button"]:active {
+  opacity: 0.72;
+}
+
 h1, h2, h3, .result-header h3, .search-summary-text {
   font-family: var(--font-heading);
 }
@@ -925,6 +967,54 @@ header p {
 @media (hover: none) {
   .hero-arrow {
     opacity: 1;
+  }
+}
+
+/* ─── Touch tap-target sizing (v1.46) ─────────────────────────────────
+   Apple HIG / WCAG 2.5.8 want ≥44px targets. Scoped to touch so desktop
+   keeps its compact button visuals. Dense calendar-heatmap cells are
+   intentionally excluded (see CLAUDE.md) — their hit area is managed by
+   cell spacing, not by inflating every cell to 44px. */
+@media (hover: none) {
+  .drp-day,
+  .save-to-trip-btn,
+  .share-btn,
+  .watch-action-btn,
+  .watch-cta-btn,
+  .header-btn,
+  .tag-btn,
+  .book-link,
+  .map-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Text-only card actions have padding:0 — give them a tap pad. */
+  .book-link,
+  .map-link {
+    padding: 0 var(--space-2);
+  }
+
+  .watch-close,
+  .compare-close {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Circular compare toggle keeps its 1.5rem visual; a transparent
+     overlay extends the hit area to 44px so adjacent cards don't mis-tap. */
+  .compare-check {
+    position: relative;
+  }
+  .compare-check::after {
+    content: "";
+    position: absolute;
+    inset: -10px;
   }
 }
 
