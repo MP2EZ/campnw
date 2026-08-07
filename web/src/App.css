@@ -179,15 +179,22 @@ select {
 }
 
 /* Suppress the iOS long-press callout + accidental text selection on UI
-   chrome. Excludes text content and form fields, which need selection. */
-button,
-a,
-[role="button"],
-.header-btn,
-.tag-btn {
-  -webkit-touch-callout: none;
-  user-select: none;
-  -webkit-user-select: none;
+   chrome. Excludes text content and form fields, which need selection.
+
+   Touch-scoped on purpose: unlike touch-action and tap-highlight-color
+   above, user-select is NOT inert on pointer devices — applied globally it
+   would stop desktop users selecting the text of any link or button, e.g.
+   copying a campground name or a booking link. */
+@media (hover: none) {
+  button,
+  a,
+  [role="button"],
+  .header-btn,
+  .tag-btn {
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
 }
 
 /* Pressed-state feedback. Touch devices get no :hover, so without this a
