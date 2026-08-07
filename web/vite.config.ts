@@ -27,6 +27,11 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules/leaflet/')) return 'leaflet'
+          // Pin the 189KB api.ts module to its own chunk. It's eagerly loaded
+          // either way, but adding a @capacitor import (v1.45) perturbed rolldown
+          // into hoisting it into the main entry chunk, blowing the 350KB budget.
+          // An explicit chunk keeps the entry lean and api.ts independently cached.
+          if (id.includes('/src/api.ts')) return 'api'
           if (id.includes('react-markdown') || id.includes('remark-parse') || id.includes('remark-rehype')) {
             return 'markdown'
           }

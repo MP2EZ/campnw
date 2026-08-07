@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -17,6 +17,32 @@ from pnw_campsites.search.engine import (
     SearchResults,
 )
 from tests.conftest import make_campground
+
+
+class TestHealthzEndpoint:
+    """Tests for GET /healthz — the synthetic-monitoring liveness probe."""
+
+    def test_healthz_ok_when_db_reachable(self, api_client: TestClient):
+        """Returns 200 + status:ok when SQLite is reachable."""
+        response = api_client.get("/healthz")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "ok"
+        assert body["db"] is True
+        assert body["version"] == api_module.APP_VERSION
+
+    def test_healthz_degraded_when_db_unreachable(self, api_client: TestClient):
+        """Returns 503 + status:degraded when the SQLite check raises."""
+        with patch.object(
+            api_module.sqlite3, "connect", side_effect=OSError("disk gone")
+        ):
+            response = api_client.get("/healthz")
+
+        assert response.status_code == 503
+        body = response.json()
+        assert body["status"] == "degraded"
+        assert body["db"] is False
 
 
 class TestCampgroundsEndpoint:

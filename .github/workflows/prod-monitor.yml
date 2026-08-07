@@ -1,0 +1,121 @@
+name: Prod Monitor
+
+# Daily synthetic monitor for the LIVE site (https://campable.co).
+#
+# Distinct from playwright.yml, which is a release GATE: it deploys dev HEAD to
+# staging and tests that before promotion. This workflow tests PRODUCTION as it
+# actually is, so a Fly outage / TLS expiry / Supabase incident is caught even
+# when no real user is around. It performs ZERO mutations (no signup, Stripe,
+# or writes) — see e2e/tests/prod-smoke.spec.ts.
+#
+# Layering (see docs/MONITORING.md):
+#   UptimeRobot  -> "is it down?"        every 5 min  (external, /healthz)
+#   THIS         -> "do features work?"  daily        (deep, read-only)
+#   playwright   -> "is the next release safe?"  pre-deploy (staging)
+#   PostHog      -> passive real-user error capture
+#
+# NOTE: the /healthz JSON check only goes green once v1.47 (which adds the real
+# /healthz route) is released to prod. Until then that step will fail on manual
+# dispatch; the Playwright smoke + /api/search check work against current prod.
+
+on:
+  schedule:
+    - cron: "0 15 * * *" # daily 15:00 UTC (offset from the 08:00 release gate)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  PROD_URL: https://campable.co
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Healthz — app + DB readiness
+        run: |
+          body=$(curl -sf --max-time 30 "$PROD_URL/healthz") || {
+            echo "::error::/healthz did not return 2xx"; exit 1; }
+          echo "$body"
+          echo "$body" | grep -q '"status":"ok"' || {
+            echo "::error::/healthz not ok (DB degraded or route not yet deployed)"; exit 1; }
+
+      - name: Search API — DB + provider pipeline
+        run: |
+          start=$(date -u -d "+30 days" +%Y-%m-%d)
+          end=$(date -u -d "+33 days" +%Y-%m-%d)
+          url="$PROD_URL/api/search?start_date=$start&end_date=$end&state=WA&nights=2&limit=5"
+          body=$(curl -sf --max-time 60 "$url") || {
+            echo "::error::/api/search did not return 2xx"; exit 1; }
+          echo "$body" | grep -q '"campgrounds_checked"' || {
+            echo "::error::/api/search response missing campgrounds_checked"; exit 1; }
+
+      - name: Install Playwright + browser
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run read-only prod smoke
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: ${{ env.PROD_URL }}
+          CI: "true"
+        run: npx playwright test prod-smoke.spec.ts
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-monitor-report
+          path: e2e/playwright-report/
+          retention-days: 30
+
+      - name: Email alert on failure (Resend)
+        if: failure()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_FROM: ${{ vars.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO: ${{ vars.ALERT_EMAIL_TO }}
+        run: |
+          if [ -z "$RESEND_API_KEY" ] || [ -z "$ALERT_EMAIL_TO" ]; then
+            echo "::warning::Resend not configured (RESEND_API_KEY / ALERT_EMAIL_TO); skipping email"
+            exit 0
+          fi
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          from="${ALERT_EMAIL_FROM:-Campable Monitor <alerts@campable.co>}"
+          date_str=$(date -u +%Y-%m-%d)
+          text=$(printf 'The daily production monitor failed. A feature on the live site may be down.\n\nRun: %s\n\nThe Playwright report + trace are attached to the run as an artifact.' "$run_url")
+          payload=$(jq -n \
+            --arg from "$from" \
+            --arg to "$ALERT_EMAIL_TO" \
+            --arg subject "🔴 campable.co prod monitor FAILED ($date_str)" \
+            --arg text "$text" \
+            '{from: $from, to: [$to], subject: $subject, text: $text}')
+          curl -sf -X POST https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$payload"
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = new Date().toISOString().split('T')[0];
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Prod monitor FAILED — campable.co (${date})`,
+              body: `The daily production synthetic monitor failed — a live feature may be down.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nThe Playwright HTML report + trace are attached as the run's artifact.`,
+              labels: ['prod-down'],
+            });

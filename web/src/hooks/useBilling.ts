@@ -16,6 +16,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
 import {
   getBillingStatus,
   openBillingPortal,
@@ -89,12 +91,25 @@ export function BillingProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const handleStartCheckout = useCallback(async () => {
+    // Option A (v1.45): the native app sells nothing in-app (no StoreKit IAP).
+    // Send users to the web pricing page in the system browser to upgrade as a
+    // web session. No backend checkout call from native.
+    if (Capacitor.isNativePlatform()) {
+      await Browser.open({ url: "https://campable.co/pricing" });
+      return;
+    }
     const url = await startCheckout();
     window.location.href = url;
   }, []);
 
   const handleOpenPortal = useCallback(async () => {
     const url = await openBillingPortal();
+    // Managing an existing subscription (cancel/update) is not a purchase, so
+    // opening the authenticated Stripe portal in the system browser is fine.
+    if (Capacitor.isNativePlatform()) {
+      await Browser.open({ url });
+      return;
+    }
     window.location.href = url;
   }, []);
 

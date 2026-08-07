@@ -1,7 +1,7 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
-**Last updated:** May 2026
-**Current version:** v1.34 shipped (deployed at campable.co; weather cache warmup completing)
+**Last updated:** June 2026
+**Current version:** v1.34 shipped (deployed at campable.co; weather cache fully warmed Apr–Oct 2026-06-12). v1.45 first milestone — internal iOS TestFlight — SHIPPED 2026-06-14.
 
 ---
 
@@ -42,7 +42,8 @@ v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Goo
 v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)
 v1.41   [SHIPPED]  Playwright E2E       — Playwright E2E suite — smoke + watch/planner limits + cancel — 4/4 nightly green (2026-05-31)
 v1.42   ------->   Site Polish + Legal  — About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.
-v1.45   ------->   Native Apps          — Capacitor shell, iOS App Store + Google Play, native push/GPS/offline registry
+v1.45   ~PARTIAL~  Native Apps          — Internal iOS TestFlight SHIPPED 2026-06-14 (Capacitor shell); App Store + Play + native push/GPS/offline registry in progress
+v1.47   ------->   Prod Monitoring      — Real /healthz (DB probe) + daily read-only prod smoke + UptimeRobot. ⚠️ NEEDS MANUAL SETUP FIRST (Resend key + UptimeRobot) — see v1.47 section / docs/MONITORING.md
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -1199,6 +1200,12 @@ Supabase availability becomes a dependency for login (not for ongoing sessions �
 
 ## v1.34 "Weather Context" [SHIPPED 2026-05-16]
 
+### Post-ship Status [cache fully warmed 2026-06-12]
+Code shipped 2026-05-16; the cache warmup ran as a long tail on the free tier and completed 2026-06-12. **Shipped reality differs from the plan below:**
+- **Window: Apr–Oct (7 months), not 12.** Shoulder/winter months are mostly NYR or snowed-in at PNW elevations — weather badges there would decorate dates nobody can book. Source of truth: `SEASON_MONTHS` in `providers/weather.py`.
+- **36,176 records, not ~16,400.** 1,300 unique rounded coordinates × 4 sample days/month (1, 8, 15, 22) × 7 months. The plan assumed one record per campground-month; the warmup samples 4 days/month for intra-month resolution.
+- **Synced to the Fly volume** via `scripts/sync-registry.sh` (registry.db is reference data; user/watch state lives separately in `watches.db`, untouched by the sync).
+
 ### Theme
 Show typical weather (high/low temps, precipitation probability) on search results so users can factor climate into campground selection. This is a **discovery-time** feature — "is it going to be freezing at night there in May?" — not a post-booking packing list (which was rejected as low-impact). Weather context turns campable from a pure availability tool into a trip-planning tool that helps you pick the *right* campground, not just an *available* one.
 
@@ -1639,10 +1646,28 @@ That's the gap v1.41 fills. Five real bugs from v1.4 validation map directly to 
 
 ---
 
-## v1.42 "Site Polish + Legal Footing"
+## v1.42 "Site Polish + Legal Footing" [SHIPPED 2026-05-31]
 
 ### Theme
 Add the site pages v1.4 deferred and that v1.45 (Apple App Store) will require regardless. Privacy Policy + Terms unblock Stripe live-mode review. About + Contact give trust signals that convert fence-sitters on /pricing. Footer ties everything together. ~1-2 days of focused work; the legal text comes from a generator (Termly or similar) and the user customizes the specifics, so most of the effort is page structure + content writing, not legal drafting.
+
+### Post-ship Status (2026-05-31)
+
+**Shipped and deployed.** Three PRs through `feat/chore` → `dev` → `main` release: PR #54 (legal pages + footer + routes + tests), PR #55 (copy pass removing em-dashes and AI-pattern tells from About, Privacy, Terms), PR #56 (support email swap to `hello@campable.co`). Release PR #57 merged into `main` at `4a6352e` triggering Fly deploy. Verified post-deploy: `/privacy`, `/terms`, `/about` all return 200; bundle hash flipped (`index-DMMAvE1u.js` → `index-BpX3omL_.js`); `hello@campable.co` and `site-footer` class present in the served bundle.
+
+**Decisions that diverged from the original entry:**
+- Hand-written legal text instead of Termly. Voice consistency with About/Pricing wins; honest disclosure of actual services (Supabase, Stripe, PostHog, Mapbox, Visual Crossing, Cloudflare, Fly) is more legally defensible than boilerplate "service providers" language.
+- No version string in the footer. `package.json` is `0.0.0` and the site is continuously deployed; the number would be noise.
+- Cloudflare RUM disabled in CF dashboard during this ship since PostHog already captures Core Web Vitals. Removes a beacon the operator wasn't reading and keeps the Privacy disclosure clean (Cloudflare's only listed role is now DNS + TLS).
+- About page was already shipped early (commit `1cd555a`); v1.42 added its missing contact mailto during the copy pass.
+
+**One real bug surfaced and fixed during self-review:** original Privacy draft claimed Google/Apple OAuth, but `useAuth.ts:107` only wires `signInWithPassword` (v1.36 OAuth not yet shipped). Removed the false claim before merge.
+
+**Out-of-code follow-ups (operator-side):**
+- Stripe Dashboard → Settings → Business → Public details: paste `https://campable.co/privacy` + `/terms`, set support email to `hello@campable.co`, support URL `https://campable.co/about`
+- Stripe Dashboard → Settings → Billing → Customer Portal: add Privacy + Terms URLs
+- Test that `hello@campable.co` actually delivers (send from outside, confirm receipt)
+- Stripe live-mode activation (still test-mode keys per v1.4 post-ship notes) when ready to accept real money
 
 Sequencing: realistically wants to happen before live Stripe mode activates (Stripe flags missing Privacy/ToS on subscription products) and before v1.45 (Apple requires a Privacy Policy URL at submission). Can be done in parallel with v1.41 since they touch different surfaces.
 
@@ -1727,10 +1752,63 @@ Sequencing: realistically wants to happen before live Stripe mode activates (Str
 
 ---
 
-## v1.45 "Native Apps"
+## v1.45 "Native Apps" [PARTIAL — internal iOS TestFlight SHIPPED 2026-06-14]
 
 ### Theme
 Wrap the existing React app in a Capacitor shell and ship to the iOS App Store and Google Play Store. Capacitor lets us keep the entire web codebase as the UI layer while adding native capabilities (APNs/FCM push, GPS, offline registry) that satisfy Apple's "Minimum Functionality" guideline (4.2) and make the app actually useful at the campground — where users frequently have no cell signal. This is not a port; it's a thin native shell + native plugins + a re-architected data layer that respects three different freshness models (registry = local, watches = local-with-sync, availability = online-only). Slotted after v1.4 so the monetization model is validated on the web (cheap iteration) before committing to App Store review cycles.
+
+The Features table below is the **eventual full target** (App Store + Play Store, push, offline, IAP-free monetization). The first executable slice is much smaller and is scoped under "First Milestone" immediately below.
+
+---
+
+### First Milestone — Internal TestFlight (iOS only, Option A) [SHIPPED 2026-06-14]
+
+**Goal:** Get a bundled iOS build of Campable onto a real iPhone via **internal** TestFlight (≤100 of our own testers, **no App Review**). Validates the toolchain and the web-in-WebView port without solving monetization, push, or offline.
+
+**Achieved 2026-06-14.** Build 1.0 (1), bundle id `co.campable.app`, uploaded and installed on a real iPhone via TestFlight internal testing. Gauntlet along the way: Capacitor 8 SPM scaffold, CORS for `capacitor://localhost`, the `API_BASE`/Supabase-storage/SW/billing native gates, two CI fixes (api.ts chunk split + PyJWT/npm CVE cleanup), the iOS safe-area top inset (`ios.contentInset: "always"`; scroll-bleed parked as a documented follow-up), recurring SPM-artifact resolution, device registration for signing, and cross-Apple-ID tester setup (developer account signs; personal Apple ID installs via TestFlight after being added under Users and Access). `DEVELOPMENT_TEAM` (KN6FDLG98K) committed to the Xcode project so future builds auto-sign.
+
+**Decisions (locked 2026-06-07):**
+- **Option A — no In-App Purchase.** Apple requires StoreKit IAP for digital subs sold *inside* the app and takes 15–30%. The app sells nothing; Pro features show "manage your subscription at campable.co" (opens system browser via `@capacitor/browser`). Sidesteps IAP integration + the biggest review-rejection risk. Internal TestFlight has no review, so anti-steering rules don't bite at this stage.
+- **Internal TestFlight only.** External testers require Beta App Review (≈ full review); deferred. App Store submission deferred.
+- **Bundled assets, not `server.url`.** Load the Vite build from the local bundle (`capacitor://localhost`). A one-time `server.url=https://campable.co` boot is allowed only as a 5-minute simulator sanity check, never shipped.
+
+**Why the port is small (grounded in current code, 2026-06-07):**
+- **CSP is HTTP-header-only** (no `<meta>` CSP in `web/index.html`) → the bundled app loads `index.html` as a local file with no server headers → **no CSP origin allowlist work needed** in the native context. Web header-based CSP is untouched.
+- **`API_BASE` seam already exists** (`web/src/api.ts:3`: `import.meta.env.DEV ? "http://localhost:8000" : ""`). Every call routes through `${API_BASE}/api/...`, so making native calls absolute is a one-line branch → `https://campable.co`.
+- **Apple's hard gates are already done:** `DELETE /api/auth/me` exists (`routes/auth.py:106`) and is surfaced in `UserMenu` (5.1.1(v) account deletion ✅); Privacy Policy URL shipped v1.42 (`campable.co/privacy` ✅); `Authorization: Bearer` already sent (`api.ts:26`, v1.33 groundwork ✅).
+
+**Change-list:**
+
+| Area | Change | File |
+|------|--------|------|
+| Backend | Add `capacitor://localhost` to CORS allowlist (explicit list required — `allow_credentials=True` forbids `*`). Small PR → dev → main. | `src/pnw_campsites/api.py` (`_cors_origins`) |
+| Frontend | `API_BASE` gains a native branch → `https://campable.co` (via `Capacitor.isNativePlatform()` / `VITE_NATIVE` flag) | `web/src/api.ts:3` |
+| Frontend | Supabase client `storage` adapter → `@capacitor/preferences` (web falls back to localStorage). Prevents WKWebView storage-pressure logout. | `web/src/lib/supabase.ts:8` |
+| Frontend | Gate `serviceWorker.register` behind `!isNativePlatform()` | `web/src/main.tsx:35` |
+| Frontend | Native upgrade CTA → "Manage at campable.co", opens system browser. This *is* Option A. | Pricing / upgrade UI |
+| Native | Capacitor scaffold (`@capacitor/core`, `cli`, `ios`), `cap add ios`, config, `@capacitor/assets` icons/splash from 1024² Madrona source, `Info.plist` `ITSAppUsesNonExemptEncryption=false` | new `ios/`, `capacitor.config.ts` |
+
+All frontend changes are **additive and native-gated** — the web bundle is byte-identical on web, so they can ship to dev/main safely before the app exists.
+
+**Execution sequence (isolates the one scary unknown — Apple signing):**
+1. **Simulator** (no signing, free): scaffold + bundle → run in iOS Simulator. Catches all web-in-WebView issues (CORS, API base, auth, Leaflet/Mapbox) with zero Apple variables. Optional 5-min `server.url` control boot first.
+2. **Tethered device** (first signing): run on a real iPhone via Xcode automatic signing. Adds only the dev-cert/provisioning variable.
+3. **Archive → upload → internal TestFlight** (full pipeline): distribution signing, App Store Connect record, upload, processing, install. Highest first-timer variance — budget a full day for Xcode/provisioning friction.
+
+**Bundle ID:** `co.campable.app` (reverse-DNS of `campable.co`, matching the sibling Being app's `fyi.being.app` convention — domain-namespaced per product, not entity-namespaced). **Permanent once the App Store Connect record is created.**
+
+**Risks:**
+1. Apple toolchain (signing/provisioning/upload) — not code, pure first-timer friction. Mitigated by the simulator→device→TestFlight progression.
+2. Anonymous watch-migration cookie (`credentials:"include"` + `campnw_session`) won't cross from `capacitor://localhost` to campable.co (WKWebView blocks third-party cookies). Non-issue for an internal, signed-in tester; revisit for public.
+3. JWT localStorage purge — mitigated by the `@capacitor/preferences` swap.
+
+**Deferred (NOT needed for internal TestFlight):** push notifications (APNs / `device_push_tokens` — biggest deferred chunk), universal/deep links, bundled offline registry, native geolocation, Android, IAP (Option A = none), external TestFlight + Beta App Review, full App Privacy nutrition labels (minimal section filled to upload; comprehensive labels wait for public).
+
+**Known issue (follow-up, non-blocking):** `ios.contentInset: "always"` fixes the at-rest top inset (header clears the status bar / Dynamic Island), but on scroll, content still bleeds slightly behind the status bar strip. `env(safe-area-inset-*)` only reports non-zero with `contentInset` set, and a CSS mask / sticky-header attempt collided with the header's z-index. Cosmetic only — does not block internal TestFlight. Revisit with the `@capacitor/status-bar` overlay API (or Capacitor's newer core `SystemBars.setOverlay`, not yet in 8.4.0) for a clean non-overlapping status bar.
+
+**Prereqs:** Xcode installed, a physical iPhone, Apple Developer account (✅ approved 2026-06-07). **Estimate:** 2–3 focused days, variance entirely in step 3.
+
+---
 
 ### Features
 
@@ -1867,6 +1945,48 @@ Wrap the existing React app in a Capacitor shell and ship to the iOS App Store a
 | Capacitor + Vite build pipeline drift over time | Lock Capacitor major version. Run `npx cap sync` in CI on every PR touching `web/`. Document in CLAUDE.md. |
 | In-app purchases not part of v1.45 scope | Subscription billing stays web-only at v1.45. Native IAP is a v1.5+ decision — Apple takes 15-30% revenue share and adds complex receipt validation. Defer until web monetization metrics justify it. |
 | Realistic timeline: 4-6 weeks calendar for solo dev new to Capacitor | Don't promise dates externally until first TestFlight build is in Apple's hands. Screenshots/metadata always take longer than estimated. |
+
+---
+
+## v1.47 "Prod Monitoring"
+
+### Theme
+Know the *live* site is broken before a user tells us. The nightly Playwright run is a release gate against **staging** — it never touches production — and PostHog is passive, so a 3am Fly/Supabase/TLS failure is invisible until someone gets hurt. v1.47 adds active synthetic checks against prod: a real `/healthz` (DB probe), a read-only daily smoke, and an external 5-min pinger. Full detail: `docs/MONITORING.md`.
+
+### ⚠️ DO THIS FIRST — manual setup (nothing alerts until these are set)
+
+The code is shipped, but the alerting path is inert without repo config and the external pinger. ~10 minutes total, both on your side.
+
+**1. Resend email alerts** — *Settings → Secrets and variables → Actions*:
+
+| Kind | Name | Value |
+|------|------|-------|
+| **Secret** | `RESEND_API_KEY` | Resend API key (create at <https://resend.com> → API Keys) |
+| Variable | `ALERT_EMAIL_TO` | your Outlook address, e.g. `you@palouselabs.com` |
+| Variable | `ALERT_EMAIL_FROM` | *(optional)* default `Campable Monitor <alerts@campable.co>` — **the domain must be verified in Resend**, or set this to one that is |
+
+If `RESEND_API_KEY` / `ALERT_EMAIL_TO` are unset the email step skips with a warning and the GitHub issue (`prod-down`) still fires — degraded, not silent, but you won't get pushed to.
+
+**2. UptimeRobot** (~5 min) — free account → Add New Monitor → HTTP(s), `https://campable.co/healthz`, 5-minute interval, **keyword monitoring** alerting when the body does *not* contain `"status":"ok"` (so a 503 or a wrong-shaped body both trip it, not just a dead connection). Alert contact = same Outlook address.
+
+**3. Verify the green path** — *Actions → Prod Monitor → Run workflow* (manual dispatch) once v1.47 is on prod. Then temporarily break a selector in `e2e/tests/prod-smoke.spec.ts` on a scratch branch to confirm the email + issue actually fire. An alert channel you've never seen fire is not a monitor.
+
+> Sequencing: `/healthz` only exists on prod after v1.47 rides `dev → main`. Until then point UptimeRobot at `https://campable.co/` for plain reachability and switch the URL after the release deploys.
+
+### What shipped
+
+| Change | File |
+|--------|------|
+| Real `/healthz` — pings SQLite, returns `{status, db, version}`, 503 when DB unreachable | `src/pnw_campsites/api.py` |
+| Tests for ok + degraded paths | `tests/test_api_endpoints.py` |
+| Read-only, non-mutating prod smoke (homepage, search API, pricing, SEO index) | `e2e/tests/prod-smoke.spec.ts` |
+| Daily 15:00 UTC monitor → Resend email + `prod-down` GitHub issue on failure | `.github/workflows/prod-monitor.yml` |
+| Four-layer model + setup instructions | `docs/MONITORING.md` |
+
+### Notes
+
+- The prod smoke is **strictly non-mutating** — no signup, no Stripe, no writes — which is what makes it safe to aim at production. The four flows in `e2e/tests/` do mutate and stay pointed at staging.
+- Side effect worth knowing: the deploy wait-loop's `curl .../healthz` was previously false-green — `/healthz` fell through to the SPA catch-all and returned `index.html` with a 200, so the deploy gate passed even mid-DB-outage. The explicit route fixes that consumer too.
 
 ---
 

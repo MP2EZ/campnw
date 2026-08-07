@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sqlite3
 import time
 from collections import deque
 from contextlib import asynccontextmanager
@@ -18,13 +19,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from pnw_campsites.monitor.db import WatchDB
+from pnw_campsites.monitor.db import DEFAULT_DB_PATH, WatchDB
 from pnw_campsites.posthog_client import get_posthog_client
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.search.engine import SearchEngine
+
+# App version — surfaced by /healthz so monitors can confirm what's deployed.
+APP_VERSION = "1.47"
 
 # ---------------------------------------------------------------------------
 # App state — initialized in lifespan
@@ -390,6 +394,10 @@ app = FastAPI(title="PNW Campsites", lifespan=lifespan)
 _cors_origins = os.getenv(
     "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5177,http://localhost:3000"
 ).split(",")
+# Capacitor native shells (v1.45) request from a fixed local origin, not
+# campable.co. Always allow them regardless of ALLOWED_ORIGINS so the iOS/Android
+# app can reach the API. iOS bundled = capacitor://localhost; Android = https://localhost.
+_cors_origins += ["capacitor://localhost", "https://localhost"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -534,6 +542,36 @@ app.include_router(billing_router)
 # SEO routes MUST be before the SPA catch-all so /campgrounds/{state}/{slug}
 # takes precedence over /{path:path}
 app.include_router(seo_router)
+
+
+@app.get("/healthz")
+async def healthz() -> JSONResponse:
+    """Liveness + DB readiness probe for synthetic monitoring.
+
+    Returns 200 when SQLite is reachable, 503 otherwise. Defined as an
+    explicit route so it takes precedence over the SPA catch-all at
+    /{path:path} — without it, unknown paths fall through to index.html
+    and any /healthz check would be falsely green during a DB outage.
+    """
+    db_ok = False
+    try:
+        conn = sqlite3.connect(str(DEFAULT_DB_PATH))
+        try:
+            conn.execute("SELECT 1")
+        finally:
+            conn.close()
+        db_ok = True
+    except Exception:
+        logging.getLogger(__name__).exception("healthz: SQLite check failed")
+
+    return JSONResponse(
+        {
+            "status": "ok" if db_ok else "degraded",
+            "db": db_ok,
+            "version": APP_VERSION,
+        },
+        status_code=200 if db_ok else 503,
+    )
 
 # Mount SEO static assets (tokens.css, seo.css)
 _seo_static_candidates = [

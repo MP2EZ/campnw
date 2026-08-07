@@ -74,7 +74,33 @@ jobs:
         working-directory: web
         run: |
           npm ci
-          npm audit --audit-level=high
+          # GHSA-qwww-vcr4-c8h2 (react-router): CSRF bypass that the advisory
+          # states is reachable only through the unstable RSC APIs. Campable is
+          # a client-only SPA — src/main.tsx uses plain BrowserRouter, with no
+          # RSC, no data-router action/loader, no server runtime — so the
+          # vulnerable path cannot be reached. npm's only offered fix is a
+          # downgrade to react-router-dom@7.11.0; the real fix is React Router 8,
+          # which folds react-router-dom into react-router (an import migration).
+          # Revisit when that migration is scheduled.
+          #
+          # Pipe-separate to allowlist more advisories. Anything high/critical
+          # that is NOT listed here still fails the build.
+          ALLOWED='GHSA-qwww-vcr4-c8h2'
+
+          npm audit --json > "$RUNNER_TEMP/audit.json" || true
+          UNEXPECTED=$(jq -r '
+            [ .vulnerabilities[]
+              | select(.severity == "high" or .severity == "critical")
+              | .via[] | objects | .url
+            ] | unique | .[]' "$RUNNER_TEMP/audit.json" \
+            | grep -vE "$ALLOWED" || true)
+
+          if [ -n "$UNEXPECTED" ]; then
+            echo "::error::Unallowlisted high/critical npm advisories found:"
+            echo "$UNEXPECTED"
+            exit 1
+          fi
+          echo "No unallowlisted high/critical npm advisories."
 
   lighthouse:
     runs-on: ubuntu-latest
