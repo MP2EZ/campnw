@@ -33,7 +33,7 @@ def _check(fn, **kwargs) -> Check:
 @pytest.fixture(autouse=True)
 def _no_warmup(monkeypatch):
     """Skip module preloading — irrelevant offline and slow to import."""
-    monkeypatch.setattr(health, "_preload_modules", lambda: None)
+    monkeypatch.setattr(health, "_preload_modules", lambda names: None)
 
 
 # ---------------------------------------------------------------------------
@@ -236,9 +236,159 @@ def test_categories_match_the_documented_cli_choices():
     assert {c.category for c in CHECKS} <= documented
 
 
+async def test_preload_loads_only_the_selected_checks_modules(monkeypatch):
+    """`--only data` must not drag in stripe/curl_cffi.
+
+    It matters on a memory-capped box: the CLI runs as a second Python process
+    alongside uvicorn, and on a 256MB staging machine the full import chain is
+    enough to wedge it.
+    """
+    loaded: list[tuple[str, ...]] = []
+    monkeypatch.setattr(health, "_preload_modules", lambda names: loaded.append(tuple(names)))
+
+    async def fn() -> str:
+        return "x"
+
+    checks = [
+        Check(name="a", category="data", fn=fn, modules=("mod_a",)),
+        Check(name="b", category="provider", fn=fn, modules=("mod_b", "mod_shared")),
+        Check(name="c", category="provider", fn=fn, modules=("mod_shared",)),
+    ]
+    await run_all(checks, categories={"data"})
+    assert loaded == [("mod_a",)]
+
+    loaded.clear()
+    await run_all(checks, categories={"provider"})
+    # Deduplicated, order preserved.
+    assert loaded == [("mod_b", "mod_shared")]
+
+
+def test_every_declared_module_is_importable():
+    """A typo in a check's `modules` would silently disable its warmup."""
+    import importlib
+
+    for check in CHECKS:
+        for name in check.modules:
+            if name == "anthropic":
+                continue  # optional 'enrichment' dep, absent on the server
+            importlib.import_module(name)
+
+
 def test_every_check_is_a_coroutine_function():
     for check in CHECKS:
         assert asyncio.iscoroutinefunction(check.fn), check.name
+
+
+# ---------------------------------------------------------------------------
+# Read-only guarantees + hang resistance (both regressions found on staging)
+# ---------------------------------------------------------------------------
+
+
+def _make_registry_db(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "registry.db"
+    conn = sqlite3.connect(db)
+    conn.executescript(
+        """
+        CREATE TABLE campgrounds (
+            id INTEGER PRIMARY KEY, name TEXT, state TEXT, enabled INTEGER,
+            booking_system TEXT, booking_url_slug TEXT, facility_id TEXT
+        );
+        INSERT INTO campgrounds VALUES (1,'A','WA',1,'recgov','','1');
+        INSERT INTO campgrounds VALUES (2,'B','OR',1,'or_state','park-b','402146');
+        INSERT INTO campgrounds VALUES (3,'C','WA',0,'recgov','','3');
+        """
+    )
+    conn.commit()
+    conn.close()
+    return db
+
+
+def test_readonly_conn_rejects_writes(tmp_path):
+    """The sweep must never mutate a live database."""
+    import sqlite3
+
+    db = _make_registry_db(tmp_path)
+    conn = health._readonly_conn(db)
+    try:
+        with pytest.raises(sqlite3.OperationalError):
+            conn.execute("UPDATE campgrounds SET name='mutated' WHERE id=1")
+    finally:
+        conn.close()
+
+
+def test_readonly_conn_reports_missing_file(tmp_path):
+    with pytest.raises(RuntimeError, match="database file missing"):
+        health._readonly_conn(tmp_path / "nope.db")
+
+
+async def test_registry_check_counts_only_enabled(tmp_path, monkeypatch):
+    db = _make_registry_db(tmp_path)
+    monkeypatch.setattr("pnw_campsites.registry.db.DEFAULT_DB_PATH", db)
+    detail = await health._check_registry_db()
+    # 3 rows exist but only 2 are enabled — search queries the enabled set, so a
+    # registry of disabled rows must not read as healthy.
+    assert detail.startswith("2 campgrounds")
+
+
+async def test_registry_check_fails_when_all_disabled(tmp_path, monkeypatch):
+    import sqlite3
+
+    db = _make_registry_db(tmp_path)
+    conn = sqlite3.connect(db)
+    conn.execute("UPDATE campgrounds SET enabled=0")
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr("pnw_campsites.registry.db.DEFAULT_DB_PATH", db)
+    with pytest.raises(RuntimeError, match="no enabled campgrounds"):
+        await health._check_registry_db()
+
+
+def test_ra_probe_resolves_from_registry(tmp_path, monkeypatch):
+    db = _make_registry_db(tmp_path)
+    monkeypatch.setattr("pnw_campsites.registry.db.DEFAULT_DB_PATH", db)
+    assert health._resolve_ra_probe() == ("402146", "park-b", "OR")
+
+
+def test_ra_probe_falls_back_when_registry_unreadable(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "pnw_campsites.registry.db.DEFAULT_DB_PATH", tmp_path / "missing.db"
+    )
+    assert health._resolve_ra_probe() == health.PROBE_RA_PARK
+
+
+async def test_timeout_returns_even_when_the_work_is_a_blocking_thread():
+    """The regression that hung the CLI on staging.
+
+    `wait_for` cannot cancel a thread, so `run_check` must still return on time
+    rather than waiting for the worker to notice.
+    """
+    import time as _time
+
+    started = asyncio.Event()
+
+    async def fn() -> str:
+        def _block() -> str:
+            started.set()
+            _time.sleep(3)
+            return "eventually"
+
+        return await asyncio.to_thread(_block)
+
+    result = await asyncio.wait_for(run_check(_check(fn), timeout=0.1), timeout=2.0)
+    assert result.status == "fail"
+    assert "timed out" in result.error
+
+
+def test_exit_now_skips_the_executor_join(monkeypatch):
+    """_exit_now must use os._exit, not sys.exit, or the join re-hangs the CLI."""
+    from pnw_campsites import __main__ as cli
+
+    called = {}
+    monkeypatch.setattr(cli.os, "_exit", lambda code: called.setdefault("code", code))
+    cli._exit_now(3)
+    assert called == {"code": 3}
 
 
 # ---------------------------------------------------------------------------

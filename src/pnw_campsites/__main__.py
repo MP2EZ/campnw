@@ -489,6 +489,24 @@ def _paint(text: str, color: str) -> str:
     return f"{color}{text}\033[0m"
 
 
+def _exit_now(code: int) -> None:
+    """Exit immediately, without joining asyncio's default thread executor.
+
+    `asyncio.wait_for` cannot cancel a blocking `to_thread` call — it only stops
+    *waiting* for it. `asyncio.run` then blocks at teardown until every worker
+    thread finishes, so one wedged check (a SQLite write lock, a socket with no
+    timeout) hangs the CLI indefinitely, long past the timeout we just reported
+    to the user. Observed against a live Fly machine: `--timeout 10` never
+    returned.
+
+    The results are already computed and printed by this point, and a stuck
+    worker has nothing left to contribute, so skipping the join is safe.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
+
+
 async def cmd_doctor(args: argparse.Namespace) -> None:
     import json
 
@@ -509,7 +527,7 @@ async def cmd_doctor(args: argparse.Namespace) -> None:
 
     if args.json:
         print(json.dumps(report, indent=2))
-        sys.exit(0 if report["healthy"] else 1)
+        _exit_now(0 if report["healthy"] else 1)
 
     name_w = max(len(r.name) for r in results)
     cat_w = max(len(r.category) for r in results)
@@ -530,7 +548,7 @@ async def cmd_doctor(args: argparse.Namespace) -> None:
             parts.append(f"{counts[key]} {key}")
     print(f"\n  {' · '.join(parts)}\n")
 
-    sys.exit(0 if report["healthy"] else 1)
+    _exit_now(0 if report["healthy"] else 1)
 
 
 def main() -> None:
