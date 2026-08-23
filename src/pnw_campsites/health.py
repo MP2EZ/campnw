@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sqlite3
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Literal
 
 import httpx
@@ -88,35 +90,65 @@ class Check:
 # ---------------------------------------------------------------------------
 
 
+# Deliberately NOT via CampgroundRegistry / WatchDB. Their constructors run
+# `executescript(SCHEMA)`, ALTER TABLE migrations and a slug backfill — i.e.
+# they WRITE. Pointed at a live server whose API process holds the SQLite
+# writer, that blocks on the write lock indefinitely, and it would break this
+# module's read-only guarantee besides. Readers never block in WAL mode, so a
+# `mode=ro` connection is both honest and safe against prod.
+#
+# This is the one place the sweep does not reuse the app's client code, because
+# the question here is "is the DB file readable and populated", not "does the
+# ORM layer work" — and answering the first must not require the second's writes.
+_SQLITE_BUSY_TIMEOUT_S = 2.0
+
+
+def _readonly_conn(path) -> sqlite3.Connection:
+    if not Path(path).exists():
+        raise RuntimeError(f"database file missing: {path}")
+    return sqlite3.connect(
+        f"file:{path}?mode=ro", uri=True, timeout=_SQLITE_BUSY_TIMEOUT_S
+    )
+
+
+def _scalar(conn, sql: str) -> int:
+    return int(conn.execute(sql).fetchone()[0])
+
+
 async def _check_registry_db() -> str:
-    from pnw_campsites.registry.db import DEFAULT_DB_PATH, CampgroundRegistry
+    from pnw_campsites.registry.db import DEFAULT_DB_PATH
 
     def _query() -> str:
-        with CampgroundRegistry() as reg:
-            total = reg.count()
-            by_state = reg.count_by_state()
+        conn = _readonly_conn(DEFAULT_DB_PATH)
+        try:
+            # enabled=1 matches what search actually queries; a registry full
+            # of disabled rows is an outage that a plain COUNT(*) would hide.
+            total = _scalar(conn, "SELECT COUNT(*) FROM campgrounds WHERE enabled=1")
+            rows = conn.execute(
+                "SELECT state, COUNT(*) c FROM campgrounds WHERE enabled=1 "
+                "GROUP BY state ORDER BY c DESC LIMIT 3"
+            ).fetchall()
+        finally:
+            conn.close()
         if total == 0:
-            raise RuntimeError(f"registry at {DEFAULT_DB_PATH} is empty")
-        top = ", ".join(
-            f"{s}:{n}" for s, n in sorted(by_state.items(), key=lambda kv: -kv[1])[:3]
-        )
+            raise RuntimeError(f"registry at {DEFAULT_DB_PATH} has no enabled campgrounds")
+        top = ", ".join(f"{state}:{count}" for state, count in rows)
         return f"{total:,} campgrounds ({top})"
 
     return await asyncio.to_thread(_query)
 
 
 async def _check_watch_db() -> str:
-    from pnw_campsites.monitor.db import WatchDB
+    from pnw_campsites.monitor.db import DEFAULT_DB_PATH as WATCH_DB_PATH
 
     def _query() -> str:
-        db = WatchDB()
+        conn = _readonly_conn(WATCH_DB_PATH)
         try:
-            watches = db.list_watches(enabled_only=True)
+            active = _scalar(conn, "SELECT COUNT(*) FROM watches WHERE enabled=1")
+            users = _scalar(conn, "SELECT COUNT(*) FROM users")
         finally:
-            close = getattr(db, "close", None)
-            if callable(close):
-                close()
-        return f"{len(watches)} active watch(es)"
+            conn.close()
+        return f"{active} active watch(es), {users} user(s)"
 
     return await asyncio.to_thread(_query)
 
@@ -174,14 +206,20 @@ def _resolve_ra_probe() -> tuple[str, str, str]:
     """
     import contextlib
 
-    from pnw_campsites.registry.db import CampgroundRegistry
+    from pnw_campsites.registry.db import DEFAULT_DB_PATH
 
-    # A registry that cannot be read is reported by the registry.db check; here
-    # it should only cost us the nicer probe target.
-    with contextlib.suppress(Exception), CampgroundRegistry() as reg:
-        for cg in reg.list_all():
-            if str(cg.booking_system) == "or_state" and cg.booking_url_slug:
-                return cg.facility_id, cg.booking_url_slug, cg.state
+    # Read-only for the same reason as the DB checks above.
+    with contextlib.suppress(Exception):
+        conn = _readonly_conn(DEFAULT_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT facility_id, booking_url_slug, state FROM campgrounds "
+                "WHERE booking_system='or_state' AND booking_url_slug != '' LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+        if row:
+            return str(row[0]), str(row[1]), str(row[2])
     return PROBE_RA_PARK
 
 
