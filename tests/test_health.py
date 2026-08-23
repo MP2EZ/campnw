@@ -33,7 +33,7 @@ def _check(fn, **kwargs) -> Check:
 @pytest.fixture(autouse=True)
 def _no_warmup(monkeypatch):
     """Skip module preloading — irrelevant offline and slow to import."""
-    monkeypatch.setattr(health, "_preload_modules", lambda: None)
+    monkeypatch.setattr(health, "_preload_modules", lambda names: None)
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +234,44 @@ def test_check_names_are_unique():
 def test_categories_match_the_documented_cli_choices():
     documented = {"data", "provider", "enrich", "platform", "notify", "llm"}
     assert {c.category for c in CHECKS} <= documented
+
+
+async def test_preload_loads_only_the_selected_checks_modules(monkeypatch):
+    """`--only data` must not drag in stripe/curl_cffi.
+
+    It matters on a memory-capped box: the CLI runs as a second Python process
+    alongside uvicorn, and on a 256MB staging machine the full import chain is
+    enough to wedge it.
+    """
+    loaded: list[tuple[str, ...]] = []
+    monkeypatch.setattr(health, "_preload_modules", lambda names: loaded.append(tuple(names)))
+
+    async def fn() -> str:
+        return "x"
+
+    checks = [
+        Check(name="a", category="data", fn=fn, modules=("mod_a",)),
+        Check(name="b", category="provider", fn=fn, modules=("mod_b", "mod_shared")),
+        Check(name="c", category="provider", fn=fn, modules=("mod_shared",)),
+    ]
+    await run_all(checks, categories={"data"})
+    assert loaded == [("mod_a",)]
+
+    loaded.clear()
+    await run_all(checks, categories={"provider"})
+    # Deduplicated, order preserved.
+    assert loaded == [("mod_b", "mod_shared")]
+
+
+def test_every_declared_module_is_importable():
+    """A typo in a check's `modules` would silently disable its warmup."""
+    import importlib
+
+    for check in CHECKS:
+        for name in check.modules:
+            if name == "anthropic":
+                continue  # optional 'enrichment' dep, absent on the server
+            importlib.import_module(name)
 
 
 def test_every_check_is_a_coroutine_function():

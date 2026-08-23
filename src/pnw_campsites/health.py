@@ -83,6 +83,11 @@ class Check:
     # produce "skip", not "fail" — an unconfigured optional integration is not
     # an outage, and conflating the two trains you to ignore red.
     requires: tuple[str, ...] = field(default_factory=tuple)
+    # Modules this check imports lazily, warmed before timing starts (see
+    # _preload_modules). Only the selected checks' modules are loaded, which
+    # keeps `--only data` from dragging in stripe and curl_cffi — it matters on
+    # a memory-capped box where a second Python process competes with uvicorn.
+    modules: tuple[str, ...] = field(default_factory=tuple)
 
 
 # ---------------------------------------------------------------------------
@@ -367,24 +372,35 @@ async def _check_anthropic() -> str:
 # ---------------------------------------------------------------------------
 
 CHECKS: list[Check] = [
-    Check("registry.db", "data", _check_registry_db, slow_ms=500),
-    Check("watch.db", "data", _check_watch_db, slow_ms=500),
-    Check("rec.gov RIDB", "provider", _check_recgov_ridb, requires=("RIDB_API_KEY",)),
-    Check("rec.gov availability", "provider", _check_recgov_availability),
+    Check("registry.db", "data", _check_registry_db, slow_ms=500,
+          modules=("pnw_campsites.registry.db",)),
+    Check("watch.db", "data", _check_watch_db, slow_ms=500,
+          modules=("pnw_campsites.monitor.db",)),
+    Check("rec.gov RIDB", "provider", _check_recgov_ridb, requires=("RIDB_API_KEY",),
+          modules=("pnw_campsites.providers.recgov",)),
+    Check("rec.gov availability", "provider", _check_recgov_availability,
+          modules=("pnw_campsites.providers.recgov",)),
     # Both state-park providers impersonate a browser TLS fingerprint and parse
     # large payloads; 2s is normal for them, so they get a wider band.
-    Check("GoingToCamp (WA)", "provider", _check_goingtocamp, slow_ms=5000),
-    Check("ReserveAmerica (OR)", "provider", _check_reserveamerica, slow_ms=6000),
+    Check("GoingToCamp (WA)", "provider", _check_goingtocamp, slow_ms=5000,
+          modules=("pnw_campsites.providers.goingtocamp",)),
+    Check("ReserveAmerica (OR)", "provider", _check_reserveamerica, slow_ms=6000,
+          modules=("pnw_campsites.providers.reserveamerica", "pnw_campsites.registry.db")),
     Check(
         "Visual Crossing",
         "enrich",
         _check_weather,
         requires=("VISUAL_CROSSING_API_KEY",),
+        modules=("pnw_campsites.providers.weather",),
     ),
-    Check("Mapbox", "enrich", _check_mapbox, requires=("MAPBOX_ACCESS_TOKEN",)),
-    Check("Nominatim", "enrich", _check_nominatim, slow_ms=3000),
-    Check("Supabase auth", "platform", _check_supabase, requires=("SUPABASE_URL",)),
-    Check("Stripe", "platform", _check_stripe, requires=("STRIPE_SECRET_KEY",)),
+    Check("Mapbox", "enrich", _check_mapbox, requires=("MAPBOX_ACCESS_TOKEN",),
+          modules=("pnw_campsites.mapbox",)),
+    Check("Nominatim", "enrich", _check_nominatim, slow_ms=3000,
+          modules=("pnw_campsites.geo",)),
+    Check("Supabase auth", "platform", _check_supabase, requires=("SUPABASE_URL",),
+          modules=("pnw_campsites.auth",)),
+    Check("Stripe", "platform", _check_stripe, requires=("STRIPE_SECRET_KEY",),
+          modules=("pnw_campsites.billing",)),
     Check(
         "PostHog",
         "platform",
@@ -398,7 +414,8 @@ CHECKS: list[Check] = [
         _check_pushover,
         requires=("PUSHOVER_API_TOKEN", "PUSHOVER_USER_KEY"),
     ),
-    Check("Anthropic", "llm", _check_anthropic, requires=("ANTHROPIC_API_KEY",)),
+    Check("Anthropic", "llm", _check_anthropic, requires=("ANTHROPIC_API_KEY",),
+          modules=("anthropic",)),
 ]
 
 
@@ -407,32 +424,18 @@ CHECKS: list[Check] = [
 # ---------------------------------------------------------------------------
 
 
-# Modules each check imports lazily. Importing them inside a timed check blocks
-# the whole event loop — curl_cffi, stripe and anthropic take seconds to load —
-# so the cost lands on whichever checks happen to be awaiting, and an unwarmed
-# sweep reported a local SQLite count at ~2s. Warming up front makes the
-# reported latency service time rather than import time.
-_PRELOAD_MODULES = (
-    "pnw_campsites.registry.db",
-    "pnw_campsites.monitor.db",
-    "pnw_campsites.providers.recgov",
-    "pnw_campsites.providers.goingtocamp",
-    "pnw_campsites.providers.reserveamerica",
-    "pnw_campsites.providers.weather",
-    "pnw_campsites.mapbox",
-    "pnw_campsites.geo",
-    "pnw_campsites.auth",
-    "pnw_campsites.billing",
-    "anthropic",
-)
+# Warming imports before timing matters because curl_cffi, stripe and anthropic
+# take seconds to load and hold the GIL: imported inside a timed check they
+# block the whole event loop, so the cost lands on whichever checks happen to be
+# awaiting. An unwarmed sweep reported a local SQLite count at ~2s.
 
 
-def _preload_modules() -> None:
-    """Import every check's dependencies before any timing begins."""
+def _preload_modules(names: tuple[str, ...] | list[str]) -> None:
+    """Import the given modules before any timing begins."""
     import contextlib
     import importlib
 
-    for name in _PRELOAD_MODULES:
+    for name in names:
         # A genuinely broken import resurfaces as that check's own failure, with
         # a useful message; suppressing it here only skips the warmup.
         with contextlib.suppress(Exception):
@@ -496,8 +499,10 @@ async def run_all(
     selected = list(checks if checks is not None else CHECKS)
     if categories:
         selected = [c for c in selected if c.category in categories]
-    # Off-thread so an API caller's event loop keeps serving during warmup.
-    await asyncio.to_thread(_preload_modules)
+    # Only the selected checks' modules, and off-thread so an API caller's
+    # event loop keeps serving during warmup.
+    needed = tuple(dict.fromkeys(m for c in selected for m in c.modules))
+    await asyncio.to_thread(_preload_modules, needed)
     return list(await asyncio.gather(*(run_check(c, timeout) for c in selected)))
 
 
