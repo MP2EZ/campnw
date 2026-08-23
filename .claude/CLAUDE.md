@@ -137,6 +137,28 @@ The poll command diffs current availability against the last snapshot. First pol
 
 Note: In production (v0.5+), watch polling runs automatically via APScheduler every 15 minutes — the CLI `watch poll` command is for local/manual use only.
 
+### Health-check every dependency
+```bash
+# Full sweep: DBs, all 4 booking providers, weather, Mapbox, Nominatim,
+# Supabase, Stripe, PostHog, ntfy, Anthropic. Read-only, safe against prod.
+.venv/bin/python3 -m pnw_campsites doctor
+
+# Just the booking providers
+.venv/bin/python3 -m pnw_campsites doctor --only provider
+
+# Machine-readable, exit 1 if anything failed
+.venv/bin/python3 -m pnw_campsites doctor --json
+```
+
+Statuses: `ok` / `slow` (succeeded but degraded) / `fail` / `skip` (not
+configured here — not a failure). Also exposed as admin-only
+`GET /api/admin/health/deep`.
+
+**The IP matters:** GoingToCamp and ReserveAmerica block by address, so a local
+`FAIL` may just be your IP. The authoritative view is
+`fly ssh console -a campnw -C "python -m pnw_campsites doctor"`.
+Full details: `docs/MONITORING.md`.
+
 ### Enrich registry tags (LLM — manual one-off)
 ```bash
 # Preview what tags would be extracted (no changes saved)

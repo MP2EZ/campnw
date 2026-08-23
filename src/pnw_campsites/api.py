@@ -28,7 +28,7 @@ from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.search.engine import SearchEngine
 
 # App version — surfaced by /healthz so monitors can confirm what's deployed.
-APP_VERSION = "1.47"
+APP_VERSION = "1.47.1"
 
 # ---------------------------------------------------------------------------
 # App state — initialized in lifespan

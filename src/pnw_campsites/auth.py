@@ -13,22 +13,31 @@ log = logging.getLogger(__name__)
 _jwks_client: PyJWKClient | None = None
 
 
+def jwks_url() -> str:
+    """Resolve the Supabase JWKS endpoint for this environment.
+
+    Shared with the dependency health sweep (``pnw_campsites.health``) so the
+    probe can never check a different URL than the one that validates real
+    tokens.
+    """
+    url = os.getenv("SUPABASE_URL")
+    if not url:
+        if os.getenv("FLY_APP_NAME"):
+            raise RuntimeError(
+                "SUPABASE_URL must be set in production. "
+                "Set it to your Supabase project URL (https://<ref>.supabase.co)."
+            )
+        log.warning("SUPABASE_URL not set — JWT validation will reject all tokens")
+        # Fall back to a dummy URL; all validations will fail gracefully
+        url = "https://placeholder.supabase.co"
+    return f"{url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+
+
 def _get_jwks_client() -> PyJWKClient:
     """Lazily create a JWKS client for the Supabase project."""
     global _jwks_client
     if _jwks_client is None:
-        url = os.getenv("SUPABASE_URL")
-        if not url:
-            if os.getenv("FLY_APP_NAME"):
-                raise RuntimeError(
-                    "SUPABASE_URL must be set in production. "
-                    "Set it to your Supabase project URL (https://<ref>.supabase.co)."
-                )
-            log.warning("SUPABASE_URL not set — JWT validation will reject all tokens")
-            # Return a client with a dummy URL; all validations will fail gracefully
-            url = "https://placeholder.supabase.co"
-        jwks_url = f"{url}/auth/v1/.well-known/jwks.json"
-        _jwks_client = PyJWKClient(jwks_url, cache_keys=True, lifespan=3600)
+        _jwks_client = PyJWKClient(jwks_url(), cache_keys=True, lifespan=3600)
     return _jwks_client
 
 

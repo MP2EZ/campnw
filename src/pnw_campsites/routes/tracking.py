@@ -6,6 +6,7 @@ import os
 import statistics
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from pnw_campsites.routes.deps import (
     get_current_user,
@@ -63,3 +64,30 @@ async def admin_digest(request: Request):
     db = get_watch_db()
     report = await generate_weekly_digest(db)
     return {"report": report}
+
+
+@router.get("/admin/health/deep")
+async def admin_health_deep(request: Request):
+    """Full dependency sweep — every DB, provider and external service. Admin only.
+
+    ``/healthz`` answers "is the app up". This answers "which dependency is
+    down", so an on-call check does not require SSHing into the machine.
+
+    Admin-gated for two reasons: the detail strings expose provider internals,
+    and a sweep makes ~15 outbound calls, one of which spends a Visual Crossing
+    quota record. Returns 503 when anything failed so it can be curled by a
+    monitor without parsing the body.
+    """
+    user_id = get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not _is_admin(user_id):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from pnw_campsites.health import run_all, summarize
+
+    only = request.query_params.get("only")
+    categories = {c.strip() for c in only.split(",") if c.strip()} if only else None
+    results = await run_all(categories=categories)
+    report = summarize(results, strict=request.query_params.get("strict") == "1")
+    return JSONResponse(report, status_code=200 if report["healthy"] else 503)
