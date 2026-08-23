@@ -88,6 +88,23 @@ class ReserveAmericaClient:
             park_id, slug, state, start_date, end_date,
         )
 
+    async def ping(self, park_id: str, slug: str, state: str) -> int:
+        """Cheap liveness probe — one request, no availability grid parsing.
+
+        ``get_availability`` walks 14-day windows and parses a ~2MB Redux blob
+        per page, which is far too expensive for a health check. This exercises
+        the same session, TLS impersonation and WAF path in a single request.
+
+        Returns the total record count reported by the search payload.
+        """
+        today = date.today()
+        records, total = await asyncio.to_thread(
+            self._fetch_window, park_id, slug, state, today, today + timedelta(days=1)
+        )
+        if not records and total == 0:
+            raise ValueError(f"ReserveAmerica returned no records for park {park_id}")
+        return total
+
     def _get_availability_sync(
         self,
         park_id: str,

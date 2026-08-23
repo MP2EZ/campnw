@@ -43,6 +43,15 @@ def _get_client() -> StripeClient:
     return StripeClient(key)
 
 
+def pro_price_id() -> str:
+    """Resolve the Stripe price id used for Pro checkout.
+
+    Shared with the dependency health sweep so the probe validates the exact
+    price that checkout will charge against.
+    """
+    return _env("STRIPE_PRO_PRICE_ID", STRIPE_PRO_PRICE_ID_DEFAULT)
+
+
 def is_configured() -> bool:
     """Return True when Stripe credentials are present (used for /api/billing gating)."""
     return bool(_env("STRIPE_SECRET_KEY") and _env("STRIPE_WEBHOOK_SECRET"))
@@ -65,7 +74,7 @@ def create_checkout_session(
     Campable user id in metadata for forensics.
     """
     client = _get_client()
-    price_id = _env("STRIPE_PRO_PRICE_ID", STRIPE_PRO_PRICE_ID_DEFAULT)
+    price_id = pro_price_id()
     success_url = _env("STRIPE_SUCCESS_URL", SUCCESS_URL_DEFAULT)
     cancel_url = _env("STRIPE_CANCEL_URL", CANCEL_URL_DEFAULT)
 
