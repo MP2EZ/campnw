@@ -13,10 +13,6 @@ name: Prod Monitor
 #   THIS         -> "do features work?"  daily        (deep, read-only)
 #   playwright   -> "is the next release safe?"  pre-deploy (staging)
 #   PostHog      -> passive real-user error capture
-#
-# NOTE: the /healthz JSON check only goes green once v1.47 (which adds the real
-# /healthz route) is released to prod. Until then that step will fail on manual
-# dispatch; the Playwright smoke + /api/search check work against current prod.
 
 on:
   schedule:
@@ -58,6 +54,50 @@ jobs:
             echo "::error::/api/search did not return 2xx"; exit 1; }
           echo "$body" | grep -q '"campgrounds_checked"' || {
             echo "::error::/api/search response missing campgrounds_checked"; exit 1; }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependency sweep — which upstream is down?
+        env:
+          RIDB_API_KEY: ${{ secrets.RIDB_API_KEY }}
+        # DIAGNOSTIC, NOT A GATE — deliberately continue-on-error. This runs
+        # from a GitHub runner, so a provider that blocks GitHub's IP range
+        # would fail here while prod is perfectly healthy. The steps above are
+        # the detectors; this explains them. Its result lands in the run summary
+        # so a failed monitor is diagnosable without opening the artifact.
+        #
+        # Scoped to provider+notify: the platform checks (Supabase, Stripe,
+        # PostHog) key off Fly secrets, so run the full sweep on the box:
+        #   fly ssh console -a campnw -C "python -m pnw_campsites doctor"
+        # Checks whose keys are absent report "skip", never "fail".
+        continue-on-error: true
+        run: |
+          pip install -e ".[api]"
+          python -m pnw_campsites doctor --only provider,notify --json \
+            > dependency-sweep.json || true
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          report = json.loads(pathlib.Path("dependency-sweep.json").read_text())
+          icon = {"ok": "✅", "slow": "🐢", "fail": "❌", "skip": "⏭️"}
+          print(f"### Dependency sweep — {report['status']}\n")
+          print("| | Dependency | Latency | Detail |")
+          print("|---|---|---|---|")
+          for c in report["checks"]:
+              ms = f"{c['latency_ms']:,}ms" if c["latency_ms"] is not None else "—"
+              print(f"| {icon[c['status']]} | {c['name']} | {ms} | {c['error'] or c['detail']} |")
+          PY
+          cat dependency-sweep.json
+
+      - name: Upload dependency sweep
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-sweep
+          path: dependency-sweep.json
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Install Playwright + browser
         working-directory: e2e

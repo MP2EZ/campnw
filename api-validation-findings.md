@@ -2,6 +2,10 @@
 
 Results from running `scripts/validate_apis.py` against all target data sources.
 
+> **Historical.** `scripts/validate_apis.py` was retired in v1.47 and replaced by
+> `python -m pnw_campsites doctor`, which probes the same providers plus every
+> other dependency, through the real client code. See `docs/MONITORING.md`.
+
 ## Recreation.gov RIDB (Metadata)
 - **Status: WORKING (with API key)**
 - Key stored in `.env` as `RIDB_API_KEY`

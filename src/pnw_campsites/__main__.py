@@ -470,6 +470,69 @@ async def cmd_enrich(args: argparse.Namespace) -> None:
     print(f"Enriched {enriched} campground(s).")
 
 
+# ---------------------------------------------------------------------------
+# doctor — dependency health sweep
+# ---------------------------------------------------------------------------
+
+_STATUS_STYLE = {
+    "ok": ("ok  ", "\033[32m"),
+    "slow": ("SLOW", "\033[33m"),
+    "fail": ("FAIL", "\033[31m"),
+    "skip": ("skip", "\033[90m"),
+}
+
+
+def _paint(text: str, color: str) -> str:
+    """Colorize only for a real terminal — CI logs and pipes stay clean."""
+    if not sys.stdout.isatty() or os.getenv("NO_COLOR"):
+        return text
+    return f"{color}{text}\033[0m"
+
+
+async def cmd_doctor(args: argparse.Namespace) -> None:
+    import json
+
+    from pnw_campsites.health import run_all, summarize
+
+    load_dotenv()
+
+    categories = (
+        {c.strip() for c in args.only.split(",") if c.strip()} if args.only else None
+    )
+    results = await run_all(timeout=args.timeout, categories=categories)
+
+    if not results:
+        print(f"No checks matched --only {args.only}", file=sys.stderr)
+        sys.exit(2)
+
+    report = summarize(results, strict=args.strict)
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+        sys.exit(0 if report["healthy"] else 1)
+
+    name_w = max(len(r.name) for r in results)
+    cat_w = max(len(r.category) for r in results)
+    print()
+    for r in results:
+        label, color = _STATUS_STYLE[r.status]
+        latency = f"{r.latency_ms:>6,}ms" if r.latency_ms is not None else " " * 8
+        note = r.error or r.detail
+        print(
+            f"  {r.category.upper():<{cat_w}}  {r.name:<{name_w}}  "
+            f"{_paint(label, color)}  {latency}  {note}"
+        )
+
+    counts = report["counts"]
+    parts = [f"{counts['ok']} ok"]
+    for key in ("slow", "fail", "skip"):
+        if counts[key]:
+            parts.append(f"{counts[key]} {key}")
+    print(f"\n  {' · '.join(parts)}\n")
+
+    sys.exit(0 if report["healthy"] else 1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="pnw_campsites",
@@ -588,6 +651,27 @@ def main() -> None:
         help="Confidence threshold for truncation detection (0.0-1.0, default: 0.5)",
     )
 
+    # --- doctor ---
+    p_doctor = sub.add_parser(
+        "doctor",
+        help="Health-check every database, provider and external service",
+    )
+    p_doctor.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON (for CI)"
+    )
+    p_doctor.add_argument(
+        "--only",
+        help="Comma-separated categories: data, provider, enrich, platform, notify, llm",
+    )
+    p_doctor.add_argument(
+        "--timeout", type=float, default=20.0,
+        help="Per-check timeout in seconds (default: 20)",
+    )
+    p_doctor.add_argument(
+        "--strict", action="store_true",
+        help="Exit non-zero on slow checks too, not just failures",
+    )
+
     args = parser.parse_args()
 
     if args.command == "search":
@@ -607,6 +691,8 @@ def main() -> None:
             asyncio.run(cmd_watch_poll(args))
     elif args.command == "enrich":
         asyncio.run(cmd_enrich(args))
+    elif args.command == "doctor":
+        asyncio.run(cmd_doctor(args))
 
 
 if __name__ == "__main__":
