@@ -274,7 +274,7 @@ export default function TripPlanner() {
   };
 
   return (
-    <main id="main-content" className="trip-planner">
+    <div className="trip-planner">
       <Helmet>
         <title>Trip Planner — Campable</title>
         <meta name="description" content="AI-powered camping trip planner. Get personalized campground recommendations and itineraries." />
@@ -373,6 +373,6 @@ export default function TripPlanner() {
             : undefined
         }
       />
-    </main>
+    </div>
   );
 }

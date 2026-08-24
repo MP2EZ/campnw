@@ -14,6 +14,10 @@ export default function TripDetail() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
+  // Both destructive actions here were irreversible, unconfirmed and
+  // un-caught: a failed request left the UI showing the row already gone.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tripId || !user) return;
@@ -32,13 +36,26 @@ export default function TripDetail() {
 
   const handleDelete = async () => {
     if (!trip) return;
-    await deleteTrip(trip.id);
+    setConfirmingDelete(false);
+    setActionError(null);
+    try {
+      await deleteTrip(trip.id);
+    } catch {
+      setActionError("Couldn't delete that trip. Please try again.");
+      return;
+    }
     navigate("/trips");
   };
 
   const handleRemoveCampground = async (cg: TripCampground) => {
     if (!trip) return;
-    await removeCampgroundFromTrip(trip.id, cg.facility_id, cg.source);
+    setActionError(null);
+    try {
+      await removeCampgroundFromTrip(trip.id, cg.facility_id, cg.source);
+    } catch {
+      setActionError(`Couldn't remove ${cg.name || "that campground"}. Please try again.`);
+      return;
+    }
     setTrip({
       ...trip,
       campgrounds: (trip.campgrounds || []).filter(
@@ -74,6 +91,10 @@ export default function TripDetail() {
     <div className="trip-detail">
       <Link to="/trips" className="trip-back-link">&larr; All trips</Link>
 
+      {actionError && (
+        <div className="error-banner" role="alert">{actionError}</div>
+      )}
+
       <div className="trip-detail-header">
         {editing ? (
           <div className="trip-edit-name">
@@ -101,9 +122,32 @@ export default function TripDetail() {
               Edit
             </button>
             <ShareButton tripId={trip.id} />
-            <button className="trip-delete-btn" onClick={handleDelete} title="Delete trip">
+            {confirmingDelete ? (
+              <span className="trip-delete-confirm">
+                <button
+                  className="trip-delete-btn danger"
+                  onClick={handleDelete}
+                  aria-label="Confirm delete trip"
+                >
+                  Delete
+                </button>
+                <button
+                  className="trip-delete-btn"
+                  onClick={() => setConfirmingDelete(false)}
+                  aria-label="Cancel delete"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+            <button
+              className="trip-delete-btn"
+              onClick={() => setConfirmingDelete(true)}
+              title="Delete trip"
+            >
               Delete trip
             </button>
+            )}
           </>
         )}
       </div>

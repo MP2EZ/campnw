@@ -11,7 +11,7 @@ export default function Privacy() {
         />
       </Helmet>
 
-      <main className="legal-page" id="main-content">
+      <div className="legal-page">
         <header className="legal-header">
           <h1>Privacy Policy</h1>
           <p className="legal-meta">Last updated: 2026-05-31</p>
@@ -165,7 +165,7 @@ export default function Privacy() {
             Replies come from a real human.
           </p>
         </section>
-      </main>
+      </div>
     </>
   );
 }

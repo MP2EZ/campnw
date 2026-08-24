@@ -12,7 +12,7 @@ export default function Terms() {
         />
       </Helmet>
 
-      <main className="legal-page" id="main-content">
+      <div className="legal-page">
         <header className="legal-header">
           <h1>Terms of Service</h1>
           <p className="legal-meta">Last updated: 2026-05-31</p>
@@ -134,7 +134,7 @@ export default function Terms() {
             <a href="mailto:hello@campable.co">hello@campable.co</a>.
           </p>
         </section>
-      </main>
+      </div>
     </>
   );
 }

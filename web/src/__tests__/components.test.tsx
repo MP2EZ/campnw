@@ -302,12 +302,16 @@ describe("ResultCard photos", () => {
   });
 
   test("PostcardPlaceholder uses source color from bookingSystem", () => {
+    // The stripe reads its colour from --pc-stripe (set per source in App.css)
+    // with the source hex as the fallback. Asserting the bare hex here is what
+    // let the stripe ship theme-blind: every other fill in the SVG already used
+    // var(), so in dark mode the stripe was the one mismatched band on the card.
     // WA-themed placeholder should paint with the WA teal stripe.
     const { unmount } = render(<ResultCard result={NO_PHOTO_RESULT} view="dates" />);
     fireEvent.click(screen.getByRole("button", { name: /deception pass/i }));
     const waPlaceholder = screen.getByTestId("postcard-placeholder");
     const waStripe = waPlaceholder.querySelector('rect[height="6"]');
-    expect(waStripe).toHaveAttribute("fill", "#1a8a7a");
+    expect(waStripe).toHaveAttribute("fill", "var(--pc-stripe, #1a8a7a)");
     unmount();
 
     // Same placeholder for a recgov campground (no photos) should use Rec.gov green.
@@ -321,7 +325,7 @@ describe("ResultCard photos", () => {
     fireEvent.click(screen.getByRole("button", { name: /no photo camp/i }));
     const recgovPlaceholder = screen.getByTestId("postcard-placeholder");
     const recgovStripe = recgovPlaceholder.querySelector('rect[height="6"]');
-    expect(recgovStripe).toHaveAttribute("fill", "#5a8a32");
+    expect(recgovStripe).toHaveAttribute("fill", "var(--pc-stripe, #5a8a32)");
   });
 
   test("card_expand event includes has_photo flag", () => {
