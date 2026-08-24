@@ -488,3 +488,59 @@ describe("OnboardingModal", () => {
     expect(screen.getByText("5/5 selected")).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: collapsed cards must not build their body DOM (audit PERF-08)
+// ---------------------------------------------------------------------------
+
+describe("ResultCard collapsed body", () => {
+  const MANY_WINDOWS = {
+    ...MOCK_RESULT,
+    windows: Array.from({ length: 60 }, (_, i) => ({
+      campsite_id: `c${i}`,
+      site_name: `Site ${i}`,
+      loop: "Loop A",
+      campsite_type: "tent",
+      start_date: "2026-06-05",
+      end_date: "2026-06-07",
+      nights: 2,
+      max_people: 4,
+      is_fcfs: false,
+      booking_url: `https://example.com/book/${i}`,
+    })),
+  };
+
+  // .card-body collapses via grid-template-rows: 0fr — the subtree is hidden
+  // but still built, laid out and styled. SiteView emits one anchor per window
+  // with no cap, so a large result set put tens of thousands of invisible nodes
+  // in the document across a 20-card list.
+  test("renders no window links while collapsed", () => {
+    const { container } = render(
+      <ResultCard result={MANY_WINDOWS} view="sites" />
+    );
+    expect(container.querySelectorAll("a[href^='https://example.com/book/']"))
+      .toHaveLength(0);
+  });
+
+  test("renders them once expanded", () => {
+    const { container } = render(
+      <ResultCard result={MANY_WINDOWS} view="sites" />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Ohanapecosh/i }));
+    expect(
+      container.querySelectorAll("a[href^='https://example.com/book/']").length
+    ).toBeGreaterThan(0);
+  });
+
+  test("body stays mounted after collapsing again, so the transition still runs", () => {
+    const { container } = render(
+      <ResultCard result={MANY_WINDOWS} view="sites" />
+    );
+    const toggle = screen.getByRole("button", { name: /Ohanapecosh/i });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(
+      container.querySelectorAll("a[href^='https://example.com/book/']").length
+    ).toBeGreaterThan(0);
+  });
+})

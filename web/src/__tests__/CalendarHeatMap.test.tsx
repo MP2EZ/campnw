@@ -556,3 +556,80 @@ describe('CalendarHeatMap Component', () => {
     expect(screen.getByText('Jul')).toBeInTheDocument()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Regression: hook order must be stable across re-renders (audit PERF-09)
+// ---------------------------------------------------------------------------
+
+describe('CalendarHeatMap hook order', () => {
+  const WITH_DATA: SearchResponse = {
+    campgrounds_checked: 1,
+    campgrounds_with_availability: 1,
+    results: [
+      {
+        facility_id: '232465',
+        name: 'Test Campground',
+        state: 'WA',
+        booking_system: 'recgov',
+        latitude: 47.5,
+        longitude: -121.5,
+        total_available_sites: 1,
+        fcfs_sites: 0,
+        tags: [],
+        estimated_drive_minutes: 90,
+        availability_url: 'https://example.com',
+        windows: [
+          {
+            campsite_id: '001',
+            site_name: 'A1',
+            loop: 'Loop A',
+            campsite_type: 'tent',
+            start_date: '2026-06-05',
+            end_date: '2026-06-07',
+            nights: 2,
+            max_people: 4,
+            is_fcfs: false,
+            booking_url: 'https://example.com/book',
+          },
+        ],
+        error: null,
+      },
+    ],
+    warnings: [],
+  }
+
+  const EMPTY: SearchResponse = {
+    campgrounds_checked: 0,
+    campgrounds_with_availability: 0,
+    results: [],
+    warnings: [],
+  }
+
+  // The component early-returns `null` when there are no results. If that
+  // return sits above a useMemo, the populated render runs one more hook than
+  // the empty one and React throws "Rendered more hooks than during the
+  // previous render" on the transition. Rendering each case in a *fresh*
+  // component (as the tests above do) can never catch this — the count only
+  // has to be stable within one mounted instance.
+  test('survives a populated -> empty transition', () => {
+    const { rerender } = render(
+      <CalendarHeatMap results={WITH_DATA} startDate="2026-06-01" endDate="2026-06-30" />
+    )
+    expect(() =>
+      rerender(
+        <CalendarHeatMap results={EMPTY} startDate="2026-06-01" endDate="2026-06-30" />
+      )
+    ).not.toThrow()
+  })
+
+  test('survives an empty -> populated transition', () => {
+    const { rerender } = render(
+      <CalendarHeatMap results={EMPTY} startDate="2026-06-01" endDate="2026-06-30" />
+    )
+    expect(() =>
+      rerender(
+        <CalendarHeatMap results={WITH_DATA} startDate="2026-06-01" endDate="2026-06-30" />
+      )
+    ).not.toThrow()
+  })
+})

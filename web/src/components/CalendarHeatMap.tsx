@@ -161,9 +161,12 @@ export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDat
 
   const activeDays = useMemo(() => resolveActiveDays(daysOfWeek), [daysOfWeek]);
 
-  if (results.results.length === 0 || weeks.length === 0) return null;
-
-  // Build a lookup: weekIdx -> dow -> day data
+  // Build a lookup: weekIdx -> dow -> day data.
+  //
+  // This must stay ABOVE the empty-results early return. Below it, a populated
+  // render runs one more hook than an empty one, and React throws "Rendered
+  // more hooks than during the previous render" the moment a mounted instance
+  // transitions between the two.
   const grid = useMemo(() => {
     const g: Map<string, { count: number; label: string; date: string }> =
       new Map();
@@ -174,6 +177,8 @@ export const CalendarHeatMap = memo(function CalendarHeatMap({ results, startDat
     }
     return g;
   }, [weeks]);
+
+  if (results.results.length === 0 || weeks.length === 0) return null;
 
   const ariaLabel = activeDays
     ? `Availability density, showing ${formatDayLabel(activeDays)}`

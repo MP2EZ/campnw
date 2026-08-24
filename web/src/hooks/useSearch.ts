@@ -81,9 +81,18 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   }, [results]);
 
   useEffect(() => {
-    if (resultSources.size > 0) {
-      setSourceFilter(resultSources);
-    }
+    if (resultSources.size === 0) return;
+    // resultSources is a fresh Set on every render, so an unconditional
+    // setSourceFilter never bails out — during a streaming search, where
+    // setResults fires once per animation frame, that produced *two* full
+    // App-tree renders per frame instead of one. Compare contents, not
+    // identity, and keep the previous Set when nothing actually changed.
+    setSourceFilter((prev) =>
+      prev.size === resultSources.size &&
+      [...resultSources].every((s) => prev.has(s))
+        ? prev
+        : resultSources
+    );
   }, [resultSources]);
 
   const filteredResults = useMemo(() => {

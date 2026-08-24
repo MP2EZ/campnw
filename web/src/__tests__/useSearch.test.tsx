@@ -305,3 +305,74 @@ describe("useSearch provider warnings", () => {
     expect(result.current.results?.warnings).toHaveLength(1);
   });
 })
+
+// ---------------------------------------------------------------------------
+// Regression: sourceFilter must bail out when the source set is unchanged
+// (audit PERF-07)
+// ---------------------------------------------------------------------------
+
+describe("useSearch sourceFilter identity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedOnResult = null;
+    capturedOnDone = null;
+    capturedOnError = null;
+  });
+
+  // `resultSources` is a useMemo returning `new Set(...)` — a fresh reference
+  // every time it recomputes. An unconditional setSourceFilter(resultSources)
+  // therefore never bails out, so each streamed result produced a second full
+  // render pass on top of the one setResults already caused. During a
+  // streaming search that runs once per animation frame, doubling the render
+  // cost of the whole results tree for the duration of the search.
+  test("streaming further results from the same source does not keep replacing the filter", async () => {
+    const { result } = renderHook(() => useSearch(null));
+
+    await act(async () => {
+      result.current.handleSearch(
+        { start_date: "2026-06-01", end_date: "2026-06-30" } as SearchParams,
+        "find",
+      );
+    });
+
+    await act(async () => {
+      capturedOnResult?.(MOCK_RESULT);
+    });
+    const filterAfterFirst = result.current.sourceFilter;
+
+    // Two more results from the *same* booking_system — the set of distinct
+    // sources is unchanged, so the filter object should be too.
+    await act(async () => {
+      capturedOnResult?.({ ...MOCK_RESULT, facility_id: "2" });
+    });
+    await act(async () => {
+      capturedOnResult?.({ ...MOCK_RESULT, facility_id: "3" });
+    });
+
+    expect(result.current.sourceFilter).toBe(filterAfterFirst);
+  });
+
+  test("a genuinely new source still updates the filter", async () => {
+    const { result } = renderHook(() => useSearch(null));
+
+    await act(async () => {
+      result.current.handleSearch(
+        { start_date: "2026-06-01", end_date: "2026-06-30" } as SearchParams,
+        "find",
+      );
+    });
+
+    await act(async () => {
+      capturedOnResult?.(MOCK_RESULT);
+    });
+    const filterAfterFirst = result.current.sourceFilter;
+
+    await act(async () => {
+      capturedOnResult?.(MOCK_OR_RESULT);
+    });
+
+    expect(result.current.sourceFilter).not.toBe(filterAfterFirst);
+    expect(result.current.sourceFilter.has("or_state")).toBe(true);
+    expect(result.current.sourceFilter.has("recgov")).toBe(true);
+  });
+})
