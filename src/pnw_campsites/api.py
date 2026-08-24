@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from pnw_campsites.auth import warm_jwks_client
 from pnw_campsites.monitor.db import DEFAULT_DB_PATH, WatchDB
 from pnw_campsites.posthog_client import get_posthog_client
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
@@ -196,8 +197,19 @@ async def lifespan(app: FastAPI):
     _reserveamerica = ReserveAmericaClient()
     await _reserveamerica.__aenter__()
 
-    _engine = SearchEngine(_registry, _recgov, _goingtocamp, _reserveamerica)
     _watch_db = WatchDB()
+
+    # Fetch the Supabase JWK set now, off the request path — otherwise the
+    # first authenticated request after boot (and after each hourly expiry)
+    # pays a blocking urllib fetch on the event loop.
+    await asyncio.to_thread(warm_jwks_client)
+
+    # Share the poller's availability_cache with discovery search: the two ask
+    # the providers for exactly the same payloads, and rec.gov returns whole
+    # months even for a 3-day query.
+    _engine = SearchEngine(
+        _registry, _recgov, _goingtocamp, _reserveamerica, watch_db=_watch_db,
+    )
 
     # Start background watch poller — two tranches offset by 7.5 minutes
     # to halve the burst of rec.gov API calls per cycle

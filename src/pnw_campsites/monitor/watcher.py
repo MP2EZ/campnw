@@ -65,9 +65,11 @@ async def _fetch_availability(
     source = booking_system.value
     month_key = start.strftime("%Y-%m")
 
-    # Check cache
+    # Serve from cache only if the cached payload covers [start, end]. Keying
+    # on the start month alone let a narrow payload answer a wider request,
+    # which silently returned incomplete availability.
     cached = watch_db.get_cached_availability(
-        facility_id, month_key, source,
+        facility_id, source, range_start=start, range_end=end,
     )
     if cached:
         return CampgroundAvailability.model_validate_json(cached)
@@ -92,9 +94,11 @@ async def _fetch_availability(
             facility_id, start, end,
         )
 
-    # Store in cache
+    # Record the range this payload actually covers so a later wider request
+    # doesn't mistake it for a superset.
     watch_db.set_cached_availability(
         facility_id, month_key, avail.model_dump_json(), source,
+        range_start=start, range_end=end,
     )
 
     return avail

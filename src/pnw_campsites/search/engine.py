@@ -327,11 +327,19 @@ class SearchEngine:
         recgov_client: RecGovClient | None = None,
         goingtocamp_client: GoingToCampClient | None = None,
         reserveamerica_client: ReserveAmericaClient | None = None,
+        watch_db=None,
     ) -> None:
         self._registry = registry
         self._recgov = recgov_client
         self._goingtocamp = goingtocamp_client
         self._reserveamerica = reserveamerica_client
+        # Optional: when supplied, availability is served from (and written to)
+        # the same availability_cache the watch poller uses. Discovery searches
+        # previously hit the provider on every request, so two users searching
+        # "WA this weekend" seconds apart each re-fetched every campground —
+        # and rec.gov returns whole months even for a 3-day query, so the hit
+        # rate across users sharing a weekend is high.
+        self._watch_db = watch_db
 
     async def _resolve_drive_times(
         self,
@@ -933,6 +941,10 @@ class SearchEngine:
     ) -> CampgroundResult:
         """Check availability for a single campground, dispatching to the right provider."""
         try:
+            cached = self._cache_get(campground, start_month, end_month)
+            if cached is not None:
+                return _process_availability(campground, cached, query)
+
             if campground.booking_system == BookingSystem.WA_STATE:
                 if not self._goingtocamp:
                     return CampgroundResult(
@@ -965,6 +977,7 @@ class SearchEngine:
                 availability = await self._recgov.get_availability_range(
                     campground.facility_id, start_month, end_month
                 )
+            self._cache_set(campground, start_month, end_month, availability)
             return _process_availability(campground, availability, query)
         except FacilityNotFoundError:
             # Silently drop — bad registry entry, no availability to show
@@ -975,6 +988,51 @@ class SearchEngine:
             return CampgroundResult(campground=campground, error="waf_blocked")
         except Exception:
             return CampgroundResult(campground=campground, error="unavailable")
+
+    def _cache_get(
+        self, campground: Campground, start: date, end: date,
+    ) -> CampgroundAvailability | None:
+        """Return cached availability covering [start, end], or None.
+
+        Never raises: a cache problem must degrade to a live fetch, not fail
+        the search.
+        """
+        if self._watch_db is None:
+            return None
+        try:
+            payload = self._watch_db.get_cached_availability(
+                campground.facility_id,
+                campground.booking_system.value,
+                range_start=start,
+                range_end=end,
+            )
+            if payload:
+                return CampgroundAvailability.model_validate_json(payload)
+        except Exception:
+            logger.debug("availability cache read failed", exc_info=True)
+        return None
+
+    def _cache_set(
+        self,
+        campground: Campground,
+        start: date,
+        end: date,
+        availability: CampgroundAvailability,
+    ) -> None:
+        """Store availability under the range it actually covers."""
+        if self._watch_db is None:
+            return
+        try:
+            self._watch_db.set_cached_availability(
+                campground.facility_id,
+                start.strftime("%Y-%m"),
+                availability.model_dump_json(),
+                campground.booking_system.value,
+                range_start=start,
+                range_end=end,
+            )
+        except Exception:
+            logger.debug("availability cache write failed", exc_info=True)
 
     async def check_specific(
         self,

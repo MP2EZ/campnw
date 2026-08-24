@@ -17,7 +17,7 @@ import logging
 import os
 from datetime import UTC, datetime
 
-from stripe import SignatureVerificationError, StripeClient, Webhook
+from stripe import RequestsClient, SignatureVerificationError, StripeClient, Webhook
 
 from pnw_campsites.monitor.db import User, WatchDB
 
@@ -36,11 +36,34 @@ def _env(name: str, default: str = "") -> str:
     return os.getenv(name, default)
 
 
+# stripe-python's default socket timeout is 80s. A hung Stripe connection on a
+# single-worker uvicorn therefore freezes the whole app for 80s (160s for
+# checkout, which makes two sequential calls). Cap it well below any sensible
+# request budget.
+_STRIPE_TIMEOUT_SECONDS = 10
+
+_stripe_client: StripeClient | None = None
+_stripe_client_key: str = ""
+
+
 def _get_client() -> StripeClient:
+    """Return a memoized StripeClient.
+
+    The default RequestsClient keeps its requests.Session on a thread-local, so
+    constructing a client per call meant a fresh TCP+TLS handshake to
+    api.stripe.com on every checkout, portal, and health probe.
+    """
+    global _stripe_client, _stripe_client_key
     key = _env("STRIPE_SECRET_KEY")
     if not key:
         raise RuntimeError("STRIPE_SECRET_KEY not configured")
-    return StripeClient(key)
+    if _stripe_client is None or _stripe_client_key != key:
+        _stripe_client = StripeClient(
+            key,
+            http_client=RequestsClient(timeout=_STRIPE_TIMEOUT_SECONDS),
+        )
+        _stripe_client_key = key
+    return _stripe_client
 
 
 def pro_price_id() -> str:
