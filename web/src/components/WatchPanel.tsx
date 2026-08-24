@@ -247,6 +247,7 @@ export function WatchButton({
       setCreated(true);
       onCreated?.();
       if (!subscribed) {
+        track("push_prompt_shown", { trigger: "after_watch_create" });
         setShowPushPrompt(true);
       }
       setTimeout(() => {

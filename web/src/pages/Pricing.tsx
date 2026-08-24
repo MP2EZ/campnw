@@ -39,8 +39,12 @@ export default function Pricing() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    track("pricing_page_viewed", { is_pro: isPro ? 1 : 0 });
-  }, [isPro]);
+    // Fire once on mount. Keyed on isPro it double-fired for every Pro
+    // visitor (false while billing status was in flight, then true), so the
+    // pricing -> upgrade denominator was inflated by the one segment that
+    // structurally cannot convert. Tier is a person property now (#132).
+    track("pricing_page_viewed", { referrer_path: document.referrer || "" });
+  }, []);
 
   const handleUpgrade = async () => {
     setError(null);

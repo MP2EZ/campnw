@@ -752,6 +752,7 @@ export default function App() {
 
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authEntryPoint, setAuthEntryPoint] = useState("unknown");
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -948,7 +949,7 @@ export default function App() {
               ) : (
                 <button
                   className="header-btn"
-                  onClick={() => setAuthModalOpen(true)}
+                  onClick={() => { setAuthEntryPoint("header"); setAuthModalOpen(true); }}
                 >
                   Sign in
                 </button>
@@ -991,7 +992,7 @@ export default function App() {
                   ) : (
                     <button
                       className="header-btn"
-                      onClick={() => { setAuthModalOpen(true); setMobileMenuOpen(false); }}
+                      onClick={() => { setAuthEntryPoint("mobile_menu"); setAuthModalOpen(true); setMobileMenuOpen(false); }}
                     >
                       Sign in
                     </button>
@@ -1018,6 +1019,7 @@ export default function App() {
         {authModalOpen && (
           <AuthModal
             open={authModalOpen}
+            entryPoint={authEntryPoint}
             onClose={() => setAuthModalOpen(false)}
           />
         )}

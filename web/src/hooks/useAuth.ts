@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogin = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
-    track("login", {});
+    track("login", { method: "password" });
     // onAuthStateChange fires → fetches profile and sets user
   }, []);
 
@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         options: { data: { display_name: displayName || "" } },
       });
       if (error) throw new Error(error.message);
-      track("signup", {});
+      track("signup", { method: "password", has_display_name: displayName ? 1 : 0 });
       // onAuthStateChange fires → fetches profile and sets user
     },
     []
