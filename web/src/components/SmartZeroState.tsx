@@ -1,8 +1,8 @@
 import { memo, useEffect } from "react";
 import { track } from "../api";
+import { formatDateRange } from "../lib/dates";
 import type { Diagnosis, DateSuggestion, ActionChip, SearchParams } from "../api";
-
-type SearchMode = "find" | "exact";
+import type { SearchMode } from "../hooks/useSearch";
 
 interface SmartZeroStateProps {
   diagnosis?: Diagnosis;
@@ -13,17 +13,6 @@ interface SmartZeroStateProps {
   onSearch: (params: SearchParams, mode: SearchMode) => void;
 }
 
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(start + "T12:00:00").toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-  const e = new Date(end + "T12:00:00").toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-  return `${s} - ${e}`;
-}
 
 export const SmartZeroState = memo(function SmartZeroState({
   diagnosis,

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, memo } from "react";
 import { track } from "../api";
+import { SOURCE_LABELS } from "../lib/sources";
 import { IconMinus, IconPlus } from "../icons";
 import type { SearchResponse, Window } from "../api";
 import { WatchButton } from "./WatchPanel";
@@ -14,12 +15,6 @@ import type { ResultsView } from "../hooks/useSearch";
 
 const INITIAL_BLOCKS_SHOWN = 3;
 
-export const SOURCE_LABELS: Record<string, string> = {
-  recgov: "Rec.gov",
-  wa_state: "WA Parks",
-  or_state: "OR Parks",
-  id_state: "ID Parks",
-};
 
 // ---------------------------------------------------------------------------
 // Helpers

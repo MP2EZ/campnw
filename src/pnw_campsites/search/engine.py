@@ -1116,17 +1116,6 @@ def next_weekend() -> tuple[date, date]:
     return fri + timedelta(days=7), sun + timedelta(days=7)
 
 
-def weekends_in_month(year: int, month: int) -> list[tuple[date, date]]:
-    """Return all (Friday, Sunday) pairs in a given month."""
-    weekends = []
-    d = date(year, month, 1)
-    while d.month == month:
-        if d.weekday() == 4:  # Friday
-            weekends.append((d, d + timedelta(days=2)))
-        d += timedelta(days=1)
-    return weekends
-
-
 # Day-of-week presets (Monday=0 .. Sunday=6)
 WEEKDAYS = {0, 1, 2, 3, 4}  # Mon-Fri
 WEEKEND = {4, 5, 6}  # Fri-Sun

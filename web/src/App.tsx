@@ -10,7 +10,9 @@ import type {
 import { WatchPanel } from "./components/WatchPanel";
 const CalendarHeatMap = lazy(() => import("./components/CalendarHeatMap").then(m => ({ default: m.CalendarHeatMap })));
 import { DateRangePicker } from "./components/DateRangePicker";
-import { ResultCard, SOURCE_LABELS } from "./components/ResultCard";
+import { ResultCard } from "./components/ResultCard";
+import { SOURCE_LABELS } from "./lib/sources";
+import { formatDateRange } from "./lib/dates";
 import { CompareBar, ComparePanel } from "./components/CompareBar";
 import { compareCampgrounds } from "./api";
 import type { CompareResponse } from "./api";
@@ -531,16 +533,6 @@ function SearchForm({
 
 // ─── Results: Date Block View (Option B) ─────────────────────────────
 
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(start + "T12:00:00");
-  const e = new Date(end + "T12:00:00");
-  const sMonth = s.toLocaleDateString("en-US", { month: "short" });
-  const eMonth = e.toLocaleDateString("en-US", { month: "short" });
-  if (sMonth === eMonth) {
-    return `${sMonth} ${s.getDate()}–${e.getDate()}`;
-  }
-  return `${sMonth} ${s.getDate()} – ${eMonth} ${e.getDate()}`;
-}
 
 const STATE_LABELS: Record<string, string> = { WA: "WA", OR: "OR", ID: "ID" };
 
