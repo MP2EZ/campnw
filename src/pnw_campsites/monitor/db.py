@@ -273,6 +273,12 @@ class WatchDB:
                 observation_count INTEGER DEFAULT 1,
                 PRIMARY KEY (campground_id, site_id, date)
             );
+            -- The PK's second column is site_id, so it cannot seek on a date
+            -- range. record_availability_history diffs one month at a time and
+            -- needs (campground_id, date) to avoid scanning the campground's
+            -- whole accumulated partition.
+            CREATE INDEX IF NOT EXISTS idx_availability_daily_cg_date
+                ON availability_daily(campground_id, date);
             CREATE TABLE IF NOT EXISTS notification_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 watch_id INTEGER REFERENCES watches(id)
@@ -537,26 +543,33 @@ class WatchDB:
         records: list[tuple[str, str, str]],
         source: str = "recgov",
     ) -> None:
-        """Record availability with batched upserts and transition detection.
+        """Record availability, detecting per-site status transitions.
 
-        1. Fetch existing statuses in one query
-        2. Detect transitions by comparing old vs new
-        3. Batch insert transitions
-        4. Batch upsert daily records
-        records: list of (site_id, date, status) tuples.
+        `records` is a list of (site_id, date, status) tuples.
+
+        The prior-status read is bounded to the date range being written: only
+        those rows can produce a transition, and the unbounded version read the
+        campground's entire accumulated partition on every call — 18,705 rows
+        for one facility on the production DB versus the 4,350 a month's poll
+        actually diffs — growing permanently with observation history, once per
+        watch per poll cycle.
         """
+        if not records:
+            return
+
         now = datetime.now().isoformat()
 
-        # 1. Fetch existing statuses for this campground
+        dates = [dt for _, dt, _ in records]
+        min_date, max_date = min(dates), max(dates)
+
         existing: dict[tuple[str, str], str] = {}
         for row in self._conn.execute(
             "SELECT site_id, date, status FROM availability_daily"
-            " WHERE campground_id=?",
-            (campground_id,),
+            " WHERE campground_id=? AND date BETWEEN ? AND ?",
+            (campground_id, min_date, max_date),
         ).fetchall():
             existing[(row[0], row[1])] = row[2]
 
-        # 2. Detect transitions
         transitions = []
         for sid, dt, status in records:
             old = existing.get((sid, dt), "")
@@ -565,7 +578,6 @@ class WatchDB:
                     (campground_id, sid, dt, old, status, source, now)
                 )
 
-        # 3. Batch insert transitions
         if transitions:
             self._conn.executemany(
                 "INSERT INTO status_transitions"
@@ -575,7 +587,6 @@ class WatchDB:
                 transitions,
             )
 
-        # 4. Batch upsert daily records
         self._conn.executemany(
             "INSERT INTO availability_daily"
             " (campground_id, site_id, date, status, source,"

@@ -758,6 +758,9 @@ async def list_campgrounds(
     max_drive: int | None = Query(None),
     name: str | None = Query(None),
     source: str | None = Query(None),
+    # Unbounded, this returns all 1,368 campgrounds: ~556ms of blocking
+    # pydantic hydration and ~560KB of JSON, on a public unauthenticated route.
+    limit: int = Query(100, ge=1, le=500),
 ):
     registry = get_registry()
     booking_system = BookingSystem(source) if source else None
@@ -767,6 +770,7 @@ async def list_campgrounds(
         max_drive_minutes=max_drive,
         name_like=name,
         booking_system=booking_system,
+        limit=limit,
     )
     return [
         CampgroundResponse(

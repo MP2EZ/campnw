@@ -737,9 +737,17 @@ class SearchEngine:
 
         # Run all probes in parallel, reusing the prepared campground list
         async def _run_probe(q: SearchQuery) -> SearchResults:
-            # Override date range in prep for each probe
+            # Override date range in prep for each probe.
+            #
+            # The campground list must be trimmed here, not left to the probe
+            # query's max_campgrounds: search() does `prep = _prep or await
+            # self._prepare_search(query)`, so supplying _prep bypasses the
+            # trimming step entirely and the cap is silently discarded. That
+            # made each of the three probes re-check every campground — up to
+            # 180 extra provider fetches on searches that already returned
+            # nothing.
             probe_prep = _PreparedSearch(
-                campgrounds=base_prep.campgrounds,
+                campgrounds=base_prep.campgrounds[: q.max_campgrounds],
                 drive_times=base_prep.drive_times,
                 registry_count=base_prep.registry_count,
                 distance_filtered=base_prep.distance_filtered,
