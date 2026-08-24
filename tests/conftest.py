@@ -213,3 +213,55 @@ def make_campground_availability(
         facility_id=facility_id,
         campsites=campsites,
     )
+
+
+@pytest.fixture
+def seo_client(tmp_path: Path) -> TestClient:
+    """TestClient with a real seeded registry for SEO route tests.
+
+    Shared by test_seo.py and test_seo_analytics.py.
+    """
+    original_connect = sqlite3.connect
+
+    def patched_connect(path, *args, **kwargs):
+        kwargs.setdefault("check_same_thread", False)
+        return original_connect(path, *args, **kwargs)
+
+    with patch("sqlite3.connect", patched_connect):
+        reg = CampgroundRegistry(tmp_path / "seo_registry.db")
+
+        reg.upsert(make_campground(
+            facility_id="100", name="Deception Pass State Park",
+            state="WA", region="Whidbey Island",
+            latitude=48.40, longitude=-122.65,
+            tags=["lakeside", "kid-friendly"],
+            booking_system=BookingSystem.WA_STATE,
+        ))
+        reg.upsert(make_campground(
+            facility_id="200", name="Cape Lookout State Park",
+            state="OR", region="Oregon Coast",
+            latitude=45.34, longitude=-123.97,
+            tags=["ocean", "kid-friendly"],
+            booking_system=BookingSystem.OR_STATE,
+        ))
+        reg.upsert(make_campground(
+            facility_id="300", name="Ohanapecosh",
+            state="WA", region="Mt. Rainier NP",
+            latitude=46.73, longitude=-121.57,
+            tags=["lakeside", "old-growth"],
+            booking_system=BookingSystem.RECGOV,
+        ))
+
+        db = WatchDB(tmp_path / "watches.db")
+        api_module._watch_db = db
+        api_module._registry = reg
+        api_module._engine = None
+
+        client = TestClient(
+            api_module.app,
+            raise_server_exceptions=False,
+            base_url="https://testserver",
+        )
+        yield client
+        db.close()
+        reg.close()
