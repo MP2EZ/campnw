@@ -152,6 +152,17 @@ class StreamDiagnosisEvent:
 
 
 @dataclass
+class StreamWarningsEvent:
+    """Yielded by search_stream once every campground has been checked.
+
+    Without this the stream had no way to report provider degradation, so the
+    UI hardcoded `warnings: []` and an outage was invisible — see ANLT-06.
+    """
+
+    warnings: list[SearchWarning]
+
+
+@dataclass
 class SearchResults:
     """Complete results from a discovery search."""
 
@@ -167,6 +178,24 @@ class SearchResults:
     @property
     def has_availability(self) -> bool:
         return self.campgrounds_with_availability > 0
+
+
+def aggregate_warnings(results: list[CampgroundResult]) -> list[SearchWarning]:
+    """Roll per-campground errors up into per-(kind, source) warnings.
+
+    `count` describes the source the warning names. It previously used
+    `sum(sources.values())` — the total across every source — so a rate limit
+    hitting 3 rec.gov and 1 WA campground reported "4" for both.
+    """
+    counts: dict[tuple[str, str], int] = {}
+    for r in results:
+        if r.error:
+            key = (r.error, r.campground.booking_system.value)
+            counts[key] = counts.get(key, 0) + 1
+    return [
+        SearchWarning(kind=kind, count=count, source=source)
+        for (kind, source), count in counts.items()
+    ]
 
 
 def _find_consecutive_windows(
@@ -535,19 +564,7 @@ class SearchEngine:
                 if fid in drive_times:
                     r.estimated_drive_minutes = drive_times[fid]
 
-        # Step 5: Aggregate errors into warnings, filter out error-only results
-        error_counts: dict[str, dict[str, int]] = {}  # error_kind -> source -> count
-        for r in all_results:
-            if r.error:
-                source = r.campground.booking_system.value
-                error_counts.setdefault(r.error, {})
-                error_counts[r.error][source] = error_counts[r.error].get(source, 0) + 1
-
-        warnings = [
-            SearchWarning(kind=kind, count=sum(sources.values()), source=src)
-            for kind, sources in error_counts.items()
-            for src, _ in sources.items()
-        ]
+        warnings = aggregate_warnings(all_results)
 
         campgrounds_with_availability = sum(
             1 for r in all_results if r.total_available_sites > 0
@@ -819,13 +836,17 @@ class SearchEngine:
     async def search_stream(
         self, query: SearchQuery,
     ) -> AsyncIterator[
-        CampgroundResult | StreamProgressEvent | StreamDiagnosisEvent
+        CampgroundResult
+        | StreamProgressEvent
+        | StreamDiagnosisEvent
+        | StreamWarningsEvent
     ]:
         """Stream search results as each campground check completes.
 
         Yields CampgroundResult for campgrounds with availability,
         StreamProgressEvent for checked campgrounds without availability,
-        and a final StreamDiagnosisEvent if zero results were found.
+        a StreamWarningsEvent when any provider degraded, and a final
+        StreamDiagnosisEvent if zero results were found.
         """
         prep = await self._prepare_search(query)
         campgrounds = prep.campgrounds
@@ -848,6 +869,7 @@ class SearchEngine:
         full_concurrency = 8
         sem = asyncio.Semaphore(initial_concurrency)
         available_count = 0
+        errored: list[CampgroundResult] = []
         checked_count = 0
         all_unavailable = 0
         total = len(campgrounds)
@@ -877,6 +899,8 @@ class SearchEngine:
                 fid = r.campground.facility_id
                 if fid in drive_times:
                     r.estimated_drive_minutes = drive_times[fid]
+            if r.error:
+                errored.append(r)
             if r.total_available_sites > 0 or r.fcfs_sites > 0:
                 available_count += 1
                 yield r
@@ -886,6 +910,12 @@ class SearchEngine:
                 yield StreamProgressEvent(
                     checked=checked_count, total=total,
                 )
+
+        # Report provider degradation. The non-streaming endpoint has always
+        # done this; the stream did not, so an outage reached the UI as simply
+        # fewer results with no explanation.
+        if errored:
+            yield StreamWarningsEvent(warnings=aggregate_warnings(errored))
 
         # Yield diagnosis if nothing had availability
         if available_count == 0:
