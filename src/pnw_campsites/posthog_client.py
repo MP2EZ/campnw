@@ -1,8 +1,11 @@
-"""Shared PostHog Python client for server-side LLM analytics."""
+"""Shared PostHog Python client for server-side analytics."""
 
+import logging
 import os
 
 from posthog import Posthog
+
+logger = logging.getLogger(__name__)
 
 _client: Posthog | None = None
 
@@ -21,6 +24,34 @@ def get_posthog_client() -> Posthog | None:
         enable_exception_autocapture=True,
     )
     return _client
+
+
+def capture_event(
+    distinct_id: str,
+    event: str,
+    properties: dict | None = None,
+    set_properties: dict | None = None,
+) -> None:
+    """Emit a server-side product event. Never raises.
+
+    `distinct_id` must be `str(user.id)` — the same value the browser passes to
+    posthog.identify() — or the server and client events land on two different
+    people for the same human.
+
+    Analytics is never load-bearing: a PostHog outage must not fail the caller
+    (in particular it must not 500 a Stripe webhook, which would trigger
+    redelivery of an event we already processed).
+    """
+    client = get_posthog_client()
+    if client is None:
+        return
+    try:
+        payload = dict(properties or {})
+        if set_properties:
+            payload["$set"] = set_properties
+        client.capture(distinct_id=distinct_id, event=event, properties=payload)
+    except Exception:
+        logger.warning("PostHog capture failed for event %s", event, exc_info=True)
 
 
 # ---------------------------------------------------------------------------

@@ -14,12 +14,46 @@ const API_BASE = Capacitor.isNativePlatform()
 // Event tracking
 // ---------------------------------------------------------------------------
 
+// PostHog is initialized by the snippet in index.html, which assigns the
+// configured instance to window.posthog. Importing the npm package gives you a
+// *different*, never-initialized instance: posthog-js guards every public
+// method on an internal `__loaded` flag set only inside init(), so calls on the
+// module singleton silently no-op. Every access must go through getPosthog().
+export interface PostHogInstance {
+  capture(event: string, props?: Record<string, unknown>): void;
+  identify(distinctId: string, props?: Record<string, unknown>): void;
+  reset(): void;
+  register(props: Record<string, unknown>): void;
+  setPersonProperties(
+    set?: Record<string, unknown>,
+    setOnce?: Record<string, unknown>,
+  ): void;
+  captureException(error: unknown, props?: Record<string, unknown>): void;
+  get_distinct_id(): string;
+}
+
+export function getPosthog(): PostHogInstance | undefined {
+  return (window as unknown as { posthog?: PostHogInstance }).posthog;
+}
+
 export function track(event: string, data: Record<string, string | number>) {
-  // posthog is initialized via HTML snippet in index.html
-  const ph = (window as unknown as Record<string, unknown>).posthog as
-    | { capture: (event: string, data: Record<string, string | number>) => void }
-    | undefined;
-  ph?.capture(event, data);
+  getPosthog()?.capture(event, data);
+}
+
+/**
+ * Register super properties that ride on every subsequent event.
+ *
+ * `platform` matters because PostHog's auto-detected $os/$browser report the
+ * Capacitor iOS WebView as plain "iOS / Mobile Safari" — indistinguishable
+ * from someone browsing campable.co in Safari. Without it, native app
+ * behaviour is silently pooled with mobile web.
+ */
+export function initAnalytics() {
+  const ph = getPosthog();
+  if (!ph) return;
+  const platform = Capacitor.isNativePlatform() ? "ios_native" : "web";
+  ph.register({ platform, app_version: __APP_VERSION__ });
+  ph.setPersonProperties(undefined, { first_platform: platform });
 }
 
 // ---------------------------------------------------------------------------

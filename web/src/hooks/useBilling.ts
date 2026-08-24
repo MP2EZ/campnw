@@ -20,6 +20,7 @@ import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 import {
   getBillingStatus,
+  getPosthog,
   openBillingPortal,
   startCheckout,
   type BillingStatus,
@@ -61,6 +62,12 @@ export function BillingProvider({ children }: { children: ReactNode }) {
     try {
       const s = await getBillingStatus();
       setStatus(s);
+      // Registering plan as a super property makes every subsequent event
+      // segmentable by tier without touching any individual call site.
+      getPosthog()?.register({
+        plan: s.is_pro ? "pro" : "free",
+        subscription_status: s.subscription_status,
+      });
     } catch {
       // Endpoint unreachable — render as if free-tier so UI doesn't break.
       setStatus(FREE_FALLBACK);
