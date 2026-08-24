@@ -291,9 +291,11 @@ async def this_weekend(request: Request):
 
 
 @router.get("/sitemap.xml")
-async def sitemap_xml(request: Request):
+async def sitemap_xml():
     registry = get_registry()
-    all_cgs = registry.list_all()
+    # (state, slug) only — hydrating 1,368 full pydantic models to reach two
+    # columns measured ~26x slower than this narrow query.
+    slug_rows = registry.list_slugs()
 
     lines = ['<?xml version="1.0" encoding="UTF-8"?>']
     lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
@@ -313,17 +315,20 @@ async def sitemap_xml(request: Request):
         lines.append(f"  <url><loc>{BASE_URL}/tags/{tag}</loc></url>")
 
     # Campground profiles
-    for cg in all_cgs:
-        if cg.slug and cg.state:
+    for state, slug in slug_rows:
+        if slug and state:
             lines.append(
                 f"  <url><loc>{BASE_URL}/campgrounds/"
-                f"{cg.state.lower()}/{cg.slug}</loc></url>"
+                f"{state.lower()}/{slug}</loc></url>"
             )
 
     lines.append("</urlset>")
     return Response(
         content="\n".join(lines),
         media_type="application/xml",
+        # The only SEO route that bypassed _cached_template, so it was fully
+        # recomputed on every crawler hit. The registry only changes on re-seed.
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 

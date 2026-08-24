@@ -125,9 +125,10 @@ async def recommendations(request: Request):
     )
     target_states = [s for s, _ in top_states[:2]] if top_states else None
 
-    candidates = registry.search(
-        state=target_states[0] if target_states and len(target_states) == 1 else None,
-    )
+    # Filter to the user's affinity states in SQL. Passing state=None whenever
+    # the top two states tied meant scanning and hydrating the whole 1,368-row
+    # registry (~556ms of blocking CPU) on every signed-in app mount.
+    candidates = registry.search(states=target_states or None)
 
     watched = affinities["watched_facility_ids"]
     tag_scores = affinities["tags"]
