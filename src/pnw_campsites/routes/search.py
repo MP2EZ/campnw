@@ -86,14 +86,48 @@ class SearchWarningResponse(BaseModel):
     message: str
 
 
-WARNING_MESSAGES = {
-    "rate_limited": (
-        "Some results may be missing — recreation.gov is rate limiting."
-        " Try a narrower search."
-    ),
-    "waf_blocked": "WA State Parks results unavailable — the booking site is blocking requests.",
-    "unavailable": "Some campgrounds couldn't be checked due to a service issue.",
+# Human labels for BookingSystem values. A warning must name the source that
+# actually failed — the previous copy hardcoded "WA State Parks" for every
+# waf_blocked warning, so an Oregon outage told users Washington was down.
+SOURCE_LABELS = {
+    "recgov": "Recreation.gov",
+    "wa_state": "WA State Parks",
+    "or_state": "Oregon State Parks",
+    "id_state": "Idaho State Parks",
+    "fcfs": "First-come, first-served",
 }
+
+# (named, generic) per warning kind. The generic form is used when the source is
+# unrecognised — staying vague is better than blaming the wrong provider.
+WARNING_TEMPLATES: dict[str, tuple[str, str]] = {
+    "rate_limited": (
+        "Some {source} results may be missing — the booking site is rate"
+        " limiting. Try a narrower search.",
+        "Some results may be missing — a booking site is rate limiting."
+        " Try a narrower search.",
+    ),
+    "waf_blocked": (
+        "{source} results unavailable — the booking site is blocking requests.",
+        "Some results are unavailable — a booking site is blocking requests.",
+    ),
+    "unavailable": (
+        "Some {source} campgrounds couldn't be checked due to a service issue.",
+        "Some campgrounds couldn't be checked due to a service issue.",
+    ),
+}
+
+_UNKNOWN_KIND_MESSAGE = "Some campgrounds couldn't be checked."
+
+
+def warning_message(kind: str, source: str) -> str:
+    """Build a user-facing warning naming the source that actually failed."""
+    label = SOURCE_LABELS.get(source)
+    named, generic = WARNING_TEMPLATES.get(
+        kind, (None, _UNKNOWN_KIND_MESSAGE)
+    )
+    if label and named:
+        return named.format(source=label)
+    return generic
 
 
 class DiagnosisResponse(BaseModel):
@@ -460,10 +494,7 @@ async def search(
                 kind=w.kind,
                 count=w.count,
                 source=w.source,
-                message=WARNING_MESSAGES.get(
-                    w.kind,
-                    "Some campgrounds couldn't be checked.",
-                ),
+                message=warning_message(w.kind, w.source),
             )
             for w in results.warnings
         ],
