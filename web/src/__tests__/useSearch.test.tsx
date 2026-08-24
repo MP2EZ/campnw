@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeEach, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useSearch } from "../hooks/useSearch";
-import type { CampgroundResult } from "../api";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import { useSearch, parseSearchParamsFromUrl } from "../hooks/useSearch";
+import { searchCampsitesStream } from "../api";
+import type { CampgroundResult, SearchParams } from "../api";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -72,6 +73,7 @@ const MOCK_OR_RESULT: CampgroundResult = {
 
 describe("useSearch", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "/");
     vi.clearAllMocks();
     capturedOnResult = null;
     capturedOnDone = null;
@@ -313,6 +315,7 @@ describe("useSearch provider warnings", () => {
 
 describe("useSearch sourceFilter identity", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "/");
     vi.clearAllMocks();
     capturedOnResult = null;
     capturedOnDone = null;
@@ -374,5 +377,104 @@ describe("useSearch sourceFilter identity", () => {
     expect(result.current.sourceFilter).not.toBe(filterAfterFirst);
     expect(result.current.sourceFilter.has("or_state")).toBe(true);
     expect(result.current.sourceFilter.has("recgov")).toBe(true);
+  });
+})
+
+// ---------------------------------------------------------------------------
+// URL round-trip: params were written but never read back (audit UX-03)
+// ---------------------------------------------------------------------------
+
+describe("parseSearchParamsFromUrl", () => {
+  test("returns null without a usable date range", () => {
+    expect(parseSearchParamsFromUrl("")).toBeNull();
+    expect(parseSearchParamsFromUrl("?state=WA")).toBeNull();
+    expect(parseSearchParamsFromUrl("?start_date=2026-06-01")).toBeNull();
+    expect(parseSearchParamsFromUrl("?start_date=nope&end_date=2026-06-30")).toBeNull();
+  });
+
+  test("round-trips the params handleSearch writes", () => {
+    const parsed = parseSearchParamsFromUrl(
+      "?start_date=2026-06-01&end_date=2026-06-30&state=WA&nights=2" +
+        "&tags=lakeside,pets&days_of_week=4,5,6&from_location=seattle" +
+        "&max_drive=180&mode=find&no_groups=true",
+    );
+    expect(parsed).toEqual({
+      start_date: "2026-06-01",
+      end_date: "2026-06-30",
+      state: "WA",
+      nights: 2,
+      tags: "lakeside,pets",
+      days_of_week: "4,5,6",
+      from_location: "seattle",
+      max_drive: 180,
+      mode: "find",
+      no_groups: true,
+    });
+  });
+
+  test("omits absent keys rather than emitting undefined", () => {
+    const parsed = parseSearchParamsFromUrl(
+      "?start_date=2026-06-01&end_date=2026-06-30",
+    );
+    expect(Object.keys(parsed!).sort()).toEqual(["end_date", "start_date"]);
+  });
+
+  test("ignores non-numeric numbers instead of producing NaN", () => {
+    const parsed = parseSearchParamsFromUrl(
+      "?start_date=2026-06-01&end_date=2026-06-30&nights=abc&max_drive=xyz",
+    );
+    expect(parsed).not.toHaveProperty("nights");
+    expect(parsed).not.toHaveProperty("max_drive");
+  });
+});
+
+describe("useSearch URL restore", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/");
+    vi.clearAllMocks();
+    capturedOnResult = null;
+    capturedOnDone = null;
+    capturedOnError = null;
+  });
+
+  test("a shared link runs its search on mount", async () => {
+    window.history.replaceState(
+      null, "", "/?start_date=2026-06-01&end_date=2026-06-30&state=WA",
+    );
+
+    const { result } = renderHook(() => useSearch(null));
+
+    // Previously nothing read the URL back, so a pasted link showed a blank
+    // first-visit form and never searched.
+    await waitFor(() =>
+      expect(vi.mocked(searchCampsitesStream)).toHaveBeenCalled(),
+    );
+    expect(vi.mocked(searchCampsitesStream).mock.calls[0][0]).toMatchObject({
+      start_date: "2026-06-01",
+      end_date: "2026-06-30",
+      state: "WA",
+    });
+    // SearchForm reads initialValues once during useState init, so the params
+    // must already be present on the first render.
+    expect(result.current.activeSearchParams).toMatchObject({ state: "WA" });
+  });
+
+  test("restores only once", async () => {
+    window.history.replaceState(
+      null, "", "/?start_date=2026-06-01&end_date=2026-06-30",
+    );
+    const { rerender } = renderHook(() => useSearch(null));
+    await waitFor(() =>
+      expect(vi.mocked(searchCampsitesStream)).toHaveBeenCalledTimes(1),
+    );
+    rerender();
+    rerender();
+    expect(vi.mocked(searchCampsitesStream)).toHaveBeenCalledTimes(1);
+  });
+
+  test("a bare URL does not trigger a search", async () => {
+    renderHook(() => useSearch(null));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(vi.mocked(searchCampsitesStream)).not.toHaveBeenCalled();
   });
 })

@@ -17,6 +17,58 @@ import type {
   DiagnosisEvent,
 } from "../api";
 
+/**
+ * Read a SearchParams back out of the query string.
+ *
+ * handleSearch has always *written* every param to the URL, so the address bar
+ * looked shareable — but nothing anywhere read it back. A pasted or bookmarked
+ * search link opened a blank first-visit form, and MapView's own "Edit search"
+ * link built `/?state=WA&start_date=...` and then discarded all of it. Both
+ * /pricing and /terms advertise shareable searches as a shipped feature.
+ *
+ * Returns null unless a usable date range is present, since that is the
+ * minimum a search needs.
+ */
+export function parseSearchParamsFromUrl(
+  search: string = window.location.search,
+): SearchParams | null {
+  const q = new URLSearchParams(search);
+  const start = q.get("start_date") ?? "";
+  const end = q.get("end_date") ?? "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    return null;
+  }
+
+  const num = (key: string): number | undefined => {
+    const raw = q.get(key);
+    if (raw === null) return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const str = (key: string): string | undefined => q.get(key) ?? undefined;
+
+  const params: SearchParams = { start_date: start, end_date: end };
+  const assign = <K extends keyof SearchParams>(k: K, v: SearchParams[K]) => {
+    if (v !== undefined) params[k] = v;
+  };
+
+  assign("q", str("q"));
+  assign("state", str("state"));
+  assign("nights", num("nights"));
+  assign("days_of_week", str("days_of_week"));
+  assign("tags", str("tags"));
+  assign("name", str("name"));
+  assign("source", str("source"));
+  assign("from_location", str("from_location"));
+  assign("max_drive", num("max_drive"));
+  assign("mode", str("mode"));
+  assign("limit", num("limit"));
+  if (q.get("no_groups") === "true") params.no_groups = true;
+  if (q.get("include_fcfs") === "true") params.include_fcfs = true;
+
+  return params;
+}
+
 export type SearchMode = "find" | "exact";
 export type ResultsView = "dates" | "sites";
 
@@ -64,7 +116,11 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   const [resultsView, setResultsView] = useState<ResultsView>("dates");
   const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
-  const [activeSearchParams, setActiveSearchParams] = useState<SearchParams | null>(null);
+  // Seeded from the URL so SearchForm's initialValues (which are read once,
+  // during useState initialization) already reflect a shared link.
+  const [activeSearchParams, setActiveSearchParams] = useState<SearchParams | null>(
+    () => parseSearchParamsFromUrl(),
+  );
   const [formCollapsed, setFormCollapsed] = useState(false);
   const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
@@ -164,7 +220,11 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         url.searchParams.set(k, String(v));
       }
     }
-    window.history.replaceState(null, "", url.toString());
+    // pushState, not replaceState: with replace, Back never undid a search —
+    // it left the site entirely.
+    if (url.toString() !== window.location.href) {
+      window.history.pushState(null, "", url.toString());
+    }
 
     const streamedResults: CampgroundResult[] = [];
     // Warnings arrive as their own SSE frame near the end of the stream. They
@@ -285,6 +345,20 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       },
     );
   }, [user]);
+
+  // Run the search a shared link describes. Without this the URL round-trip is
+  // write-only: the address bar looks right, the form shows defaults, and no
+  // results appear. Fires once — restoredRef guards StrictMode's double-invoke
+  // and any later re-render.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const fromUrl = parseSearchParamsFromUrl();
+    if (fromUrl) {
+      handleSearch(fromUrl, (fromUrl.mode as SearchMode) || "find");
+    }
+  }, [handleSearch]);
 
   return {
     results,
