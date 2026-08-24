@@ -1,10 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
+import { readFileSync } from 'node:fs'
+
+const pkgVersion = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf-8'),
+).version as string
 
 // https://vite.dev/config/
 export default defineConfig({
   envDir: '..',
+  // Stamped onto every analytics event as a super property so a regression can
+  // be tied to the release that introduced it.
+  define: {
+    __APP_VERSION__: JSON.stringify(pkgVersion),
+  },
   plugins: [
     react(),
     visualizer({ filename: 'stats.html' }),

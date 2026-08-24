@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from stripe import RequestsClient, SignatureVerificationError, StripeClient, Webhook
 
 from pnw_campsites.monitor.db import User, WatchDB
+from pnw_campsites.posthog_client import capture_event
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +242,25 @@ def _handle_checkout_completed(event: dict, watch_db: WatchDB) -> None:
         new_status="pro",
         source="webhook",
     )
+    # The purchase is only observable here. A client-side event would be lost
+    # to adblockers, to the user closing the tab before Stripe redirects back,
+    # and entirely to the native iOS flow (which upgrades in the system
+    # browser). client_reference_id is str(user.id), which is the same
+    # distinct_id the browser identifies with — so these join.
+    capture_event(
+        distinct_id=str(user_id),
+        event="subscription_started",
+        properties={
+            "plan": "pro",
+            "previous_status": old_status,
+            "amount_cents": session.get("amount_total") or 0,
+            "currency": session.get("currency") or "usd",
+            "stripe_customer_id": customer_id,
+            "stripe_subscription_id": subscription_id,
+            "source": "webhook",
+        },
+        set_properties={"plan": "pro", "subscription_status": "pro"},
+    )
     logger.info(
         "Activated Pro for user %d (customer=%s, subscription=%s)",
         user_id, customer_id, subscription_id,
@@ -372,6 +392,17 @@ def _handle_subscription_deleted(event: dict, watch_db: WatchDB) -> None:
         old_status=old_status,
         new_status="free",
     )
+    capture_event(
+        distinct_id=str(user.id),
+        event="subscription_cancelled",
+        properties={
+            "plan_from": old_status,
+            "plan_to": "free",
+            "stripe_customer_id": customer_id,
+            "source": "webhook",
+        },
+        set_properties={"plan": "free", "subscription_status": "free"},
+    )
     logger.info("User %d subscription deleted; reverted to free", user.id)
 
 
@@ -391,6 +422,17 @@ def _handle_payment_failed(event: dict, watch_db: WatchDB) -> None:
         event_type="invoice.payment_failed",
         old_status=user.subscription_status,
         new_status=user.subscription_status,
+    )
+    capture_event(
+        distinct_id=str(user.id),
+        event="payment_failed",
+        properties={
+            "plan": user.subscription_status,
+            "attempt_count": invoice.get("attempt_count") or 0,
+            "amount_cents": invoice.get("amount_due") or 0,
+            "currency": invoice.get("currency") or "usd",
+            "source": "webhook",
+        },
     )
     logger.warning(
         "Payment failed for user %d (customer=%s)", user.id, customer_id,

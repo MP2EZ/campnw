@@ -1,4 +1,5 @@
 import { Component, type ReactNode, type ErrorInfo } from "react";
+import { getPosthog } from "../api";
 
 interface Props {
   children: ReactNode;
@@ -17,8 +18,16 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("ErrorBoundary caught:", error, info.componentStack);
-    import("posthog-js").then(({ default: posthog }) => {
-      posthog.captureException(error, { componentStack: info.componentStack });
+    // The snippet's capture_exceptions only sees *uncaught* errors — a React
+    // boundary swallows the error before it reaches window.onerror, so the
+    // crashes that actually blank the UI are exactly the ones that need an
+    // explicit report.
+    const ph = getPosthog();
+    ph?.captureException(error, { componentStack: info.componentStack });
+    ph?.capture("app_crashed", {
+      error_name: error.name,
+      error_message: error.message,
+      route: window.location.pathname,
     });
   }
 

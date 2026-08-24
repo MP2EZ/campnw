@@ -2,7 +2,7 @@ import { createContext, useContext, useCallback, useEffect, useState, useRef } f
 import type { ReactNode } from "react";
 import { createElement } from "react";
 import { supabase } from "../lib/supabase";
-import { getMe, updateProfile, track, type UserData } from "../api";
+import { getMe, updateProfile, track, getPosthog, type UserData } from "../api";
 
 interface AuthContextValue {
   user: UserData | null;
@@ -21,12 +21,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const initializedRef = useRef(false);
 
+  // Must use the snippet-initialized instance (see getPosthog in api.ts) —
+  // identify() on the npm module singleton is a silent no-op, which left every
+  // event anonymous and un-stitched.
   const identifyUser = useCallback((u: UserData) => {
-    import("posthog-js").then(({ default: posthog }) => {
-      posthog.identify(String(u.id), {
-        display_name: u.display_name,
-      });
-    }).catch(() => {});
+    getPosthog()?.identify(String(u.id), {
+      display_name: u.display_name,
+    });
   }, []);
 
   const refresh = useCallback(async () => {
@@ -127,9 +128,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
-    import("posthog-js").then(({ default: posthog }) => {
-      posthog.reset();
-    }).catch(() => {});
+    // Without a real reset the next person to sign in on this device is
+    // merged into the previous user's profile.
+    getPosthog()?.reset();
   }, []);
 
   const handleUpdateProfile = useCallback(
