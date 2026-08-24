@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { searchCampsitesStream, saveSearchHistory, track } from "../api";
 import type {
-  CampgroundResult, SearchParams, SearchResponse,
+  CampgroundResult, SearchParams, SearchResponse, SearchWarning,
   DiagnosisEvent,
 } from "../api";
 
@@ -158,6 +158,10 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     window.history.replaceState(null, "", url.toString());
 
     const streamedResults: CampgroundResult[] = [];
+    // Warnings arrive as their own SSE frame near the end of the stream. They
+    // were hardcoded to [] at every setResults call, so provider outages
+    // reached the UI as silently fewer results.
+    let streamedWarnings: SearchWarning[] = [];
     let rafId: number | null = null;
     let checkedCount = 0;
     setResults({
@@ -181,7 +185,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
                 (r) => r.total_available_sites > 0,
               ).length,
               results: [...streamedResults],
-              warnings: [],
+              warnings: streamedWarnings,
             });
           });
         }
@@ -200,7 +204,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           campgrounds_checked: checkedCount,
           campgrounds_with_availability: withAvail,
           results: [...streamedResults],
-          warnings: [],
+          warnings: streamedWarnings,
         });
         track("search_executed", {
           state: params.state || "all",
@@ -259,10 +263,16 @@ export function useSearch(user: UserData | null): UseSearchReturn {
                 (r) => r.total_available_sites > 0,
               ).length,
               results: [...streamedResults],
-              warnings: [],
+              warnings: streamedWarnings,
             });
           });
         }
+      },
+      (warnings) => {
+        streamedWarnings = warnings;
+        setResults((prev) =>
+          prev ? { ...prev, warnings } : prev,
+        );
       },
     );
   }, [user]);

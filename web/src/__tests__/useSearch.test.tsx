@@ -10,6 +10,7 @@ import type { CampgroundResult } from "../api";
 let capturedOnResult: ((r: CampgroundResult) => void) | null = null;
 let capturedOnDone: (() => void) | null = null;
 let capturedOnError: ((err: Error) => void) | null = null;
+let capturedOnWarnings: ((w: unknown[]) => void) | null = null;
 
 vi.mock("../api", () => ({
   searchCampsitesStream: vi.fn(
@@ -18,10 +19,15 @@ vi.mock("../api", () => ({
       onResult: any,
       onDone: any,
       onError: any,
+      ...rest: unknown[]
     ) => {
       capturedOnResult = onResult;
       capturedOnDone = onDone;
       capturedOnError = onError;
+      // after (params, onResult, onDone, onError) the rest are:
+      // 0 onDiagnosis, 1 signal, 2 onParsed, 3 onSummary, 4 onProgress,
+      // 5 onWarnings
+      capturedOnWarnings = (rest[5] as ((w: unknown[]) => void)) ?? null;
     },
   ),
   saveSearchHistory: vi.fn(),
@@ -230,3 +236,72 @@ describe("useSearch", () => {
     expect(result.current.formCollapsed).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Provider degradation must reach state, not be hardcoded away (audit ANLT-06)
+// ---------------------------------------------------------------------------
+
+describe("useSearch provider warnings", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/");
+    vi.clearAllMocks();
+    capturedOnResult = null;
+    capturedOnDone = null;
+    capturedOnError = null;
+    capturedOnWarnings = null;
+  });
+
+  // Every setResults call passed `warnings: []`, so even once the stream
+  // carried them they had nowhere to land. During the ReserveAmerica outage
+  // (#131) an Oregon search just returned fewer results, with no explanation.
+  test("a warnings frame lands in results.warnings", async () => {
+    const { result } = renderHook(() => useSearch(null));
+
+    await act(async () => {
+      result.current.handleSearch(
+        { start_date: "2026-06-01", end_date: "2026-06-30" } as SearchParams,
+        "find",
+      );
+    });
+
+    expect(capturedOnWarnings).toBeTypeOf("function");
+
+    await act(async () => {
+      capturedOnWarnings?.([
+        {
+          kind: "waf_blocked",
+          count: 2,
+          source: "or_state",
+          message: "Oregon State Parks results unavailable — the booking site is blocking requests.",
+        },
+      ]);
+    });
+
+    expect(result.current.results?.warnings).toHaveLength(1);
+    expect(result.current.results?.warnings[0]).toMatchObject({
+      source: "or_state",
+      count: 2,
+    });
+  });
+
+  test("warnings survive subsequent streamed results", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => {
+      result.current.handleSearch(
+        { start_date: "2026-06-01", end_date: "2026-06-30" } as SearchParams,
+        "find",
+      );
+    });
+
+    await act(async () => {
+      capturedOnWarnings?.([
+        { kind: "waf_blocked", count: 1, source: "or_state", message: "x" },
+      ]);
+    });
+    await act(async () => {
+      capturedOnResult?.(MOCK_RESULT);
+    });
+
+    expect(result.current.results?.warnings).toHaveLength(1);
+  });
+})

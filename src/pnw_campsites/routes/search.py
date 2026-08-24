@@ -22,6 +22,7 @@ from pnw_campsites.search.engine import (
     SearchQuery,
     StreamDiagnosisEvent,
     StreamProgressEvent,
+    StreamWarningsEvent,
 )
 from pnw_campsites.urls import (
     or_state_availability_url,
@@ -638,6 +639,26 @@ async def search_stream(
             if isinstance(item, StreamProgressEvent):
                 progress = {"type": "progress", "checked": item.checked, "total": item.total}
                 yield f"data: {json.dumps(progress)}\n\n"
+                continue
+
+            # StreamWarningsEvent = a provider degraded. Reuses
+            # warning_message() so the stream names the source that actually
+            # failed, the same as /api/search.
+            if isinstance(item, StreamWarningsEvent):
+                if item.warnings:
+                    payload = {
+                        "type": "warnings",
+                        "warnings": [
+                            {
+                                "kind": w.kind,
+                                "count": w.count,
+                                "source": w.source,
+                                "message": warning_message(w.kind, w.source),
+                            }
+                            for w in item.warnings
+                        ],
+                    }
+                    yield f"data: {json.dumps(payload)}\n\n"
                 continue
 
             # StreamDiagnosisEvent = zero results, emit diagnosis
