@@ -405,7 +405,7 @@ export function PostcardPlaceholder({
             height="338"
             fill={`url(#postcard-grain-${bookingSystem})`}
           />
-          <rect width="600" height="6" fill={theme.stripe} />
+          <rect width="600" height="6" fill={`var(--pc-stripe, ${theme.stripe})`} />
           {/* Madrona pin watermark */}
           <g transform="translate(300, 90)">
             <path

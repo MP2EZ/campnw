@@ -8,7 +8,7 @@
   --bg-toggle: #e8e8e0;
   --text: #1a1a1a;
   --text-muted: #666;
-  --text-light: #777;
+  --text-light: #6b6b6b;
   --border: #ddd;
   --border-light: #eee;
   --border-input: #ccc;
@@ -17,9 +17,10 @@
   --chip-bg: #f0f7e8;
   --chip-border: #c5dbb0;
   --chip-hover: #e0efd0;
+  --chip-text: var(--text);
   --warning-bg: #fef8e8;
   --warning-border: #e8d48a;
-  --warning-text: #8a6d3b;
+  --warning-text: #856835;
   --error-bg: #fee;
   --error-border: #e99;
   --error-text: #933;
@@ -59,6 +60,7 @@
   --chip-bg: #1c2618;
   --chip-border: #3d5530;
   --chip-hover: #243020;
+  --chip-text: var(--text);
 
   /* Warning — warm amber, low saturation */
   --warning-bg: #2a2418;
@@ -976,6 +978,12 @@ header p {
    intentionally excluded (see CLAUDE.md) — their hit area is managed by
    cell spacing, not by inflating every cell to 44px. */
 @media (hover: none) {
+  /* Previously split across two blocks with disjoint selector lists: this one
+     under (hover: none) and a second under (max-width: 640px). Only .tag-btn
+     appeared in both, so a touch device wider than 640px — iPad, landscape
+     phone — got one set and not the other, leaving .site-chip/.window-chip at
+     36px and .view-toggle button at 32px. Touch capability, not viewport
+     width, is what determines target size, so everything lives here now. */
   .drp-day,
   .save-to-trip-btn,
   .share-btn,
@@ -984,7 +992,24 @@ header p {
   .header-btn,
   .tag-btn,
   .book-link,
-  .map-link {
+  .map-link,
+  .site-chip,
+  .window-chip,
+  .view-toggle button,
+  .source-toggle-btn,
+  .date-preset-btn,
+  .recent-chip,
+  .trip-type-btn,
+  .trip-delete-btn,
+  .trip-remove-btn,
+  .mobile-menu-btn,
+  .user-menu-item,
+  .show-more-btn,
+  .onboarding-tag,
+  .action-chip,
+  .date-suggestion-chip,
+  .push-opt-in-btn,
+  .drp-footer-btn {
     min-height: 44px;
     display: inline-flex;
     align-items: center;
@@ -995,6 +1020,13 @@ header p {
   .book-link,
   .map-link {
     padding: 0 var(--space-2);
+  }
+
+  /* 40px by explicit declaration, and in a seven-across row where adjacent
+     mis-taps are most likely. */
+  .day-btn {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .watch-close,
@@ -1250,7 +1282,7 @@ header p {
 
 .suggestion-chip {
   background: var(--chip-bg);
-  color: var(--chip-text, var(--text));
+  color: var(--chip-text);
   border: 1px solid var(--chip-border);
   border-radius: var(--radius-pill);
   padding: var(--space-2) var(--space-4);
@@ -2171,20 +2203,6 @@ header p {
   /* Scale wordmark and logo down on mobile */
   header .wordmark {
     font-size: 20px;
-  }
-
-  .site-chip,
-  .window-chip {
-    min-height: 44px;
-  }
-
-  .view-toggle button,
-  .source-toggle-btn {
-    min-height: 44px;
-  }
-
-  .tag-btn {
-    min-height: 44px;
   }
 
   .date-block-sites {
@@ -4663,7 +4681,7 @@ a.header-btn {
 }
 
 .watch-limit-indicator.at-limit {
-  color: var(--warning-fg, #b54a00);
+  color: var(--warning-text);
   opacity: 1;
   font-weight: var(--weight-medium);
 }
@@ -4691,4 +4709,21 @@ a.header-btn {
   font-size: var(--text-xs);
   color: var(--text);
   opacity: 0.6;
+}
+
+/* --- Inline destructive confirmation (trips) --------------------------- */
+
+.trip-delete-confirm {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.trip-delete-btn.danger {
+  color: var(--error-text);
+  font-weight: var(--weight-semi);
+}
+
+.trip-delete-btn.danger:hover {
+  background: var(--error-bg);
 }

@@ -75,7 +75,7 @@ export default function Pricing() {
         />
       </Helmet>
 
-      <main className="pricing-page">
+      <div className="pricing-page">
         <header className="pricing-header">
           <h1>Pricing that pays for the servers</h1>
           <p className="pricing-lede">
@@ -198,7 +198,7 @@ export default function Pricing() {
             </dd>
           </dl>
         </section>
-      </main>
+      </div>
     </>
   );
 }

@@ -961,6 +961,13 @@ export default function App() {
 
       <ErrorBoundary>
       <Suspense fallback={<div className="loading-page">Loading...</div>}>
+      {/* Single main landmark for the whole app. Pages render plain
+          containers: when App had its own <main> and also rendered MapView /
+          TripPlanner inline, the result was a nested <main> plus a duplicate
+          DOM id, while /pricing and /trips/:id had no landmark at all — so the
+          skip link above resolved to two elements on some routes and none on
+          others. */}
+      <main id="main-content">
       <Routes>
         <Route path="/plan" element={<TripPlanner />} />
         <Route path="/map" element={<MapView />} />
@@ -971,7 +978,7 @@ export default function App() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/" element={
-          <main id="main-content">
+          <>
           <div className="mode-tabs" role="tablist" aria-label="Discovery mode">
             <button
               role="tab"
@@ -1203,9 +1210,10 @@ export default function App() {
       })()}
       </>
       )}
-      </main>
+          </>
         } />
       </Routes>
+      </main>
       </Suspense>
       </ErrorBoundary>
       <Footer />

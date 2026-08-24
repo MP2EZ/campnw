@@ -218,16 +218,16 @@ export default function MapView() {
 
   if (!filteredResults.length && !loading) {
     return (
-      <main id="main-content" className="map-empty">
+      <div className="map-empty">
         <h2>No search results yet</h2>
         <p>Run a search to see campgrounds on the map.</p>
         <Link to="/" className="header-btn active">Go to Search</Link>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main id="main-content" className="map-page">
+    <div className="map-page">
       <Helmet>
         <title>Map — Campable</title>
         <meta name="description" content="Interactive map of campsite availability across the western US." />
@@ -278,6 +278,6 @@ export default function MapView() {
           </table>
         </details>
       )}
-    </main>
+    </div>
   );
 }
