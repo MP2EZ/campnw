@@ -20,6 +20,17 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
   {% block jsonld %}{% endblock %}
+  <script
+    id="seo-analytics"
+    src="/seo-static/analytics.js"
+    defer
+    data-page-type="{{ page_type | default('unknown') }}"
+    data-state="{{ analytics_state | default('') }}"
+    data-slug="{{ analytics_slug | default('') }}"
+    data-tag="{{ analytics_tag | default('') }}"
+    data-campground-count="{{ analytics_campground_count | default('') }}"
+    data-canonical-url="{{ canonical_url | default('') }}"
+  ></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>

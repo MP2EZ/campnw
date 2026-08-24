@@ -143,6 +143,9 @@ async def campground_profile(request: Request, state: str, slug: str):
         booking_tips=booking_tips,
         nearby=nearby,
         canonical_url=f"{BASE_URL}/campgrounds/{state.lower()}/{slug}",
+        page_type="profile",
+        analytics_state=state_upper,
+        analytics_slug=slug,
     )
     return _cached_template("profile.html", ctx)
 
@@ -187,6 +190,10 @@ async def state_index(request: Request, state: str, tag: str | None = None):
         all_tags=all_tags,
         active_tag=tag,
         canonical_url=f"{BASE_URL}/campgrounds/{state.lower()}",
+        page_type="state_index",
+        analytics_state=state_upper,
+        analytics_tag=tag or "",
+        analytics_campground_count=len(campgrounds),
     )
     return _cached_template("state_index.html", ctx)
 
@@ -216,6 +223,8 @@ async def campgrounds_index(request: Request):
         states=states,
         all_tags=all_tags,
         canonical_url=f"{BASE_URL}/campgrounds",
+        page_type="campgrounds_index",
+        analytics_campground_count=total,
     )
     return _cached_template("campgrounds_index.html", ctx)
 
@@ -248,6 +257,9 @@ async def tag_index(request: Request, tag: str):
         groups=groups,
         other_tags=other_tags,
         canonical_url=f"{BASE_URL}/tags/{tag}",
+        page_type="tag_index",
+        analytics_tag=tag,
+        analytics_campground_count=len(campgrounds),
     )
     return _cached_template("tag_index.html", ctx)
 
@@ -281,6 +293,7 @@ async def this_weekend(request: Request):
         refreshed_at=cache.get("refreshed_at"),
         loading=cache.get("results") is None,
         canonical_url=f"{BASE_URL}/this-weekend",
+        page_type="this_weekend",
     )
     return _cached_template("this_weekend.html", ctx, max_age=900, stale=1800)
 
