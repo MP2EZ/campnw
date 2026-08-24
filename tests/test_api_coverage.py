@@ -4,36 +4,23 @@ poll-status, push notifications, data export, admin digest, and SSE streaming.""
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import jwt as pyjwt
 import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
+from tests.conftest import (
+    auth_headers as _auth_headers,
+)
 from tests.conftest import make_campground
-
-_TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"
-
+from tests.conftest import (
+    make_supabase_jwt as _make_jwt,
+)
 
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
-
-
-def _make_jwt(email="test@example.com", supabase_id=None):
-    sub = supabase_id or str(uuid.uuid4())
-    payload = {
-        "sub": sub, "email": email, "role": "authenticated", "aud": "authenticated",
-        "exp": datetime.now(UTC) + timedelta(hours=1), "iat": datetime.now(UTC),
-    }
-    return pyjwt.encode(payload, _TEST_SECRET, algorithm="HS256")
-
-
-def _auth_headers(token):
-    return {"Authorization": f"Bearer {token}"}
 
 
 def _signup_and_login(client: TestClient, email: str = "test@example.com"):

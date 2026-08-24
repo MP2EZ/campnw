@@ -35,10 +35,14 @@ beforeEach(() => {
 })
 
 describe('App Component', () => {
-  test('renders without crashing', () => {
+  test('renders the app shell', () => {
+    // `expect(container).toBeTruthy()` cannot fail: render() always returns a
+    // container, even if App rendered nothing at all. Assert something App is
+    // actually responsible for.
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
     const { container } = renderApp()
-    expect(container).toBeTruthy()
+    expect(container.querySelector('main#main-content')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Search$/ })).toBeInTheDocument()
   })
 
   test('renders the campable heading', () => {

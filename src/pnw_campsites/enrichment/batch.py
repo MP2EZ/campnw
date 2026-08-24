@@ -14,6 +14,7 @@ import logging
 import time
 
 from pnw_campsites.enrichment.llm_tags import VALID_TAGS, TagExtractionResult, _truncate
+from pnw_campsites.posthog_client import HAIKU_MODEL
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import Campground
 
@@ -111,7 +112,7 @@ def build_batch_requests(campgrounds: list[Campground]) -> list[dict]:
         requests.append({
             "custom_id": f"{cg.booking_system.value}_{cg.facility_id}",
             "params": {
-                "model": "claude-haiku-4-5-20251001",
+                "model": HAIKU_MODEL,
                 "max_tokens": 500,
                 "messages": [
                     {"role": "user", "content": _build_prompt(cg)},
@@ -123,14 +124,9 @@ def build_batch_requests(campgrounds: list[Campground]) -> list[dict]:
 
 def submit_batch(api_key: str, campgrounds: list[Campground]) -> str:
     """Submit a batch of enrichment requests. Returns batch_id."""
-    from pnw_campsites.posthog_client import get_posthog_client
+    from pnw_campsites.posthog_client import get_sync_anthropic_client
 
-    try:
-        from posthog.ai.anthropic import Anthropic
-        client = Anthropic(api_key=api_key, posthog_client=get_posthog_client())
-    except ImportError:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
+    client = get_sync_anthropic_client(api_key)
     requests = build_batch_requests(campgrounds)
 
     _logger.info("Submitting batch of %d requests...", len(requests))
@@ -147,14 +143,9 @@ def submit_batch(api_key: str, campgrounds: list[Campground]) -> str:
 
 def poll_batch(api_key: str, batch_id: str, poll_interval: int = 10) -> dict:
     """Poll until batch completes. Returns the batch object as dict."""
-    from pnw_campsites.posthog_client import get_posthog_client
+    from pnw_campsites.posthog_client import get_sync_anthropic_client
 
-    try:
-        from posthog.ai.anthropic import Anthropic
-        client = Anthropic(api_key=api_key, posthog_client=get_posthog_client())
-    except ImportError:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
+    client = get_sync_anthropic_client(api_key)
 
     while True:
         batch = client.messages.batches.retrieve(batch_id)
@@ -201,14 +192,9 @@ def process_results(
     dry_run: bool = False,
 ) -> dict:
     """Process batch results and write to registry. Returns stats."""
-    from pnw_campsites.posthog_client import get_posthog_client
+    from pnw_campsites.posthog_client import get_sync_anthropic_client
 
-    try:
-        from posthog.ai.anthropic import Anthropic
-        client = Anthropic(api_key=api_key, posthog_client=get_posthog_client())
-    except ImportError:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
+    client = get_sync_anthropic_client(api_key)
 
     stats = {"succeeded": 0, "errored": 0, "skipped": 0}
 
