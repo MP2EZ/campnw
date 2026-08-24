@@ -21,6 +21,7 @@ import { Browser } from "@capacitor/browser";
 import {
   getBillingStatus,
   getPosthog,
+  track,
   openBillingPortal,
   startCheckout,
   type BillingStatus,
@@ -88,6 +89,7 @@ export function BillingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("billing") === "success") {
+      track("checkout_returned", { outcome: "success" });
       refresh();
       params.delete("billing");
       const newSearch = params.toString();
@@ -102,11 +104,31 @@ export function BillingProvider({ children }: { children: ReactNode }) {
     // Send users to the web pricing page in the system browser to upgrade as a
     // web session. No backend checkout call from native.
     if (Capacitor.isNativePlatform()) {
-      await Browser.open({ url: "https://campable.co/pricing" });
+      // SFSafariViewController has its own cookie jar, so PostHog mints a
+      // fresh anonymous id over there and the upgrade reads as web-direct.
+      // Pass the distinct id through so the web session can stitch back.
+      const distinctId = getPosthog()?.get_distinct_id?.() ?? "";
+      track("native_upgrade_handoff", { platform: "ios", has_distinct_id: distinctId ? 1 : 0 });
+      const url = new URL("https://campable.co/pricing");
+      url.searchParams.set("utm_source", "ios_app");
+      url.searchParams.set("utm_medium", "native_handoff");
+      if (distinctId) url.searchParams.set("ph_distinct_id", distinctId);
+      await Browser.open({ url: url.toString() });
       return;
     }
-    const url = await startCheckout();
-    window.location.href = url;
+    // upgrade_clicked fires *before* this await, so it counts intent, not
+    // checkout entries: a 503 (billing unconfigured) or 502 (Stripe down)
+    // inflated it with failures. These two split that.
+    try {
+      const url = await startCheckout();
+      track("checkout_session_created", {});
+      window.location.href = url;
+    } catch (err) {
+      track("checkout_failed", {
+        reason: err instanceof Error ? err.message.slice(0, 80) : "unknown",
+      });
+      throw err;
+    }
   }, []);
 
   const handleOpenPortal = useCallback(async () => {

@@ -34,6 +34,7 @@ vi.mock("../hooks/useAuth", () => ({
 import { ResultCard } from "../components/ResultCard";
 import { CompareBar } from "../components/CompareBar";
 import { OnboardingModal } from "../components/OnboardingModal";
+import { AuthModal } from "../components/AuthModal";
 import { compareCampgrounds, track } from "../api";
 
 // ---------------------------------------------------------------------------
@@ -546,5 +547,40 @@ describe("ResultCard collapsed body", () => {
     expect(
       container.querySelectorAll("a[href^='https://example.com/book/']").length
     ).toBeGreaterThan(0);
+  });
+})
+
+// ---------------------------------------------------------------------------
+// Auth funnel interiors (audit ANLT-13)
+// ---------------------------------------------------------------------------
+
+describe("AuthModal funnel events", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // The modal had zero track() calls, so the landing -> signup funnel had one
+  // step: the success event. No open, no submit attempt, and no failure —
+  // the classic silent signup-funnel killer.
+  test("opening emits auth_modal_opened with its entry point", () => {
+    render(<AuthModal open entryPoint="header" onClose={() => {}} />);
+    expect(track).toHaveBeenCalledWith(
+      "auth_modal_opened",
+      expect.objectContaining({ entry_point: "header", mode: "login" }),
+    );
+  });
+
+  test("a closed modal emits nothing", () => {
+    render(<AuthModal open={false} entryPoint="header" onClose={() => {}} />);
+    expect(vi.mocked(track).mock.calls.filter((c) => c[0] === "auth_modal_opened"))
+      .toHaveLength(0);
+  });
+
+  test("toggling to signup is measurable", () => {
+    render(<AuthModal open entryPoint="header" onClose={() => {}} />);
+    const toggle = screen.getByRole("button", { name: /create one|sign up/i });
+    fireEvent.click(toggle);
+    expect(track).toHaveBeenCalledWith(
+      "auth_mode_toggled",
+      expect.objectContaining({ to: "signup" }),
+    );
   });
 })

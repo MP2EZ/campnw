@@ -127,7 +127,12 @@ describe("useAuth", () => {
       email: "test@example.com",
       password: "password123",
     });
-    expect(mockTrack).toHaveBeenCalledWith("login", {});
+    // Was `{}` — an unsegmentable vanity count with no method and no
+    // surface. The audit's point was that asserting the empty bag locked it in.
+    expect(mockTrack).toHaveBeenCalledWith(
+      "login",
+      expect.objectContaining({ method: "password" }),
+    );
   });
 
   test("login throws on supabase error", async () => {
@@ -158,7 +163,10 @@ describe("useAuth", () => {
       password: "password123",
       options: { data: { display_name: "Tester" } },
     });
-    expect(mockTrack).toHaveBeenCalledWith("signup", {});
+    expect(mockTrack).toHaveBeenCalledWith(
+      "signup",
+      expect.objectContaining({ method: "password", has_display_name: 1 }),
+    );
   });
 
   // Regression guard: identify() previously ran against the npm posthog-js

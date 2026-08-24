@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getVapidKey, subscribePush } from "../api";
+import { getVapidKey, subscribePush, track } from "../api";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -29,8 +29,19 @@ export function usePushNotifications() {
     const vapidKey = await getVapidKey();
     if (!vapidKey) return false;
 
+    const priorPermission = Notification.permission;
     const result = await Notification.requestPermission();
     setPermission(result);
+    // Push permission is the single gate on whether a watch can ever deliver
+    // value. The result was discarded, so "watches created" overstated the
+    // reachable alert audience by an unknown factor.
+    track("push_permission_result", {
+      result,
+      // Read from the browser rather than the React state the callback closes
+      // over: subscribe() is intentionally dep-free so its identity stays
+      // stable, and the state can lag the real permission.
+      prior_permission: priorPermission,
+    });
     if (result !== "granted") return false;
 
     const subscription = await registration.pushManager.subscribe({

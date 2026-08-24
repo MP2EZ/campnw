@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { track } from "../api";
 
 export function AuthModal({
   open,
+  entryPoint = "unknown",
   onClose,
 }: {
   open: boolean;
+  entryPoint?: string;
   onClose: () => void;
 }) {
   const { login, signup } = useAuth();
@@ -15,6 +18,14 @@ export function AuthModal({
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // The modal had zero track() calls, so the landing -> signup funnel had
+  // exactly one step: the success event. No open, no mode toggle, no submit
+  // attempt, and — the classic silent funnel killer — no failure.
+  useEffect(() => {
+    if (open) track("auth_modal_opened", { entry_point: entryPoint, mode });
+    // Only on open; a mode toggle emits its own event below.
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -52,6 +63,7 @@ export function AuthModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    track("auth_submitted", { mode, entry_point: entryPoint });
     setSubmitting(true);
     try {
       if (mode === "login") {
@@ -64,7 +76,20 @@ export function AuthModal({
       setDisplayName("");
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      const message = err instanceof Error ? err.message : "Something went wrong";
+      // Normalised, never the raw Supabase string — and never the email.
+      track("auth_failed", {
+        mode,
+        entry_point: entryPoint,
+        reason: /invalid|credential|password/i.test(message)
+          ? "invalid_credentials"
+          : /exists|registered/i.test(message)
+            ? "already_registered"
+            : /network|fetch/i.test(message)
+              ? "network"
+              : "other",
+      });
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -150,6 +175,7 @@ export function AuthModal({
                   type="button"
                   className="auth-switch-btn"
                   onClick={() => {
+                    track("auth_mode_toggled", { to: "signup", entry_point: entryPoint });
                     setMode("signup");
                     setError(null);
                   }}
@@ -164,6 +190,7 @@ export function AuthModal({
                   type="button"
                   className="auth-switch-btn"
                   onClick={() => {
+                    track("auth_mode_toggled", { to: "login", entry_point: entryPoint });
                     setMode("login");
                     setError(null);
                   }}
