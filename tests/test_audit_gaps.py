@@ -7,35 +7,23 @@ and security header middleware.
 
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import jwt as pyjwt
 import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
-
-_TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"
-
+from tests.conftest import (
+    auth_headers as _auth_headers,
+)
+from tests.conftest import (
+    make_supabase_jwt as _make_jwt,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _make_jwt(email="test@example.com", supabase_id=None):
-    sub = supabase_id or str(uuid.uuid4())
-    payload = {
-        "sub": sub, "email": email, "role": "authenticated", "aud": "authenticated",
-        "exp": datetime.now(UTC) + timedelta(hours=1), "iat": datetime.now(UTC),
-    }
-    return pyjwt.encode(payload, _TEST_SECRET, algorithm="HS256")
-
-
-def _auth_headers(token):
-    return {"Authorization": f"Bearer {token}"}
 
 
 def _signup(client: TestClient, email: str = "test@example.com"):
@@ -413,17 +401,20 @@ class TestDateSuggestionProbes:
         registry.search.return_value = []
         engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
 
-        query = SearchQuery(
-            start_date=date(2026, 8, 1),
-            end_date=date(2026, 8, 7),
-        )
+        # Relative to today: _suggest_alternative_dates drops probes whose
+        # shifted start is in the past, so an absolute date silently empties
+        # this test once it goes by. The -7 shift needs >7 days of headroom.
+        base = date.today() + timedelta(days=30)
+        query = SearchQuery(start_date=base, end_date=base + timedelta(days=6))
 
         # All probes return results
         mock_result = SearchResults(query=query, campgrounds_with_availability=3)
         with patch.object(engine, "search", new_callable=AsyncMock, return_value=mock_result):
             suggestions = await engine._suggest_alternative_dates(query)
 
-        assert len(suggestions) <= 3
+        # `<= 3` alone is satisfied by [], which is what this asserted for
+        # weeks. There are exactly three shifts, all valid from a future base.
+        assert len(suggestions) == 3
 
     @pytest.mark.asyncio
     async def test_sorted_by_proximity(self):
@@ -434,20 +425,29 @@ class TestDateSuggestionProbes:
         registry.search.return_value = []
         engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
 
-        query = SearchQuery(
-            start_date=date(2026, 8, 1),
-            end_date=date(2026, 8, 7),
-        )
+        # Relative to today: _suggest_alternative_dates drops probes whose
+        # shifted start is in the past, so an absolute date silently empties
+        # this test once it goes by. The -7 shift needs >7 days of headroom.
+        base = date.today() + timedelta(days=30)
+        query = SearchQuery(start_date=base, end_date=base + timedelta(days=6))
 
         mock_result = SearchResults(query=query, campgrounds_with_availability=2)
         with patch.object(engine, "search", new_callable=AsyncMock, return_value=mock_result):
             suggestions = await engine._suggest_alternative_dates(query)
 
-        if len(suggestions) >= 2:
-            # First suggestion should be closer to original dates
-            d0 = abs((date.fromisoformat(suggestions[0].start_date) - query.start_date).days)
-            d1 = abs((date.fromisoformat(suggestions[1].start_date) - query.start_date).days)
-            assert d0 <= d1
+        # Assert the precondition rather than guarding on it: wrapped in
+        # `if len(suggestions) >= 2`, a regression returning zero or one
+        # suggestion made this test pass silently.
+        assert len(suggestions) >= 2, (
+            f"expected multiple date suggestions, got {len(suggestions)}"
+        )
+        offsets = [
+            abs((date.fromisoformat(s.start_date) - query.start_date).days)
+            for s in suggestions
+        ]
+        assert offsets == sorted(offsets), (
+            f"suggestions not ordered by closeness to the original dates: {offsets}"
+        )
 
     @pytest.mark.asyncio
     async def test_no_suggestions_when_no_dates(self):
@@ -529,34 +529,40 @@ class TestWatcherCachePath:
 
     @pytest.mark.asyncio
     async def test_cache_hit_skips_provider(self, watch_db):
-        """Second poll should use cached availability, not call provider again."""
+        """Second poll should use cached availability, not call provider again.
+
+        The assertions must read ``get_availability_range`` — the method
+        ``_fetch_availability`` actually calls for RECGOV. This test previously
+        asserted on ``get_availability``, an attribute AsyncMock auto-creates on
+        access and which nothing ever invokes, so both counts were 0 and
+        ``second == first`` held whether the cache worked, the provider was
+        called every time, or the function raised. ``spec_set`` below makes that
+        class of typo an AttributeError instead of a silent pass.
+        """
         from pnw_campsites.monitor.watcher import _fetch_availability
+        from pnw_campsites.providers.recgov import RecGovClient
         from pnw_campsites.registry.models import BookingSystem
 
-        mock_recgov = AsyncMock()
         mock_availability = MagicMock()
         mock_availability.campsites = {}
         mock_availability.model_dump_json = MagicMock(
             return_value='{"facility_id":"232465","campsites":{}}',
         )
+        mock_recgov = AsyncMock(spec_set=RecGovClient)
         mock_recgov.get_availability_range = AsyncMock(return_value=mock_availability)
 
-        # First call — should hit provider
         await _fetch_availability(
             "232465", date(2026, 6, 1), date(2026, 6, 30),
             BookingSystem.RECGOV, mock_recgov, None, watch_db,
         )
-        first_call_count = mock_recgov.get_availability.call_count
+        assert mock_recgov.get_availability_range.await_count == 1
 
-        # Second call — should use cache (within TTL)
+        # Second identical call — served from cache, provider untouched.
         await _fetch_availability(
             "232465", date(2026, 6, 1), date(2026, 6, 30),
             BookingSystem.RECGOV, mock_recgov, None, watch_db,
         )
-        second_call_count = mock_recgov.get_availability.call_count
-
-        # If cache works, provider shouldn't be called again
-        assert second_call_count == first_call_count
+        assert mock_recgov.get_availability_range.await_count == 1
 
 
 # ---------------------------------------------------------------------------

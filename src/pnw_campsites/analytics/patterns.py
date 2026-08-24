@@ -93,14 +93,9 @@ async def extract_booking_tips(
             return [f"Weekday availability is higher — {best_day[0]}s have the most openings."]
         return []
 
-    from pnw_campsites.posthog_client import get_posthog_client
+    from pnw_campsites.posthog_client import HAIKU_MODEL, get_anthropic_client
 
-    try:
-        from posthog.ai.anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
-    except ImportError:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=api_key)
+    client = get_anthropic_client(api_key)
 
     prompt = (
         f"Generate 2-4 concise booking tips for {campground_name or campground_id} "
@@ -113,7 +108,7 @@ async def extract_booking_tips(
     try:
         response = await asyncio.wait_for(
             client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=HAIKU_MODEL,
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
                 posthog_privacy_mode=True,

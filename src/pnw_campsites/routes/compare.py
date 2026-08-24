@@ -75,14 +75,9 @@ async def _generate_narrative(
     if not api_key:
         return None
 
-    from pnw_campsites.posthog_client import get_posthog_client
+    from pnw_campsites.posthog_client import HAIKU_MODEL, get_anthropic_client
 
-    try:
-        from posthog.ai.anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
-    except (ImportError, ValueError):
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=api_key)
+    client = get_anthropic_client(api_key)
 
     compact = json.dumps([
         {
@@ -105,7 +100,7 @@ async def _generate_narrative(
     try:
         response = await asyncio.wait_for(
             client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=HAIKU_MODEL,
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}],
                 posthog_distinct_id=posthog_distinct_id,
