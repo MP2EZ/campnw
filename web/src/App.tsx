@@ -747,7 +747,7 @@ export default function App() {
     activeSearchParams, formCollapsed, setFormCollapsed,
     focusedCardIndex, setFocusedCardIndex,
     liveAnnouncement, setLiveAnnouncement,
-    cardRefs, maxResults, handleSearch, toggleSource, resetSearch,
+    cardRefs, maxResults, handleSearch, toggleSource, resetSearch, searchId,
   } = useSearch(user ?? null);
 
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
@@ -1251,6 +1251,7 @@ export default function App() {
               dateSuggestions={results?.date_suggestions}
               actionChips={results?.action_chips}
               searchDates={searchDates || undefined}
+              searchId={searchId}
               onSearch={handleSearch}
             />
           )}

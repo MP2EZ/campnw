@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { searchCampsitesStream, saveSearchHistory, track } from "../api";
+import { getPosthog, searchCampsitesStream, saveSearchHistory, track } from "../api";
 import type {
   CampgroundResult, SearchParams, SearchResponse, SearchWarning,
   DiagnosisEvent,
@@ -69,6 +69,23 @@ export function parseSearchParamsFromUrl(
   return params;
 }
 
+/** Days between a search's start and end date; 0 when either is absent. */
+function dateRangeDays(params: SearchParams): number {
+  if (!params.start_date || !params.end_date) return 0;
+  const a = Date.parse(params.start_date + "T12:00:00");
+  const b = Date.parse(params.end_date + "T12:00:00");
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.round((b - a) / 86_400_000);
+}
+
+/** Days from today to the search's start — how far ahead people plan. */
+function leadTimeDays(params: SearchParams): number {
+  if (!params.start_date) return 0;
+  const start = Date.parse(params.start_date + "T12:00:00");
+  if (Number.isNaN(start)) return 0;
+  return Math.max(0, Math.round((start - Date.now()) / 86_400_000));
+}
+
 export type SearchMode = "find" | "exact";
 export type ResultsView = "dates" | "sites";
 
@@ -95,6 +112,7 @@ export interface UseSearchReturn {
   resultSources: Set<string>;
   filteredResults: CampgroundResult[];
   activeSearchParams: SearchParams | null;
+  searchId: string;
   formCollapsed: boolean;
   setFormCollapsed: (v: boolean) => void;
   focusedCardIndex: number;
@@ -128,6 +146,9 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   const lastSearchParams = useRef<SearchParams | null>(null);
   const lastSearchMode = useRef<SearchMode>("find");
   const searchAbortRef = useRef<AbortController | null>(null);
+  // Correlates search_executed with the book_click / zero-state events it
+  // produces. Exposed so ResultCard can stamp outbound clicks with it.
+  const searchIdRef = useRef<string>("");
 
   const maxResults = lastSearchParams.current?.limit || 20;
 
@@ -197,6 +218,14 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     searchAbortRef.current?.abort();
     const abortController = new AbortController();
     searchAbortRef.current = abortController;
+    searchIdRef.current =
+      globalThis.crypto?.randomUUID?.() ?? String(Date.now());
+    const searchId = searchIdRef.current;
+    const startedAt = performance.now();
+    // Super property rather than a prop: book_click fires from four nested
+    // components inside ResultCard, and threading search_id to each of them
+    // would be more invasive than the correlation is worth.
+    getPosthog()?.register({ search_id: searchId });
 
     setLoading(true);
     setError(null);
@@ -276,10 +305,20 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           warnings: streamedWarnings,
         });
         track("search_executed", {
+          search_id: searchId,
           state: params.state || "all",
           nights: params.nights || 2,
           result_count: withAvail,
           total_checked: streamedResults.length,
+          mode,
+          days_preset: params.days_of_week || "any",
+          date_range_days: dateRangeDays(params),
+          lead_time_days: leadTimeDays(params),
+          radius_minutes: params.max_drive || 0,
+          tag_count: params.tags ? params.tags.split(",").length : 0,
+          tags: params.tags || "",
+          is_nl_query: params.q ? 1 : 0,
+          elapsed_ms: Math.round(performance.now() - startedAt),
         });
         if (user) {
           saveSearchHistory(params, withAvail);
@@ -289,6 +328,13 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         setError(err.message);
         setLoading(false);
         searchAbortRef.current = null;
+        track("search_failed", {
+          search_id: searchId,
+          reason: err.message.slice(0, 120),
+          state: params.state || "all",
+          results_received_before_failure: streamedResults.length,
+          elapsed_ms: Math.round(performance.now() - startedAt),
+        });
       },
       (diagEvent: DiagnosisEvent) => {
         setResults((prev) =>
@@ -361,6 +407,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   }, [handleSearch]);
 
   return {
+    searchId: searchIdRef.current,
     results,
     searchSummary,
     setSearchSummary,

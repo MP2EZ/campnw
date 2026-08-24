@@ -79,7 +79,9 @@ function meaningfulLoop(loop: string, campgroundName: string): string | null {
 // DateBlockView
 // ---------------------------------------------------------------------------
 
-function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
+function DateBlockView({
+  result, rank,
+}: { result: SearchResponse["results"][0]; rank?: number }) {
   const blocks = groupByDateBlock(result.windows);
   const fcfsSites = result.windows.filter((w) => w.is_fcfs);
   const isWaState = result.booking_system === "wa_state";
@@ -110,6 +112,9 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                 className="site-chip wa-book-link"
                 onClick={() => track("book_click", {
                   facility_id: result.facility_id,
+                  result_rank: rank ?? -1,
+                  drive_minutes: result.estimated_drive_minutes ?? -1,
+                  total_available_sites: result.total_available_sites,
                   name: result.name,
                   source: result.booking_system,
                   type: "wa_date_block",
@@ -133,6 +138,9 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                   className="site-chip"
                   onClick={() => track("book_click", {
                     facility_id: result.facility_id,
+                  result_rank: rank ?? -1,
+                  drive_minutes: result.estimated_drive_minutes ?? -1,
+                  total_available_sites: result.total_available_sites,
                     name: result.name,
                     source: result.booking_system,
                     type: "site",
@@ -177,9 +185,11 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
 // SiteView
 // ---------------------------------------------------------------------------
 
-function SiteView({ result }: { result: SearchResponse["results"][0] }) {
+function SiteView({
+  result, rank,
+}: { result: SearchResponse["results"][0]; rank?: number }) {
   if (result.booking_system === "wa_state") {
-    return <DateBlockView result={result} />;
+    return <DateBlockView result={result} rank={rank} />;
   }
 
   const bySite = new Map<string, Window[]>();
@@ -221,6 +231,9 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
                       className="window-chip"
                       onClick={() => track("book_click", {
                         facility_id: result.facility_id,
+                  result_rank: rank ?? -1,
+                  drive_minutes: result.estimated_drive_minutes ?? -1,
+                  total_available_sites: result.total_available_sites,
                         name: result.name,
                         source: result.booking_system,
                         type: "site_window",
@@ -423,6 +436,9 @@ export const ResultCard = memo(function ResultCard({
                 className="book-link"
                 onClick={() => track("book_click", {
                   facility_id: result.facility_id,
+                  result_rank: index ?? -1,
+                  drive_minutes: result.estimated_drive_minutes ?? -1,
+                  total_available_sites: result.total_available_sites,
                   name: result.name,
                   source: result.booking_system,
                   type: "view_page",
@@ -456,9 +472,9 @@ export const ResultCard = memo(function ResultCard({
             </div>
           )}
           {view === "dates" ? (
-            <DateBlockView result={result} />
+            <DateBlockView result={result} rank={index} />
           ) : (
-            <SiteView result={result} />
+            <SiteView result={result} rank={index} />
           )}
           </>)}
         </div>

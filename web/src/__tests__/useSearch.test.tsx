@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useSearch, parseSearchParamsFromUrl } from "../hooks/useSearch";
-import { searchCampsitesStream } from "../api";
+import { searchCampsitesStream, track, getPosthog } from "../api";
 import type { CampgroundResult, SearchParams } from "../api";
 
 // ---------------------------------------------------------------------------
@@ -33,6 +33,7 @@ vi.mock("../api", () => ({
   ),
   saveSearchHistory: vi.fn(),
   track: vi.fn(),
+  getPosthog: vi.fn(() => ({ register: vi.fn(), capture: vi.fn() })),
 }));
 
 // Stub window methods used by useSearch
@@ -476,5 +477,81 @@ describe("useSearch URL restore", () => {
     renderHook(() => useSearch(null));
     await new Promise((r) => setTimeout(r, 20));
     expect(vi.mocked(searchCampsitesStream)).not.toHaveBeenCalled();
+  });
+})
+
+// ---------------------------------------------------------------------------
+// Search funnel instrumentation (audit ANLT-06 remainder, ANLT-07)
+// ---------------------------------------------------------------------------
+
+describe("useSearch funnel events", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/");
+    vi.clearAllMocks();
+    capturedOnResult = null;
+    capturedOnDone = null;
+    capturedOnError = null;
+  });
+
+  async function runSearch(hook: {
+    result: { current: { handleSearch: (p: SearchParams, m: "find" | "exact") => void } };
+  }) {
+    await act(async () => {
+      hook.result.current.handleSearch(
+        {
+          start_date: "2026-06-01",
+          end_date: "2026-06-08",
+          state: "WA",
+          tags: "lakeside,pets",
+          max_drive: 180,
+        } as SearchParams,
+        "find",
+      );
+    });
+  }
+
+  // search_executed carried four props, so a zero-result search was countable
+  // but not diagnosable: the dimensions that *cause* one — dates, lead time,
+  // radius, tags — all sat unused in `params`.
+  test("search_executed carries the dimensions that explain a zero result", async () => {
+    const hook = renderHook(() => useSearch(null));
+    await runSearch(hook);
+    await act(async () => {
+      capturedOnDone?.();
+    });
+
+    const call = vi.mocked(track).mock.calls.find((c) => c[0] === "search_executed");
+    expect(call).toBeDefined();
+    expect(call![1]).toMatchObject({
+      state: "WA",
+      date_range_days: 7,
+      radius_minutes: 180,
+      tag_count: 2,
+      mode: "find",
+    });
+    expect(call![1].search_id).toBeTruthy();
+  });
+
+  // A failed search emitted nothing at all, so it was indistinguishable from a
+  // search that was never run.
+  test("a failed search emits search_failed", async () => {
+    const hook = renderHook(() => useSearch(null));
+    await runSearch(hook);
+    await act(async () => {
+      capturedOnError?.(new Error("stream died"));
+    });
+
+    const call = vi.mocked(track).mock.calls.find((c) => c[0] === "search_failed");
+    expect(call).toBeDefined();
+    expect(call![1]).toMatchObject({ reason: "stream died", state: "WA" });
+  });
+
+  test("search_id is registered as a super property for downstream events", async () => {
+    const hook = renderHook(() => useSearch(null));
+    await runSearch(hook);
+    const ph = vi.mocked(getPosthog).mock.results[0]?.value;
+    expect(ph.register).toHaveBeenCalledWith(
+      expect.objectContaining({ search_id: expect.any(String) }),
+    );
   });
 })
