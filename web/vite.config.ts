@@ -32,9 +32,13 @@ export default defineConfig({
           // into hoisting it into the main entry chunk, blowing the 350KB budget.
           // An explicit chunk keeps the entry lean and api.ts independently cached.
           if (id.includes('/src/api.ts')) return 'api'
-          if (id.includes('react-markdown') || id.includes('remark-parse') || id.includes('remark-rehype')) {
-            return 'markdown'
-          }
+          // No rule for react-markdown/remark: naming a chunk by module-id
+          // substring pulls those modules OUT of the async chunk Rollup would
+          // otherwise build for them, and the entry then imports the named
+          // chunk statically. That put a 123KB markdown parser on the
+          // modulepreloaded critical path for every visitor, while TripPlanner
+          // — its only consumer, behind React.lazy — contained none of it.
+          // Letting Rollup decide keeps it inside the lazy route.
         },
       },
     },

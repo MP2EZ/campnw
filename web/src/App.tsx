@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, memo, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { getSearchHistory, getRecommendations, track } from "./api";
@@ -697,6 +697,45 @@ function ResultsSkeleton() {
 
 // ─── App ─────────────────────────────────────────────────────────────
 
+/**
+ * Natural-language search box.
+ *
+ * Owns its own input state. Living in App, every keystroke re-rendered the
+ * entire results tree — up to 50 un-memoized ResultCards plus a full
+ * O(results x windows x nights) heat-map recompute, per character.
+ */
+const NlSearchBar = memo(function NlSearchBar({
+  onSubmit,
+}: {
+  onSubmit: (query: string) => void;
+}) {
+  const [value, setValue] = useState("");
+
+  return (
+    <div className="nl-search-section">
+      <div className="nl-search-row">
+        <IconSearch className="nl-search-icon" />
+        <input
+          type="text"
+          className="nl-search-input"
+          placeholder={'Try "pet-friendly near Portland, July weekend"'}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-label="Search in plain language"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && value.trim()) {
+              e.preventDefault();
+              onSubmit(value.trim());
+              setValue("");
+            }
+          }}
+        />
+      </div>
+      <div className="nl-divider" aria-hidden="true">or search by filters</div>
+    </div>
+  );
+});
+
 export default function App() {
   const { user } = useAuth();
   const location = useLocation();
@@ -728,7 +767,14 @@ export default function App() {
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
   const [compareResult, setCompareResult] = useState<CompareResponse | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
-  const [nlQuery, setNlQuery] = useState("");
+  const handleNlSearch = useCallback((query: string) => {
+    track("nl_search_submitted", { query_length: query.length });
+    handleSearch(
+      { start_date: "", end_date: "", q: query } as SearchParams,
+      "find",
+    );
+  }, [handleSearch]);
+
 
   const toggleCompare = useCallback((facilityId: string) => {
     if (compareResult) {
@@ -802,6 +848,36 @@ export default function App() {
     () => filteredResults.filter((r) => r.total_available_sites > 0),
     [filteredResults]
   );
+
+  // CalendarHeatMap is memo()'d and memoizes computeDensity on `results`, but
+  // both guards were defeated by building this object inline in JSX: a fresh
+  // identity every render re-ran an O(results x windows x nights) scan that
+  // allocates a Date and an ISO string per night.
+  const heatMapResults = useMemo(
+    () => results && ({
+      ...results,
+      results: filteredResults,
+      campgrounds_with_availability: availableCards.length,
+    }),
+    [results, filteredResults, availableCards]
+  );
+
+  // Stable per-card callbacks. Recreated inline, they change identity every
+  // render and defeat React.memo on ResultCard no matter how it is wrapped.
+  const registerCardRef = useCallback(
+    (index: number, el: HTMLButtonElement | null) => {
+      // Writing into a ref-keyed array is the intended pattern here; the rule
+      // only fires because the write moved from JSX into a useCallback.
+      // eslint-disable-next-line react-hooks/immutability
+      cardRefs.current[index] = el;
+    },
+    [cardRefs]
+  );
+
+  const showMapView = useCallback(() => {
+    setResultsDisplay("map");
+    track("map_toggled", { to: "map" });
+  }, []);
 
   const navigateCard = useCallback((delta: number) => {
     if (!availableCards.length) return;
@@ -997,31 +1073,7 @@ export default function App() {
             </Suspense>
           ) : (
           <>
-          <div className="nl-search-section">
-            <div className="nl-search-row">
-              <IconSearch className="nl-search-icon" />
-              <input
-                type="text"
-                className="nl-search-input"
-                placeholder={'Try "pet-friendly near Portland, July weekend"'}
-                value={nlQuery}
-                onChange={(e) => setNlQuery(e.target.value)}
-                aria-label="Search in plain language"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && nlQuery.trim()) {
-                    e.preventDefault();
-                    track("nl_search_submitted", { query_length: nlQuery.trim().length });
-                    handleSearch(
-                      { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
-                      "find",
-                    );
-                    setNlQuery("");
-                  }
-                }}
-              />
-            </div>
-            <div className="nl-divider" aria-hidden="true">or search by filters</div>
-          </div>
+          <NlSearchBar onSubmit={handleNlSearch} />
           {formCollapsed && activeSearchParams && searchDates ? (
             <SearchSummaryBar
               params={activeSearchParams}
@@ -1050,7 +1102,7 @@ export default function App() {
       {loading && (!results || results.results.length === 0) && <ResultsSkeleton />}
 
       {results && (() => {
-        const withAvailability = filteredResults.filter((r) => r.total_available_sites > 0).length;
+        const withAvailability = availableCards.length;
         return (
         <div className="results">
           <div className="results-header">
@@ -1119,10 +1171,10 @@ export default function App() {
             </div>
           ) : (
           <>
-          {searchDates && withAvailability > 0 && (
+          {searchDates && withAvailability > 0 && heatMapResults && (
             <Suspense fallback={null}>
               <CalendarHeatMap
-                results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}
+                results={heatMapResults}
                 startDate={searchDates.start}
                 endDate={searchDates.end}
                 daysOfWeek={activeSearchParams?.days_of_week || undefined}
@@ -1151,22 +1203,21 @@ export default function App() {
               </button>
             </div>
           ) : null}
-          {filteredResults
-            .filter((r) => r.total_available_sites > 0)
-            .map((r, i) => (
-              <ResultCard
-                key={r.facility_id}
-                result={r}
-                view={resultsView}
-                searchDates={searchDates || undefined}
-                focused={i === focusedCardIndex}
-                headerRef={(el) => { cardRefs.current[i] = el; }}
-                compareSelected={compareSet.has(r.facility_id)}
-                onToggleCompare={toggleCompare}
-                compareDisabled={compareSet.size >= 3}
-                onShowMap={() => { setResultsDisplay("map"); track("map_toggled", { to: "map" }); }}
-              />
-            ))}
+          {availableCards.map((r, i) => (
+            <ResultCard
+              key={r.facility_id}
+              index={i}
+              result={r}
+              view={resultsView}
+              searchDates={searchDates || undefined}
+              focused={i === focusedCardIndex}
+              registerRef={registerCardRef}
+              compareSelected={compareSet.has(r.facility_id)}
+              onToggleCompare={toggleCompare}
+              compareDisabled={compareSet.size >= 3}
+              onShowMap={showMapView}
+            />
+          ))}
           {!compareResult && (
             <CompareBar
               selectedIds={compareSet}
