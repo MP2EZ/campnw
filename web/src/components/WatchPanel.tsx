@@ -222,7 +222,28 @@ export function WatchButton({
         notification_channel: "web_push",
       };
       await createWatch(params);
-      track("watch_created", { facility_id: facilityId });
+      track("watch_created", {
+        facility_id: facilityId,
+        name: name || "",
+        start_date: startDate,
+        end_date: endDate,
+        date_range_days: Math.max(
+          0,
+          Math.round(
+            (Date.parse(endDate + "T12:00:00") -
+              Date.parse(startDate + "T12:00:00")) / 86_400_000,
+          ),
+        ),
+        lead_time_days: Math.max(
+          0,
+          Math.round(
+            (Date.parse(startDate + "T12:00:00") - Date.now()) / 86_400_000,
+          ),
+        ),
+        min_nights: minNights || 1,
+        notification_channel: "web_push",
+        push_already_granted: subscribed ? 1 : 0,
+      });
       setCreated(true);
       onCreated?.();
       if (!subscribed) {

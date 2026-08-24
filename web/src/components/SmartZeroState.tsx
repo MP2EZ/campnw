@@ -1,4 +1,5 @@
-import { memo } from "react";
+import { memo, useEffect } from "react";
+import { track } from "../api";
 import type { Diagnosis, DateSuggestion, ActionChip, SearchParams } from "../api";
 
 type SearchMode = "find" | "exact";
@@ -8,6 +9,7 @@ interface SmartZeroStateProps {
   dateSuggestions?: DateSuggestion[];
   actionChips?: ActionChip[];
   searchDates?: { start: string; end: string };
+  searchId?: string;
   onSearch: (params: SearchParams, mode: SearchMode) => void;
 }
 
@@ -28,14 +30,33 @@ export const SmartZeroState = memo(function SmartZeroState({
   dateSuggestions,
   actionChips,
   searchDates,
+  searchId,
   onSearch,
 }: SmartZeroStateProps) {
   const hasDiagnosis = diagnosis != null;
   const hasSuggestions = dateSuggestions != null && dateSuggestions.length > 0;
   const hasActions = actionChips != null && actionChips.length > 0;
 
+  // The zero-results screen was designed for but never measured. Teams
+  // instrument the happy path and go blind to every reason people leave — and
+  // this is the surface a user sees at the moment they are most likely to.
+  useEffect(() => {
+    track("zero_state_shown", {
+      search_id: searchId || "",
+      has_diagnosis: hasDiagnosis ? 1 : 0,
+      binding_constraint: diagnosis?.binding_constraint || "",
+      date_suggestion_count: dateSuggestions?.length ?? 0,
+      action_chip_count: actionChips?.length ?? 0,
+    });
+    // Fire once per rendered zero-state, keyed on the search that produced it.
+  }, [searchId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSuggestionClick = (suggestion: DateSuggestion) => {
-    if (!searchDates) return;
+    track("zero_state_recovery_clicked", {
+      search_id: searchId || "",
+      chip_type: "date_suggestion",
+      chip_label: suggestion.reason,
+    });
     onSearch(
       {
         start_date: suggestion.start_date,
@@ -46,6 +67,11 @@ export const SmartZeroState = memo(function SmartZeroState({
   };
 
   const handleActionClick = (chip: ActionChip) => {
+    track("zero_state_recovery_clicked", {
+      search_id: searchId || "",
+      chip_type: chip.action,
+      chip_label: chip.label,
+    });
     const params = chip.params as Partial<SearchParams>;
     onSearch(params as SearchParams, "find");
   };
