@@ -119,34 +119,11 @@ const TAG_GLYPHS: Record<string, { glyph: ReactNode; label: string }> = {
       </>
     ),
   },
-  "old-growth": {
-    label: "old-growth",
-    glyph: (
-      <>
-        <polygon points="-8,4 0,-10 8,4" />
-        <rect x="-1.5" y="4" width="3" height="5" />
-      </>
-    ),
-  },
   mountain: {
     label: "mountain",
     glyph: <polygon points="-10,5 -3,-7 3,-2 10,5" fill="currentColor" />,
   },
   family: {
-    label: "family",
-    glyph: (
-      <>
-        <polygon
-          points="-10,6 0,-10 10,6"
-          fill="none"
-          strokeWidth="2"
-          strokeLinejoin="round"
-        />
-        <line x1="0" y1="-10" x2="0" y2="6" strokeWidth="2" />
-      </>
-    ),
-  },
-  "kid-friendly": {
     label: "family",
     glyph: (
       <>
@@ -199,37 +176,7 @@ const TAG_GLYPHS: Record<string, { glyph: ReactNode; label: string }> = {
       </>
     ),
   },
-  "pull-through": {
-    label: "RV",
-    glyph: (
-      <>
-        <rect
-          x="-10"
-          y="-5"
-          width="20"
-          height="8"
-          rx="1.5"
-          fill="none"
-          strokeWidth="2"
-        />
-        <circle cx="-6" cy="5" r="2" />
-        <circle cx="6" cy="5" r="2" />
-      </>
-    ),
-  },
   trails: {
-    label: "trails",
-    glyph: (
-      <path
-        d="M-12,4 L-6,-4 L-1,3 L4,-3 L10,4"
-        strokeWidth="2"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    ),
-  },
-  hiking: {
     label: "trails",
     glyph: (
       <path
@@ -304,16 +251,32 @@ const TAG_GLYPHS: Record<string, { glyph: ReactNode; label: string }> = {
     ),
   },
 };
+// Synonyms that render the same artwork. Previously each was a verbatim copy
+// of its partner's definition, so editing one left the other behind.
+const TAG_ALIASES: Record<string, string> = {
+  "old-growth": "forest",
+  "kid-friendly": "family",
+  "pull-through": "rv-friendly",
+  hiking: "trails",
+};
+
+/** Resolve a tag to its glyph, following synonyms. */
+function glyphFor(tag: string) {
+  return TAG_GLYPHS[tag] ?? TAG_GLYPHS[TAG_ALIASES[tag]];
+}
+
 
 function pickTagGlyphs(tags: string[]): { glyph: ReactNode; label: string }[] {
   const seen = new Set<string>();
   const out: { glyph: ReactNode; label: string }[] = [];
   for (const t of tags) {
     const norm = t.toLowerCase();
-    const entry = TAG_GLYPHS[norm];
+    const entry = glyphFor(norm);
     if (entry && !seen.has(entry.label)) {
       seen.add(entry.label);
-      out.push(entry);
+      // Keep the tag's own wording — old-growth shares forest's artwork but
+      // is still labelled "old-growth" on the card.
+      out.push({ glyph: entry.glyph, label: norm });
     }
     if (out.length === 3) break;
   }

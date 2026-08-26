@@ -53,8 +53,6 @@ def _save_searches(client: TestClient, headers: dict, count: int = 5, tags: str 
 
 
 # ---------------------------------------------------------------------------
-# TEST-01: Auth rate limiter — REMOVED
-# Auth login/signup endpoints no longer exist (Supabase handles auth).
 # ---------------------------------------------------------------------------
 
 

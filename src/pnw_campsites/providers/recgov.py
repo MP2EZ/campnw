@@ -19,7 +19,7 @@ AVAILABILITY_BASE = "https://www.recreation.gov/api/camps/availability/campgroun
 
 # Allowlist for stored image URLs — defense-in-depth so a future change
 # (clickable link, server-side proxy, etc.) can't inherit a stored XSS
-# or SSRF from a poisoned RIDB response. v1.35 audit S8 / CWE-79.
+# or SSRF from a poisoned RIDB response. CWE-79.
 _ALLOWED_PHOTO_HOST_PREFIX = "https://cdn.recreation.gov/"
 
 BROWSER_USER_AGENT = (

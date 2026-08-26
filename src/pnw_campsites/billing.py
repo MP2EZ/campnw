@@ -1,10 +1,5 @@
 """Stripe billing integration for Campable Pro subscriptions.
 
-v1.4 monetization layer. Adapted from the prior v0.95 prototype on
-`feature/monetization` (March 2026) — rewritten against post-v1.33 Supabase
-auth and the current `campable.co` domain. The branch's Stripe SDK wiring
-and webhook handling pattern are preserved; everything auth-coupled is new.
-
 Configuration is environment-driven so this module is harmless when
 `STRIPE_SECRET_KEY` is unset (dev/local). All public functions raise a
 clear RuntimeError if called without credentials.
