@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { AnalyticsOptOut } from "../components/AnalyticsOptOut";
 
 export default function Privacy() {
   return (
@@ -69,9 +70,13 @@ export default function Privacy() {
             </li>
             <li>
               <strong>PostHog:</strong> product analytics, EU-hosted
-              (eu.posthog.com). Sees clicks and page views tied to a session
-              ID. Requests are reverse-proxied through campable.co so your IP
-              isn&rsquo;t forwarded.
+              (eu.posthog.com). Sees clicks, page views and searches tied to a
+              session ID, and records a replay of your session &mdash; the
+              pages you visit, what you click, and how you scroll. Text you
+              type into forms is masked before it leaves your browser, so
+              replays never contain what you entered. Requests are
+              reverse-proxied through campable.co so your IP isn&rsquo;t
+              forwarded. You can turn all of this off below.
             </li>
             <li>
               <strong>Mapbox:</strong> drive-time geocoding. Sees the origin
@@ -133,9 +138,15 @@ export default function Privacy() {
             We use first-party cookies for session login and a first-party
             analytics cookie for PostHog, and no third-party advertising
             cookies. An EU consent banner is not yet implemented; we plan to
-            add one once EU traffic exceeds 5% of total. If you&rsquo;re in
-            the EU and want to opt out before then, email us and we&rsquo;ll
-            exclude your account from analytics.
+            add one once EU traffic exceeds 5% of total. In the meantime you
+            can opt out here, on this device, at any time:
+          </p>
+          <AnalyticsOptOut />
+          <p>
+            Opting out stops analytics events and session replay for this
+            browser. It is stored locally, so you&rsquo;ll need to set it on
+            each device you use. To have your account excluded everywhere,
+            email us.
           </p>
         </section>
 

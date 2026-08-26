@@ -129,3 +129,48 @@ class TestSharing:
         _, headers2 = _signup(api_client, "attacker@test.com")
         resp = api_client.post("/api/shares", json={"watch_id": watch["id"]}, headers=headers2)
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Share loop analytics (audit ANLT-14)
+# ---------------------------------------------------------------------------
+
+
+class TestShareLinkViewedEvent:
+    """The share loop was instrumented on the supply side only —
+    share_link_created fired when the sharer copied the URL, but the visit was
+    untracked at both ends, so K-factor was uncomputable and the cheapest
+    organic loop in the product could not be evaluated."""
+
+    def test_viewing_a_share_emits_share_link_viewed(self, api_client, monkeypatch):
+        from pnw_campsites.routes import sharing
+
+        events: list[dict] = []
+        monkeypatch.setattr(sharing, "capture_event", lambda **kw: events.append(kw))
+
+        _user, headers = _signup(api_client, email="sharer@example.com")
+        trip = api_client.post(
+            "/api/trips", json={"name": "Shared Trip"}, headers=headers,
+        ).json()
+        share = api_client.post(
+            "/api/shares", json={"trip_id": trip["id"]}, headers=headers,
+        ).json()
+
+        resp = api_client.get(f"/api/shared/{share['uuid']}")
+        assert resp.status_code == 200
+
+        viewed = [e for e in events if e["event"] == "share_link_viewed"]
+        assert len(viewed) == 1, (
+            "viewing a share emitted nothing — visits per share, and therefore "
+            "the share loop's contribution, stay uncomputable"
+        )
+        assert viewed[0]["properties"]["share_type"] == "trip"
+
+    def test_a_dead_link_emits_nothing(self, api_client, monkeypatch):
+        from pnw_campsites.routes import sharing
+
+        events: list[dict] = []
+        monkeypatch.setattr(sharing, "capture_event", lambda **kw: events.append(kw))
+
+        assert api_client.get("/api/shared/does-not-exist").status_code == 404
+        assert events == []
