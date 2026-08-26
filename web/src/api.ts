@@ -30,6 +30,9 @@ export interface PostHogInstance {
   ): void;
   captureException(error: unknown, props?: Record<string, unknown>): void;
   get_distinct_id(): string;
+  opt_out_capturing?(): void;
+  opt_in_capturing?(): void;
+  has_opted_out_capturing?(): boolean;
 }
 
 export function getPosthog(): PostHogInstance | undefined {
@@ -447,6 +450,52 @@ export async function createShareLink(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
+  return resp.json();
+}
+
+export interface SharedWatch {
+  name: string;
+  facility_id: string;
+  start_date: string;
+  end_date: string;
+  min_nights: number;
+}
+
+export interface SharedTrip {
+  name: string;
+  start_date: string;
+  end_date: string;
+  campgrounds: { facility_id: string; source: string; name: string }[];
+}
+
+export interface SharedLinkPayload {
+  uuid: string;
+  type: "watch" | "trip" | null;
+  watch?: SharedWatch;
+  trip?: SharedTrip;
+}
+
+/** Distinguishes a dead link (revoked/expired/missing) from a transport error. */
+export class ShareUnavailableError extends Error {
+  // Plain field, not a parameter property — tsconfig sets erasableSyntaxOnly.
+  readonly kind: "not_found" | "gone" | "rate_limited";
+
+  constructor(kind: "not_found" | "gone" | "rate_limited") {
+    super(kind);
+    this.kind = kind;
+  }
+}
+
+/**
+ * Fetch a shared watch or trip. Public — no auth, so plain fetch rather than
+ * authFetch: a recipient is by definition not signed in yet.
+ */
+export async function getSharedLink(uuid: string): Promise<SharedLinkPayload> {
+  const resp = await fetch(`${API_BASE}/api/shared/${encodeURIComponent(uuid)}`);
+  if (resp.status === 404) throw new ShareUnavailableError("not_found");
+  if (resp.status === 410) throw new ShareUnavailableError("gone");
+  if (resp.status === 429) throw new ShareUnavailableError("rate_limited");
+  if (!resp.ok) throw new Error(`Share lookup failed (${resp.status})`);
   return resp.json();
 }
 

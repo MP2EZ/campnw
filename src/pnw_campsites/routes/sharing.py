@@ -7,6 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from pnw_campsites.posthog_client import capture_event
 from pnw_campsites.routes.deps import get_current_user, get_watch_db
 
 router = APIRouter(tags=["sharing"])
@@ -27,6 +28,14 @@ class CreateShareRequest(BaseModel):
 
 _share_view_counts: dict[str, tuple[str, int]] = {}  # key -> (hour_key, count)
 _share_cleanup_counter = 0
+
+
+def _days_since(iso: str) -> int:
+    """Whole days between an ISO timestamp and now; 0 if unparseable."""
+    try:
+        return max(0, (datetime.now() - datetime.fromisoformat(iso)).days)
+    except (ValueError, TypeError):
+        return 0
 
 
 def _check_share_rate_limit(uuid: str, client_ip: str) -> bool:
@@ -148,6 +157,21 @@ async def view_shared(uuid: str, request: Request):
                     for cg in campgrounds
                 ],
             }
+
+    # The share loop was instrumented on the supply side only —
+    # share_link_created fired when the sharer copied the URL, but the visit
+    # was untracked at both ends, so K-factor (visits and signups per share)
+    # was uncomputable and the cheapest organic loop in the product could not
+    # be evaluated. Keyed on the sharer so a share's reach is attributable.
+    capture_event(
+        distinct_id=str(link.created_by) if link.created_by else f"share:{uuid}",
+        event="share_link_viewed",
+        properties={
+            "share_type": result["type"] or "unknown",
+            "sharer_user_id": link.created_by,
+            "days_since_created": _days_since(link.created_at),
+        },
+    )
 
     return result
 

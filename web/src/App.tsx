@@ -34,6 +34,7 @@ const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const MapView = lazy(() => import("./pages/MapView"));
 const TripsPage = lazy(() => import("./pages/TripsPage"));
 const TripDetail = lazy(() => import("./pages/TripDetail"));
+const SharedView = lazy(() => import("./pages/SharedView"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));
 const Privacy = lazy(() => import("./pages/Privacy"));
@@ -1043,6 +1044,9 @@ export default function App() {
         <Route path="/map" element={<MapView />} />
         <Route path="/trips" element={<TripsPage />} />
         <Route path="/trips/:tripId" element={<TripDetail />} />
+        {/* ShareButton has always copied /shared/:uuid; without this route the
+            recipient got the app shell and an empty content area. */}
+        <Route path="/shared/:uuid" element={<SharedView />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/about" element={<About />} />
         <Route path="/privacy" element={<Privacy />} />
