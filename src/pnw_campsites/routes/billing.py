@@ -1,8 +1,7 @@
 """Billing routes — Stripe Checkout, Customer Portal, webhooks, status.
 
-Slice 2 of v1.4 monetization. Webhook endpoint authenticates via Stripe
-signature only (no Bearer token); all other endpoints require a logged-in
-Supabase user.
+The webhook endpoint authenticates via Stripe signature only (no Bearer
+token); all other endpoints require a logged-in Supabase user.
 
 `/api/billing/checkout` and `/api/billing/portal` return a redirect URL
 that the frontend opens in a top-level navigation — never embed in an
