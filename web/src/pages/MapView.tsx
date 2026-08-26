@@ -1,4 +1,6 @@
 import { useEffect, useRef, useMemo } from "react";
+import { sourceLabel } from "../lib/sources";
+import { formatDateRange, formatDriveTime } from "../lib/dates";
 import { Helmet } from "react-helmet-async";
 import { Link, useLocation } from "react-router-dom";
 import { useSearchContext } from "../contexts/SearchContext";
@@ -51,27 +53,18 @@ function pinRadius(totalSites: number): number {
   return 6;
 }
 
-function formatDrive(minutes: number | null): string {
-  if (minutes === null) return "";
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `~${m}m`;
-  if (m === 0) return `~${h}h`;
-  return `~${h}h ${m}m`;
-}
 
 function popupHtml(r: CampgroundResult): string {
-  const sourceLabels: Record<string, string> = { recgov: "Rec.gov", wa_state: "WA Parks", or_state: "OR Parks", id_state: "ID Parks" };
-  const sourceLabel = sourceLabels[r.booking_system] || r.booking_system;
+  const label = sourceLabel(r.booking_system);
   const sourceClass = `source-${r.booking_system}`;
-  const drive = r.estimated_drive_minutes ? ` · ${formatDrive(r.estimated_drive_minutes)} drive` : "";
+  const drive = r.estimated_drive_minutes ? ` · ${formatDriveTime(r.estimated_drive_minutes)} drive` : "";
   const link = r.availability_url
     ? `<a href="${r.availability_url}" target="_blank" rel="noopener">View availability ↗</a>`
     : "";
   return `
     <div class="map-popup">
       <strong>${r.name}</strong>
-      <span class="source-badge ${sourceClass}">${sourceLabel}</span>
+      <span class="source-badge ${sourceClass}">${label}</span>
       <p>${r.total_available_sites} sites available${drive}</p>
       ${link}
     </div>
@@ -101,12 +94,6 @@ function searchUrl(params: SearchParams): string {
   return url.pathname + url.search;
 }
 
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(start + "T12:00:00");
-  const e = new Date(end + "T12:00:00");
-  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `${fmt(s)} – ${fmt(e)}`;
-}
 
 export default function MapView() {
   const { filteredResults, loading, searchParams, searchDates } = useSearchContext();
@@ -218,16 +205,16 @@ export default function MapView() {
 
   if (!filteredResults.length && !loading) {
     return (
-      <main id="main-content" className="map-empty">
+      <div className="map-empty">
         <h2>No search results yet</h2>
         <p>Run a search to see campgrounds on the map.</p>
         <Link to="/" className="header-btn active">Go to Search</Link>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main id="main-content" className="map-page">
+    <div className="map-page">
       <Helmet>
         <title>Map — Campable</title>
         <meta name="description" content="Interactive map of campsite availability across the western US." />
@@ -269,15 +256,15 @@ export default function MapView() {
                       <a href={r.availability_url} target="_blank" rel="noopener">{r.name}</a>
                     ) : r.name}
                   </td>
-                  <td>{{ recgov: "Rec.gov", wa_state: "WA Parks", or_state: "OR Parks", id_state: "ID Parks" }[r.booking_system] || r.booking_system}</td>
+                  <td>{sourceLabel(r.booking_system)}</td>
                   <td>{r.total_available_sites}</td>
-                  <td>{formatDrive(r.estimated_drive_minutes)}</td>
+                  <td>{formatDriveTime(r.estimated_drive_minutes)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </details>
       )}
-    </main>
+    </div>
   );
 }

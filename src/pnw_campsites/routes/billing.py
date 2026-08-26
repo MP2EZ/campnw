@@ -1,8 +1,7 @@
 """Billing routes — Stripe Checkout, Customer Portal, webhooks, status.
 
-Slice 2 of v1.4 monetization. Webhook endpoint authenticates via Stripe
-signature only (no Bearer token); all other endpoints require a logged-in
-Supabase user.
+The webhook endpoint authenticates via Stripe signature only (no Bearer
+token); all other endpoints require a logged-in Supabase user.
 
 `/api/billing/checkout` and `/api/billing/portal` return a redirect URL
 that the frontend opens in a top-level navigation — never embed in an
@@ -11,6 +10,7 @@ iframe (Stripe blocks framing for security).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
@@ -81,7 +81,11 @@ async def start_checkout(request: Request) -> CheckoutResponse:
         )
 
     try:
-        url, customer_id = billing.create_checkout_session(
+        # The Stripe SDK is synchronous. Called inline from an async handler on
+        # a single uvicorn worker it blocks the event loop for the whole
+        # round-trip — every other user's search and the poller included.
+        url, customer_id = await asyncio.to_thread(
+            billing.create_checkout_session,
             user_id=user.id,
             email=user.email,
             customer_id=user.stripe_customer_id,
@@ -125,7 +129,9 @@ async def open_portal(request: Request) -> PortalResponse:
         )
 
     try:
-        url = billing.create_portal_session(user.stripe_customer_id)
+        url = await asyncio.to_thread(
+            billing.create_portal_session, user.stripe_customer_id,
+        )
     except Exception as e:
         logger.exception("Stripe portal session creation failed")
         raise HTTPException(

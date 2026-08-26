@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { patchLastAssistant } from "../lib/messages";
+import type { DisplayMessage } from "../lib/messages";
 import { Helmet } from "react-helmet-async";
 import Markdown from "react-markdown";
 import { planChatStream, PlannerLimitError, track } from "../api";
 import type { ChatMessage, ToolCall } from "../api";
 import { ItineraryCard, parseItinerary } from "../components/ItineraryCard";
 import { UpgradeModal } from "../components/UpgradeModal";
-
-interface DisplayMessage {
-  role: "user" | "assistant";
-  content: string;
-  tool_calls?: ToolCall[];
-  isError?: boolean;
-}
 
 function ToolCallBadge({ call }: { call: ToolCall }) {
   const labels: Record<string, string> = {
@@ -153,14 +148,7 @@ export default function TripPlanner() {
       rafId = 0;
       pendingFlush = false;
       const text = fullText;
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last && last.role === "assistant") {
-          updated[updated.length - 1] = { ...last, content: text };
-        }
-        return updated;
-      });
+      setMessages((prev) => patchLastAssistant(prev, { content: text }));
     };
 
     await planChatStream(
@@ -174,32 +162,16 @@ export default function TripPlanner() {
       },
       (name) => {
         toolCalls.push({ name, input: {} });
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === "assistant") {
-            updated[updated.length - 1] = {
-              ...last,
+        setMessages((prev) => patchLastAssistant(prev, {
               tool_calls: [...toolCalls],
-            };
-          }
-          return updated;
-        });
+          }));
       },
       (name, summary) => {
         const tc = toolCalls.find((t) => t.name === name && !t.result_summary);
         if (tc) tc.result_summary = summary;
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === "assistant") {
-            updated[updated.length - 1] = {
-              ...last,
+        setMessages((prev) => patchLastAssistant(prev, {
               tool_calls: [...toolCalls],
-            };
-          }
-          return updated;
-        });
+          }));
       },
       (finalContent, finalToolCalls) => {
         if (rafId) cancelAnimationFrame(rafId);
@@ -208,18 +180,10 @@ export default function TripPlanner() {
           ...prev,
           { role: "assistant", content },
         ]);
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === "assistant") {
-            updated[updated.length - 1] = {
-              ...last,
+        setMessages((prev) => patchLastAssistant(prev, {
               content,
               tool_calls: finalToolCalls.length > 0 ? finalToolCalls : toolCalls,
-            };
-          }
-          return updated;
-        });
+          }));
         setLoading(false);
         inputRef.current?.focus();
       },
@@ -239,18 +203,10 @@ export default function TripPlanner() {
         }
         const message = err.message || "Something went wrong";
         setError(message);
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === "assistant") {
-            updated[updated.length - 1] = {
-              ...last,
+        setMessages((prev) => patchLastAssistant(prev, {
               content: message,
               isError: true,
-            };
-          }
-          return updated;
-        });
+          }));
         setLoading(false);
         inputRef.current?.focus();
       },
@@ -274,7 +230,7 @@ export default function TripPlanner() {
   };
 
   return (
-    <main id="main-content" className="trip-planner">
+    <div className="trip-planner">
       <Helmet>
         <title>Trip Planner — Campable</title>
         <meta name="description" content="AI-powered camping trip planner. Get personalized campground recommendations and itineraries." />
@@ -373,6 +329,6 @@ export default function TripPlanner() {
             : undefined
         }
       />
-    </main>
+    </div>
   );
 }

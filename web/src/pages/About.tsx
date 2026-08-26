@@ -23,7 +23,7 @@ export default function About() {
         />
       </Helmet>
 
-      <main className="about-page" id="main-content">
+      <div className="about-page">
         <header className="about-header">
           <h1>About Campable</h1>
           <p className="about-lede">
@@ -126,7 +126,7 @@ export default function About() {
             become accessible.
           </p>
         </section>
-      </main>
+      </div>
     </>
   );
 }

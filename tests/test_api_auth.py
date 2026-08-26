@@ -3,37 +3,18 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
-import jwt as pyjwt
 import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
-
-# Must match the secret set in conftest.py autouse fixture
-_TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"
-
-
-def _make_jwt(
-    supabase_id: str | None = None,
-    email: str = "test@example.com",
-    expired: bool = False,
-    role: str = "authenticated",
-    aud: str = "authenticated",
-) -> str:
-    sub = supabase_id or str(uuid.uuid4())
-    exp = datetime.now(UTC) + (timedelta(days=-1) if expired else timedelta(hours=1))
-    payload = {
-        "sub": sub, "email": email, "role": role, "aud": aud,
-        "exp": exp, "iat": datetime.now(UTC),
-    }
-    return pyjwt.encode(payload, _TEST_SECRET, algorithm="HS256")
-
-
-def _auth_headers(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+from tests.conftest import (
+    auth_headers as _auth_headers,
+)
+from tests.conftest import (
+    make_supabase_jwt as _make_jwt,
+)
 
 
 @pytest.fixture

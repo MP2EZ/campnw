@@ -29,21 +29,6 @@ def get_registry():
     return _api._registry
 
 
-def get_recgov():
-    import pnw_campsites.api as _api
-    return _api._recgov
-
-
-def get_goingtocamp():
-    import pnw_campsites.api as _api
-    return _api._goingtocamp
-
-
-def get_reserveamerica():
-    import pnw_campsites.api as _api
-    return _api._reserveamerica
-
-
 def get_engine():
     import pnw_campsites.api as _api
     return _api._engine

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 _docker_db = Path("/app/data/watches.db")
@@ -141,6 +141,15 @@ class SharedLink:
     created_at: str = ""
 
 
+def _as_iso_date(value: date | str | None) -> str | None:
+    """Normalize a date or ISO string to YYYY-MM-DD for cache range columns."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value[:10]
+    return value.isoformat()
+
+
 class WatchDB:
     """CRUD for watch state."""
 
@@ -235,6 +244,12 @@ class WatchDB:
                 source TEXT NOT NULL DEFAULT 'recgov',
                 payload TEXT NOT NULL,
                 cached_at TEXT NOT NULL,
+                -- The date span this payload actually covers. Without it the
+                -- cache was keyed on the start month alone, so a narrow
+                -- payload would satisfy a later wider request and return
+                -- incomplete availability.
+                range_start TEXT,
+                range_end TEXT,
                 PRIMARY KEY (campground_id, month, source)
             );
             CREATE TABLE IF NOT EXISTS availability_history (
@@ -273,6 +288,12 @@ class WatchDB:
                 observation_count INTEGER DEFAULT 1,
                 PRIMARY KEY (campground_id, site_id, date)
             );
+            -- The PK's second column is site_id, so it cannot seek on a date
+            -- range. record_availability_history diffs one month at a time and
+            -- needs (campground_id, date) to avoid scanning the campground's
+            -- whole accumulated partition.
+            CREATE INDEX IF NOT EXISTS idx_availability_daily_cg_date
+                ON availability_daily(campground_id, date);
             CREATE TABLE IF NOT EXISTS notification_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 watch_id INTEGER REFERENCES watches(id)
@@ -283,6 +304,22 @@ class WatchDB:
                 sent_at TEXT NOT NULL
             );
         """)
+        # availability_cache range tracking. CREATE TABLE IF NOT EXISTS leaves
+        # an existing table alone, so add the columns explicitly. Existing rows
+        # keep NULL ranges and are treated as misses until refetched — see
+        # get_cached_availability.
+        cache_cols = [
+            r[1] for r in self._conn.execute(
+                "PRAGMA table_info(availability_cache)"
+            )
+        ]
+        for col in ("range_start", "range_end"):
+            if cache_cols and col not in cache_cols:
+                self._conn.execute(
+                    f"ALTER TABLE availability_cache ADD COLUMN {col} TEXT"
+                )
+                self._conn.commit()
+
         # v0.5 watch column: notification_channel
         watch_cols = [
             r[1] for r in self._conn.execute(
@@ -486,32 +523,70 @@ class WatchDB:
     _CACHE_TTL_SECONDS = 600  # 10 minutes
 
     def get_cached_availability(
-        self, campground_id: str, month: str, source: str = "recgov",
+        self,
+        campground_id: str,
+        source: str = "recgov",
+        *,
+        range_start: date | str,
+        range_end: date | str,
     ) -> str | None:
-        """Return cached JSON payload if fresh, None if expired."""
-        row = self._conn.execute(
+        """Return a fresh cached payload that *covers* the requested range.
+
+        Coverage, not equality: a payload spanning Jun-Sep legitimately answers
+        a request for Jun 10-12 (it is a superset), which is what lets
+        poll_all's per-facility prefetch dedupe across watches. The reverse is
+        not true — serving a narrow payload for a wide request returns
+        incomplete availability, which for a cancellation-alert product means
+        silently missing the sites the user is waiting for.
+
+        Note the lookup deliberately ignores the `month` partition column that
+        writes use. Keying reads on the requester's start month is what broke
+        the prefetch: it stores one wide range under *its* start month, so a
+        watch beginning in any later month looked in the wrong partition and
+        re-hit the provider.
+
+        Rows written before range tracking existed have no recorded extent, so
+        they cannot be proven to cover anything and are treated as a miss. The
+        next fetch rewrites them with a range.
+        """
+        want_start = _as_iso_date(range_start)
+        want_end = _as_iso_date(range_end)
+
+        rows = self._conn.execute(
             "SELECT payload, cached_at FROM availability_cache"
-            " WHERE campground_id=? AND month=? AND source=?",
-            (campground_id, month, source),
-        ).fetchone()
-        if not row:
-            return None
-        cached_at = datetime.fromisoformat(row["cached_at"])
-        age = (datetime.now() - cached_at).total_seconds()
-        if age > self._CACHE_TTL_SECONDS:
-            return None
-        return row["payload"]
+            " WHERE campground_id=? AND source=?"
+            "   AND range_start IS NOT NULL AND range_end IS NOT NULL"
+            "   AND range_start <= ? AND range_end >= ?"
+            " ORDER BY cached_at DESC",
+            (campground_id, source, want_start, want_end),
+        ).fetchall()
+
+        for row in rows:
+            cached_at = datetime.fromisoformat(row["cached_at"])
+            if (datetime.now() - cached_at).total_seconds() <= self._CACHE_TTL_SECONDS:
+                return row["payload"]
+        return None
 
     def set_cached_availability(
-        self, campground_id: str, month: str,
-        payload: str, source: str = "recgov",
+        self,
+        campground_id: str,
+        month: str,
+        payload: str,
+        source: str = "recgov",
+        *,
+        range_start: date | str | None = None,
+        range_end: date | str | None = None,
     ) -> None:
         now = datetime.now().isoformat()
         self._conn.execute(
             "INSERT OR REPLACE INTO availability_cache"
-            " (campground_id, month, source, payload, cached_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (campground_id, month, source, payload, now),
+            " (campground_id, month, source, payload, cached_at,"
+            "  range_start, range_end)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                campground_id, month, source, payload, now,
+                _as_iso_date(range_start), _as_iso_date(range_end),
+            ),
         )
         self._conn.commit()
 
@@ -537,26 +612,33 @@ class WatchDB:
         records: list[tuple[str, str, str]],
         source: str = "recgov",
     ) -> None:
-        """Record availability with batched upserts and transition detection.
+        """Record availability, detecting per-site status transitions.
 
-        1. Fetch existing statuses in one query
-        2. Detect transitions by comparing old vs new
-        3. Batch insert transitions
-        4. Batch upsert daily records
-        records: list of (site_id, date, status) tuples.
+        `records` is a list of (site_id, date, status) tuples.
+
+        The prior-status read is bounded to the date range being written: only
+        those rows can produce a transition, and the unbounded version read the
+        campground's entire accumulated partition on every call — 18,705 rows
+        for one facility on the production DB versus the 4,350 a month's poll
+        actually diffs — growing permanently with observation history, once per
+        watch per poll cycle.
         """
+        if not records:
+            return
+
         now = datetime.now().isoformat()
 
-        # 1. Fetch existing statuses for this campground
+        dates = [dt for _, dt, _ in records]
+        min_date, max_date = min(dates), max(dates)
+
         existing: dict[tuple[str, str], str] = {}
         for row in self._conn.execute(
             "SELECT site_id, date, status FROM availability_daily"
-            " WHERE campground_id=?",
-            (campground_id,),
+            " WHERE campground_id=? AND date BETWEEN ? AND ?",
+            (campground_id, min_date, max_date),
         ).fetchall():
             existing[(row[0], row[1])] = row[2]
 
-        # 2. Detect transitions
         transitions = []
         for sid, dt, status in records:
             old = existing.get((sid, dt), "")
@@ -565,7 +647,6 @@ class WatchDB:
                     (campground_id, sid, dt, old, status, source, now)
                 )
 
-        # 3. Batch insert transitions
         if transitions:
             self._conn.executemany(
                 "INSERT INTO status_transitions"
@@ -575,7 +656,6 @@ class WatchDB:
                 transitions,
             )
 
-        # 4. Batch upsert daily records
         self._conn.executemany(
             "INSERT INTO availability_daily"
             " (campground_id, site_id, date, status, source,"

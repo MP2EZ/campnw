@@ -3,28 +3,16 @@
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import UTC, datetime, timedelta
 
-import jwt as pyjwt
 from fastapi.testclient import TestClient
 
 from pnw_campsites.routes.planner import _extract_campgrounds_from_messages
-
-_TEST_SECRET = "test-supabase-jwt-secret-that-is-at-least-32-characters"
-
-
-def _make_jwt(email="test@example.com", supabase_id=None):
-    sub = supabase_id or str(uuid.uuid4())
-    payload = {
-        "sub": sub, "email": email, "role": "authenticated", "aud": "authenticated",
-        "exp": datetime.now(UTC) + timedelta(hours=1), "iat": datetime.now(UTC),
-    }
-    return pyjwt.encode(payload, _TEST_SECRET, algorithm="HS256")
-
-
-def _auth_headers(token):
-    return {"Authorization": f"Bearer {token}"}
+from tests.conftest import (
+    auth_headers as _auth_headers,
+)
+from tests.conftest import (
+    make_supabase_jwt as _make_jwt,
+)
 
 
 def _signup(client: TestClient):

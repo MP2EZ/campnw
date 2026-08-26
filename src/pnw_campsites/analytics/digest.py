@@ -119,14 +119,9 @@ async def generate_weekly_digest(watch_db) -> str:
 
         api_key = os.getenv("ANTHROPIC_API_KEY", "")
         if api_key:
-            from pnw_campsites.posthog_client import get_posthog_client
+            from pnw_campsites.posthog_client import HAIKU_MODEL, get_anthropic_client
 
-            try:
-                from posthog.ai.anthropic import AsyncAnthropic
-                client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
-            except (ImportError, ValueError):
-                import anthropic
-                client = anthropic.AsyncAnthropic(api_key=api_key)
+            client = get_anthropic_client(api_key)
             prompt = (
                 "Analyze this weekly search data for a campsite tool and "
                 "write 3-5 bullet points of actionable product insights. "
@@ -135,7 +130,7 @@ async def generate_weekly_digest(watch_db) -> str:
                 f"{json.dumps(analytics, indent=2)}"
             )
             response = await client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=HAIKU_MODEL,
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
                 posthog_privacy_mode=True,

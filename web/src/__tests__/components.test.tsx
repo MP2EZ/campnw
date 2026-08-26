@@ -34,6 +34,7 @@ vi.mock("../hooks/useAuth", () => ({
 import { ResultCard } from "../components/ResultCard";
 import { CompareBar } from "../components/CompareBar";
 import { OnboardingModal } from "../components/OnboardingModal";
+import { AuthModal } from "../components/AuthModal";
 import { compareCampgrounds, track } from "../api";
 
 // ---------------------------------------------------------------------------
@@ -302,12 +303,16 @@ describe("ResultCard photos", () => {
   });
 
   test("PostcardPlaceholder uses source color from bookingSystem", () => {
+    // The stripe reads its colour from --pc-stripe (set per source in App.css)
+    // with the source hex as the fallback. Asserting the bare hex here is what
+    // let the stripe ship theme-blind: every other fill in the SVG already used
+    // var(), so in dark mode the stripe was the one mismatched band on the card.
     // WA-themed placeholder should paint with the WA teal stripe.
     const { unmount } = render(<ResultCard result={NO_PHOTO_RESULT} view="dates" />);
     fireEvent.click(screen.getByRole("button", { name: /deception pass/i }));
     const waPlaceholder = screen.getByTestId("postcard-placeholder");
     const waStripe = waPlaceholder.querySelector('rect[height="6"]');
-    expect(waStripe).toHaveAttribute("fill", "#1a8a7a");
+    expect(waStripe).toHaveAttribute("fill", "var(--pc-stripe, #1a8a7a)");
     unmount();
 
     // Same placeholder for a recgov campground (no photos) should use Rec.gov green.
@@ -321,7 +326,7 @@ describe("ResultCard photos", () => {
     fireEvent.click(screen.getByRole("button", { name: /no photo camp/i }));
     const recgovPlaceholder = screen.getByTestId("postcard-placeholder");
     const recgovStripe = recgovPlaceholder.querySelector('rect[height="6"]');
-    expect(recgovStripe).toHaveAttribute("fill", "#5a8a32");
+    expect(recgovStripe).toHaveAttribute("fill", "var(--pc-stripe, #5a8a32)");
   });
 
   test("card_expand event includes has_photo flag", () => {
@@ -488,3 +493,94 @@ describe("OnboardingModal", () => {
     expect(screen.getByText("5/5 selected")).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: collapsed cards must not build their body DOM (audit PERF-08)
+// ---------------------------------------------------------------------------
+
+describe("ResultCard collapsed body", () => {
+  const MANY_WINDOWS = {
+    ...MOCK_RESULT,
+    windows: Array.from({ length: 60 }, (_, i) => ({
+      campsite_id: `c${i}`,
+      site_name: `Site ${i}`,
+      loop: "Loop A",
+      campsite_type: "tent",
+      start_date: "2026-06-05",
+      end_date: "2026-06-07",
+      nights: 2,
+      max_people: 4,
+      is_fcfs: false,
+      booking_url: `https://example.com/book/${i}`,
+    })),
+  };
+
+  // .card-body collapses via grid-template-rows: 0fr — the subtree is hidden
+  // but still built, laid out and styled. SiteView emits one anchor per window
+  // with no cap, so a large result set put tens of thousands of invisible nodes
+  // in the document across a 20-card list.
+  test("renders no window links while collapsed", () => {
+    const { container } = render(
+      <ResultCard result={MANY_WINDOWS} view="sites" />
+    );
+    expect(container.querySelectorAll("a[href^='https://example.com/book/']"))
+      .toHaveLength(0);
+  });
+
+  test("renders them once expanded", () => {
+    const { container } = render(
+      <ResultCard result={MANY_WINDOWS} view="sites" />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Ohanapecosh/i }));
+    expect(
+      container.querySelectorAll("a[href^='https://example.com/book/']").length
+    ).toBeGreaterThan(0);
+  });
+
+  test("body stays mounted after collapsing again, so the transition still runs", () => {
+    const { container } = render(
+      <ResultCard result={MANY_WINDOWS} view="sites" />
+    );
+    const toggle = screen.getByRole("button", { name: /Ohanapecosh/i });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(
+      container.querySelectorAll("a[href^='https://example.com/book/']").length
+    ).toBeGreaterThan(0);
+  });
+})
+
+// ---------------------------------------------------------------------------
+// Auth funnel interiors (audit ANLT-13)
+// ---------------------------------------------------------------------------
+
+describe("AuthModal funnel events", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // The modal had zero track() calls, so the landing -> signup funnel had one
+  // step: the success event. No open, no submit attempt, and no failure —
+  // the classic silent signup-funnel killer.
+  test("opening emits auth_modal_opened with its entry point", () => {
+    render(<AuthModal open entryPoint="header" onClose={() => {}} />);
+    expect(track).toHaveBeenCalledWith(
+      "auth_modal_opened",
+      expect.objectContaining({ entry_point: "header", mode: "login" }),
+    );
+  });
+
+  test("a closed modal emits nothing", () => {
+    render(<AuthModal open={false} entryPoint="header" onClose={() => {}} />);
+    expect(vi.mocked(track).mock.calls.filter((c) => c[0] === "auth_modal_opened"))
+      .toHaveLength(0);
+  });
+
+  test("toggling to signup is measurable", () => {
+    render(<AuthModal open entryPoint="header" onClose={() => {}} />);
+    const toggle = screen.getByRole("button", { name: /create one|sign up/i });
+    fireEvent.click(toggle);
+    expect(track).toHaveBeenCalledWith(
+      "auth_mode_toggled",
+      expect.objectContaining({ to: "signup" }),
+    );
+  });
+})

@@ -7,6 +7,11 @@ import App from './App.tsx'
 import { AuthProvider } from './hooks/useAuth'
 import { BillingProvider } from './hooks/useBilling'
 import { Capacitor } from '@capacitor/core'
+import { initAnalytics } from './api'
+
+// Register platform/version super properties on the snippet-initialized
+// PostHog instance before the first event fires.
+initAnalytics()
 
 // axe-core accessibility checks in development only
 if (import.meta.env.DEV) {

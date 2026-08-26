@@ -22,6 +22,7 @@ from pnw_campsites.search.engine import (
     SearchQuery,
     StreamDiagnosisEvent,
     StreamProgressEvent,
+    StreamWarningsEvent,
 )
 from pnw_campsites.urls import (
     or_state_availability_url,
@@ -197,14 +198,9 @@ async def _generate_search_summary(
     if not api_key:
         return None
 
-    from pnw_campsites.posthog_client import get_posthog_client
+    from pnw_campsites.posthog_client import HAIKU_MODEL, get_anthropic_client
 
-    try:
-        from posthog.ai.anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
-    except (ImportError, ValueError):
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=api_key)
+    client = get_anthropic_client(api_key)
 
     compact = json.dumps(results_data[:20])  # cap at 20 for token budget
     state_str = query.state or "all states"
@@ -226,7 +222,7 @@ async def _generate_search_summary(
     try:
         response = await asyncio.wait_for(
             client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=HAIKU_MODEL,
                 max_tokens=150,
                 messages=[{"role": "user", "content": prompt}],
                 posthog_distinct_id=posthog_distinct_id,
@@ -640,6 +636,26 @@ async def search_stream(
                 yield f"data: {json.dumps(progress)}\n\n"
                 continue
 
+            # StreamWarningsEvent = a provider degraded. Reuses
+            # warning_message() so the stream names the source that actually
+            # failed, the same as /api/search.
+            if isinstance(item, StreamWarningsEvent):
+                if item.warnings:
+                    payload = {
+                        "type": "warnings",
+                        "warnings": [
+                            {
+                                "kind": w.kind,
+                                "count": w.count,
+                                "source": w.source,
+                                "message": warning_message(w.kind, w.source),
+                            }
+                            for w in item.warnings
+                        ],
+                    }
+                    yield f"data: {json.dumps(payload)}\n\n"
+                continue
+
             # StreamDiagnosisEvent = zero results, emit diagnosis
             if isinstance(item, StreamDiagnosisEvent):
                 if item.diagnosis or item.date_suggestions:
@@ -763,6 +779,9 @@ async def list_campgrounds(
     max_drive: int | None = Query(None),
     name: str | None = Query(None),
     source: str | None = Query(None),
+    # Unbounded, this returns all 1,368 campgrounds: ~556ms of blocking
+    # pydantic hydration and ~560KB of JSON, on a public unauthenticated route.
+    limit: int = Query(100, ge=1, le=500),
 ):
     registry = get_registry()
     booking_system = BookingSystem(source) if source else None
@@ -772,6 +791,7 @@ async def list_campgrounds(
         max_drive_minutes=max_drive,
         name_like=name,
         booking_system=booking_system,
+        limit=limit,
     )
     return [
         CampgroundResponse(

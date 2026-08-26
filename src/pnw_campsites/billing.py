@@ -1,10 +1,5 @@
 """Stripe billing integration for Campable Pro subscriptions.
 
-v1.4 monetization layer. Adapted from the prior v0.95 prototype on
-`feature/monetization` (March 2026) — rewritten against post-v1.33 Supabase
-auth and the current `campable.co` domain. The branch's Stripe SDK wiring
-and webhook handling pattern are preserved; everything auth-coupled is new.
-
 Configuration is environment-driven so this module is harmless when
 `STRIPE_SECRET_KEY` is unset (dev/local). All public functions raise a
 clear RuntimeError if called without credentials.
@@ -17,9 +12,10 @@ import logging
 import os
 from datetime import UTC, datetime
 
-from stripe import SignatureVerificationError, StripeClient, Webhook
+from stripe import RequestsClient, SignatureVerificationError, StripeClient, Webhook
 
 from pnw_campsites.monitor.db import User, WatchDB
+from pnw_campsites.posthog_client import capture_event
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +32,34 @@ def _env(name: str, default: str = "") -> str:
     return os.getenv(name, default)
 
 
+# stripe-python's default socket timeout is 80s. A hung Stripe connection on a
+# single-worker uvicorn therefore freezes the whole app for 80s (160s for
+# checkout, which makes two sequential calls). Cap it well below any sensible
+# request budget.
+_STRIPE_TIMEOUT_SECONDS = 10
+
+_stripe_client: StripeClient | None = None
+_stripe_client_key: str = ""
+
+
 def _get_client() -> StripeClient:
+    """Return a memoized StripeClient.
+
+    The default RequestsClient keeps its requests.Session on a thread-local, so
+    constructing a client per call meant a fresh TCP+TLS handshake to
+    api.stripe.com on every checkout, portal, and health probe.
+    """
+    global _stripe_client, _stripe_client_key
     key = _env("STRIPE_SECRET_KEY")
     if not key:
         raise RuntimeError("STRIPE_SECRET_KEY not configured")
-    return StripeClient(key)
+    if _stripe_client is None or _stripe_client_key != key:
+        _stripe_client = StripeClient(
+            key,
+            http_client=RequestsClient(timeout=_STRIPE_TIMEOUT_SECONDS),
+        )
+        _stripe_client_key = key
+    return _stripe_client
 
 
 def pro_price_id() -> str:
@@ -218,6 +237,25 @@ def _handle_checkout_completed(event: dict, watch_db: WatchDB) -> None:
         new_status="pro",
         source="webhook",
     )
+    # The purchase is only observable here. A client-side event would be lost
+    # to adblockers, to the user closing the tab before Stripe redirects back,
+    # and entirely to the native iOS flow (which upgrades in the system
+    # browser). client_reference_id is str(user.id), which is the same
+    # distinct_id the browser identifies with — so these join.
+    capture_event(
+        distinct_id=str(user_id),
+        event="subscription_started",
+        properties={
+            "plan": "pro",
+            "previous_status": old_status,
+            "amount_cents": session.get("amount_total") or 0,
+            "currency": session.get("currency") or "usd",
+            "stripe_customer_id": customer_id,
+            "stripe_subscription_id": subscription_id,
+            "source": "webhook",
+        },
+        set_properties={"plan": "pro", "subscription_status": "pro"},
+    )
     logger.info(
         "Activated Pro for user %d (customer=%s, subscription=%s)",
         user_id, customer_id, subscription_id,
@@ -349,6 +387,17 @@ def _handle_subscription_deleted(event: dict, watch_db: WatchDB) -> None:
         old_status=old_status,
         new_status="free",
     )
+    capture_event(
+        distinct_id=str(user.id),
+        event="subscription_cancelled",
+        properties={
+            "plan_from": old_status,
+            "plan_to": "free",
+            "stripe_customer_id": customer_id,
+            "source": "webhook",
+        },
+        set_properties={"plan": "free", "subscription_status": "free"},
+    )
     logger.info("User %d subscription deleted; reverted to free", user.id)
 
 
@@ -368,6 +417,17 @@ def _handle_payment_failed(event: dict, watch_db: WatchDB) -> None:
         event_type="invoice.payment_failed",
         old_status=user.subscription_status,
         new_status=user.subscription_status,
+    )
+    capture_event(
+        distinct_id=str(user.id),
+        event="payment_failed",
+        properties={
+            "plan": user.subscription_status,
+            "attempt_count": invoice.get("attempt_count") or 0,
+            "amount_cents": invoice.get("amount_due") or 0,
+            "currency": invoice.get("currency") or "usd",
+            "source": "webhook",
+        },
     )
     logger.warning(
         "Payment failed for user %d (customer=%s)", user.id, customer_id,

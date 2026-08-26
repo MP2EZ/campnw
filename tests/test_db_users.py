@@ -883,13 +883,15 @@ class TestUserExport:
         ).fetchone()
         assert before[0] == 2
 
-        # Clear expired
         removed = db.clear_expired_cache()
 
-        assert removed >= 1
-
-        # Verify old one removed, fresh one remains
-        after = db._conn.execute(
-            "SELECT COUNT(*) FROM availability_cache"
-        ).fetchone()
-        assert after[0] <= before[0]
+        # `removed >= 1` and `after <= before` both hold if clear_expired_cache
+        # deleted *everything* — which is exactly the bug the fresh row was
+        # inserted to catch, so the assertions have to name which row survives.
+        assert removed == 1
+        survivors = [
+            r[0] for r in db._conn.execute(
+                "SELECT campground_id FROM availability_cache"
+            ).fetchall()
+        ]
+        assert survivors == ["232465"]

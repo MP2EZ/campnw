@@ -23,29 +23,35 @@ vi.mock("../lib/supabase", () => ({
   },
 }));
 
-vi.mock("posthog-js", () => ({
-  default: {
-    identify: vi.fn(),
-    reset: vi.fn(),
-    capture: vi.fn(),
-    captureException: vi.fn(),
-  },
+// The app talks to the PostHog instance the index.html snippet puts on
+// `window` — never to the npm module singleton, which is never init()ed and
+// whose methods silently no-op. Mocking `getPosthog` (rather than
+// "posthog-js") is what makes these assertions mean anything.
+// vi.hoisted, not a plain const: vi.mock factories are hoisted above const
+// declarations, so a bare const would still be in its TDZ when the factory runs.
+const mockPosthog = vi.hoisted(() => ({
+  identify: vi.fn(),
+  reset: vi.fn(),
+  capture: vi.fn(),
+  register: vi.fn(),
+  setPersonProperties: vi.fn(),
+  captureException: vi.fn(),
+  get_distinct_id: vi.fn(() => "anon-id"),
 }));
 
 vi.mock("../api", () => ({
   getMe: vi.fn(),
   updateProfile: vi.fn(),
   track: vi.fn(),
+  getPosthog: vi.fn(() => mockPosthog),
 }));
 
 import { AuthProvider, useAuth } from "../hooks/useAuth";
 import { getMe, updateProfile, track } from "../api";
-import posthog from "posthog-js";
 
 const mockGetMe = vi.mocked(getMe);
 const mockUpdateProfile = vi.mocked(updateProfile);
 const mockTrack = vi.mocked(track);
-const mockPosthog = vi.mocked(posthog);
 
 const TEST_USER = {
   id: 1,
@@ -121,7 +127,12 @@ describe("useAuth", () => {
       email: "test@example.com",
       password: "password123",
     });
-    expect(mockTrack).toHaveBeenCalledWith("login", {});
+    // Was `{}` — an unsegmentable vanity count with no method and no
+    // surface. The audit's point was that asserting the empty bag locked it in.
+    expect(mockTrack).toHaveBeenCalledWith(
+      "login",
+      expect.objectContaining({ method: "password" }),
+    );
   });
 
   test("login throws on supabase error", async () => {
@@ -152,7 +163,30 @@ describe("useAuth", () => {
       password: "password123",
       options: { data: { display_name: "Tester" } },
     });
-    expect(mockTrack).toHaveBeenCalledWith("signup", {});
+    expect(mockTrack).toHaveBeenCalledWith(
+      "signup",
+      expect.objectContaining({ method: "password", has_display_name: 1 }),
+    );
+  });
+
+  // Regression guard: identify() previously ran against the npm posthog-js
+  // singleton, which is never init()ed, so it silently no-op'd and every event
+  // stayed anonymous. Nothing asserted the call, so the breakage was invisible.
+  test("identifies the user against the initialized posthog instance", async () => {
+    mockPosthog.identify.mockClear();
+    mockGetMe.mockResolvedValue(TEST_USER);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await act(async () => {
+      triggerAuthChange({ access_token: "test-token" });
+    });
+    await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
+
+    expect(mockPosthog.identify).toHaveBeenCalledWith(
+      String(TEST_USER.id),
+      expect.objectContaining({ display_name: TEST_USER.display_name }),
+    );
   });
 
   test("logout calls supabase signOut and resets posthog", async () => {

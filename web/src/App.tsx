@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, memo, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { getSearchHistory, getRecommendations, track } from "./api";
@@ -10,7 +10,9 @@ import type {
 import { WatchPanel } from "./components/WatchPanel";
 const CalendarHeatMap = lazy(() => import("./components/CalendarHeatMap").then(m => ({ default: m.CalendarHeatMap })));
 import { DateRangePicker } from "./components/DateRangePicker";
-import { ResultCard, SOURCE_LABELS } from "./components/ResultCard";
+import { ResultCard } from "./components/ResultCard";
+import { SOURCE_LABELS } from "./lib/sources";
+import { formatDateRange } from "./lib/dates";
 import { CompareBar, ComparePanel } from "./components/CompareBar";
 import { compareCampgrounds } from "./api";
 import type { CompareResponse } from "./api";
@@ -32,6 +34,7 @@ const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const MapView = lazy(() => import("./pages/MapView"));
 const TripsPage = lazy(() => import("./pages/TripsPage"));
 const TripDetail = lazy(() => import("./pages/TripDetail"));
+const SharedView = lazy(() => import("./pages/SharedView"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));
 const Privacy = lazy(() => import("./pages/Privacy"));
@@ -531,16 +534,6 @@ function SearchForm({
 
 // ─── Results: Date Block View (Option B) ─────────────────────────────
 
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(start + "T12:00:00");
-  const e = new Date(end + "T12:00:00");
-  const sMonth = s.toLocaleDateString("en-US", { month: "short" });
-  const eMonth = e.toLocaleDateString("en-US", { month: "short" });
-  if (sMonth === eMonth) {
-    return `${sMonth} ${s.getDate()}–${e.getDate()}`;
-  }
-  return `${sMonth} ${s.getDate()} – ${eMonth} ${e.getDate()}`;
-}
 
 const STATE_LABELS: Record<string, string> = { WA: "WA", OR: "OR", ID: "ID" };
 
@@ -697,6 +690,45 @@ function ResultsSkeleton() {
 
 // ─── App ─────────────────────────────────────────────────────────────
 
+/**
+ * Natural-language search box.
+ *
+ * Owns its own input state. Living in App, every keystroke re-rendered the
+ * entire results tree — up to 50 un-memoized ResultCards plus a full
+ * O(results x windows x nights) heat-map recompute, per character.
+ */
+const NlSearchBar = memo(function NlSearchBar({
+  onSubmit,
+}: {
+  onSubmit: (query: string) => void;
+}) {
+  const [value, setValue] = useState("");
+
+  return (
+    <div className="nl-search-section">
+      <div className="nl-search-row">
+        <IconSearch className="nl-search-icon" />
+        <input
+          type="text"
+          className="nl-search-input"
+          placeholder={'Try "pet-friendly near Portland, July weekend"'}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-label="Search in plain language"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && value.trim()) {
+              e.preventDefault();
+              onSubmit(value.trim());
+              setValue("");
+            }
+          }}
+        />
+      </div>
+      <div className="nl-divider" aria-hidden="true">or search by filters</div>
+    </div>
+  );
+});
+
 export default function App() {
   const { user } = useAuth();
   const location = useLocation();
@@ -708,11 +740,12 @@ export default function App() {
     activeSearchParams, formCollapsed, setFormCollapsed,
     focusedCardIndex, setFocusedCardIndex,
     liveAnnouncement, setLiveAnnouncement,
-    cardRefs, maxResults, handleSearch, toggleSource, resetSearch,
+    cardRefs, maxResults, handleSearch, toggleSource, resetSearch, searchId,
   } = useSearch(user ?? null);
 
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authEntryPoint, setAuthEntryPoint] = useState("unknown");
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -728,7 +761,14 @@ export default function App() {
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
   const [compareResult, setCompareResult] = useState<CompareResponse | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
-  const [nlQuery, setNlQuery] = useState("");
+  const handleNlSearch = useCallback((query: string) => {
+    track("nl_search_submitted", { query_length: query.length });
+    handleSearch(
+      { start_date: "", end_date: "", q: query } as SearchParams,
+      "find",
+    );
+  }, [handleSearch]);
+
 
   const toggleCompare = useCallback((facilityId: string) => {
     if (compareResult) {
@@ -803,6 +843,36 @@ export default function App() {
     [filteredResults]
   );
 
+  // CalendarHeatMap is memo()'d and memoizes computeDensity on `results`, but
+  // both guards were defeated by building this object inline in JSX: a fresh
+  // identity every render re-ran an O(results x windows x nights) scan that
+  // allocates a Date and an ISO string per night.
+  const heatMapResults = useMemo(
+    () => results && ({
+      ...results,
+      results: filteredResults,
+      campgrounds_with_availability: availableCards.length,
+    }),
+    [results, filteredResults, availableCards]
+  );
+
+  // Stable per-card callbacks. Recreated inline, they change identity every
+  // render and defeat React.memo on ResultCard no matter how it is wrapped.
+  const registerCardRef = useCallback(
+    (index: number, el: HTMLButtonElement | null) => {
+      // Writing into a ref-keyed array is the intended pattern here; the rule
+      // only fires because the write moved from JSX into a useCallback.
+      // eslint-disable-next-line react-hooks/immutability
+      cardRefs.current[index] = el;
+    },
+    [cardRefs]
+  );
+
+  const showMapView = useCallback(() => {
+    setResultsDisplay("map");
+    track("map_toggled", { to: "map" });
+  }, []);
+
   const navigateCard = useCallback((delta: number) => {
     if (!availableCards.length) return;
     setFocusedCardIndex((prev) => {
@@ -872,7 +942,7 @@ export default function App() {
               ) : (
                 <button
                   className="header-btn"
-                  onClick={() => setAuthModalOpen(true)}
+                  onClick={() => { setAuthEntryPoint("header"); setAuthModalOpen(true); }}
                 >
                   Sign in
                 </button>
@@ -915,7 +985,7 @@ export default function App() {
                   ) : (
                     <button
                       className="header-btn"
-                      onClick={() => { setAuthModalOpen(true); setMobileMenuOpen(false); }}
+                      onClick={() => { setAuthEntryPoint("mobile_menu"); setAuthModalOpen(true); setMobileMenuOpen(false); }}
                     >
                       Sign in
                     </button>
@@ -942,6 +1012,7 @@ export default function App() {
         {authModalOpen && (
           <AuthModal
             open={authModalOpen}
+            entryPoint={authEntryPoint}
             onClose={() => setAuthModalOpen(false)}
           />
         )}
@@ -961,17 +1032,27 @@ export default function App() {
 
       <ErrorBoundary>
       <Suspense fallback={<div className="loading-page">Loading...</div>}>
+      {/* Single main landmark for the whole app. Pages render plain
+          containers: when App had its own <main> and also rendered MapView /
+          TripPlanner inline, the result was a nested <main> plus a duplicate
+          DOM id, while /pricing and /trips/:id had no landmark at all — so the
+          skip link above resolved to two elements on some routes and none on
+          others. */}
+      <main id="main-content">
       <Routes>
         <Route path="/plan" element={<TripPlanner />} />
         <Route path="/map" element={<MapView />} />
         <Route path="/trips" element={<TripsPage />} />
         <Route path="/trips/:tripId" element={<TripDetail />} />
+        {/* ShareButton has always copied /shared/:uuid; without this route the
+            recipient got the app shell and an empty content area. */}
+        <Route path="/shared/:uuid" element={<SharedView />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/about" element={<About />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/" element={
-          <main id="main-content">
+          <>
           <div className="mode-tabs" role="tablist" aria-label="Discovery mode">
             <button
               role="tab"
@@ -997,31 +1078,7 @@ export default function App() {
             </Suspense>
           ) : (
           <>
-          <div className="nl-search-section">
-            <div className="nl-search-row">
-              <IconSearch className="nl-search-icon" />
-              <input
-                type="text"
-                className="nl-search-input"
-                placeholder={'Try "pet-friendly near Portland, July weekend"'}
-                value={nlQuery}
-                onChange={(e) => setNlQuery(e.target.value)}
-                aria-label="Search in plain language"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && nlQuery.trim()) {
-                    e.preventDefault();
-                    track("nl_search_submitted", { query_length: nlQuery.trim().length });
-                    handleSearch(
-                      { start_date: "", end_date: "", q: nlQuery.trim() } as SearchParams,
-                      "find",
-                    );
-                    setNlQuery("");
-                  }
-                }}
-              />
-            </div>
-            <div className="nl-divider" aria-hidden="true">or search by filters</div>
-          </div>
+          <NlSearchBar onSubmit={handleNlSearch} />
           {formCollapsed && activeSearchParams && searchDates ? (
             <SearchSummaryBar
               params={activeSearchParams}
@@ -1050,7 +1107,7 @@ export default function App() {
       {loading && (!results || results.results.length === 0) && <ResultsSkeleton />}
 
       {results && (() => {
-        const withAvailability = filteredResults.filter((r) => r.total_available_sites > 0).length;
+        const withAvailability = availableCards.length;
         return (
         <div className="results">
           <div className="results-header">
@@ -1119,10 +1176,10 @@ export default function App() {
             </div>
           ) : (
           <>
-          {searchDates && withAvailability > 0 && (
+          {searchDates && withAvailability > 0 && heatMapResults && (
             <Suspense fallback={null}>
               <CalendarHeatMap
-                results={{ ...results, results: filteredResults, campgrounds_with_availability: withAvailability }}
+                results={heatMapResults}
                 startDate={searchDates.start}
                 endDate={searchDates.end}
                 daysOfWeek={activeSearchParams?.days_of_week || undefined}
@@ -1151,22 +1208,21 @@ export default function App() {
               </button>
             </div>
           ) : null}
-          {filteredResults
-            .filter((r) => r.total_available_sites > 0)
-            .map((r, i) => (
-              <ResultCard
-                key={r.facility_id}
-                result={r}
-                view={resultsView}
-                searchDates={searchDates || undefined}
-                focused={i === focusedCardIndex}
-                headerRef={(el) => { cardRefs.current[i] = el; }}
-                compareSelected={compareSet.has(r.facility_id)}
-                onToggleCompare={toggleCompare}
-                compareDisabled={compareSet.size >= 3}
-                onShowMap={() => { setResultsDisplay("map"); track("map_toggled", { to: "map" }); }}
-              />
-            ))}
+          {availableCards.map((r, i) => (
+            <ResultCard
+              key={r.facility_id}
+              index={i}
+              result={r}
+              view={resultsView}
+              searchDates={searchDates || undefined}
+              focused={i === focusedCardIndex}
+              registerRef={registerCardRef}
+              compareSelected={compareSet.has(r.facility_id)}
+              onToggleCompare={toggleCompare}
+              compareDisabled={compareSet.size >= 3}
+              onShowMap={showMapView}
+            />
+          ))}
           {!compareResult && (
             <CompareBar
               selectedIds={compareSet}
@@ -1193,6 +1249,7 @@ export default function App() {
               dateSuggestions={results?.date_suggestions}
               actionChips={results?.action_chips}
               searchDates={searchDates || undefined}
+              searchId={searchId}
               onSearch={handleSearch}
             />
           )}
@@ -1203,9 +1260,10 @@ export default function App() {
       })()}
       </>
       )}
-      </main>
+          </>
         } />
       </Routes>
+      </main>
       </Suspense>
       </ErrorBoundary>
       <Footer />

@@ -14,12 +14,49 @@ const API_BASE = Capacitor.isNativePlatform()
 // Event tracking
 // ---------------------------------------------------------------------------
 
+// PostHog is initialized by the snippet in index.html, which assigns the
+// configured instance to window.posthog. Importing the npm package gives you a
+// *different*, never-initialized instance: posthog-js guards every public
+// method on an internal `__loaded` flag set only inside init(), so calls on the
+// module singleton silently no-op. Every access must go through getPosthog().
+export interface PostHogInstance {
+  capture(event: string, props?: Record<string, unknown>): void;
+  identify(distinctId: string, props?: Record<string, unknown>): void;
+  reset(): void;
+  register(props: Record<string, unknown>): void;
+  setPersonProperties(
+    set?: Record<string, unknown>,
+    setOnce?: Record<string, unknown>,
+  ): void;
+  captureException(error: unknown, props?: Record<string, unknown>): void;
+  get_distinct_id(): string;
+  opt_out_capturing?(): void;
+  opt_in_capturing?(): void;
+  has_opted_out_capturing?(): boolean;
+}
+
+export function getPosthog(): PostHogInstance | undefined {
+  return (window as unknown as { posthog?: PostHogInstance }).posthog;
+}
+
 export function track(event: string, data: Record<string, string | number>) {
-  // posthog is initialized via HTML snippet in index.html
-  const ph = (window as unknown as Record<string, unknown>).posthog as
-    | { capture: (event: string, data: Record<string, string | number>) => void }
-    | undefined;
-  ph?.capture(event, data);
+  getPosthog()?.capture(event, data);
+}
+
+/**
+ * Register super properties that ride on every subsequent event.
+ *
+ * `platform` matters because PostHog's auto-detected $os/$browser report the
+ * Capacitor iOS WebView as plain "iOS / Mobile Safari" — indistinguishable
+ * from someone browsing campable.co in Safari. Without it, native app
+ * behaviour is silently pooled with mobile web.
+ */
+export function initAnalytics() {
+  const ph = getPosthog();
+  if (!ph) return;
+  const platform = Capacitor.isNativePlatform() ? "ios_native" : "web";
+  ph.register({ platform, app_version: __APP_VERSION__ });
+  ph.setPersonProperties(undefined, { first_platform: platform });
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +117,11 @@ function isSSESummary(data: unknown): data is { type: "summary"; text: string } 
 function isSSEProgress(data: unknown): data is { type: "progress"; checked: number; total: number } {
   return typeof data === "object" && data !== null
     && (data as Record<string, unknown>).type === "progress";
+}
+
+function isSSEWarnings(data: unknown): data is { type: "warnings"; warnings: SearchWarning[] } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "warnings";
 }
 
 function isCampgroundResult(data: unknown): data is CampgroundResult {
@@ -238,6 +280,7 @@ export async function searchCampsitesStream(
   onParsed?: (params: ParsedParams) => void,
   onSummary?: (text: string) => void,
   onProgress?: (checked: number, total: number) => void,
+  onWarnings?: (warnings: SearchWarning[]) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   if (params.q) {
@@ -291,6 +334,8 @@ export async function searchCampsitesStream(
               onProgress(parsed.checked, parsed.total);
             } else if (isSSESummary(parsed) && onSummary) {
               onSummary(parsed.text);
+            } else if (isSSEWarnings(parsed) && onWarnings) {
+              onWarnings(parsed.warnings);
             } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
               onDiagnosis(parsed);
             } else if (isCampgroundResult(parsed)) {
@@ -405,6 +450,52 @@ export async function createShareLink(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
+  return resp.json();
+}
+
+export interface SharedWatch {
+  name: string;
+  facility_id: string;
+  start_date: string;
+  end_date: string;
+  min_nights: number;
+}
+
+export interface SharedTrip {
+  name: string;
+  start_date: string;
+  end_date: string;
+  campgrounds: { facility_id: string; source: string; name: string }[];
+}
+
+export interface SharedLinkPayload {
+  uuid: string;
+  type: "watch" | "trip" | null;
+  watch?: SharedWatch;
+  trip?: SharedTrip;
+}
+
+/** Distinguishes a dead link (revoked/expired/missing) from a transport error. */
+export class ShareUnavailableError extends Error {
+  // Plain field, not a parameter property — tsconfig sets erasableSyntaxOnly.
+  readonly kind: "not_found" | "gone" | "rate_limited";
+
+  constructor(kind: "not_found" | "gone" | "rate_limited") {
+    super(kind);
+    this.kind = kind;
+  }
+}
+
+/**
+ * Fetch a shared watch or trip. Public — no auth, so plain fetch rather than
+ * authFetch: a recipient is by definition not signed in yet.
+ */
+export async function getSharedLink(uuid: string): Promise<SharedLinkPayload> {
+  const resp = await fetch(`${API_BASE}/api/shared/${encodeURIComponent(uuid)}`);
+  if (resp.status === 404) throw new ShareUnavailableError("not_found");
+  if (resp.status === 410) throw new ShareUnavailableError("gone");
+  if (resp.status === 429) throw new ShareUnavailableError("rate_limited");
+  if (!resp.ok) throw new Error(`Share lookup failed (${resp.status})`);
   return resp.json();
 }
 

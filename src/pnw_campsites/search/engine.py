@@ -152,6 +152,17 @@ class StreamDiagnosisEvent:
 
 
 @dataclass
+class StreamWarningsEvent:
+    """Yielded by search_stream once every campground has been checked.
+
+    Without this the stream had no way to report provider degradation, so the
+    UI hardcoded `warnings: []` and an outage was invisible — see ANLT-06.
+    """
+
+    warnings: list[SearchWarning]
+
+
+@dataclass
 class SearchResults:
     """Complete results from a discovery search."""
 
@@ -167,6 +178,24 @@ class SearchResults:
     @property
     def has_availability(self) -> bool:
         return self.campgrounds_with_availability > 0
+
+
+def aggregate_warnings(results: list[CampgroundResult]) -> list[SearchWarning]:
+    """Roll per-campground errors up into per-(kind, source) warnings.
+
+    `count` describes the source the warning names. It previously used
+    `sum(sources.values())` — the total across every source — so a rate limit
+    hitting 3 rec.gov and 1 WA campground reported "4" for both.
+    """
+    counts: dict[tuple[str, str], int] = {}
+    for r in results:
+        if r.error:
+            key = (r.error, r.campground.booking_system.value)
+            counts[key] = counts.get(key, 0) + 1
+    return [
+        SearchWarning(kind=kind, count=count, source=source)
+        for (kind, source), count in counts.items()
+    ]
 
 
 def _find_consecutive_windows(
@@ -327,11 +356,19 @@ class SearchEngine:
         recgov_client: RecGovClient | None = None,
         goingtocamp_client: GoingToCampClient | None = None,
         reserveamerica_client: ReserveAmericaClient | None = None,
+        watch_db=None,
     ) -> None:
         self._registry = registry
         self._recgov = recgov_client
         self._goingtocamp = goingtocamp_client
         self._reserveamerica = reserveamerica_client
+        # Optional: when supplied, availability is served from (and written to)
+        # the same availability_cache the watch poller uses. Discovery searches
+        # previously hit the provider on every request, so two users searching
+        # "WA this weekend" seconds apart each re-fetched every campground —
+        # and rec.gov returns whole months even for a 3-day query, so the hit
+        # rate across users sharing a weekend is high.
+        self._watch_db = watch_db
 
     async def _resolve_drive_times(
         self,
@@ -527,19 +564,7 @@ class SearchEngine:
                 if fid in drive_times:
                     r.estimated_drive_minutes = drive_times[fid]
 
-        # Step 5: Aggregate errors into warnings, filter out error-only results
-        error_counts: dict[str, dict[str, int]] = {}  # error_kind -> source -> count
-        for r in all_results:
-            if r.error:
-                source = r.campground.booking_system.value
-                error_counts.setdefault(r.error, {})
-                error_counts[r.error][source] = error_counts[r.error].get(source, 0) + 1
-
-        warnings = [
-            SearchWarning(kind=kind, count=sum(sources.values()), source=src)
-            for kind, sources in error_counts.items()
-            for src, _ in sources.items()
-        ]
+        warnings = aggregate_warnings(all_results)
 
         campgrounds_with_availability = sum(
             1 for r in all_results if r.total_available_sites > 0
@@ -737,9 +762,17 @@ class SearchEngine:
 
         # Run all probes in parallel, reusing the prepared campground list
         async def _run_probe(q: SearchQuery) -> SearchResults:
-            # Override date range in prep for each probe
+            # Override date range in prep for each probe.
+            #
+            # The campground list must be trimmed here, not left to the probe
+            # query's max_campgrounds: search() does `prep = _prep or await
+            # self._prepare_search(query)`, so supplying _prep bypasses the
+            # trimming step entirely and the cap is silently discarded. That
+            # made each of the three probes re-check every campground — up to
+            # 180 extra provider fetches on searches that already returned
+            # nothing.
             probe_prep = _PreparedSearch(
-                campgrounds=base_prep.campgrounds,
+                campgrounds=base_prep.campgrounds[: q.max_campgrounds],
                 drive_times=base_prep.drive_times,
                 registry_count=base_prep.registry_count,
                 distance_filtered=base_prep.distance_filtered,
@@ -803,13 +836,17 @@ class SearchEngine:
     async def search_stream(
         self, query: SearchQuery,
     ) -> AsyncIterator[
-        CampgroundResult | StreamProgressEvent | StreamDiagnosisEvent
+        CampgroundResult
+        | StreamProgressEvent
+        | StreamDiagnosisEvent
+        | StreamWarningsEvent
     ]:
         """Stream search results as each campground check completes.
 
         Yields CampgroundResult for campgrounds with availability,
         StreamProgressEvent for checked campgrounds without availability,
-        and a final StreamDiagnosisEvent if zero results were found.
+        a StreamWarningsEvent when any provider degraded, and a final
+        StreamDiagnosisEvent if zero results were found.
         """
         prep = await self._prepare_search(query)
         campgrounds = prep.campgrounds
@@ -832,6 +869,7 @@ class SearchEngine:
         full_concurrency = 8
         sem = asyncio.Semaphore(initial_concurrency)
         available_count = 0
+        errored: list[CampgroundResult] = []
         checked_count = 0
         all_unavailable = 0
         total = len(campgrounds)
@@ -861,6 +899,8 @@ class SearchEngine:
                 fid = r.campground.facility_id
                 if fid in drive_times:
                     r.estimated_drive_minutes = drive_times[fid]
+            if r.error:
+                errored.append(r)
             if r.total_available_sites > 0 or r.fcfs_sites > 0:
                 available_count += 1
                 yield r
@@ -870,6 +910,12 @@ class SearchEngine:
                 yield StreamProgressEvent(
                     checked=checked_count, total=total,
                 )
+
+        # Report provider degradation. The non-streaming endpoint has always
+        # done this; the stream did not, so an outage reached the UI as simply
+        # fewer results with no explanation.
+        if errored:
+            yield StreamWarningsEvent(warnings=aggregate_warnings(errored))
 
         # Yield diagnosis if nothing had availability
         if available_count == 0:
@@ -925,6 +971,10 @@ class SearchEngine:
     ) -> CampgroundResult:
         """Check availability for a single campground, dispatching to the right provider."""
         try:
+            cached = self._cache_get(campground, start_month, end_month)
+            if cached is not None:
+                return _process_availability(campground, cached, query)
+
             if campground.booking_system == BookingSystem.WA_STATE:
                 if not self._goingtocamp:
                     return CampgroundResult(
@@ -957,6 +1007,7 @@ class SearchEngine:
                 availability = await self._recgov.get_availability_range(
                     campground.facility_id, start_month, end_month
                 )
+            self._cache_set(campground, start_month, end_month, availability)
             return _process_availability(campground, availability, query)
         except FacilityNotFoundError:
             # Silently drop — bad registry entry, no availability to show
@@ -967,6 +1018,51 @@ class SearchEngine:
             return CampgroundResult(campground=campground, error="waf_blocked")
         except Exception:
             return CampgroundResult(campground=campground, error="unavailable")
+
+    def _cache_get(
+        self, campground: Campground, start: date, end: date,
+    ) -> CampgroundAvailability | None:
+        """Return cached availability covering [start, end], or None.
+
+        Never raises: a cache problem must degrade to a live fetch, not fail
+        the search.
+        """
+        if self._watch_db is None:
+            return None
+        try:
+            payload = self._watch_db.get_cached_availability(
+                campground.facility_id,
+                campground.booking_system.value,
+                range_start=start,
+                range_end=end,
+            )
+            if payload:
+                return CampgroundAvailability.model_validate_json(payload)
+        except Exception:
+            logger.debug("availability cache read failed", exc_info=True)
+        return None
+
+    def _cache_set(
+        self,
+        campground: Campground,
+        start: date,
+        end: date,
+        availability: CampgroundAvailability,
+    ) -> None:
+        """Store availability under the range it actually covers."""
+        if self._watch_db is None:
+            return
+        try:
+            self._watch_db.set_cached_availability(
+                campground.facility_id,
+                start.strftime("%Y-%m"),
+                availability.model_dump_json(),
+                campground.booking_system.value,
+                range_start=start,
+                range_end=end,
+            )
+        except Exception:
+            logger.debug("availability cache write failed", exc_info=True)
 
     async def check_specific(
         self,
@@ -1018,17 +1114,6 @@ def next_weekend() -> tuple[date, date]:
     """Return (Friday, Sunday) for the weekend after this one."""
     fri, sun = this_weekend()
     return fri + timedelta(days=7), sun + timedelta(days=7)
-
-
-def weekends_in_month(year: int, month: int) -> list[tuple[date, date]]:
-    """Return all (Friday, Sunday) pairs in a given month."""
-    weekends = []
-    d = date(year, month, 1)
-    while d.month == month:
-        if d.weekday() == 4:  # Friday
-            weekends.append((d, d + timedelta(days=2)))
-        d += timedelta(days=1)
-    return weekends
 
 
 # Day-of-week presets (Monday=0 .. Sunday=6)

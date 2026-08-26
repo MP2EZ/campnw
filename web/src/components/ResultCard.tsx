@@ -1,5 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, memo } from "react";
 import { track } from "../api";
+import { SOURCE_LABELS } from "../lib/sources";
 import { IconMinus, IconPlus } from "../icons";
 import type { SearchResponse, Window } from "../api";
 import { WatchButton } from "./WatchPanel";
@@ -14,12 +15,6 @@ import type { ResultsView } from "../hooks/useSearch";
 
 const INITIAL_BLOCKS_SHOWN = 3;
 
-export const SOURCE_LABELS: Record<string, string> = {
-  recgov: "Rec.gov",
-  wa_state: "WA Parks",
-  or_state: "OR Parks",
-  id_state: "ID Parks",
-};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,7 +74,9 @@ function meaningfulLoop(loop: string, campgroundName: string): string | null {
 // DateBlockView
 // ---------------------------------------------------------------------------
 
-function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
+function DateBlockView({
+  result, rank,
+}: { result: SearchResponse["results"][0]; rank?: number }) {
   const blocks = groupByDateBlock(result.windows);
   const fcfsSites = result.windows.filter((w) => w.is_fcfs);
   const isWaState = result.booking_system === "wa_state";
@@ -110,6 +107,9 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                 className="site-chip wa-book-link"
                 onClick={() => track("book_click", {
                   facility_id: result.facility_id,
+                  result_rank: rank ?? -1,
+                  drive_minutes: result.estimated_drive_minutes ?? -1,
+                  total_available_sites: result.total_available_sites,
                   name: result.name,
                   source: result.booking_system,
                   type: "wa_date_block",
@@ -133,6 +133,9 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
                   className="site-chip"
                   onClick={() => track("book_click", {
                     facility_id: result.facility_id,
+                  result_rank: rank ?? -1,
+                  drive_minutes: result.estimated_drive_minutes ?? -1,
+                  total_available_sites: result.total_available_sites,
                     name: result.name,
                     source: result.booking_system,
                     type: "site",
@@ -177,9 +180,11 @@ function DateBlockView({ result }: { result: SearchResponse["results"][0] }) {
 // SiteView
 // ---------------------------------------------------------------------------
 
-function SiteView({ result }: { result: SearchResponse["results"][0] }) {
+function SiteView({
+  result, rank,
+}: { result: SearchResponse["results"][0]; rank?: number }) {
   if (result.booking_system === "wa_state") {
-    return <DateBlockView result={result} />;
+    return <DateBlockView result={result} rank={rank} />;
   }
 
   const bySite = new Map<string, Window[]>();
@@ -221,6 +226,9 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
                       className="window-chip"
                       onClick={() => track("book_click", {
                         facility_id: result.facility_id,
+                  result_rank: rank ?? -1,
+                  drive_minutes: result.estimated_drive_minutes ?? -1,
+                  total_available_sites: result.total_available_sites,
                         name: result.name,
                         source: result.booking_system,
                         type: "site_window",
@@ -246,28 +254,50 @@ function SiteView({ result }: { result: SearchResponse["results"][0] }) {
 // ResultCard
 // ---------------------------------------------------------------------------
 
-export function ResultCard({
+/**
+ * memo() is load-bearing here: these cards render in a list of up to 50 inside
+ * the same component that owns the search input, so without it every keystroke
+ * re-rendered all of them. memo only helps while the call site keeps prop
+ * identities stable — hence `registerRef(index, el)` rather than an inline
+ * `ref={el => ...}` closure, which would be a new function per card per render.
+ */
+export const ResultCard = memo(function ResultCard({
   result,
+  index,
   view,
   searchDates,
   focused,
-  headerRef,
+  registerRef,
   compareSelected,
   onToggleCompare,
   compareDisabled,
   onShowMap,
 }: {
   result: SearchResponse["results"][0];
+  index?: number;
   view: ResultsView;
   searchDates?: { start: string; end: string };
   focused?: boolean;
-  headerRef?: (el: HTMLButtonElement | null) => void;
+  registerRef?: (index: number, el: HTMLButtonElement | null) => void;
   compareSelected?: boolean;
   onToggleCompare?: (facilityId: string) => void;
   compareDisabled?: boolean;
   onShowMap?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // The body is collapsed with grid-template-rows: 0fr, which hides it but
+  // still builds, lays out and styles the whole subtree. SiteView emits one
+  // anchor per window with no cap, so a 30-day search across 20 campgrounds
+  // could put tens of thousands of invisible nodes in the document. Mount on
+  // first expand, then keep it mounted so the open/close transition still runs.
+  const [everExpanded, setEverExpanded] = useState(false);
+
+  const handleHeaderRef = useCallback(
+    (el: HTMLButtonElement | null) => {
+      if (index !== undefined) registerRef?.(index, el);
+    },
+    [registerRef, index]
+  );
   const cardRef = useRef<HTMLDivElement>(null);
 
   const hasPhoto = !!(result.image_urls && result.image_urls.length > 0);
@@ -275,6 +305,7 @@ export function ResultCard({
     const next = !expanded;
     setExpanded(next);
     if (next) {
+      setEverExpanded(true);
       track("card_expand", {
         facility_id: result.facility_id,
         name: result.name,
@@ -313,7 +344,7 @@ export function ResultCard({
           onClick={handleToggle}
           aria-expanded={expanded}
           type="button"
-          ref={headerRef}
+          ref={handleHeaderRef}
         >
           <div>
             <h3>
@@ -365,6 +396,7 @@ export function ResultCard({
 
       <div className={`card-body${expanded ? " card-body-open" : ""}`}>
         <div className="card-body-inner">
+          {everExpanded && (<>
           {expanded && (
             hasPhoto ? (
               <HeroPhoto
@@ -399,6 +431,9 @@ export function ResultCard({
                 className="book-link"
                 onClick={() => track("book_click", {
                   facility_id: result.facility_id,
+                  result_rank: index ?? -1,
+                  drive_minutes: result.estimated_drive_minutes ?? -1,
+                  total_available_sites: result.total_available_sites,
                   name: result.name,
                   source: result.booking_system,
                   type: "view_page",
@@ -432,12 +467,13 @@ export function ResultCard({
             </div>
           )}
           {view === "dates" ? (
-            <DateBlockView result={result} />
+            <DateBlockView result={result} rank={index} />
           ) : (
-            <SiteView result={result} />
+            <SiteView result={result} rank={index} />
           )}
+          </>)}
         </div>
       </div>
     </div>
   );
-}
+});

@@ -19,8 +19,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from pnw_campsites.auth import warm_jwks_client
 from pnw_campsites.monitor.db import DEFAULT_DB_PATH, WatchDB
-from pnw_campsites.posthog_client import get_posthog_client
+from pnw_campsites.posthog_client import capture_event, get_posthog_client
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
@@ -53,6 +54,29 @@ _poll_state: dict = {
 _search_timings: deque[float] = deque(maxlen=200)
 
 _poll_logger = logging.getLogger("pnw_campsites.poller")
+
+
+def _capture_notification(result, channel: str, status: str) -> None:
+    """Mirror a notification dispatch into PostHog.
+
+    The watch -> poll -> notify -> click -> book loop is the product's whole
+    reason to exist and none of it was observable: db.log_notification wrote a
+    row nothing analysed. Without these you cannot answer what fraction of
+    watches ever fire, the median time to first alert, or whether an alert ever
+    produced a booking.
+    """
+    watch = result.watch
+    capture_event(
+        distinct_id=str(watch.user_id) if watch.user_id else f"watch:{watch.id}",
+        event="notification_sent" if status == "sent" else "notification_failed",
+        properties={
+            "watch_id": watch.id,
+            "facility_id": watch.facility_id,
+            "channel": channel,
+            "source": watch.booking_system,
+            "sites_in_message": len(result.changes),
+        },
+    )
 
 
 async def _poll_tranche(
@@ -117,6 +141,20 @@ async def _poll_tranche(
         if not result.has_changes:
             continue
         total_changes += len(result.changes)
+        capture_event(
+            distinct_id=(
+                str(result.watch.user_id) if result.watch.user_id
+                else f"watch:{result.watch.id}"
+            ),
+            event="watch_triggered",
+            properties={
+                "watch_id": result.watch.id,
+                "facility_id": result.watch.facility_id,
+                "source": result.watch.booking_system,
+                "sites_freed": len(result.changes),
+                "current_available": result.current_available,
+            },
+        )
         channel = result.watch.notification_channel or ""
         topic = result.watch.notify_topic
         # Dispatch notification based on channel
@@ -127,6 +165,7 @@ async def _poll_tranche(
                     result.watch.id, "ntfy", "sent",
                     len(result.changes),
                 )
+                _capture_notification(result, "ntfy", "sent")
             except Exception as e:
                 _poll_logger.warning(
                     "ntfy failed for watch %s: %s",
@@ -135,6 +174,7 @@ async def _poll_tranche(
                 _watch_db.log_notification(
                     result.watch.id, "ntfy", "failed",
                 )
+                _capture_notification(result, "ntfy", "failed")
         elif channel == "web_push" and result.watch.user_id:
             subs = _watch_db.get_push_subscriptions_for_user(result.watch.user_id)
             for sub in subs:
@@ -149,12 +189,14 @@ async def _poll_tranche(
                     _watch_db.log_notification(
                         result.watch.id, "web_push", "sent", len(result.changes),
                     )
+                    _capture_notification(result, "web_push", "sent")
                 except Exception as e:
                     _poll_logger.warning(
                         "web_push failed for watch %s: %s",
                         result.watch.id, e,
                     )
                     _watch_db.log_notification(result.watch.id, "web_push", "failed")
+                    _capture_notification(result, "web_push", "failed")
         elif topic:
             # Legacy: if notify_topic is set but no channel,
             # treat as ntfy for backward compatibility
@@ -196,8 +238,19 @@ async def lifespan(app: FastAPI):
     _reserveamerica = ReserveAmericaClient()
     await _reserveamerica.__aenter__()
 
-    _engine = SearchEngine(_registry, _recgov, _goingtocamp, _reserveamerica)
     _watch_db = WatchDB()
+
+    # Fetch the Supabase JWK set now, off the request path — otherwise the
+    # first authenticated request after boot (and after each hourly expiry)
+    # pays a blocking urllib fetch on the event loop.
+    await asyncio.to_thread(warm_jwks_client)
+
+    # Share the poller's availability_cache with discovery search: the two ask
+    # the providers for exactly the same payloads, and rec.gov returns whole
+    # months even for a 3-day query.
+    _engine = SearchEngine(
+        _registry, _recgov, _goingtocamp, _reserveamerica, watch_db=_watch_db,
+    )
 
     # Start background watch poller — two tranches offset by 7.5 minutes
     # to halve the burst of rec.gov API calls per cycle

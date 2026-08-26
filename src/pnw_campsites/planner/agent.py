@@ -99,7 +99,7 @@ async def chat(
     """
     from datetime import date as _date
 
-    from pnw_campsites.posthog_client import get_posthog_client
+    from pnw_campsites.posthog_client import SONNET_MODEL, get_anthropic_client
 
     today = _date.today()
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
@@ -107,18 +107,13 @@ async def chat(
         weekday=today.strftime("%A"),
     )
 
-    try:
-        from posthog.ai.anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
-    except ImportError:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=api_key)
+    client = get_anthropic_client(api_key)
     tool_call_log: list[dict] = []
     current_messages = list(messages)
 
     for _iteration in range(_MAX_TOOL_ITERATIONS):
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=SONNET_MODEL,
             system=system_prompt,
             messages=current_messages,
             tools=TOOLS,  # type: ignore[arg-type]
@@ -173,7 +168,7 @@ async def chat(
     # Exceeded iteration cap — get a final response without tools
     logger.warning("Trip planner hit max tool iterations (%d)", _MAX_TOOL_ITERATIONS)
     final = await client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=SONNET_MODEL,
         system=system_prompt,
         messages=current_messages,
         max_tokens=1024,
@@ -235,7 +230,7 @@ async def chat_stream(
     """
     from datetime import date as _date
 
-    from pnw_campsites.posthog_client import get_posthog_client
+    from pnw_campsites.posthog_client import SONNET_MODEL, get_anthropic_client
 
     today = _date.today()
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
@@ -243,12 +238,7 @@ async def chat_stream(
         weekday=today.strftime("%A"),
     )
 
-    try:
-        from posthog.ai.anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
-    except ImportError:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=api_key)
+    client = get_anthropic_client(api_key)
     tool_call_log: list[dict] = []
     current_messages = list(messages)
     final_text = ""
@@ -263,7 +253,7 @@ async def chat_stream(
         try:
             event_stream = await _open_stream(
                 client,
-                model="claude-sonnet-4-20250514",
+                model=SONNET_MODEL,
                 system=system_prompt,
                 messages=current_messages,
                 tools=TOOLS,  # type: ignore[arg-type]
@@ -363,7 +353,7 @@ async def chat_stream(
     try:
         event_stream = await _open_stream(
             client,
-            model="claude-sonnet-4-20250514",
+            model=SONNET_MODEL,
             system=system_prompt,
             messages=current_messages,
             max_tokens=1024,

@@ -43,14 +43,9 @@ async def _enhance_rec_reasons(
     if not api_key:
         return None
 
-    from pnw_campsites.posthog_client import get_posthog_client
+    from pnw_campsites.posthog_client import HAIKU_MODEL, get_anthropic_client
 
-    try:
-        from posthog.ai.anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=api_key, posthog_client=get_posthog_client())
-    except (ImportError, ValueError):
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=api_key)
+    client = get_anthropic_client(api_key)
 
     top_tags = sorted(
         affinities["tags"].items(), key=lambda x: -x[1],
@@ -78,7 +73,7 @@ async def _enhance_rec_reasons(
     try:
         response = await asyncio.wait_for(
             client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=HAIKU_MODEL,
                 max_tokens=400,
                 messages=[{"role": "user", "content": prompt}],
                 posthog_distinct_id=posthog_distinct_id,
@@ -125,9 +120,10 @@ async def recommendations(request: Request):
     )
     target_states = [s for s, _ in top_states[:2]] if top_states else None
 
-    candidates = registry.search(
-        state=target_states[0] if target_states and len(target_states) == 1 else None,
-    )
+    # Filter to the user's affinity states in SQL. Passing state=None whenever
+    # the top two states tied meant scanning and hydrating the whole 1,368-row
+    # registry (~556ms of blocking CPU) on every signed-in app mount.
+    candidates = registry.search(states=target_states or None)
 
     watched = affinities["watched_facility_ids"]
     tag_scores = affinities["tags"]

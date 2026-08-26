@@ -46,8 +46,9 @@ test("New Pro user can cancel via Customer Portal", async ({ page }) => {
 
   // Stripe Portal cancel flow, as observed 2026-08:
   //   portal home "Cancel subscription"
-  //     -> "Confirm cancellation" page, which opens a "Cancel your
-  //        subscription" reason-survey modal on top of itself
+  //     -> a confirm page (headed "Confirm cancellation" until Aug 2026, then
+  //        "Review your changes" — do not key off it), which opens a "Cancel
+  //        your subscription" reason-survey modal on top of itself
   //     -> modal "Continue to cancellation" dismisses the survey
   //     -> confirm page "Cancel subscription" finalises
   //
@@ -56,14 +57,21 @@ test("New Pro user can cancel via Customer Portal", async ({ page }) => {
   // be dismissed first. That also rules out ordinal locators past the entry
   // click — .first()/.last() silently re-bind to the unclickable node.
   //
-  // Both Portal-side steps are best-effort. Stripe toggles the survey via a
-  // Portal setting and has reshaped this flow before, so a missing step
-  // shouldn't fail the run. The authoritative assertion is the "Pro until"
+  // Every Portal-side step is best-effort, and none of them assert on Stripe's
+  // copy. Stripe toggles the survey via a Portal setting and has reshaped and
+  // reworded this flow repeatedly (three fix commits on 2026-08-05, then a
+  // rename that broke five consecutive nightlies from 2026-08-22). A missing
+  // or renamed step must not fail the run. The authoritative assertion is the "Pro until"
   // check below: it can't pass unless cancellation really propagated, so
   // skipping a step here can produce a false failure but never a false pass.
   await page.getByText("Cancel subscription", { exact: true }).first().click();
-  await expect(page.getByText("Confirm cancellation")).toBeVisible({ timeout: 15_000 });
 
+  // No assertion on the confirm page's heading. Stripe renamed it from
+  // "Confirm cancellation" to "Review your changes" in Aug 2026, which failed
+  // the nightly for five consecutive runs even though cancellation itself
+  // worked — the page had loaded and the survey was present. The appears()
+  // guard below already waits for that page, so the heading check bought
+  // nothing but a dependency on wording we do not control.
   const survey = page.getByRole("alertdialog", { name: /cancel your subscription/i });
   if (await appears(survey)) {
     // The reason select is optional — "Continue to cancellation" is enabled
@@ -77,13 +85,17 @@ test("New Pro user can cancel via Customer Portal", async ({ page }) => {
     await confirmCancel.click();
   }
 
-  // Wait for the Portal to actually record the cancellation before leaving.
-  // Stripe returns to the Portal home page once it has, so the confirm page's
-  // heading going away is the state transition to wait on — no dependency on
-  // Stripe's post-cancel wording. Without this the goto() below fires
-  // immediately after the click and can abort the in-flight cancel request,
-  // which surfaces confusingly as a missing "Pro until" further down.
-  await expect(page.getByText("Confirm cancellation")).toBeHidden({ timeout: 30_000 });
+  // Let the cancel request finish before navigating away. Without this the
+  // goto() below can abort it in flight, which surfaces confusingly as a
+  // missing "Pro until" further down.
+  //
+  // Waits on the network rather than on Stripe's post-cancel wording: the
+  // previous version watched the confirm page's heading disappear, which
+  // silently became a permanent failure the moment Stripe renamed it.
+  await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {
+    // Best-effort. A busy Portal page can keep connections open; the
+    // authoritative "Pro until" assertion below has its own 60s budget.
+  });
 
   // Step 3: back to campable — webhook → DB → UI loop validation.
   // This is the assertion that matters: it covers our own

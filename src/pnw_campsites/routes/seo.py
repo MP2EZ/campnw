@@ -143,6 +143,9 @@ async def campground_profile(request: Request, state: str, slug: str):
         booking_tips=booking_tips,
         nearby=nearby,
         canonical_url=f"{BASE_URL}/campgrounds/{state.lower()}/{slug}",
+        page_type="profile",
+        analytics_state=state_upper,
+        analytics_slug=slug,
     )
     return _cached_template("profile.html", ctx)
 
@@ -187,6 +190,10 @@ async def state_index(request: Request, state: str, tag: str | None = None):
         all_tags=all_tags,
         active_tag=tag,
         canonical_url=f"{BASE_URL}/campgrounds/{state.lower()}",
+        page_type="state_index",
+        analytics_state=state_upper,
+        analytics_tag=tag or "",
+        analytics_campground_count=len(campgrounds),
     )
     return _cached_template("state_index.html", ctx)
 
@@ -216,6 +223,8 @@ async def campgrounds_index(request: Request):
         states=states,
         all_tags=all_tags,
         canonical_url=f"{BASE_URL}/campgrounds",
+        page_type="campgrounds_index",
+        analytics_campground_count=total,
     )
     return _cached_template("campgrounds_index.html", ctx)
 
@@ -248,6 +257,9 @@ async def tag_index(request: Request, tag: str):
         groups=groups,
         other_tags=other_tags,
         canonical_url=f"{BASE_URL}/tags/{tag}",
+        page_type="tag_index",
+        analytics_tag=tag,
+        analytics_campground_count=len(campgrounds),
     )
     return _cached_template("tag_index.html", ctx)
 
@@ -281,6 +293,7 @@ async def this_weekend(request: Request):
         refreshed_at=cache.get("refreshed_at"),
         loading=cache.get("results") is None,
         canonical_url=f"{BASE_URL}/this-weekend",
+        page_type="this_weekend",
     )
     return _cached_template("this_weekend.html", ctx, max_age=900, stale=1800)
 
@@ -291,9 +304,11 @@ async def this_weekend(request: Request):
 
 
 @router.get("/sitemap.xml")
-async def sitemap_xml(request: Request):
+async def sitemap_xml():
     registry = get_registry()
-    all_cgs = registry.list_all()
+    # (state, slug) only — hydrating 1,368 full pydantic models to reach two
+    # columns measured ~26x slower than this narrow query.
+    slug_rows = registry.list_slugs()
 
     lines = ['<?xml version="1.0" encoding="UTF-8"?>']
     lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
@@ -313,17 +328,20 @@ async def sitemap_xml(request: Request):
         lines.append(f"  <url><loc>{BASE_URL}/tags/{tag}</loc></url>")
 
     # Campground profiles
-    for cg in all_cgs:
-        if cg.slug and cg.state:
+    for state, slug in slug_rows:
+        if slug and state:
             lines.append(
                 f"  <url><loc>{BASE_URL}/campgrounds/"
-                f"{cg.state.lower()}/{cg.slug}</loc></url>"
+                f"{state.lower()}/{slug}</loc></url>"
             )
 
     lines.append("</urlset>")
     return Response(
         content="\n".join(lines),
         media_type="application/xml",
+        # The only SEO route that bypassed _cached_template, so it was fully
+        # recomputed on every crawler hit. The registry only changes on re-seed.
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 
