@@ -49,10 +49,12 @@ def _parse_dates(date_str: str) -> tuple[date, date]:
 
 def _parse_days(days_str: str) -> set[int]:
     """Parse day names: 'thu,fri,sat,sun' or presets like 'weekend'."""
+    from pnw_campsites.search.engine import LONG_WEEKEND, WEEKDAYS, WEEKEND
+
     presets = {
-        "weekend": {4, 5, 6},
-        "long-weekend": {3, 4, 5, 6},
-        "weekdays": {0, 1, 2, 3, 4},
+        "weekend": WEEKEND,
+        "long-weekend": LONG_WEEKEND,
+        "weekdays": WEEKDAYS,
     }
     if days_str in presets:
         return presets[days_str]

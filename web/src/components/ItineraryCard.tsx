@@ -1,4 +1,6 @@
 import { memo } from "react";
+import { sourceLabel } from "../lib/sources";
+import { formatDriveTime } from "../lib/dates";
 import { track } from "../api";
 import { SaveToTripButton } from "./SaveToTripButton";
 
@@ -14,16 +16,10 @@ export interface ItineraryLeg {
   tags: string[];
 }
 
-function formatDrive(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
 
 export const ItineraryCard = memo(function ItineraryCard({ leg, index }: { leg: ItineraryLeg; index: number }) {
-  const sourceClass = leg.booking_system === "wa_state" ? "wa_state"
-    : leg.booking_system === "or_state" ? "or_state" : "recgov";
+  // Previously a nested ternary that collapsed id_state to "recgov".
+  const sourceClass = leg.booking_system;
 
   return (
     <div className="itinerary-card">
@@ -32,14 +28,13 @@ export const ItineraryCard = memo(function ItineraryCard({ leg, index }: { leg: 
         <div className="itinerary-card-header">
           <h4 className="itinerary-card-name">{leg.name}</h4>
           <span className={`source-badge source-${sourceClass}`}>
-            {leg.booking_system === "wa_state" ? "WA Parks"
-              : leg.booking_system === "or_state" ? "OR Parks" : "Rec.gov"}
+            {sourceLabel(leg.booking_system)}
           </span>
         </div>
         <div className="itinerary-card-details">
           <span className="itinerary-card-dates">{leg.dates}</span>
           {leg.nights > 0 && <span className="itinerary-card-nights">{leg.nights} night{leg.nights !== 1 ? "s" : ""}</span>}
-          <span className="itinerary-card-drive">~{formatDrive(leg.drive_minutes)}</span>
+          <span className="itinerary-card-drive">{formatDriveTime(leg.drive_minutes)}</span>
           <span className="itinerary-card-sites">{leg.sites_available} site{leg.sites_available !== 1 ? "s" : ""}</span>
         </div>
         {leg.tags.length > 0 && (

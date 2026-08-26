@@ -14,7 +14,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { getPosthog, searchCampsitesStream, saveSearchHistory, track } from "../api";
 import type {
   CampgroundResult, SearchParams, SearchResponse, SearchWarning,
-  DiagnosisEvent,
+  DiagnosisEvent, UserData,
 } from "../api";
 
 /**
@@ -88,16 +88,6 @@ function leadTimeDays(params: SearchParams): number {
 
 export type SearchMode = "find" | "exact";
 export type ResultsView = "dates" | "sites";
-
-export interface UserData {
-  id: number;
-  email: string;
-  display_name: string;
-  default_state: string;
-  default_nights: number;
-  default_from: string;
-  recommendations_enabled: boolean;
-}
 
 export interface UseSearchReturn {
   results: SearchResponse | null;

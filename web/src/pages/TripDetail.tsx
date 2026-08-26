@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { getTrip, updateTrip, deleteTrip, removeCampgroundFromTrip } from "../api";
 import type { TripData, TripCampground } from "../api";
 import { useAuth } from "../hooks/useAuth";
-import { SOURCE_LABELS } from "../components/ResultCard";
+import { SOURCE_LABELS } from "../lib/sources";
 import { ShareButton } from "../components/ShareButton";
 
 export default function TripDetail() {
