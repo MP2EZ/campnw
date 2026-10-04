@@ -1,7 +1,12 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
-**Last updated:** June 2026
-**Current version:** v1.34 shipped (deployed at campable.co; weather cache fully warmed Apr–Oct 2026-06-12). v1.45 first milestone — internal iOS TestFlight — SHIPPED 2026-06-14.
+**Last updated:** 2026-10-04
+**Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`). Last release: PR #150 (`dev → main`, 2026-08-26) — audit remediation. v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; App Store/Play still pending.
+
+**Open problems (not yet scheduled):**
+- **#131** — ReserveAmerica blocks Fly egress IPs → all 53 Oregon State Parks return nothing in prod.
+- **#135** — a provider can go fully dark without the prod monitor failing (the monitor has passed 58/58 runs while #131 was live).
+- **#127** — nightly Playwright red since late August. PR #148 fixed the Portal-copy assertion, but as of 2026-10-03 both Stripe flows (`upgrade.spec.ts`, `cancel-reactivate.spec.ts`) time out on a click; `upgrade.spec.ts` also gates PRs.
 
 ---
 
@@ -35,15 +40,17 @@ v1.29   [SHIPPED]  Brand + Polish        — Madrona logo, og:image, LLM analyti
 v1.3    [SHIPPED]  SEO + Discoverability — Campground profile pages, sitemap, structured data, Cloudflare
 v1.31   [SHIPPED]  Audit Fixes          — Security hardening, perf optimizations, WCAG AA compliance
 v1.32   [SHIPPED]  Accurate Drive Times — Mapbox routing, drive_times table, tiered search lookup
-v1.33   ------->   Supabase Auth        — Replace custom auth with Supabase, Bearer tokens, auto-provisioning
+v1.33   [SHIPPED]  Supabase Auth        — Replace custom auth with Supabase, Bearer tokens, auto-provisioning
 v1.34   [SHIPPED]  Weather Context      — Typical temps + precipitation on search results via Visual Crossing
 v1.35   [SHIPPED]  Source Photos        — Campground photos from RIDB/RA + SVG postcard placeholder for missing sources
 v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Google/Apple blocked on LLC/developer accounts)
 v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)
 v1.41   [SHIPPED]  Playwright E2E       — Playwright E2E suite — smoke + watch/planner limits + cancel — 4/4 nightly green (2026-05-31)
-v1.42   ------->   Site Polish + Legal  — About, Privacy, Terms, footer. Unblocks Stripe live-mode review + Apple App Store URL requirement.
+v1.42   [SHIPPED]  Site Polish + Legal  — About, Privacy, Terms, footer (2026-05-31)
 v1.45   ~PARTIAL~  Native Apps          — Internal iOS TestFlight SHIPPED 2026-06-14 (Capacitor shell); App Store + Play + native push/GPS/offline registry in progress
-v1.47   ------->   Prod Monitoring      — Real /healthz (DB probe) + daily read-only prod smoke + UptimeRobot. ⚠️ NEEDS MANUAL SETUP FIRST (Resend key + UptimeRobot) — see v1.47 section / docs/MONITORING.md
+v1.46   ~PARTIAL~  Mobile Polish        — Touch feel + 44px tap targets SHIPPED 2026-08-06 (Themes B+C); safe-area, layout, keyboard (A/D/E) pending
+v1.47   [SHIPPED]  Prod Monitoring      — /healthz, daily prod smoke, `doctor` dependency sweep (v1.47.1). Alert delivery path still unproven — see v1.47 section
+—       [SHIPPED]  Audit Remediation    — Analytics identity fix, SEO/funnel instrumentation, query perf, cache correctness, UX/a11y, shared-link page (2026-08-26, no version bump)
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -1948,14 +1955,28 @@ All frontend changes are **additive and native-gated** — the web bundle is byt
 
 ---
 
-## v1.47 "Prod Monitoring"
+## v1.46 "Mobile Polish" [PARTIAL — Themes B+C SHIPPED 2026-08-06]
+
+Post-TestFlight polish pass for the Capacitor iOS shell. Scoped so desktop web is byte-identical: every change is inert on pointer devices or gated behind `@media (hover: none)`.
+
+| Theme | Status | Scope |
+|-------|--------|-------|
+| **B** — touch feel | Shipped (PR #66) | `touch-action: manipulation` (no 300ms delay), no iOS tap flash, no long-press callout on UI chrome, `:active` feedback |
+| **C** — tap targets | Shipped (PR #66) | ≥44px hit areas on date-picker days, card actions, close buttons; compare-check keeps a 24px visual with a 44px `::after` overlay. Heatmap cells intentionally excluded |
+| **A** — safe areas | Pending | Status-bar scroll bleed, modal safe-area + scroll lock |
+| **D** — responsive layout | Pending | Search-form/poll grids, MapView on mobile, modal widths |
+| **E** — keyboard | Pending | Needs `@capacitor/keyboard` |
+
+---
+
+## v1.47 "Prod Monitoring" [SHIPPED 2026-08-23]
 
 ### Theme
 Know the *live* site is broken before a user tells us. The nightly Playwright run is a release gate against **staging** — it never touches production — and PostHog is passive, so a 3am Fly/Supabase/TLS failure is invisible until someone gets hurt. v1.47 adds active synthetic checks against prod: a real `/healthz` (DB probe), a read-only daily smoke, and an external 5-min pinger. Full detail: `docs/MONITORING.md`.
 
-### ⚠️ DO THIS FIRST — manual setup (nothing alerts until these are set)
+### ⚠️ Alert path unproven — verify the manual setup
 
-The code is shipped, but the alerting path is inert without repo config and the external pinger. ~10 minutes total, both on your side.
+Status 2026-10-04: the Prod Monitor workflow is live and has passed 58 of 58 completed runs (1 cancelled). It has **never failed**, so the email + `prod-down` issue path has never fired and is unverified. The Resend secret/variables below were not visible from the CLI, and UptimeRobot can't be checked from the repo. Step 3 is still the only way to know alerts work. Note that the monitor stayed green through #131 (Oregon dark in prod) — that blind spot is #135.
 
 **1. Resend email alerts** — *Settings → Secrets and variables → Actions*:
 
@@ -1982,11 +2003,35 @@ If `RESEND_API_KEY` / `ALERT_EMAIL_TO` are unset the email step skips with a war
 | Read-only, non-mutating prod smoke (homepage, search API, pricing, SEO index) | `e2e/tests/prod-smoke.spec.ts` |
 | Daily 15:00 UTC monitor → Resend email + `prod-down` GitHub issue on failure | `.github/workflows/prod-monitor.yml` |
 | Four-layer model + setup instructions | `docs/MONITORING.md` |
+| **v1.47.1** — `doctor` dependency sweep (DBs, 4 providers, weather, Mapbox, Nominatim, Supabase, Stripe, PostHog, ntfy, Anthropic), read-only and hang-proof; admin `GET /api/admin/health/deep` (PRs #128, #129) | `src/pnw_campsites/health.py` |
 
 ### Notes
 
 - The prod smoke is **strictly non-mutating** — no signup, no Stripe, no writes — which is what makes it safe to aim at production. The four flows in `e2e/tests/` do mutate and stay pointed at staging.
 - Side effect worth knowing: the deploy wait-loop's `curl .../healthz` was previously false-green — `/healthz` fell through to the SPA catch-all and returned `index.html` with a 200, so the deploy gate passed even mid-DB-outage. The explicit route fixes that consumer too.
+
+---
+
+## Audit Remediation [SHIPPED 2026-08-26 — release PR #150, no version bump]
+
+### Theme
+Full-repo `--perf --bloat --ux --analytics` audit (2026-08-23), fixed in per-batch PRs to `dev`, released together. The headline finding: **PostHog `identify()` had never worked** — it called the uninitialized npm singleton instead of the snippet-loaded instance, so 495 pageviews from March to August produced 0 identified users. Verified fixed in production via PostHog.
+
+### What shipped
+
+| Area | PRs | Change |
+|------|-----|--------|
+| Analytics | #132, #143, #144, #145 | Identity fixed; `platform`/`app_version`/`plan` super properties; SEO page instrumentation (`seo_page_viewed`, live from 2026-08-27); watch→notify loop events; search funnel props + `zero_state_shown`; checkout/subscription events server-side |
+| Performance | #133, #134, #137 | Bounded four hot-path queries; JWKS/Stripe calls off the event loop with timeouts; 115KB off the critical path; latent hooks crash fixed |
+| Correctness | #134, #136, #139, #142 | Availability cache only serves when the cached range covers the request; provider warnings carried through SSE and attributed to the right source; search params restored from URL |
+| UX / a11y | #138 | AA contrast, single `main` landmark, confirmable trip deletion |
+| Sharing + privacy | #149 | `/shared/:uuid` page — share links previously landed on a blank shell. Privacy page discloses session replay; per-browser analytics opt-out |
+| Bloat / tests | #141, #146, #147 | Four tests that could not fail repaired; drifted duplicates collapsed (`lib/dates`, `lib/sources`, `lib/messages`); dead `CalendarHeatMap` removed |
+| E2E | #148 | Cancel flow no longer asserts on Stripe Portal copy (partial fix for #127 — see header) |
+
+### Still open from the audit
+- Very low traffic (≈65 pageviews/month) — most new events are unverified rather than broken.
+- Residual Info-tier polish items in `.audit-report.md` (local, untracked).
 
 ---
 
