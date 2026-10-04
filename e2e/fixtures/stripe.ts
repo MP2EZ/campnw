@@ -7,9 +7,14 @@ import { Page, expect } from "@playwright/test";
  * DOM verified via Chrome DevTools MCP against a real staging session
  * (2026-05-30). The flow:
  *
- *   - Payment-method block has radio options: Card, Cash App Pay,
- *     Klarna, Bank. The "Card" element has role=radio (NOT a button).
- *   - Click the Card radio to expand the card form inline.
+ *   - Payment-method block is an accordion: Card, Cash App Pay, Klarna,
+ *     Bank. Click the Card item to expand the card form inline.
+ *   - Target it by `data-testid="card-accordion-item"`, not by role. Until
+ *     late Sep 2026 the item held an `<input type=radio>` named "Card";
+ *     Stripe then swapped it for an aria-hidden decorative span, so
+ *     `getByRole("radio", { name: "Card" })` matched nothing and every
+ *     Checkout flow timed out (nightly red from 2026-09-30). The test id
+ *     survived that change; the role did not.
  *   - Fields render in the page accessibility tree, accessible by label.
  *   - All required for US: card number, expiration, CVC, cardholder
  *     name, ZIP, phone number.
@@ -31,9 +36,9 @@ export async function payWithCard(
 ): Promise<void> {
   const values = { ...DEFAULTS, ...overrides };
 
-  // Select the Card radio (NOT the "Pay with card" button — that button
-  // only becomes the action button AFTER the form is filled).
-  await page.getByRole("radio", { name: "Card" }).click({ force: true });
+  // Expand the Card item. Not the "Pay with card" button — that only becomes
+  // the action button after the form is filled.
+  await page.getByTestId("card-accordion-item").click();
 
   // Card form expands inline. Scope to role=textbox so the label match
   // doesn't accidentally hit info icons or country-code comboboxes that
