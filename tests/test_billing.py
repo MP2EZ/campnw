@@ -874,6 +874,65 @@ class TestConfiguration:
             billing.create_portal_session("")
 
 
+class TestPortalReturnUrl:
+    """The Portal used to return to the Checkout success URL, so every
+    cancel or card update was recorded as `checkout_returned: success` and
+    took the Checkout return path, which refreshes billing status once. A
+    Portal return has to be distinguishable from a purchase."""
+
+    def test_explicit_env_wins(self, monkeypatch) -> None:
+        monkeypatch.setenv("STRIPE_PORTAL_RETURN_URL", "https://x.test/?billing=portal")
+        monkeypatch.setenv("STRIPE_SUCCESS_URL", "https://y.test/?billing=success")
+        assert billing.portal_return_url() == "https://x.test/?billing=portal"
+
+    def test_derived_from_success_url_so_each_env_keeps_its_own_host(
+        self, monkeypatch,
+    ) -> None:
+        # Staging sets only STRIPE_SUCCESS_URL; its Portal must not send
+        # users back to production.
+        monkeypatch.delenv("STRIPE_PORTAL_RETURN_URL", raising=False)
+        monkeypatch.setenv(
+            "STRIPE_SUCCESS_URL", "https://campnw-staging.fly.dev/?billing=success",
+        )
+        assert (
+            billing.portal_return_url()
+            == "https://campnw-staging.fly.dev/?billing=portal"
+        )
+
+    def test_default_when_nothing_is_set(self, monkeypatch) -> None:
+        monkeypatch.delenv("STRIPE_PORTAL_RETURN_URL", raising=False)
+        monkeypatch.delenv("STRIPE_SUCCESS_URL", raising=False)
+        assert billing.portal_return_url() == "https://campable.co/?billing=portal"
+
+    def test_success_url_without_the_param_still_gets_marked(
+        self, monkeypatch,
+    ) -> None:
+        monkeypatch.delenv("STRIPE_PORTAL_RETURN_URL", raising=False)
+        monkeypatch.setenv("STRIPE_SUCCESS_URL", "https://campable.co/account?x=1")
+        assert (
+            billing.portal_return_url()
+            == "https://campable.co/account?x=1&billing=portal"
+        )
+
+    def test_portal_session_uses_it(self, monkeypatch) -> None:
+        monkeypatch.delenv("STRIPE_PORTAL_RETURN_URL", raising=False)
+        monkeypatch.setenv("STRIPE_SUCCESS_URL", "https://s.test/?billing=success")
+        captured = {}
+
+        class _Sessions:
+            def create(self, params):
+                captured.update(params)
+                return type("S", (), {"url": "https://billing.stripe.test/x"})()
+
+        fake = type("C", (), {})()
+        fake.v1 = type("V1", (), {})()
+        fake.v1.billing_portal = type("BP", (), {"sessions": _Sessions()})()
+        monkeypatch.setattr(billing, "_get_client", lambda: fake)
+
+        billing.create_portal_session("cus_123")
+        assert captured["return_url"] == "https://s.test/?billing=portal"
+
+
 # ---------------------------------------------------------------------------
 # CSP defensive coding (regression: production-incident scope)
 # ---------------------------------------------------------------------------

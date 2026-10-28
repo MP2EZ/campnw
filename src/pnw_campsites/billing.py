@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from stripe import RequestsClient, SignatureVerificationError, StripeClient, Webhook
 
@@ -119,12 +120,29 @@ def create_checkout_session(
     return session.url, customer_id
 
 
+def portal_return_url() -> str:
+    """Where the Customer Portal sends users back to.
+
+    Distinct from the Checkout success URL so the frontend can tell a
+    cancel or card update from a purchase. Derived from STRIPE_SUCCESS_URL
+    unless STRIPE_PORTAL_RETURN_URL is set, so each environment returns to
+    its own host without another secret.
+    """
+    explicit = _env("STRIPE_PORTAL_RETURN_URL")
+    if explicit:
+        return explicit
+    parts = urlsplit(_env("STRIPE_SUCCESS_URL", SUCCESS_URL_DEFAULT))
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k != "billing"]
+    query.append(("billing", "portal"))
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
 def create_portal_session(customer_id: str) -> str:
     """Create a Stripe Customer Portal session for an existing customer."""
     if not customer_id:
         raise ValueError("customer_id required for portal session")
     client = _get_client()
-    return_url = _env("STRIPE_SUCCESS_URL", SUCCESS_URL_DEFAULT)
+    return_url = portal_return_url()
     session = client.v1.billing_portal.sessions.create(
         params={"customer": customer_id, "return_url": return_url},
     )
