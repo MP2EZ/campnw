@@ -139,6 +139,10 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   // Correlates search_executed with the book_click / zero-state events it
   // produces. Exposed so ResultCard can stamp outbound clicks with it.
   const searchIdRef = useRef<string>("");
+  // Cleared on unmount: a pending scroll that fires after teardown throws
+  // "document is not defined" under vitest and flaked CI.
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(scrollTimerRef.current), []);
 
   const maxResults = lastSearchParams.current?.limit || 20;
 
@@ -226,7 +230,8 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     }
     setFormCollapsed(true);
 
-    setTimeout(() => {
+    clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => {
       document.querySelector(".results-skeleton, .results")?.scrollIntoView({
         behavior: "smooth", block: "start",
       });
