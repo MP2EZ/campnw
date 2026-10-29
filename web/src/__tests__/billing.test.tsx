@@ -343,6 +343,94 @@ describe("useBilling", () => {
       value: originalHistory,
     });
   });
+
+  test("a Portal return is not a checkout, and re-reads until the webhook lands", async () => {
+    // The Portal used to return to ?billing=success, so every cancel was
+    // logged as checkout_returned and status was read exactly once — before
+    // Stripe's webhook had updated it. The user saw plain "Pro" after
+    // cancelling until they reloaded.
+    const originalHistory = window.history.replaceState;
+    const replaceStateMock = vi.fn();
+    Object.defineProperty(window, "history", {
+      value: { ...window.history, replaceState: replaceStateMock },
+      writable: true,
+    });
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, search: "?billing=portal", pathname: "/" },
+      writable: true,
+    });
+    const capture = vi.fn();
+    (window as unknown as { posthog: unknown }).posthog = {
+      capture,
+      register: vi.fn(),
+    };
+
+    vi.doMock("../lib/supabase", () => ({
+      supabase: {
+        auth: {
+          getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+        },
+      },
+    }));
+    vi.doMock("../hooks/useAuth", () => ({
+      useAuth: () => ({
+        user: { id: 1, email: "u@x.com", display_name: "U" },
+        loading: false,
+      }),
+    }));
+    // Real schedule, no real waiting.
+    vi.doMock("../lib/pollUntilChanged", async () => {
+      const actual = await vi.importActual<
+        typeof import("../lib/pollUntilChanged")
+      >("../lib/pollUntilChanged");
+      return {
+        pollUntilChanged: (o: Parameters<typeof actual.pollUntilChanged>[0]) =>
+          actual.pollUntilChanged({ ...o, sleep: () => Promise.resolve() }),
+      };
+    });
+
+    const base = {
+      subscription_status: "pro",
+      has_stripe_customer: true,
+      is_pro: true,
+      watch_limit: null,
+      planner_session_limit: 20,
+      configured: true,
+    };
+    let reads = 0;
+    globalThis.fetch = vi.fn().mockImplementation(async () => {
+      reads += 1;
+      // Webhook lands on the third read.
+      const expires = reads >= 3 ? "2026-11-28T00:00:00Z" : "";
+      return {
+        ok: true,
+        json: () => Promise.resolve({ ...base, subscription_expires_at: expires }),
+      };
+    });
+
+    const { BillingProvider, useBilling } = await import("../hooks/useBilling");
+    function Probe() {
+      const { status } = useBilling();
+      return <span data-testid="probe">{status?.subscription_expires_at || "none"}</span>;
+    }
+    render(
+      <BillingProvider>
+        <Probe />
+      </BillingProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("probe")).toHaveTextContent("2026-11-28");
+    });
+    expect(capture).toHaveBeenCalledWith("portal_returned", expect.anything());
+    expect(capture).not.toHaveBeenCalledWith("checkout_returned", expect.anything());
+    expect(replaceStateMock.mock.calls[0][2]).not.toContain("billing=portal");
+
+    delete (window as unknown as { posthog?: unknown }).posthog;
+    Object.defineProperty(window.history, "replaceState", {
+      value: originalHistory,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 /**
  * Billing context hook (v1.4 monetization).
  *
- * Fetches /api/billing/status once on mount and exposes the tier state
- * plus action helpers (startCheckout, openPortal, refresh). Shared via
+ * Fetches /api/billing/status on mount (and re-reads briefly after a
+ * Customer Portal return) and exposes the tier state plus action helpers
+ * (startCheckout, openPortal, refresh). Shared via
  * a context so multiple components (UpgradeModal, WatchPanel, UserMenu)
  * read consistent state without re-fetching.
  */
@@ -26,6 +27,7 @@ import {
   startCheckout,
   type BillingStatus,
 } from "../api";
+import { pollUntilChanged } from "../lib/pollUntilChanged";
 import { useAuth } from "./useAuth";
 
 interface BillingContextValue {
@@ -44,6 +46,23 @@ interface BillingContextValue {
 
 const BillingContext = createContext<BillingContextValue | null>(null);
 
+// Checkout waits for its webhook before redirecting back; the Portal does
+// not, so a status read on return usually predates the cancel. ~29s total.
+const PORTAL_RETURN_POLL_MS = [2_000, 4_000, 8_000, 15_000] as const;
+
+const statusKey = (s: BillingStatus) =>
+  `${s.subscription_status}|${s.subscription_expires_at}|${s.is_pro}`;
+
+function stripBillingParam(params: URLSearchParams) {
+  params.delete("billing");
+  const newSearch = params.toString();
+  window.history.replaceState(
+    {},
+    "",
+    window.location.pathname + (newSearch ? `?${newSearch}` : ""),
+  );
+}
+
 const FREE_FALLBACK: BillingStatus = {
   subscription_status: "free",
   subscription_expires_at: "",
@@ -56,26 +75,37 @@ const FREE_FALLBACK: BillingStatus = {
 
 export function BillingProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
+  const userId = user?.id;
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
+  const apply = useCallback((s: BillingStatus) => {
+    setStatus(s);
+    // Registering plan as a super property makes every subsequent event
+    // segmentable by tier without touching any individual call site.
+    getPosthog()?.register({
+      plan: s.is_pro ? "pro" : "free",
+      subscription_status: s.subscription_status,
+    });
+  }, []);
+
+  const load = useCallback(async (): Promise<BillingStatus | null> => {
     try {
       const s = await getBillingStatus();
-      setStatus(s);
-      // Registering plan as a super property makes every subsequent event
-      // segmentable by tier without touching any individual call site.
-      getPosthog()?.register({
-        plan: s.is_pro ? "pro" : "free",
-        subscription_status: s.subscription_status,
-      });
+      apply(s);
+      return s;
     } catch {
       // Endpoint unreachable — render as if free-tier so UI doesn't break.
       setStatus(FREE_FALLBACK);
+      return null;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apply]);
+
+  const refresh = useCallback(async () => {
+    await load();
+  }, [load]);
 
   // Initial fetch and re-fetch on auth state change (login/logout flips
   // the relevant subscription_status on the user record).
@@ -91,13 +121,37 @@ export function BillingProvider({ children }: { children: ReactNode }) {
     if (params.get("billing") === "success") {
       track("checkout_returned", { outcome: "success" });
       refresh();
-      params.delete("billing");
-      const newSearch = params.toString();
-      const newUrl =
-        window.location.pathname + (newSearch ? `?${newSearch}` : "");
-      window.history.replaceState({}, "", newUrl);
+      stripBillingParam(params);
     }
   }, [refresh]);
+
+  // Return from the Customer Portal (cancel, reactivate, card update).
+  // Waits for auth: a read made before the session resolves returns the
+  // anonymous shape, and the first signed-in read would then count as the
+  // change and end polling before the webhook had landed. Stripping the
+  // param makes this one-shot across the auth re-runs.
+  useEffect(() => {
+    if (authLoading || userId == null) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("billing") !== "portal") return;
+    track("portal_returned", {});
+    stripBillingParam(params);
+    // No cleanup/cancel: BillingProvider wraps the app for the page's
+    // lifetime, and under StrictMode a cancel-on-cleanup would kill the poll
+    // in dev while the re-run finds the param already stripped.
+    load().then((first) => {
+      if (!first) return;
+      return pollUntilChanged({
+        initial: first,
+        fetchOnce: getBillingStatus,
+        delaysMs: PORTAL_RETURN_POLL_MS,
+        onValue: apply,
+        key: statusKey,
+      });
+    });
+    // Keyed on the id, not the user object, so a token refresh doesn't
+    // re-run this.
+  }, [authLoading, userId, load, apply]);
 
   const handleStartCheckout = useCallback(async () => {
     // Option A (v1.45): the native app sells nothing in-app (no StoreKit IAP).
