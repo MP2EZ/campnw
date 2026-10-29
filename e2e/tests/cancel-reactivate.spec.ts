@@ -64,6 +64,13 @@ test("New Pro user can cancel via Customer Portal", async ({ page }) => {
   // or renamed step must not fail the run. The authoritative assertion is the "Pro until"
   // check below: it can't pass unless cancellation really propagated, so
   // skipping a step here can produce a false failure but never a false pass.
+  // Registered before the first click so it can't miss the request, whichever
+  // of the steps below turns out to be the one that submits it.
+  const cancelSubmitted = page.waitForResponse(
+    (r) => r.request().method() === "POST" && /\/subscriptions\/[^/]+\/cancel\b/.test(r.url()),
+    { timeout: 30_000 },
+  );
+
   await page.getByText("Cancel subscription", { exact: true }).first().click();
 
   // No assertion on the confirm page's heading. Stripe renamed it from
@@ -85,25 +92,34 @@ test("New Pro user can cancel via Customer Portal", async ({ page }) => {
     await confirmCancel.click();
   }
 
-  // Let the cancel request finish before navigating away. Without this the
-  // goto() below can abort it in flight, which surfaces confusingly as a
-  // missing "Pro until" further down.
+  // Don't leave the Portal until Stripe has answered the cancel POST, or the
+  // goto() below aborts it in flight and the subscription is never cancelled.
   //
-  // Waits on the network rather than on Stripe's post-cancel wording: the
-  // previous version watched the confirm page's heading disappear, which
-  // silently became a permanent failure the moment Stripe renamed it.
-  await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {
-    // Best-effort. A busy Portal page can keep connections open; the
-    // authoritative "Pro until" assertion below has its own 60s budget.
-  });
+  // This replaced a waitForLoadState("networkidle"), which could not do the
+  // job: it resolves immediately once the page has *ever* reached networkidle,
+  // so it returned in ~4ms and the cancel POST was aborted (status -1 in the
+  // trace) on most runs from 2026-08-27. That then surfaced as a missing
+  // "Pro until" — a cancellation that never happened, reported as a webhook
+  // failure. Waiting on our own request, not on Stripe's wording, keeps the
+  // step immune to Portal copy changes; if the request never fires, the
+  // cancellation didn't happen and failing here is the truthful result.
+  await cancelSubmitted;
 
   // Step 3: back to campable — webhook → DB → UI loop validation.
   // This is the assertion that matters: it covers our own
   // Stripe → webhook → DB → BillingProvider chain rather than Stripe's copy,
   // which is why there's no assertion on the Portal's confirmation wording.
   // The webhook round trip can take 30-60s.
-  await page.goto("/");
-  await page.locator(".user-menu-trigger").click();
-  await page.getByRole("button", { name: "Billing" }).click();
-  await expect(page.getByText(/Pro until/i)).toBeVisible({ timeout: 60_000 });
+  //
+  // Reload inside the retry, not once before it. BillingProvider fetches
+  // /api/billing/status once on mount and never polls, so a single goto()
+  // followed by a 60s toBeVisible only ever saw the status from the moment
+  // the page mounted — usually <1s after the cancel, before the webhook had
+  // landed. The 60s budget was waiting on a DOM that could not change.
+  await expect(async () => {
+    await page.goto("/");
+    await page.locator(".user-menu-trigger").click();
+    await page.getByRole("button", { name: "Billing" }).click();
+    await expect(page.getByText(/Pro until/i)).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 60_000, intervals: [2_000, 5_000] });
 });
