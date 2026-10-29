@@ -318,12 +318,21 @@ class TestGeocodeAddress:
         assert "User-Agent" in request.headers
         assert "PNW-Campsites" in request.headers["User-Agent"]
 
+    @respx.mock
     async def test_address_at_boundary_200_chars(self):
-        """Address with exactly 200 chars should not raise ValueError."""
+        """A 200-char address passes validation and reaches Nominatim.
+
+        This used to call the real Nominatim unmocked and accept any
+        ValueError — including the length check it meant to rule out — so it
+        could not fail on the bug it named, and a 429 from Nominatim failed
+        the deploy gate on 2026-10-29.
+        """
         address_200 = "a" * 200
-        with pytest.raises(ValueError):
-            # Will fail in the actual geocode call (no mock), but not validation
-            await geocode_address(address_200)
+        route = respx.get("https://nominatim.openstreetmap.org/search").mock(
+            return_value=httpx.Response(200, json=[{"lat": "1", "lon": "2"}]),
+        )
+        assert await geocode_address(address_200) == (1.0, 2.0)
+        assert route.calls[0].request.url.params["q"] == address_200
 
     @respx.mock
     async def test_returns_floats_not_strings(self):
