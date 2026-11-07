@@ -2085,6 +2085,8 @@ The results page answers the question in one line ("22 campgrounds have a June w
 - **Mobile:** map plus bottom sheet with date quick-chips.
 - **Accessibility:** visible focus, 44px targets, contrast fixes.
 
+**Implementation plan:** `docs/PLAN-v1.48-answer-first-results.md` (decisions D1–D13, PRs P1a–P4b, risks).
+
 ### Persona review (2026-11-06)
 Five task-based personas (weekend planner, last-minute mobile, RV owner, cancellation hunter, first-timer) plus an accessibility audit. They agreed on:
 - Full and unreleased places vanished.
