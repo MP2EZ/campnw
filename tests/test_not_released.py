@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from pnw_campsites.registry.models import BookingSystem
+from pnw_campsites.providers.goingtocamp import GoingToCampClient
+from pnw_campsites.registry.models import BookingSystem, CampgroundAvailability
 from pnw_campsites.search.engine import SearchQuery, _process_availability
 from tests.conftest import (
     make_campground,
@@ -101,14 +102,24 @@ class TestProcessAvailabilityNotReleased:
         assert r.releases_on is None
         assert r.releases_through is None
 
-    def test_wa_state_nights_count_without_a_release_date(self) -> None:
-        avail = _avail(_site("1", {"2099-06-01": "NYR"}))
+    def test_wa_search_past_the_nine_month_window(self) -> None:
+        # GoingToCamp says Available for every night; on 2098-09-02 only
+        # arrivals through 2099-06-02 are open.
+        raw = {sid: [{"availability": 0}] * 4 for sid in ("1", "2")}
+        sites = GoingToCampClient()._build_campsites(
+            raw, date(2099, 6, 1), date(2099, 6, 4), today=date(2098, 9, 2),
+        )
         r = _process_availability(
             make_campground(booking_system=BookingSystem.WA_STATE),
-            avail, _query(date(2099, 6, 1), date(2099, 6, 1)),
+            CampgroundAvailability(facility_id="-2147483624", campsites=sites),
+            _query(date(2099, 6, 1), date(2099, 6, 4)),
         )
-        assert r.not_released_nights == 1
-        assert r.releases_on is None
+        assert r.not_released_nights == 2
+        assert r.releases_on == date(2098, 9, 3)
+        assert r.releases_through == date(2098, 9, 4)
+        assert {(w.start_date, w.nights) for w in r.available_windows} == {
+            ("2099-06-01", 2),
+        }
 
     def test_available_windows_are_unchanged(self) -> None:
         avail = _avail(

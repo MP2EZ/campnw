@@ -5,7 +5,11 @@ from __future__ import annotations
 from datetime import date
 
 from pnw_campsites.registry.models import BookingSystem
-from pnw_campsites.search.release import recgov_release_date, release_date
+from pnw_campsites.search.release import (
+    recgov_release_date,
+    release_date,
+    wa_release_date,
+)
 
 
 class TestRecgovReleaseDate:
@@ -40,6 +44,28 @@ class TestRecgovReleaseDate:
         assert recgov_release_date(date(2027, 7, 1)) == date(2027, 1, 1)
 
 
+class TestWaReleaseDate:
+    """WA State Parks: arrivals open 9 months ahead, same day-of-month."""
+
+    def test_same_day_nine_months_earlier(self) -> None:
+        # Probed 2026-11-06/07: Aug 6 2027 arrivals were bookable on Nov 6.
+        assert wa_release_date(date(2027, 8, 6)) == date(2026, 11, 6)
+
+    def test_crosses_the_year_boundary(self) -> None:
+        assert wa_release_date(date(2027, 9, 30)) == date(2026, 12, 30)
+        assert wa_release_date(date(2027, 10, 1)) == date(2027, 1, 1)
+
+    def test_month_end_clamps_to_last_day_of_shorter_month(self) -> None:
+        # Nov 29–30 have no matching day in February, Aug 31 none in November.
+        assert wa_release_date(date(2027, 11, 30)) == date(2027, 2, 28)
+        assert wa_release_date(date(2027, 11, 29)) == date(2027, 2, 28)
+        assert wa_release_date(date(2027, 11, 28)) == date(2027, 2, 28)
+        assert wa_release_date(date(2027, 8, 31)) == date(2026, 11, 30)
+
+    def test_month_end_in_a_leap_year_clamps_to_feb_29(self) -> None:
+        assert wa_release_date(date(2028, 11, 30)) == date(2028, 2, 29)
+
+
 class TestReleaseDate:
     """Dispatch by booking system, refusing dates the data contradicts."""
 
@@ -48,12 +74,11 @@ class TestReleaseDate:
     def test_dispatches_per_booking_system(self) -> None:
         night = date(2027, 8, 20)
         assert release_date(BookingSystem.RECGOV, night, self.TODAY) == date(2027, 2, 20)
+        assert release_date(BookingSystem.WA_STATE, night, self.TODAY) == date(2026, 11, 20)
 
-    def test_systems_without_a_verified_rule_return_none(self) -> None:
-        # WA publishes a 9-month window, but GoingToCamp's NYR status doesn't
-        # follow it (see release.py). ReserveAmerica has no NYR status.
+    def test_systems_without_a_rule_return_none(self) -> None:
+        # ReserveAmerica has no NYR status.
         night = date(2027, 9, 4)
-        assert release_date(BookingSystem.WA_STATE, night, self.TODAY) is None
         assert release_date(BookingSystem.OR_STATE, night, self.TODAY) is None
         assert release_date(BookingSystem.FCFS, night, self.TODAY) is None
 
@@ -66,6 +91,8 @@ class TestReleaseDate:
         # The rule says Jun 1 2026 — long past, yet the night is NYR.
         assert release_date(BookingSystem.RECGOV, date(2026, 12, 1), self.TODAY) is None
         assert release_date(BookingSystem.RECGOV, date(2027, 5, 5), self.TODAY) is None
+        # A Deception Pass loop is NYR all of Aug 2027, inside WA's window.
+        assert release_date(BookingSystem.WA_STATE, date(2027, 8, 1), self.TODAY) is None
 
     def test_release_today_is_still_reported(self) -> None:
         # Releases at 7 am PT today; the search may run before then.
