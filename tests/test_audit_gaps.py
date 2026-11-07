@@ -572,6 +572,25 @@ class TestGenerateSearchSummary:
     """Tests for the AI search summary helper."""
 
     @pytest.mark.asyncio
+    async def test_off_by_default_even_with_api_key(self):
+        """Dropped for now (2026-11-07): it stated data bugs as fact and its
+        urgency contradicted the brand. Off unless SEARCH_SUMMARY_ENABLED is
+        set, and it must not spend a model call while off."""
+        from pnw_campsites.routes.search import _generate_search_summary
+        from pnw_campsites.search.engine import SearchQuery
+
+        query = SearchQuery(start_date=date(2026, 6, 1), end_date=date(2026, 6, 30))
+        with (
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}, clear=False),
+            patch("pnw_campsites.posthog_client.get_anthropic_client") as factory,
+        ):
+            import os
+            os.environ.pop("SEARCH_SUMMARY_ENABLED", None)
+            result = await _generate_search_summary([{"name": "Test"}], query)
+        assert result is None
+        factory.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_returns_none_without_api_key(self):
         """Should return None when no ANTHROPIC_API_KEY is set."""
         from pnw_campsites.routes.search import _generate_search_summary
@@ -603,7 +622,7 @@ class TestGenerateSearchSummary:
         mock_client.messages.create = AsyncMock(return_value=mock_response)
 
         with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key", "SEARCH_SUMMARY_ENABLED": "1"}),
             patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             result = await _generate_search_summary(
@@ -628,7 +647,7 @@ class TestGenerateSearchSummary:
         mock_client.messages.create = slow_create
 
         with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key", "SEARCH_SUMMARY_ENABLED": "1"}),
             patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             result = await _generate_search_summary(
@@ -655,7 +674,7 @@ class TestGenerateSearchSummary:
         mock_client.messages.create = AsyncMock(return_value=mock_response)
 
         with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key", "SEARCH_SUMMARY_ENABLED": "1"}),
             patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
         ):
             await _generate_search_summary(results, query)

@@ -206,9 +206,18 @@ async def _generate_search_summary(
     query: SearchQuery,
     posthog_distinct_id: str | None = None,
 ) -> str | None:
-    """Generate a brief AI summary of search results. Returns None on failure."""
+    """Generate a brief AI summary of search results. Returns None on failure.
+
+    Off unless SEARCH_SUMMARY_ENABLED is truthy. Dropped 2026-11-07: it stated
+    upstream data bugs as fact ("only 1 site for June 2027" from a not-yet-
+    released month) and its urgency contradicted docs/BRAND.md. The key gate
+    alone couldn't turn it off: NL search and the planner share the key.
+    """
     import asyncio
     import os
+
+    if os.getenv("SEARCH_SUMMARY_ENABLED", "").strip().lower() not in ("1", "true", "yes"):
+        return None
 
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key:
