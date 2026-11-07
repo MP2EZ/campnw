@@ -4,10 +4,27 @@
 **Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`; no version bump since August). Last release: PR #166 (`dev → main`, 2026-11-07). v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; App Store/Play still pending. Next planned milestone: **v1.48 "Answer-first Results"** (designed, not started).
 
 **Open problems:**
-- **WA State Parks dark in prod since ~2026-11-05.** GoingToCamp's Azure WAF blocks prod's Fly outbound IP (`79.127.185.38`); staging's Fly IP and GitHub's Azure runners still get through, so the block is IP-specific, not class-wide. A dedicated Fly egress IP is the likely fix (untested). Since #165, prod survives the block at startup and labels it `waf_blocked` instead of "unavailable"; before that, any restart would have failed to boot.
-- **Oregon State Parks dark in prod (#131, closed 2026-11-07 as decided).** ReserveAmerica blocks *every* datacenter IP tested (Fly prod, Fly staging, Azure runner); only residential works. Remaining options: a residential proxy for RA calls (cost + ToS questions) or accept and label it, which is the current state.
-- **#135** — a provider can go dark without the monitor failing. Partly addressed by #165 (the monitor now checks prod's own provider view); still open.
+- **WA State Parks dark in prod since ~2026-11-05.** GoingToCamp's Azure WAF blocks prod's outbound IPs: first the shared Datacamp address `79.127.185.38`, and since 2026-11-07 also prod's dedicated Fly egress IP `209.71.113.243`, which is in Fly's own range and was blocked immediately. Staging (shared CDN77 `79.127.255.236`) and GitHub's Azure runners (`52.159.243.197`, 2026-11-07) still get through, so the block targets particular IPs and ranges, not datacenters as a class. Prod survives the block (#165) and labels it `waf_blocked`. Tracked by open alert #167. Fix options are below ("Restoring WA State Parks"). **Decision 2026-11-07: documented, not started.**
+- **#135** — a provider can go dark without the monitor failing. Largely addressed: #165 makes the monitor check prod's own WA view, and #168 runs the diagnostic sweep on failure and keeps one issue per outage. Oregon isn't covered by a prod-view check yet.
 - **Watch poller** sends WA watches (ids 7, 9) to the Recreation.gov URL and keeps polling past-dated watches, so it gets 400s every cycle (seen in prod logs 2026-11-06). A fix session was started and interrupted; no branch yet.
+
+**Resolved 2026-11-07: Oregon State Parks restored.** Prod was given a dedicated app-scoped Fly egress IP (`fly ips allocate-egress -a campnw -r sjc`, about $4/mo). ReserveAmerica blocked the shared Datacamp/CDN77 and Azure addresses but not Fly's own range, so the 53 Oregon parks work from prod again (`doctor` ok; Silver Falls returns availability). That supersedes #131's conclusion that every datacenter IP is blocked.
+
+### Restoring WA State Parks (documented 2026-11-07, not started)
+The egress IP is shared by all of prod's outbound traffic. It can't be split per provider, and it has to stay because it is what keeps Oregon working. So WA needs its own route:
+- **Recommended: proxy GoingToCamp only.**
+  - A tiny Azure VM in West US (~$4–5/mo, smallest size) running `tinyproxy` as an HTTP CONNECT proxy.
+  - Lock it down by source IP (`209.71.113.243`) plus basic auth.
+  - Azure is the only host with evidence: two separate GitHub runner IPs reached GoingToCamp on 2026-11-06 and 2026-11-07, while ReserveAmerica blocks Azure. Other clouds are untested.
+  - CONNECT keeps curl_cffi's Chrome TLS fingerprint intact through the proxy, which is what gets past the WAF.
+- **Code:** a `GOINGTOCAMP_PROXY` env var, used by `GoingToCampClient` (and the `doctor` probe and WA seeder) when set and ignored when unset. Pass it as `proxies={"https": url}` to the curl_cffi `Session`.
+- **Order:**
+  1. Create the VM.
+  2. From the VM, run one curl_cffi request to `/api/maps` and `/api/availability/map` and confirm a 200.
+  3. Set the Fly secret.
+  4. Deploy.
+  5. Confirm with `doctor --only provider` on the prod box and the #167 monitor going green.
+- **Risk:** if GoingToCamp blocked the old IP because of traffic volume rather than its range, the proxy IP could get blocked the same way. The instant block of Fly's range points to range reputation, but this isn't proven. Mitigation: keep WA polling modest, and fix the watch poller bug above.
 
 ---
 
@@ -2078,13 +2095,17 @@ Five task-based personas (weekend planner, last-minute mobile, RV owner, cancell
 
 All five are addressed in the v2 canvas.
 
-### Data prerequisites (issue drafts, not filed)
-1. WA site types are hardcoded `STANDARD`. Decode `wa_state_sites.allowed_equipment` with GoingToCamp `/api/equipment`, which gives tent / van / RV length bands (20′–40′+), plus loop descriptions for hookups.
-2. WA site metadata is seeded for only 25 of the 75 parks.
-3. There's no `boat-in` tag.
-4. Not-yet-released (`NYR`) is collapsed into "unavailable", so a 6-month-out search looks fully booked.
-5. River parks are tagged `beach`.
-6. Search silently checks only the N closest campgrounds.
+### Data prerequisites
+| # | Item | Status |
+|---|------|--------|
+| 1 | WA site types are hardcoded `STANDARD`. Decode `wa_state_sites.allowed_equipment` with GoingToCamp `/api/equipment` (tent / van / RV length bands 20′–40′+), plus loop descriptions for hookups | Open |
+| 2 | WA site metadata is seeded for only 25 of the 75 parks. Seeding must run from a network GoingToCamp doesn't block | Open |
+| 3 | `boat-in` tag | **Done**: #170 (on `dev`) |
+| 4 | Not-yet-released (`NYR`) collapsed into "unavailable" | **Done**: #171 engine, #172 API, #173 UI notice, #175 WA 9-month window (on `dev`) |
+| 5 | River parks tagged `beach` | **Done**: #170 curated overrides, applied as a startup migration (on `dev`) |
+| 6 | Search silently checks only the N closest campgrounds | **Done**: #169 `campgrounds_matched` plus "Checked N of M" / "Check the rest" (on `dev`) |
+
+Also on `dev`: #174 (Recreation.gov stay-continuation nights were counted as FCFS) and #168 (monitor dedupe). None of these are released to `main` yet.
 
 ---
 
