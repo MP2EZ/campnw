@@ -70,6 +70,7 @@ class CampgroundResultResponse(BaseModel):
     description_rewrite: str = ""
     best_for: str = ""
     estimated_drive_minutes: int | None = None
+    boat_in: bool = False  # only reachable by boat; no drive time is shown
     availability_url: str | None = None
     windows: list[WindowResponse]
     error: str | None = None
@@ -324,7 +325,8 @@ def _format_result(
         elevator_pitch=cg.elevator_pitch,
         description_rewrite=cg.description_rewrite,
         best_for=cg.best_for,
-        estimated_drive_minutes=r.estimated_drive_minutes,
+        estimated_drive_minutes=None if r.boat_in else r.estimated_drive_minutes,
+        boat_in=r.boat_in,
         availability_url=_build_availability_url(
             cg.facility_id, cg.booking_system, start, end,
             slug=cg.booking_url_slug,

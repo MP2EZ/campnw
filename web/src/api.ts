@@ -159,6 +159,8 @@ export interface CampgroundResult {
   description_rewrite?: string;
   best_for?: string;
   estimated_drive_minutes: number | null;
+  /** Only reachable by boat; drive time is omitted and the card says so. */
+  boat_in?: boolean;
   availability_url: string | null;
   windows: Window[];
   error: string | null;
