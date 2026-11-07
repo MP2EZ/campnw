@@ -74,3 +74,12 @@ def release_date(
     released = rule(night)
     return released if released >= today else None
 
+
+def format_release_range(first: date, last: date) -> str:
+    """Dec 4, Dec 4 – 25, or Dec 28 – Jan 3 — as the frontend's formatDateRange."""
+    start = f"{first:%b} {first.day}"
+    if first == last:
+        return start
+    if (first.year, first.month) == (last.year, last.month):
+        return f"{start} – {last.day}"
+    return f"{start} – {last:%b} {last.day}"

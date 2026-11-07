@@ -22,6 +22,7 @@ from pnw_campsites.search.engine import (
     SearchQuery,
     StreamCoverageEvent,
     StreamDiagnosisEvent,
+    StreamNotReleasedEvent,
     StreamProgressEvent,
     StreamWarningsEvent,
 )
@@ -80,6 +81,10 @@ class CampgroundResultResponse(BaseModel):
     weather_precip_pct: int | None = None
     image_urls: list[str] = []
     image_attribution: str = ""
+    # Requested nights not yet released for booking, and when the first opens
+    # (None when the booking system has no reliable rule).
+    not_released_nights: int = 0
+    releases_on: date | None = None
 
 
 class SearchWarningResponse(BaseModel):
@@ -165,6 +170,12 @@ class SearchResponse(BaseModel):
     diagnosis: DiagnosisResponse | None = None
     date_suggestions: list[DateSuggestionResponse] = []
     action_chips: list[ActionChipResponse] = []
+    # Checked campgrounds with requested nights not yet released, including
+    # those with no availability (which aren't in `results`), and the span of
+    # release dates from their first to their last not-released night.
+    not_released_campgrounds: int = 0
+    releases_on_earliest: date | None = None
+    releases_on_latest: date | None = None
 
 
 class CampgroundResponse(BaseModel):
@@ -238,6 +249,10 @@ async def _generate_search_summary(
         return response.content[0].text.strip()
     except Exception:
         return None
+
+
+def _iso(d: date | None) -> str | None:
+    return d.isoformat() if d else None
 
 
 def _build_availability_url(
@@ -342,6 +357,8 @@ def _format_result(
         weather_precip_pct=round(weather[2]) if weather else None,
         image_urls=[] if photos_disabled else cg.image_urls,
         image_attribution="" if photos_disabled else cg.image_attribution,
+        not_released_nights=r.not_released_nights,
+        releases_on=r.releases_on,
     )
 
 
@@ -529,6 +546,9 @@ async def search(
             )
             for c in results.action_chips
         ],
+        not_released_campgrounds=results.not_released.campgrounds,
+        releases_on_earliest=results.not_released.releases_on_earliest,
+        releases_on_latest=results.not_released.releases_on_latest,
     )
 
 
@@ -674,6 +694,17 @@ async def search_stream(
                 yield f"data: {json.dumps(coverage)}\n\n"
                 continue
 
+            if isinstance(item, StreamNotReleasedEvent):
+                s = item.summary
+                payload = {
+                    "type": "not_released",
+                    "not_released_campgrounds": s.campgrounds,
+                    "releases_on_earliest": _iso(s.releases_on_earliest),
+                    "releases_on_latest": _iso(s.releases_on_latest),
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                continue
+
             # StreamDiagnosisEvent = zero results, emit diagnosis
             if isinstance(item, StreamDiagnosisEvent):
                 if item.diagnosis or item.date_suggestions:
@@ -730,7 +761,7 @@ async def search_stream(
                 item, booking_system or BookingSystem.RECGOV,
                 weather=weather,
             )
-            yield f"data: {json.dumps(data.model_dump())}\n\n"
+            yield f"data: {json.dumps(data.model_dump(mode='json'))}\n\n"
             if item.total_available_sites > 0:
                 available_count += 1
                 summary_data.append({
