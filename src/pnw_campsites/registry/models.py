@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
 # Availability (matches rec.gov undocumented API response)
@@ -21,6 +21,22 @@ class AvailabilityStatus(StrEnum):
     NYR = "NYR"  # Not Yet Released — reservations haven't opened
     OPEN = "Open"  # FCFS / walk-in, or stay continuation (see continuation_dates)
     CLOSED = "Closed"  # seasonal closure
+
+
+class SiteFit(BaseModel):
+    """What a site takes, as far as the booking system says. None = unknown.
+
+    `fits_rv` with `max_rv_ft` None means RVs fit but no length is listed.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    fits_tent: bool | None = None
+    fits_van: bool | None = None
+    fits_rv: bool | None = None  # RV or trailer
+    max_rv_ft: int | None = None
+    hookups: bool | None = None  # electric (or more)
+    walk_in: bool | None = None
 
 
 class CampsiteAvailability(BaseModel):
