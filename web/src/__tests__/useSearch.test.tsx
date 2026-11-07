@@ -14,6 +14,7 @@ let capturedOnError: ((err: Error) => void) | null = null;
 let capturedOnWarnings: ((w: unknown[]) => void) | null = null;
 let capturedOnDiagnosis: ((e: unknown) => void) | null = null;
 let capturedOnNotReleased: ((s: unknown) => void) | null = null;
+let capturedOnCoverage: ((matched: number, checked: number) => void) | null = null;
 
 vi.mock("../api", () => ({
   searchCampsitesStream: vi.fn(
@@ -29,10 +30,12 @@ vi.mock("../api", () => ({
       capturedOnError = onError;
       // after (params, onResult, onDone, onError) the rest are:
       // 0 onDiagnosis, 1 signal, 2 onParsed, 3 onSummary, 4 onProgress,
-      // 5 onWarnings, 6 onNotReleased
+      // 5 onWarnings, 6 onCoverage, 7 onNotReleased
       capturedOnDiagnosis = (rest[0] as ((e: unknown) => void)) ?? null;
       capturedOnWarnings = (rest[5] as ((w: unknown[]) => void)) ?? null;
-      capturedOnNotReleased = (rest[6] as ((s: unknown) => void)) ?? null;
+      capturedOnCoverage =
+        (rest[6] as ((matched: number, checked: number) => void)) ?? null;
+      capturedOnNotReleased = (rest[7] as ((s: unknown) => void)) ?? null;
     },
   ),
   saveSearchHistory: vi.fn(),
@@ -618,3 +621,49 @@ describe("useSearch funnel events", () => {
     );
   });
 })
+
+describe("useSearch coverage", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/");
+    vi.clearAllMocks();
+  });
+
+  const PARAMS = { start_date: "2026-06-01", end_date: "2026-06-30" } as SearchParams;
+
+  test("a coverage frame lands in results and survives later flushes", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => {
+      result.current.handleSearch(PARAMS, "find");
+    });
+    expect(result.current.results?.campgrounds_matched).toBeUndefined();
+
+    await act(async () => {
+      capturedOnCoverage?.(46, 20);
+    });
+    expect(result.current.results).toMatchObject({
+      campgrounds_matched: 46, campgrounds_checked: 20,
+    });
+
+    await act(async () => {
+      capturedOnResult?.(MOCK_RESULT);
+      capturedOnDone?.();
+    });
+    expect(result.current.results?.campgrounds_matched).toBe(46);
+  });
+
+  test("checkRest re-runs the same search with the higher limit", async () => {
+    const { searchCampsitesStream } = await import("../api");
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => {
+      result.current.handleSearch({ ...PARAMS, state: "WA", limit: 20 }, "exact");
+    });
+    await act(async () => {
+      result.current.checkRest(46);
+    });
+
+    const calls = vi.mocked(searchCampsitesStream).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[1][0]).toMatchObject({ ...PARAMS, state: "WA", limit: 46 });
+    expect(result.current.maxResults).toBe(46);
+  });
+});

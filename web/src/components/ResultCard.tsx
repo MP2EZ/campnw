@@ -352,7 +352,9 @@ export const ResultCard = memo(function ResultCard({
               <span className={`source-badge source-${result.booking_system}`}>
                 {sourceLabel}
               </span>
-              {result.estimated_drive_minutes != null && (
+              {result.boat_in ? (
+                <span className="drive-badge">Boat-in only</span>
+              ) : result.estimated_drive_minutes != null && (
                 <span className="drive-badge">
                   {result.estimated_drive_minutes < 60
                     ? `~${result.estimated_drive_minutes}m`
