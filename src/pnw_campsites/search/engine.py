@@ -732,10 +732,20 @@ class SearchEngine:
             # Ahead of "distance" and "dates": a wider radius or shifted week
             # hits the same release horizon, and "fully booked" is false.
             binding = "not_released"
-            explanation = (
-                f"{unreleased} of {checked} campgrounds haven't released "
-                f"these dates for booking yet."
-            )
+            if unreleased < checked:
+                explanation = (
+                    f"{unreleased} of {checked} campgrounds haven't released "
+                    f"these dates for booking yet."
+                )
+            elif checked == 1:
+                explanation = (
+                    "This campground hasn't released these dates for booking yet."
+                )
+            else:
+                explanation = (
+                    f"None of the {checked} campgrounds have released these "
+                    f"dates for booking yet."
+                )
             first = not_released.releases_on_earliest
             last = not_released.releases_on_latest or first
             if first:

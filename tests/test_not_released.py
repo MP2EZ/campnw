@@ -160,8 +160,9 @@ class TestSummarizeNotReleased:
 
 class TestFormatReleaseRange:
     def test_formats(self) -> None:
+        # Matches the frontend's formatDateRange (web/src/lib/dates.ts).
         assert format_release_range(date(2026, 12, 4), date(2026, 12, 4)) == "Dec 4"
-        assert format_release_range(date(2026, 12, 4), date(2026, 12, 25)) == "Dec 4–25"
+        assert format_release_range(date(2026, 12, 4), date(2026, 12, 25)) == "Dec 4 – 25"
         assert format_release_range(date(2026, 12, 28), date(2027, 1, 3)) == "Dec 28 – Jan 3"
 
 
@@ -185,8 +186,19 @@ class TestDiagnosisNotReleased:
         assert diagnosis.binding_constraint == "not_released"
         assert "fully booked" not in diagnosis.explanation
         assert "18 of 20" in diagnosis.explanation
-        assert "Dec 4–27" in diagnosis.explanation
+        assert "Dec 4 – 27" in diagnosis.explanation
         assert any(c.action == "watch" for c in chips)
+
+    def test_copy_reads_naturally_when_none_are_released(self) -> None:
+        q = _query(date(2027, 6, 4), date(2027, 6, 6))
+        explain = lambda n, checked: self._engine()._diagnose_zero_results(  # noqa: E731
+            q, registry_matches=checked, distance_filtered=0, checked=checked,
+            all_unavailable=checked, not_released=NotReleasedSummary(campgrounds=n),
+        )[0].explanation
+        assert explain(1, 1) == "This campground hasn't released these dates for booking yet."
+        assert explain(3, 3) == (
+            "None of the 3 campgrounds have released these dates for booking yet."
+        )
 
     def test_without_a_release_date_it_still_says_not_released(self) -> None:
         q = _query(date(2027, 9, 4), date(2027, 9, 6))
@@ -230,7 +242,7 @@ class TestSearchReportsNotReleased:
         assert results.not_released.releases_on_earliest == date(2098, 12, 4)
         assert results.not_released.releases_on_latest == date(2098, 12, 27)
         assert results.diagnosis.binding_constraint == "not_released"
-        assert "Dec 4–27" in results.diagnosis.explanation
+        assert "Dec 4 – 27" in results.diagnosis.explanation
 
     async def test_stream_emits_a_not_released_event_then_the_diagnosis(self, registry) -> None:
         events = [
