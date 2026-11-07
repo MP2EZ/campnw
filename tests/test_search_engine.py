@@ -1364,7 +1364,11 @@ class TestSearchIntegration:
         """search_stream yields diagnosis event if no campgrounds match."""
         from unittest.mock import AsyncMock
 
-        from pnw_campsites.search.engine import SearchEngine, StreamDiagnosisEvent
+        from pnw_campsites.search.engine import (
+            SearchEngine,
+            StreamCoverageEvent,
+            StreamDiagnosisEvent,
+        )
 
         recgov = AsyncMock()
         engine = SearchEngine(registry=registry, recgov_client=recgov)
@@ -1378,10 +1382,12 @@ class TestSearchIntegration:
         async for item in engine.search_stream(query):
             results.append(item)
 
-        # Should yield exactly one StreamDiagnosisEvent (not CampgroundResults)
-        assert len(results) == 1
-        assert isinstance(results[0], StreamDiagnosisEvent)
-        assert results[0].diagnosis is not None
+        # A coverage event (0 matched) then one StreamDiagnosisEvent; no
+        # CampgroundResults.
+        assert len(results) == 2
+        assert isinstance(results[0], StreamCoverageEvent)
+        assert isinstance(results[1], StreamDiagnosisEvent)
+        assert results[1].diagnosis is not None
 
     def test_suggest_similar_campgrounds_returns_chips(self, registry) -> None:
         """_suggest_similar_campgrounds returns action chips."""
