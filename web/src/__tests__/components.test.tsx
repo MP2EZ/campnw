@@ -87,6 +87,33 @@ describe("ResultCard", () => {
     expect(screen.getByText("~2h 30m")).toBeInTheDocument();
   });
 
+  test("boat-in campground shows 'Boat-in only' instead of a drive time", () => {
+    const boatIn = {
+      ...MOCK_RESULT,
+      name: "Blake Island",
+      boat_in: true,
+      estimated_drive_minutes: null,
+      tags: ["beach", "boat-in"],
+    };
+    render(<ResultCard result={boatIn} view="dates" />);
+    expect(screen.getByText("Boat-in only")).toBeInTheDocument();
+    expect(screen.queryByText(/~\d/)).not.toBeInTheDocument();
+  });
+
+  test("boat_in wins even if a drive time is still sent", () => {
+    const boatIn = { ...MOCK_RESULT, boat_in: true, estimated_drive_minutes: 63 };
+    render(<ResultCard result={boatIn} view="dates" />);
+    expect(screen.getByText("Boat-in only")).toBeInTheDocument();
+    expect(screen.queryByText("~1h 3m")).not.toBeInTheDocument();
+  });
+
+  test("regular campground never shows 'Boat-in only'", () => {
+    render(<ResultCard result={{ ...MOCK_RESULT, boat_in: false }} view="dates" />);
+    expect(screen.queryByText("Boat-in only")).not.toBeInTheDocument();
+    render(<ResultCard result={MOCK_RESULT} view="dates" />);
+    expect(screen.queryByText("Boat-in only")).not.toBeInTheDocument();
+  });
+
   test("shows up to 4 tags", () => {
     render(<ResultCard result={MOCK_RESULT} view="dates" />);
     expect(screen.getByText("forest")).toBeInTheDocument();

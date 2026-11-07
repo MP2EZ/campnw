@@ -20,6 +20,7 @@ from pnw_campsites.routes.deps import (
 )
 from pnw_campsites.search.engine import (
     SearchQuery,
+    StreamCoverageEvent,
     StreamDiagnosisEvent,
     StreamNotReleasedEvent,
     StreamProgressEvent,
@@ -71,6 +72,7 @@ class CampgroundResultResponse(BaseModel):
     description_rewrite: str = ""
     best_for: str = ""
     estimated_drive_minutes: int | None = None
+    boat_in: bool = False  # only reachable by boat; no drive time is shown
     availability_url: str | None = None
     windows: list[WindowResponse]
     error: str | None = None
@@ -159,6 +161,9 @@ class ActionChipResponse(BaseModel):
 
 class SearchResponse(BaseModel):
     campgrounds_checked: int
+    # Everything that passed the registry, tag and distance filters — the pool
+    # the `limit` cap selects from. matched > checked means the search was capped.
+    campgrounds_matched: int
     campgrounds_with_availability: int
     results: list[CampgroundResultResponse]
     warnings: list[SearchWarningResponse] = []
@@ -339,7 +344,8 @@ def _format_result(
         elevator_pitch=cg.elevator_pitch,
         description_rewrite=cg.description_rewrite,
         best_for=cg.best_for,
-        estimated_drive_minutes=r.estimated_drive_minutes,
+        estimated_drive_minutes=None if r.boat_in else r.estimated_drive_minutes,
+        boat_in=r.boat_in,
         availability_url=_build_availability_url(
             cg.facility_id, cg.booking_system, start, end,
             slug=cg.booking_url_slug,
@@ -493,6 +499,7 @@ async def search(
 
     return SearchResponse(
         campgrounds_checked=results.campgrounds_checked,
+        campgrounds_matched=results.campgrounds_matched,
         campgrounds_with_availability=results.campgrounds_with_availability,
         results=[
             _format_result(
@@ -674,6 +681,17 @@ async def search_stream(
                         ],
                     }
                     yield f"data: {json.dumps(payload)}\n\n"
+                continue
+
+            # StreamCoverageEvent = matched vs checked, so a capped search is
+            # never mistaken for a complete one.
+            if isinstance(item, StreamCoverageEvent):
+                coverage = {
+                    "type": "coverage",
+                    "campgrounds_matched": item.campgrounds_matched,
+                    "campgrounds_checked": item.campgrounds_checked,
+                }
+                yield f"data: {json.dumps(coverage)}\n\n"
                 continue
 
             if isinstance(item, StreamNotReleasedEvent):

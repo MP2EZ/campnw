@@ -124,6 +124,13 @@ function isSSEWarnings(data: unknown): data is { type: "warnings"; warnings: Sea
     && (data as Record<string, unknown>).type === "warnings";
 }
 
+function isSSECoverage(
+  data: unknown,
+): data is { type: "coverage"; campgrounds_matched: number; campgrounds_checked: number } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "coverage";
+}
+
 function isCampgroundResult(data: unknown): data is CampgroundResult {
   return typeof data === "object" && data !== null
     && typeof (data as Record<string, unknown>).facility_id === "string"
@@ -159,6 +166,8 @@ export interface CampgroundResult {
   description_rewrite?: string;
   best_for?: string;
   estimated_drive_minutes: number | null;
+  /** Only reachable by boat; drive time is omitted and the card says so. */
+  boat_in?: boolean;
   availability_url: string | null;
   windows: Window[];
   error: string | null;
@@ -199,6 +208,12 @@ export interface ActionChip {
 
 export interface SearchResponse {
   campgrounds_checked: number;
+  /**
+   * Campgrounds that passed every registry, tag and distance filter — the
+   * pool the `limit` cap selects from. `matched > checked` means the search
+   * was capped. Optional because a streaming search only learns it at the end.
+   */
+  campgrounds_matched?: number;
   campgrounds_with_availability: number;
   results: CampgroundResult[];
   warnings: SearchWarning[];
@@ -281,6 +296,7 @@ export async function searchCampsitesStream(
   onSummary?: (text: string) => void,
   onProgress?: (checked: number, total: number) => void,
   onWarnings?: (warnings: SearchWarning[]) => void,
+  onCoverage?: (matched: number, checked: number) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   if (params.q) {
@@ -336,6 +352,8 @@ export async function searchCampsitesStream(
               onSummary(parsed.text);
             } else if (isSSEWarnings(parsed) && onWarnings) {
               onWarnings(parsed.warnings);
+            } else if (isSSECoverage(parsed) && onCoverage) {
+              onCoverage(parsed.campgrounds_matched, parsed.campgrounds_checked);
             } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
               onDiagnosis(parsed);
             } else if (isCampgroundResult(parsed)) {

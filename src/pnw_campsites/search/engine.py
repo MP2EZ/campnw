@@ -87,6 +87,11 @@ class CampgroundResult:
     releases_on: date | None = None
     releases_through: date | None = None
 
+    @property
+    def boat_in(self) -> bool:
+        """Only reachable by boat: any drive time is to the shore, not the site."""
+        return "boat-in" in self.campground.tags
+
 
 @dataclass
 class SearchWarning:
@@ -149,6 +154,10 @@ class _PreparedSearch:
     start_month: date
     end_month: date
     from_coords: tuple | None
+    # Size of the pool the per-source cap selects from: everything that passed
+    # the registry, tag and distance filters. registry_count is *pre*-distance,
+    # so it cannot answer "how many matched?".
+    matched_count: int = 0
 
 
 @dataclass
@@ -180,6 +189,18 @@ class StreamWarningsEvent:
 
 
 @dataclass
+class StreamCoverageEvent:
+    """Yielded by search_stream once per search, after every check finishes.
+
+    Carries the same two numbers /api/search returns, so a capped search is
+    never mistaken for a complete one.
+    """
+
+    campgrounds_matched: int
+    campgrounds_checked: int
+
+
+@dataclass
 class StreamNotReleasedEvent:
     """Yielded by search_stream once every campground has been checked, when
     any had requested nights not yet released. Most such campgrounds have no
@@ -195,6 +216,7 @@ class SearchResults:
     query: SearchQuery
     results: list[CampgroundResult] = field(default_factory=list)
     campgrounds_checked: int = 0
+    campgrounds_matched: int = 0
     campgrounds_with_availability: int = 0
     warnings: list[SearchWarning] = field(default_factory=list)
     diagnosis: SearchDiagnosis | None = None
@@ -547,6 +569,10 @@ class SearchEngine:
                 key=lambda cg: drive_times.get(cg.facility_id, 9999)
             )
 
+        # The pool the cap selects from. Counted after distance filtering and
+        # before the cap, so matched >= checked always holds.
+        matched_count = len(campgrounds)
+
         if not query.booking_system:
             by_source: dict[str, list] = {}
             for cg in campgrounds:
@@ -583,6 +609,7 @@ class SearchEngine:
             start_month=start_month,
             end_month=end_month,
             from_coords=from_coords,
+            matched_count=matched_count,
         )
 
     async def search(
@@ -596,7 +623,9 @@ class SearchEngine:
         from_coords = prep.from_coords
 
         if not campgrounds:
-            empty_results = SearchResults(query=query)
+            empty_results = SearchResults(
+                query=query, campgrounds_matched=prep.matched_count,
+            )
             if not _skip_diagnosis:
                 diagnosis, chips = self._diagnose_zero_results(
                     query, prep.registry_count, prep.distance_filtered, 0, 0,
@@ -639,11 +668,11 @@ class SearchEngine:
             sum(1 for r in all_results if r.total_available_sites > 0),
         )
 
-        # Step 4: Attach drive times to results
+        # Step 4: Attach drive times to results (never to boat-in campgrounds)
         if drive_times:
             for r in all_results:
                 fid = r.campground.facility_id
-                if fid in drive_times:
+                if fid in drive_times and not r.boat_in:
                     r.estimated_drive_minutes = drive_times[fid]
 
         warnings = aggregate_warnings(all_results)
@@ -660,6 +689,7 @@ class SearchEngine:
                 if r.total_available_sites > 0 or r.fcfs_sites > 0
             ],
             campgrounds_checked=len(all_results),
+            campgrounds_matched=prep.matched_count,
             campgrounds_with_availability=campgrounds_with_availability,
             warnings=warnings,
             not_released=not_released,
@@ -687,8 +717,9 @@ class SearchEngine:
 
         # Sort by distance if filtering by location, otherwise by availability
         if from_coords:
+            # Boat-in campgrounds sort after every drive-in campground
             results.results.sort(
-                key=lambda r: r.estimated_drive_minutes or 9999
+                key=lambda r: (r.boat_in, r.estimated_drive_minutes or 9999)
             )
         else:
             results.results.sort(
@@ -889,6 +920,7 @@ class SearchEngine:
                 start_month=q.start_date or base_prep.start_month,
                 end_month=q.end_date or base_prep.end_month,
                 from_coords=base_prep.from_coords,
+                matched_count=base_prep.matched_count,
             )
             return await self.search(q, _skip_diagnosis=True, _prep=probe_prep)
 
@@ -950,13 +982,15 @@ class SearchEngine:
         | StreamProgressEvent
         | StreamDiagnosisEvent
         | StreamWarningsEvent
+        | StreamCoverageEvent
         | StreamNotReleasedEvent
     ]:
         """Stream search results as each campground check completes.
 
         Yields CampgroundResult for campgrounds with availability,
         StreamProgressEvent for checked campgrounds without availability,
-        a StreamWarningsEvent when any provider degraded, and a final
+        a StreamWarningsEvent when any provider degraded, a
+        StreamCoverageEvent with matched/checked counts, and a final
         StreamDiagnosisEvent if zero results were found.
         """
         prep = await self._prepare_search(query)
@@ -964,6 +998,9 @@ class SearchEngine:
         drive_times = prep.drive_times
 
         if not campgrounds:
+            yield StreamCoverageEvent(
+                campgrounds_matched=prep.matched_count, campgrounds_checked=0,
+            )
             diagnosis, chips = self._diagnose_zero_results(
                 query, prep.registry_count, prep.distance_filtered, 0, 0,
             )
@@ -1009,7 +1046,7 @@ class SearchEngine:
 
             if drive_times:
                 fid = r.campground.facility_id
-                if fid in drive_times:
+                if fid in drive_times and not r.boat_in:
                     r.estimated_drive_minutes = drive_times[fid]
             if r.error:
                 errored.append(r)
@@ -1030,6 +1067,11 @@ class SearchEngine:
         # fewer results with no explanation.
         if errored:
             yield StreamWarningsEvent(warnings=aggregate_warnings(errored))
+
+        yield StreamCoverageEvent(
+            campgrounds_matched=prep.matched_count,
+            campgrounds_checked=checked_count,
+        )
 
         not_released = summarize_not_released(unreleased)
         if not_released.campgrounds:
