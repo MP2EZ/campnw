@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
+from pnw_campsites.search.engine import NotReleasedSummary
 from tests.conftest import (
     auth_headers as _auth_headers,
 )
@@ -104,6 +105,7 @@ class TestTimingMiddleware:
         mock_results.results = []
         mock_results.campgrounds_checked = 0
         mock_results.diagnosis = None
+        mock_results.not_released = NotReleasedSummary()
         api_module._engine.search = AsyncMock(return_value=mock_results)
 
         api_client.get("/api/search?start_date=2026-06-01&end_date=2026-06-30&state=WA")

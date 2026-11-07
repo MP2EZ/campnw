@@ -22,7 +22,7 @@ from pnw_campsites.registry.models import (
     CampgroundAvailability,
     CampsiteAvailability,
 )
-from pnw_campsites.search.release import release_date
+from pnw_campsites.search.release import format_release_range, release_date
 
 logger = logging.getLogger("pnw_campsites.search")
 
@@ -98,6 +98,16 @@ class SearchWarning:
 
 
 @dataclass
+class NotReleasedSummary:
+    """Checked campgrounds with requested nights not yet released (NYR), and
+    the span from the first to the last of those nights' release dates."""
+
+    campgrounds: int = 0
+    releases_on_earliest: date | None = None
+    releases_on_latest: date | None = None
+
+
+@dataclass
 class SearchDiagnosis:
     """Analysis of why a search returned zero results."""
 
@@ -170,6 +180,15 @@ class StreamWarningsEvent:
 
 
 @dataclass
+class StreamNotReleasedEvent:
+    """Yielded by search_stream once every campground has been checked, when
+    any had requested nights not yet released. Most such campgrounds have no
+    availability, so they never reach the client as results."""
+
+    summary: NotReleasedSummary
+
+
+@dataclass
 class SearchResults:
     """Complete results from a discovery search."""
 
@@ -181,6 +200,7 @@ class SearchResults:
     diagnosis: SearchDiagnosis | None = None
     date_suggestions: list[DateSuggestion] = field(default_factory=list)
     action_chips: list[ActionChip] = field(default_factory=list)
+    not_released: NotReleasedSummary = field(default_factory=NotReleasedSummary)
 
     @property
     def has_availability(self) -> bool:
@@ -203,6 +223,18 @@ def aggregate_warnings(results: list[CampgroundResult]) -> list[SearchWarning]:
         SearchWarning(kind=kind, count=count, source=source)
         for (kind, source), count in counts.items()
     ]
+
+
+def summarize_not_released(results: list[CampgroundResult]) -> NotReleasedSummary:
+    """Roll per-campground not-released nights up for the whole search."""
+    unreleased = [r for r in results if r.not_released_nights]
+    firsts = [r.releases_on for r in unreleased if r.releases_on]
+    lasts = [r.releases_through for r in unreleased if r.releases_through]
+    return NotReleasedSummary(
+        campgrounds=len(unreleased),
+        releases_on_earliest=min(firsts, default=None),
+        releases_on_latest=max(lasts, default=None),
+    )
 
 
 def _find_consecutive_windows(
@@ -615,6 +647,7 @@ class SearchEngine:
                     r.estimated_drive_minutes = drive_times[fid]
 
         warnings = aggregate_warnings(all_results)
+        not_released = summarize_not_released(all_results)
 
         campgrounds_with_availability = sum(
             1 for r in all_results if r.total_available_sites > 0
@@ -629,6 +662,7 @@ class SearchEngine:
             campgrounds_checked=len(all_results),
             campgrounds_with_availability=campgrounds_with_availability,
             warnings=warnings,
+            not_released=not_released,
         )
 
         # Diagnose zero-result searches
@@ -639,7 +673,7 @@ class SearchEngine:
             )
             diagnosis, chips = self._diagnose_zero_results(
                 query, prep.registry_count, prep.distance_filtered,
-                len(all_results), all_unavailable,
+                len(all_results), all_unavailable, not_released,
             )
             results.diagnosis = diagnosis
             results.action_chips = chips
@@ -670,9 +704,11 @@ class SearchEngine:
         distance_filtered: int,
         checked: int,
         all_unavailable: int,
+        not_released: NotReleasedSummary | None = None,
     ) -> tuple[SearchDiagnosis, list[ActionChip]]:
         """Analyze why a search returned zero results and suggest actions."""
         chips: list[ActionChip] = []
+        unreleased = not_released.campgrounds if not_released else 0
 
         if registry_matches == 0 and query.name_like:
             binding = "name"
@@ -692,6 +728,20 @@ class SearchEngine:
             explanation = (
                 f"No campgrounds found in {query.state}"
             )
+        elif unreleased:
+            # Ahead of "distance" and "dates": a wider radius or shifted week
+            # hits the same release horizon, and "fully booked" is false.
+            binding = "not_released"
+            explanation = (
+                f"{unreleased} of {checked} campgrounds haven't released "
+                f"these dates for booking yet."
+            )
+            first = not_released.releases_on_earliest
+            last = not_released.releases_on_latest or first
+            if first:
+                explanation += (
+                    f" Booking typically opens {format_release_range(first, last)}."
+                )
         elif (
             distance_filtered > 0
             and registry_matches > 0
@@ -890,6 +940,7 @@ class SearchEngine:
         | StreamProgressEvent
         | StreamDiagnosisEvent
         | StreamWarningsEvent
+        | StreamNotReleasedEvent
     ]:
         """Stream search results as each campground check completes.
 
@@ -920,6 +971,7 @@ class SearchEngine:
         sem = asyncio.Semaphore(initial_concurrency)
         available_count = 0
         errored: list[CampgroundResult] = []
+        unreleased: list[CampgroundResult] = []
         checked_count = 0
         all_unavailable = 0
         total = len(campgrounds)
@@ -951,6 +1003,8 @@ class SearchEngine:
                     r.estimated_drive_minutes = drive_times[fid]
             if r.error:
                 errored.append(r)
+            if r.not_released_nights:
+                unreleased.append(r)
             if r.total_available_sites > 0 or r.fcfs_sites > 0:
                 available_count += 1
                 yield r
@@ -967,11 +1021,15 @@ class SearchEngine:
         if errored:
             yield StreamWarningsEvent(warnings=aggregate_warnings(errored))
 
+        not_released = summarize_not_released(unreleased)
+        if not_released.campgrounds:
+            yield StreamNotReleasedEvent(summary=not_released)
+
         # Yield diagnosis if nothing had availability
         if available_count == 0:
             diagnosis, chips = self._diagnose_zero_results(
                 query, prep.registry_count, prep.distance_filtered,
-                checked_count, all_unavailable,
+                checked_count, all_unavailable, not_released,
             )
             if query.name_like:
                 chips.extend(self._suggest_similar_campgrounds(query))
