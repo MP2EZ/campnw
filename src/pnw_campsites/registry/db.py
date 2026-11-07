@@ -11,6 +11,7 @@ from pathlib import Path
 
 from pnw_campsites.geo import haversine_miles
 from pnw_campsites.registry.models import BookingSystem, Campground
+from pnw_campsites.registry.tag_overrides import apply_tag_overrides
 
 
 def slugify(name: str) -> str:
@@ -191,6 +192,10 @@ class CampgroundRegistry:
                         f"ALTER TABLE wa_state_sites ADD COLUMN {col} {sql_type}"
                     )
                     self._conn.commit()
+
+        # Curated tag fixes (boat-in, river parks wrongly tagged beach). Prod's
+        # registry.db is never re-seeded, so these ship as an idempotent migration.
+        apply_tag_overrides(self._conn)
 
     def close(self) -> None:
         self._conn.close()
