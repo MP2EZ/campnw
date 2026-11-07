@@ -8,11 +8,14 @@ availability data lives at the leaf level with individual campsite resources.
 from __future__ import annotations
 
 import asyncio
+import logging
+import threading
+import time
 from datetime import date, timedelta
 
 from curl_cffi import requests as curl_requests
 
-from pnw_campsites.providers.errors import WAFBlockedError
+from pnw_campsites.providers.errors import RateLimitedError, WAFBlockedError
 from pnw_campsites.registry.models import (
     AvailabilityStatus,
     CampgroundAvailability,
@@ -20,6 +23,12 @@ from pnw_campsites.registry.models import (
 )
 
 BASE_URL = "https://washington.goingtocamp.com"
+
+logger = logging.getLogger(__name__)
+
+# After the park index fails to load, re-raise that failure for this long
+# instead of re-fetching /api/maps once per park in a search fan-out.
+INDEX_RETRY_SECONDS = 60
 
 # Resource category IDs from GoingToCamp
 CAMPSITE_CATEGORY = -2147483648
@@ -47,10 +56,21 @@ class GoingToCampClient:
         self._session: curl_requests.Session | None = None
         # resourceLocationId → park-level childMapId (from /api/maps links)
         self._park_map_ids: dict[int, int] = {}
+        self._index_lock = threading.Lock()
+        self._index_error: Exception | None = None
+        self._index_failed_at = 0.0
 
     async def __aenter__(self) -> GoingToCampClient:
         self._session = curl_requests.Session(impersonate="chrome131")
-        await self._load_park_map_index()
+        # The server enters this client during app startup. A blocked or failed
+        # index load must not fail startup; availability calls retry it.
+        try:
+            await asyncio.to_thread(self._ensure_park_index_sync)
+        except Exception as exc:
+            logger.warning(
+                "GoingToCamp park index unavailable at startup: %s: %s",
+                type(exc).__name__, exc,
+            )
         return self
 
     async def __aexit__(self, *exc: object) -> None:
@@ -58,19 +78,44 @@ class GoingToCampClient:
             self._session.close()
             self._session = None
 
-    async def _load_park_map_index(self) -> None:
+    def _ensure_park_index_sync(self) -> None:
         """Build resourceLocationId → park mapId index from the maps hierarchy.
 
         Each top-level map has mapLinks with resourceLocationId and childMapId.
         The childMapId is the park-specific map that contains loop/area sub-maps.
+
+        No-op once loaded. On failure, raises — and keeps raising the same
+        error without refetching for INDEX_RETRY_SECONDS.
         """
-        maps = await self._get("/api/maps")
-        for m in maps:
-            for link in m.get("mapLinks", []):
-                rl_id = link.get("resourceLocationId")
-                child_map = link.get("childMapId")
-                if rl_id is not None and child_map is not None:
-                    self._park_map_ids[rl_id] = child_map
+        if self._park_map_ids:
+            return
+        with self._index_lock:
+            if self._park_map_ids:
+                return
+            if (
+                self._index_error is not None
+                and time.monotonic() - self._index_failed_at < INDEX_RETRY_SECONDS
+            ):
+                raise self._index_error.with_traceback(None)
+            # Built aside and swapped in whole: readers skip the lock once the
+            # index is non-empty, so filling it in place would let them act on
+            # a half-built index, and a response that broke mid-loop would
+            # leave a partial one that never got rebuilt.
+            index: dict[int, int] = {}
+            try:
+                maps = self._get_sync("/api/maps")
+                for m in maps:
+                    for link in m.get("mapLinks", []):
+                        rl_id = link.get("resourceLocationId")
+                        child_map = link.get("childMapId")
+                        if rl_id is not None and child_map is not None:
+                            index[rl_id] = child_map
+            except Exception as exc:
+                self._index_error = exc
+                self._index_failed_at = time.monotonic()
+                raise
+            self._index_error = None
+            self._park_map_ids = index
 
     async def _get(self, path: str, params: dict | None = None) -> dict | list:
         """GET with WAF bypass, run in thread to avoid blocking the event loop."""
@@ -78,11 +123,12 @@ class GoingToCampClient:
 
     def _get_sync(self, path: str, params: dict | None = None) -> dict | list:
         assert self._session is not None
-        import time
         for attempt in range(2):
             resp = self._session.get(f"{BASE_URL}{path}", params=params, timeout=30)
             if resp.status_code == 403:
                 raise WAFBlockedError("GoingToCamp WAF blocked the request")
+            if resp.status_code == 429:
+                raise RateLimitedError("GoingToCamp rate limited the request")
             if resp.status_code >= 500 and attempt == 0:
                 time.sleep(1)
                 continue
@@ -166,6 +212,7 @@ class GoingToCampClient:
     ) -> CampgroundAvailability:
         facility_id = str(resource_location_id)
 
+        self._ensure_park_index_sync()
         park_map_id = self._park_map_ids.get(resource_location_id)
         if not park_map_id:
             return CampgroundAvailability(facility_id=facility_id, campsites={})
@@ -208,7 +255,6 @@ class GoingToCampClient:
         end_date: date,
     ) -> dict:
         """Fetch availability for a single map node."""
-        assert self._session is not None
         params = {
             "mapId": map_id,
             "bookingCategoryId": 0,
@@ -221,11 +267,7 @@ class GoingToCampClient:
             "subEquipmentCategoryId": NON_GROUP_EQUIPMENT,
             "filterData": "[]",
         }
-        resp = self._session.get(
-            f"{BASE_URL}/api/availability/map", params=params, timeout=30
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return self._get_sync("/api/availability/map", params)
 
     def _build_campsites(
         self,

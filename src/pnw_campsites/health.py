@@ -192,14 +192,25 @@ async def _check_recgov_availability() -> str:
 async def _check_goingtocamp() -> str:
     from pnw_campsites.providers.goingtocamp import GoingToCampClient
 
-    # Entering the context manager fetches /api/maps, which is itself the
-    # WAF-bypass check: plain httpx gets a 403 here, chrome131 impersonation
-    # does not.
+    # Probe /api/availability/map — the endpoint every search and watch poll
+    # depends on — not just the metadata endpoints. Some parks have no map, so
+    # try a few before calling it a failure; a WAF block raises on the first.
+    start = date.today() + timedelta(days=45)
     async with GoingToCampClient() as client:
         locations = await client.get_campground_locations()
-    if not locations:
-        raise RuntimeError("no campground locations returned")
-    return f"{len(locations)} WA parks with campsites"
+        if not locations:
+            raise RuntimeError("no campground locations returned")
+        for loc in locations[:3]:
+            park_id = loc["resourceLocationId"]
+            avail = await client.get_availability(
+                park_id, start, start + timedelta(days=2),
+            )
+            if avail.campsites:
+                return (
+                    f"{len(locations)} WA parks; "
+                    f"{len(avail.campsites)} sites at park {park_id}"
+                )
+    raise RuntimeError("availability returned no campsites for the first 3 parks")
 
 
 def _resolve_ra_probe() -> tuple[str, str, str]:
