@@ -2216,6 +2216,12 @@ header p {
   outline-color: var(--accent-text);
 }
 
+/* Results v2 ring, page-wide while v2 is on (useUiVersion sets data-ui).
+   Becomes the only rule at the v1.48 flip. */
+[data-ui="v2"] :focus-visible {
+  outline: 3px solid var(--focus-ring);
+}
+
 /* ─── Mobile: 44px touch targets, tighter layout ───────────────────── */
 
 @media (max-width: 640px) {

@@ -121,6 +121,21 @@
   --map-pin-id: var(--src-id-border);
   --map-pin-opacity: 0.85;
   --map-popup-max-w: 280px;
+
+  /* ── Results v2 (v1.48, D12) ─────────────────────────────────── */
+  --surface-card: #fffdf8;
+  --chip-open-bg: #fbefe4;
+  --chip-open-text: #8a4413;
+  --chip-few-dot: #b4561a;
+  --chip-full-bg: #f1efe6;
+  --chip-full-text: #55554e;
+  --chip-full-border: #b0ad9f;   /* decorative: the "Full" label carries the state */
+  --notice-info-bg: #e7eff1;
+  --notice-info-text: #1d4a5a;
+  --focus-ring: #b4561a;
+  --text-display: 2.5rem;
+  --leading-display: 1.1;
+  --radius-2xl: 16px;
 }
 
 [data-theme="dark"] {
@@ -153,6 +168,18 @@
   --heatmap-2: #264a62;
   --heatmap-3: #3a6a8e;
   --heatmap-4: #5898c0;
+
+  /* ── Results v2 ("night camp") ───────────────────────────────── */
+  --surface-card: #21211e;
+  --chip-open-bg: #3a2414;
+  --chip-open-text: #f2b384;
+  --chip-few-dot: #e8894a;
+  --chip-full-bg: #2b2a25;
+  --chip-full-text: #b8b6aa;
+  --chip-full-border: #6e6c62;
+  --notice-info-bg: #15282e;
+  --notice-info-text: #9fd0de;
+  --focus-ring: #e8894a;
 
   /* ── Shadows (darker for contrast on dark surfaces) ──────────── */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
