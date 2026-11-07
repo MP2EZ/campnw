@@ -1,12 +1,13 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
-**Last updated:** 2026-10-04
-**Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`). Last release: PR #150 (`dev → main`, 2026-08-26) — audit remediation. v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; App Store/Play still pending.
+**Last updated:** 2026-11-07
+**Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`; no version bump since August). Last release: PR #166 (`dev → main`, 2026-11-07). v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; App Store/Play still pending. Next planned milestone: **v1.48 "Answer-first Results"** (designed, not started).
 
-**Open problems (not yet scheduled):**
-- **#131** — ReserveAmerica blocks Fly egress IPs → all 53 Oregon State Parks return nothing in prod.
-- **#135** — a provider can go fully dark without the prod monitor failing (the monitor has passed 58/58 runs while #131 was live).
-- **#127** — nightly Playwright red since late August. PR #148 fixed the Portal-copy assertion, but as of 2026-10-03 both Stripe flows (`upgrade.spec.ts`, `cancel-reactivate.spec.ts`) time out on a click; `upgrade.spec.ts` also gates PRs.
+**Open problems:**
+- **WA State Parks dark in prod since ~2026-11-05.** GoingToCamp's Azure WAF blocks prod's Fly outbound IP (`79.127.185.38`); staging's Fly IP and GitHub's Azure runners still get through, so the block is IP-specific, not class-wide. A dedicated Fly egress IP is the likely fix (untested). Since #165, prod survives the block at startup and labels it `waf_blocked` instead of "unavailable"; before that, any restart would have failed to boot.
+- **Oregon State Parks dark in prod (#131, closed 2026-11-07 as decided).** ReserveAmerica blocks *every* datacenter IP tested (Fly prod, Fly staging, Azure runner); only residential works. Remaining options: a residential proxy for RA calls (cost + ToS questions) or accept and label it, which is the current state.
+- **#135** — a provider can go dark without the monitor failing. Partly addressed by #165 (the monitor now checks prod's own provider view); still open.
+- **Watch poller** sends WA watches (ids 7, 9) to the Recreation.gov URL and keeps polling past-dated watches, so it gets 400s every cycle (seen in prod logs 2026-11-06). A fix session was started and interrupted; no branch yet.
 
 ---
 
@@ -51,6 +52,8 @@ v1.45   ~PARTIAL~  Native Apps          — Internal iOS TestFlight SHIPPED 2026
 v1.46   ~PARTIAL~  Mobile Polish        — Touch feel + 44px tap targets SHIPPED 2026-08-06 (Themes B+C); safe-area, layout, keyboard (A/D/E) pending
 v1.47   [SHIPPED]  Prod Monitoring      — /healthz, daily prod smoke, `doctor` dependency sweep (v1.47.1). Alert delivery path still unproven — see v1.47 section
 —       [SHIPPED]  Audit Remediation    — Analytics identity fix, SEO/funnel instrumentation, query perf, cache correctness, UX/a11y, shared-link page (2026-08-26, no version bump)
+—       [SHIPPED]  Reliability (Oct–Nov) — Stripe E2E fixed, Portal return path, dependency advisories, Playwright for ubuntu-26.04, WAF-blocked GoingToCamp survivable (2026-10-29 → 11-07)
+v1.48   ------->   Answer-first Results — Results redesign: drive-time bands, weekend chips, fit-aware counts, full/not-released states (designed 2026-11-06)
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -2032,6 +2035,56 @@ Full-repo `--perf --bloat --ux --analytics` audit (2026-08-23), fixed in per-bat
 ### Still open from the audit
 - Very low traffic (≈65 pageviews/month) — most new events are unverified rather than broken.
 - Residual Info-tier polish items in `.audit-report.md` (local, untracked).
+
+---
+
+## Reliability, Oct–Nov 2026 [SHIPPED — releases #154/#156, #164, #166]
+
+| PR | Change |
+|----|--------|
+| #151 | Unblocked CI. Fixed the Stripe Checkout selector (Stripe made the Card radio decorative). Fixed the Portal cancel race, where `networkidle` resolved instantly and aborted the cancel POST, and made the "Pro until" check reload. Also: PyJWT 2.13.0 → 2.15.1, npm audit fix (critical in `@capacitor/ios`), and a scroll-timer test flake. Closed #127. |
+| #153 | The Customer Portal returns to `?billing=portal`. It's tracked as `portal_returned` (it was being counted as `checkout_returned: success`), and status is re-read at 2/4/8/15s until the webhook lands. |
+| #155 | A deploy-gate test called the real Nominatim API (a 429 blocked release #154). It's now mocked, and it now catches the off-by-one it was named for. |
+| #163 | Playwright 1.60 → 1.64.1. `ubuntu-latest` moved to 26.04 around 2026-10-30, so the nightly, the prod monitor and PR smoke died at install. That produced false `prod-down` issues #157–#162, all closed. |
+| #165 | GoingToCamp WAF block: startup survives it, the park index retries with a cooldown and is swapped in whole, 403/429 are classified and logged, and the monitor checks prod's own provider view. |
+
+Notes:
+- `gh pr merge` on a `dev → main` PR asks "Delete the branch locally?". Answering yes deleted `dev` locally and on GitHub on 2026-10-29; it was restored at the same commit. Answer **N**.
+- Fly certs auto-renewed 2026-10-06; next expiry 2027-01-04.
+
+---
+
+## v1.48 "Answer-first Results" [DESIGNED 2026-11-06 — not started]
+
+### Theme
+The results page answers the question in one line ("22 campgrounds have a June weekend open within 3 hours of Seattle"), then groups places by drive time with the bookable weekends on each card. Design canvas: https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private; 5 artboards, built on real June 2027 data).
+
+### Design
+- **Search bar:** Where / When / Who (people + tent/van/trailer and length) / Drive, plus campground-name search.
+- **Results:** a one-line answer, quick picks, and drive-time bands. Each card shows weather, fit ("Fits tents · RVs up to 35′") and weekend chips with fit-aware counts.
+- **New groups:** "Boat-in only", and "Full or not released yet" with Watch / Remind me.
+- **Weekend chip → site list:** shows types, RV length, hookups and capacity before handing off with "Book on WA State Parks ↗".
+- **Watching:** a per-weekend Watch sheet, and release-morning reminders that turn into cancellation watches.
+- **Mobile:** map plus bottom sheet with date quick-chips.
+- **Accessibility:** visible focus, 44px targets, contrast fixes.
+
+### Persona review (2026-11-06)
+Five task-based personas (weekend planner, last-minute mobile, RV owner, cancellation hunter, first-timer) plus an accessibility audit. They agreed on:
+- Full and unreleased places vanished.
+- Counts mixed site types.
+- The booking hand-off was unexplained.
+- Boat-in Blake Island was shown as a drive.
+- The Watch bell was ambiguous.
+
+All five are addressed in the v2 canvas.
+
+### Data prerequisites (issue drafts, not filed)
+1. WA site types are hardcoded `STANDARD`. Decode `wa_state_sites.allowed_equipment` with GoingToCamp `/api/equipment`, which gives tent / van / RV length bands (20′–40′+), plus loop descriptions for hookups.
+2. WA site metadata is seeded for only 25 of the 75 parks.
+3. There's no `boat-in` tag.
+4. Not-yet-released (`NYR`) is collapsed into "unavailable", so a 6-month-out search looks fully booked.
+5. River parks are tagged `beach`.
+6. Search silently checks only the N closest campgrounds.
 
 ---
 
