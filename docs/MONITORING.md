@@ -99,7 +99,7 @@ $ .venv/bin/python3 -m pnw_campsites doctor
   DATA      watch.db              ok       243ms  10 active watch(es)
   PROVIDER  rec.gov RIDB          ok     1,991ms  191 WA facilities indexed
   PROVIDER  rec.gov availability  ok       299ms  151 sites for Oct 2026
-  PROVIDER  GoingToCamp (WA)      ok       960ms  75 WA parks with campsites
+  PROVIDER  GoingToCamp (WA)      ok     1,650ms  75 WA parks; 46 sites at park -2147483617
   PROVIDER  ReserveAmerica (OR)   FAIL     502ms  WAFBlockedError: WAF blocked the request
   ENRICH    Visual Crossing       ok       561ms  Jul 15 normals 69.7/43.3°F
   ENRICH    Mapbox                ok       240ms  Seattle→Paradise 153 min / 107.5 mi
@@ -151,9 +151,15 @@ shell or CI step directly.
 
 That is exactly why the CI step is `continue-on-error: true`. It runs from a
 GitHub runner, so it is a **diagnostic attached to the run, not a detector**;
-the `/healthz` and `/api/search` steps remain the things that actually decide
-whether the monitor fails. Its result is written to the run summary as a table
-and uploaded as `dependency-sweep.json`.
+the `/healthz`, `/api/search` and WA `/api/check` steps remain the things that
+actually decide whether the monitor fails. Its result is written to the run
+summary as a table and uploaded as `dependency-sweep.json`.
+
+The WA `/api/check` step exists because of this caveat: in Nov 2026
+GoingToCamp's WAF blocked prod's Fly egress IP, every WA search came back
+`unavailable`, and this sweep, running from a runner whose IP was fine, kept
+reporting GoingToCamp `ok`. `/api/check` runs inside prod, so it sees what
+users see.
 
 ### Design note: it uses the real client code
 

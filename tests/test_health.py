@@ -345,6 +345,75 @@ async def test_registry_check_fails_when_all_disabled(tmp_path, monkeypatch):
         await health._check_registry_db()
 
 
+class _FakeGoingToCamp:
+    """Stands in for GoingToCampClient: metadata endpoints answer, availability
+    does whatever the test says."""
+
+    def __init__(self, availability):
+        self._availability = availability
+        self.availability_calls: list[int] = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return None
+
+    async def get_campground_locations(self):
+        return [{"resourceLocationId": -1}, {"resourceLocationId": -2}]
+
+    async def get_availability(self, park_id, start, end):
+        self.availability_calls.append(park_id)
+        if isinstance(self._availability, Exception):
+            raise self._availability
+        return self._availability(park_id)
+
+
+def _patch_goingtocamp(monkeypatch, fake):
+    monkeypatch.setattr(
+        "pnw_campsites.providers.goingtocamp.GoingToCampClient", lambda: fake,
+    )
+
+
+async def test_goingtocamp_check_probes_the_availability_endpoint(monkeypatch):
+    """Nov 2026: prod's WA searches all failed while this check said ok — it
+    only probed the metadata endpoints, never /api/availability/map."""
+    from pnw_campsites.providers.errors import WAFBlockedError
+
+    _patch_goingtocamp(monkeypatch, _FakeGoingToCamp(WAFBlockedError("blocked")))
+    with pytest.raises(WAFBlockedError):
+        await health._check_goingtocamp()
+
+
+async def test_goingtocamp_check_skips_a_park_with_no_sites(monkeypatch):
+    from pnw_campsites.registry.models import CampgroundAvailability
+
+    def avail(park_id):
+        sites = {} if park_id == -1 else {"9": object()}
+        return CampgroundAvailability.model_construct(
+            facility_id=str(park_id), campsites=sites,
+        )
+
+    fake = _FakeGoingToCamp(avail)
+    _patch_goingtocamp(monkeypatch, fake)
+    detail = await health._check_goingtocamp()
+    assert fake.availability_calls == [-1, -2]
+    assert "1 sites" in detail
+
+
+async def test_goingtocamp_check_fails_when_no_park_has_sites(monkeypatch):
+    from pnw_campsites.registry.models import CampgroundAvailability
+
+    fake = _FakeGoingToCamp(
+        lambda park_id: CampgroundAvailability.model_construct(
+            facility_id=str(park_id), campsites={},
+        )
+    )
+    _patch_goingtocamp(monkeypatch, fake)
+    with pytest.raises(RuntimeError, match="no campsites"):
+        await health._check_goingtocamp()
+
+
 def test_ra_probe_resolves_from_registry(tmp_path, monkeypatch):
     db = _make_registry_db(tmp_path)
     monkeypatch.setattr("pnw_campsites.registry.db.DEFAULT_DB_PATH", db)

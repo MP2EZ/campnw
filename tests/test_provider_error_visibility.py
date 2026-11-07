@@ -101,3 +101,74 @@ class TestEngineLogsUnclassifiedProviderErrors:
         assert "-2147483646" in logged
         assert "RuntimeError" in logged
         assert "Operation timed out" in logged
+
+
+class TestBlockedAtStartup:
+    """The server builds its GoingToCampClient in the FastAPI lifespan.
+
+    `__aenter__` loaded the park map index from `/api/maps` and let a 403
+    propagate, so once Fly's egress IP was WAF-blocked, any restart or deploy
+    would fail app startup outright and take every source down, not just WA.
+    """
+
+    def _blocked_session(self) -> MagicMock:
+        session = MagicMock()
+        resp = MagicMock(status_code=403)
+        session.get.return_value = resp
+        return session
+
+    def test_enter_survives_a_blocked_index_load(self, monkeypatch) -> None:
+        from pnw_campsites.providers import goingtocamp
+
+        session = self._blocked_session()
+        monkeypatch.setattr(
+            goingtocamp.curl_requests, "Session", lambda **_: session,
+        )
+
+        async def enter() -> GoingToCampClient:
+            return await GoingToCampClient().__aenter__()
+
+        client = asyncio.run(enter())
+        assert client._park_map_ids == {}
+
+    def test_availability_reports_the_block_instead_of_empty_results(self) -> None:
+        """An empty index must not read as "this park has no sites"."""
+        client = GoingToCampClient()
+        client._session = self._blocked_session()
+
+        with pytest.raises(WAFBlockedError):
+            client._get_availability_sync(
+                -2147483646, date(2027, 6, 1), date(2027, 6, 30),
+            )
+
+    def test_index_loads_once_the_block_lifts(self) -> None:
+        client = GoingToCampClient()
+        client._session = MagicMock()
+        maps = MagicMock(status_code=200)
+        maps.json.return_value = [
+            {"mapLinks": [{"resourceLocationId": -2147483646, "childMapId": 7}]},
+        ]
+        avail = MagicMock(status_code=200)
+        avail.json.return_value = {"resourceAvailabilities": {"1": [0]}}
+        client._session.get.side_effect = [maps, avail]
+
+        result = client._get_availability_sync(
+            -2147483646, date(2027, 6, 1), date(2027, 6, 1),
+        )
+
+        assert client._park_map_ids == {-2147483646: 7}
+        assert list(result.campsites) == ["1"]
+
+    def test_failed_index_load_is_not_retried_on_every_park(self) -> None:
+        """A search fans out to ~75 WA parks at once; one blocked /api/maps
+        call per park would hammer a WAF that is already blocking us."""
+        client = GoingToCampClient()
+        client._session = self._blocked_session()
+
+        for _ in range(5):
+            with pytest.raises(WAFBlockedError):
+                client._get_availability_sync(
+                    -2147483646, date(2027, 6, 1), date(2027, 6, 30),
+                )
+
+        assert client._session.get.call_count == 1
