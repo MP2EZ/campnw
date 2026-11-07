@@ -168,12 +168,34 @@ jobs:
         if: failure()
         uses: actions/github-script@v7
         with:
+          # One open issue per outage, not one per day: a multi-day outage
+          # used to open a fresh issue every run (#157-#162 for one cause).
+          # While a prod-down issue is open, later failures comment on it.
           script: |
             const date = new Date().toISOString().split('T')[0];
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'prod-down',
+              state: 'open',
+              sort: 'created',
+              direction: 'desc',
+              per_page: 1,
+            });
+            if (open.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: open[0].number,
+                body: `Still failing on ${date}.\n\nRun: ${runUrl}`,
+              });
+              return;
+            }
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Prod monitor FAILED — campable.co (${date})`,
-              body: `The daily production synthetic monitor failed — a live feature may be down.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nThe Playwright HTML report + trace are attached as the run's artifact.`,
+              title: `Prod monitor FAILED — campable.co (since ${date})`,
+              body: `The daily production synthetic monitor failed — a live feature may be down.\n\nRun: ${runUrl}\n\nThe Playwright HTML report + trace are attached as the run's artifact. Later failures are added here as comments until this issue is closed.`,
               labels: ['prod-down'],
             });
