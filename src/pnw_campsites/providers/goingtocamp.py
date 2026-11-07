@@ -21,6 +21,7 @@ from pnw_campsites.registry.models import (
     CampgroundAvailability,
     CampsiteAvailability,
 )
+from pnw_campsites.search.release import wa_release_date
 
 BASE_URL = "https://washington.goingtocamp.com"
 
@@ -47,6 +48,11 @@ _AVAILABILITY_MAP: dict[int, AvailabilityStatus] = {
     4: AvailabilityStatus.NOT_RESERVABLE_MGMT,
     5: AvailabilityStatus.NYR,
 }
+
+# Statuses GoingToCamp reports for nights past the 9-month window that only
+# mean "released": Available (nobody can arrive yet) and Reserved (the tail of
+# a stay that arrived in time). Closed / not-reservable describe the site.
+_WINDOW_STATUSES = {AvailabilityStatus.AVAILABLE, AvailabilityStatus.RESERVED}
 
 
 class GoingToCampClient:
@@ -274,10 +280,17 @@ class GoingToCampClient:
         resources: dict[str, list[dict]],
         start_date: date,
         end_date: date,
+        today: date | None = None,
     ) -> dict[str, CampsiteAvailability]:
-        """Convert GoingToCamp resource availability to CampsiteAvailability models."""
+        """Convert GoingToCamp resource availability to CampsiteAvailability models.
+
+        GoingToCamp's daily availability ignores WA's 9-month arrival window,
+        so nights past it are rewritten to NYR here, where every consumer
+        (search, check, watches) reads them.
+        """
         campsites: dict[str, CampsiteAvailability] = {}
         num_days = (end_date - start_date).days + 1
+        today = today or date.today()
 
         for res_id, day_list in resources.items():
             availabilities: dict[str, AvailabilityStatus] = {}
@@ -287,9 +300,10 @@ class GoingToCampClient:
                 day = start_date + timedelta(days=i)
                 iso_key = f"{day.isoformat()}T00:00:00.000Z"
                 raw_val = day_data["availability"] if isinstance(day_data, dict) else day_data
-                availabilities[iso_key] = _AVAILABILITY_MAP.get(
-                    raw_val, AvailabilityStatus.NOT_AVAILABLE
-                )
+                status = _AVAILABILITY_MAP.get(raw_val, AvailabilityStatus.NOT_AVAILABLE)
+                if status in _WINDOW_STATUSES and wa_release_date(day) > today:
+                    status = AvailabilityStatus.NYR
+                availabilities[iso_key] = status
 
             campsites[res_id] = CampsiteAvailability(
                 campsite_id=res_id,

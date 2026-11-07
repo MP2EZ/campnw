@@ -1,14 +1,7 @@
 """When a not-yet-released (NYR) night opens for booking, per booking system.
 
-Only Recreation.gov has a rule. The others return None:
-
-- WA State Parks publishes a rolling 9-month window ("up to nine months in
-  advance of the first date of your trip", parks.wa.gov, checked 2026-11-06),
-  but GoingToCamp's NYR status doesn't follow it. Probed 2026-11-06, Deception
-  Pass showed 20 sites NYR on every night of Aug 2027 (inside the window too),
-  and nights past the window came back Available rather than NYR. A date
-  derived from the 9-month rule would be a guess.
-- ReserveAmerica (Oregon) has no NYR status.
+Recreation.gov and WA State Parks have rules. ReserveAmerica (Oregon) has no
+NYR status, so it returns None.
 """
 
 from __future__ import annotations
@@ -43,8 +36,25 @@ def recgov_release_date(night: date) -> date:
     return _months_before(night, 6)
 
 
+def wa_release_date(night: date) -> date:
+    """WA State Parks: "Reservations can be made up to nine months in advance
+    of the first date of your trip" (parks.wa.gov, checked 2026-11-07), so a
+    night opens for arrival 9 months before, same day.
+
+    GoingToCamp doesn't report this window: nights past it come back
+    Available, and its own NYR code marks loops on other schedules. The
+    provider applies this rule to its statuses (see goingtocamp.py).
+
+    Probed at Deception Pass, Aug 2027: on Nov 6-7 2026, Aug 6 had 194 sites
+    Reserved, the count tapered to 2 on Aug 15 (10-night stays that arrived
+    in time) and was 0 from Aug 16. The time of day it opens is unverified.
+    """
+    return _months_before(night, 9)
+
+
 _RULES = {
     BookingSystem.RECGOV: recgov_release_date,
+    BookingSystem.WA_STATE: wa_release_date,
 }
 
 
