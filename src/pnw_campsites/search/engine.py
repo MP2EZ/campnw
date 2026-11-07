@@ -16,11 +16,13 @@ from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import (
+    AvailabilityStatus,
     BookingSystem,
     Campground,
     CampgroundAvailability,
     CampsiteAvailability,
 )
+from pnw_campsites.search.release import release_date
 
 logger = logging.getLogger("pnw_campsites.search")
 
@@ -79,6 +81,11 @@ class CampgroundResult:
     total_sites: int = 0  # total sites at this campground
     estimated_drive_minutes: int | None = None
     error: str | None = None
+    # Requested nights not yet released for booking (NYR), and when the first
+    # and last of them open. Dates are None when the system has no rule.
+    not_released_nights: int = 0
+    releases_on: date | None = None
+    releases_through: date | None = None
 
     @property
     def boat_in(self) -> bool:
@@ -309,6 +316,46 @@ def _find_consecutive_windows(
     return windows
 
 
+def _site_matches(site: CampsiteAvailability, query: SearchQuery) -> bool:
+    """Group-site and capacity filters."""
+    if not query.include_group_sites and "GROUP" in site.campsite_type.upper():
+        return False
+    return not (query.max_people and site.max_num_people < query.max_people)
+
+
+def _not_released_nights(
+    availability: CampgroundAvailability, query: SearchQuery,
+) -> list[date]:
+    """Requested nights none of the matching sites has been released for.
+
+    A night counts when some site is NYR and none is Available or Reserved.
+    Partial NYR doesn't count: at Deception Pass one loop is NYR all summer
+    while the rest is bookable, and that night isn't "not released".
+    """
+    nyr: set[str] = set()
+    released: set[str] = set()
+    for site in availability.campsites.values():
+        if not _site_matches(site, query):
+            continue
+        for day, status in site.availabilities.items():
+            if status == AvailabilityStatus.NYR:
+                nyr.add(day[:10])
+            elif status in (AvailabilityStatus.AVAILABLE, AvailabilityStatus.RESERVED):
+                released.add(day[:10])
+
+    nights = []
+    for day in sorted(nyr - released):
+        night = date.fromisoformat(day)
+        if query.start_date and night < query.start_date:
+            continue
+        if query.end_date and night > query.end_date:
+            continue
+        if query.days_of_week is not None and night.weekday() not in query.days_of_week:
+            continue
+        nights.append(night)
+    return nights
+
+
 def _process_availability(
     campground: Campground,
     availability: CampgroundAvailability,
@@ -316,6 +363,14 @@ def _process_availability(
 ) -> CampgroundResult:
     """Process raw availability into structured results."""
     result = CampgroundResult(campground=campground)
+    nights = _not_released_nights(availability, query)
+    if nights:
+        today = date.today()
+        system = campground.booking_system
+        result.not_released_nights = len(nights)
+        result.releases_on = release_date(system, nights[0], today)
+        if result.releases_on:
+            result.releases_through = release_date(system, nights[-1], today)
     result.total_sites = len(availability.campsites)
     seen_sites: set[str] = set()
     fcfs_count = 0
@@ -344,12 +399,7 @@ def _process_availability(
             seen_sites.add(site_id)
             continue
 
-        # Filter group sites
-        if not query.include_group_sites and "GROUP" in site.campsite_type.upper():
-            continue
-
-        # Filter by capacity
-        if query.max_people and site.max_num_people < query.max_people:
+        if not _site_matches(site, query):
             continue
 
         windows = _find_consecutive_windows(
