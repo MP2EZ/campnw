@@ -189,3 +189,35 @@ def fit_from_recgov_type(campsite_type: str) -> SiteFit:
     if "STANDARD" in t:
         return SiteFit(hookups=hookups, walk_in=False)
     return SiteFit(hookups=hookups)
+
+
+# ---------------------------------------------------------------------------
+# ReserveAmerica (Oregon): per-site attributes
+# ---------------------------------------------------------------------------
+
+
+def fit_from_ra_attributes(
+    prod_grp: str,
+    categories: list[str] | None,
+    max_vehicle_ft: str | None,
+    electric: str | None,
+) -> SiteFit:
+    """Fit from RA's "Looking For Category", "Maximum Vehicle Length" and
+    "Electricity Hookup" attributes. Without categories, only hookups."""
+    hookups = True if electric else None
+    walk_in = True if "WALK" in (prod_grp or "").upper() else None
+    if categories is None:
+        return SiteFit(hookups=hookups, walk_in=walk_in)
+    cats = {c.lower() for c in categories}
+    fits_rv = bool(cats & {"rv site", "trailer site"})
+    max_rv_ft = None
+    if fits_rv and max_vehicle_ft and max_vehicle_ft.strip().isdigit():
+        max_rv_ft = int(max_vehicle_ft)
+    return SiteFit(
+        fits_tent="tent site" in cats,
+        fits_van=fits_rv,
+        fits_rv=fits_rv,
+        max_rv_ft=max_rv_ft,
+        hookups=bool(electric),
+        walk_in=walk_in,
+    )

@@ -153,6 +153,14 @@ export interface Window {
   max_people: number;
   is_fcfs: boolean;
   booking_url: string | null;
+  // Site fit; null = the booking system doesn't say (never "doesn't fit").
+  // fits_rv true with max_rv_ft null means RVs fit but no length is listed.
+  fits_tent: boolean | null;
+  fits_van: boolean | null;
+  fits_rv: boolean | null;
+  max_rv_ft: number | null;
+  hookups: boolean | null;
+  walk_in: boolean | null;
 }
 
 export interface CampgroundResult {

@@ -50,6 +50,7 @@ class CampsiteAvailability(BaseModel):
     min_num_people: int  # can be 0
     max_num_people: int
     availabilities: dict[str, AvailabilityStatus]  # ISO datetime str -> status
+    fit: SiteFit | None = None  # set by WA enrichment and ReserveAmerica
 
     def available_dates(self) -> list[str]:
         """Return sorted list of dates with Available status."""

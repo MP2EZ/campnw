@@ -54,6 +54,14 @@ class WindowResponse(BaseModel):
     max_people: int
     is_fcfs: bool = False
     booking_url: str | None = None
+    # Site fit; None = the booking system doesn't say. fits_rv with no
+    # max_rv_ft means RVs fit but no length is listed.
+    fits_tent: bool | None = None
+    fits_van: bool | None = None
+    fits_rv: bool | None = None
+    max_rv_ft: int | None = None
+    hookups: bool | None = None
+    walk_in: bool | None = None
 
 
 class CampgroundResultResponse(BaseModel):
@@ -334,6 +342,7 @@ def _format_result(
                 max_people=w.max_people,
                 is_fcfs=w.is_fcfs,
                 booking_url=booking_url,
+                **w.fit.model_dump(),
             )
         )
 
