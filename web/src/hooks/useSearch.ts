@@ -112,6 +112,8 @@ export interface UseSearchReturn {
   cardRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
   maxResults: number;
   handleSearch: (params: SearchParams, mode: SearchMode) => Promise<void>;
+  /** Re-run the current search with a higher `limit` to check more campgrounds. */
+  checkRest: (limit: number) => void;
   toggleSource: (src: string) => void;
   resetSearch: () => void;
 }
@@ -257,6 +259,8 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     let streamedWarnings: SearchWarning[] = [];
     let rafId: number | null = null;
     let checkedCount = 0;
+    // Known only once the stream finishes; undefined until then.
+    let matchedCount: number | undefined;
     setResults({
       campgrounds_checked: 0,
       campgrounds_with_availability: 0,
@@ -274,6 +278,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
             rafId = null;
             setResults({
               campgrounds_checked: checkedCount,
+              campgrounds_matched: matchedCount,
               campgrounds_with_availability: streamedResults.filter(
                 (r) => r.total_available_sites > 0,
               ).length,
@@ -295,6 +300,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         ).length;
         setResults({
           campgrounds_checked: checkedCount,
+          campgrounds_matched: matchedCount,
           campgrounds_with_availability: withAvail,
           results: [...streamedResults],
           warnings: streamedWarnings,
@@ -369,6 +375,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
             rafId = null;
             setResults({
               campgrounds_checked: checkedCount,
+              campgrounds_matched: matchedCount,
               campgrounds_with_availability: streamedResults.filter(
                 (r) => r.total_available_sites > 0,
               ).length,
@@ -384,8 +391,31 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           prev ? { ...prev, warnings } : prev,
         );
       },
+      (matched, checked) => {
+        matchedCount = matched;
+        checkedCount = checked;
+        setResults((prev) =>
+          prev
+            ? { ...prev, campgrounds_matched: matched, campgrounds_checked: checked }
+            : prev,
+        );
+      },
     );
   }, [user]);
+
+  const checkRest = useCallback((limit: number) => {
+    // activeSearchParams, not the form's params: for a natural-language search
+    // it holds the dates and filters the server parsed, so the re-run does not
+    // pay for (or vary with) a second NL parse.
+    const base = activeSearchParams;
+    if (!base) return;
+    track("check_rest_clicked", {
+      from_limit: base.limit || 20,
+      to_limit: limit,
+      matched: results?.campgrounds_matched ?? 0,
+    });
+    handleSearch({ ...base, limit }, lastSearchMode.current);
+  }, [activeSearchParams, handleSearch, results?.campgrounds_matched]);
 
   // Run the search a shared link describes. Without this the URL round-trip is
   // write-only: the address bar looks right, the form shows defaults, and no
@@ -424,6 +454,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     cardRefs,
     maxResults,
     handleSearch,
+    checkRest,
     toggleSource,
     resetSearch: useCallback(() => {
       setResults(null);

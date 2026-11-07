@@ -14,6 +14,7 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   searchCampsites,
+  searchCampsitesStream,
   getWatches,
   createWatch,
   deleteWatch,
@@ -36,6 +37,34 @@ globalThis.fetch = mockFetch
 
 beforeEach(() => {
   mockFetch.mockReset()
+})
+
+describe('API: Search coverage', () => {
+  test('searchCampsitesStream forwards the coverage frame', async () => {
+    const frames = [
+      'data: {"type":"coverage","campgrounds_matched":46,"campgrounds_checked":20}\n\n',
+      'data: [DONE]\n\n',
+    ].join('')
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(frames))
+          controller.close()
+        },
+      }),
+    })
+
+    const onCoverage = vi.fn()
+    await searchCampsitesStream(
+      { start_date: '2026-06-01', end_date: '2026-06-30' },
+      vi.fn(), vi.fn(), vi.fn(),
+      undefined, undefined, undefined, undefined, undefined, undefined,
+      onCoverage,
+    )
+
+    expect(onCoverage).toHaveBeenCalledWith(46, 20)
+  })
 })
 
 describe('API: Search', () => {

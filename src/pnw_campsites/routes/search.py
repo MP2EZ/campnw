@@ -20,6 +20,7 @@ from pnw_campsites.routes.deps import (
 )
 from pnw_campsites.search.engine import (
     SearchQuery,
+    StreamCoverageEvent,
     StreamDiagnosisEvent,
     StreamProgressEvent,
     StreamWarningsEvent,
@@ -154,6 +155,9 @@ class ActionChipResponse(BaseModel):
 
 class SearchResponse(BaseModel):
     campgrounds_checked: int
+    # Everything that passed the registry, tag and distance filters — the pool
+    # the `limit` cap selects from. matched > checked means the search was capped.
+    campgrounds_matched: int
     campgrounds_with_availability: int
     results: list[CampgroundResultResponse]
     warnings: list[SearchWarningResponse] = []
@@ -476,6 +480,7 @@ async def search(
 
     return SearchResponse(
         campgrounds_checked=results.campgrounds_checked,
+        campgrounds_matched=results.campgrounds_matched,
         campgrounds_with_availability=results.campgrounds_with_availability,
         results=[
             _format_result(
@@ -654,6 +659,17 @@ async def search_stream(
                         ],
                     }
                     yield f"data: {json.dumps(payload)}\n\n"
+                continue
+
+            # StreamCoverageEvent = matched vs checked, so a capped search is
+            # never mistaken for a complete one.
+            if isinstance(item, StreamCoverageEvent):
+                coverage = {
+                    "type": "coverage",
+                    "campgrounds_matched": item.campgrounds_matched,
+                    "campgrounds_checked": item.campgrounds_checked,
+                }
+                yield f"data: {json.dumps(coverage)}\n\n"
                 continue
 
             # StreamDiagnosisEvent = zero results, emit diagnosis
