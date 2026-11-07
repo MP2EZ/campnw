@@ -257,10 +257,25 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     // were hardcoded to [] at every setResults call, so provider outages
     // reached the UI as silently fewer results.
     let streamedWarnings: SearchWarning[] = [];
+    // Diagnosis and not-released frames arrive just before [DONE]. Every
+    // update rebuilds `results` from this snapshot so the end of the stream
+    // can't drop them — onDone used to, so the zero-results screen never
+    // received a diagnosis.
+    let streamedEnd: Partial<SearchResponse> = {};
     let rafId: number | null = null;
     let checkedCount = 0;
     // Known only once the stream finishes; undefined until then.
     let matchedCount: number | undefined;
+    const snapshot = (): SearchResponse => ({
+      campgrounds_checked: checkedCount,
+      campgrounds_matched: matchedCount,
+      campgrounds_with_availability: streamedResults.filter(
+        (r) => r.total_available_sites > 0,
+      ).length,
+      results: [...streamedResults],
+      warnings: streamedWarnings,
+      ...streamedEnd,
+    });
     setResults({
       campgrounds_checked: 0,
       campgrounds_with_availability: 0,
@@ -276,15 +291,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
-            setResults({
-              campgrounds_checked: checkedCount,
-              campgrounds_matched: matchedCount,
-              campgrounds_with_availability: streamedResults.filter(
-                (r) => r.total_available_sites > 0,
-              ).length,
-              results: [...streamedResults],
-              warnings: streamedWarnings,
-            });
+            setResults(snapshot());
           });
         }
       },
@@ -295,16 +302,9 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         }
         setLoading(false);
         searchAbortRef.current = null;
-        const withAvail = streamedResults.filter(
-          (r) => r.total_available_sites > 0,
-        ).length;
-        setResults({
-          campgrounds_checked: checkedCount,
-          campgrounds_matched: matchedCount,
-          campgrounds_with_availability: withAvail,
-          results: [...streamedResults],
-          warnings: streamedWarnings,
-        });
+        const final = snapshot();
+        const withAvail = final.campgrounds_with_availability;
+        setResults(final);
         track("search_executed", {
           search_id: searchId,
           state: params.state || "all",
@@ -338,16 +338,13 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         });
       },
       (diagEvent: DiagnosisEvent) => {
-        setResults((prev) =>
-          prev
-            ? {
-                ...prev,
-                diagnosis: diagEvent.diagnosis ?? undefined,
-                date_suggestions: diagEvent.date_suggestions,
-                action_chips: diagEvent.action_chips,
-              }
-            : prev,
-        );
+        streamedEnd = {
+          ...streamedEnd,
+          diagnosis: diagEvent.diagnosis ?? undefined,
+          date_suggestions: diagEvent.date_suggestions,
+          action_chips: diagEvent.action_chips,
+        };
+        setResults((prev) => (prev ? { ...prev, ...streamedEnd } : prev));
       },
       abortController.signal,
       (parsed) => {
@@ -373,15 +370,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
-            setResults({
-              campgrounds_checked: checkedCount,
-              campgrounds_matched: matchedCount,
-              campgrounds_with_availability: streamedResults.filter(
-                (r) => r.total_available_sites > 0,
-              ).length,
-              results: [...streamedResults],
-              warnings: streamedWarnings,
-            });
+            setResults(snapshot());
           });
         }
       },
@@ -399,6 +388,10 @@ export function useSearch(user: UserData | null): UseSearchReturn {
             ? { ...prev, campgrounds_matched: matched, campgrounds_checked: checked }
             : prev,
         );
+      },
+      (notReleased) => {
+        streamedEnd = { ...streamedEnd, ...notReleased };
+        setResults((prev) => (prev ? { ...prev, ...notReleased } : prev));
       },
     );
   }, [user]);

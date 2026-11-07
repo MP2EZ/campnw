@@ -262,6 +262,7 @@ CI runs both on `pull_request` events AND on direct pushes to `dev`/`main`, so t
 - Availability statuses beyond the documented ones: "Not Reservable", "Not Reservable Management", "Open", "Closed" — all handled in AvailabilityStatus enum
 - Many USFS campgrounds are first-come-first-served with no online system
 - Some RIDB facilities return 404 on the availability endpoint (scenic byways, areas, corridors) — these aren't reservable campgrounds. Errors are caught and reported gracefully.
+- GoingToCamp reports nights past WA's 9-month arrival window as Available (its daily availability ignores the window, whatever startDate you send). The provider rewrites Available/Reserved past `wa_release_date` (search/release.py) to NYR. Its own NYR code (5) marks loops on other schedules, not the window.
 - GoingToCamp resource/site details endpoint returns 404 — site names not available via API. Sites identified by resource ID (e.g., `WA--2147482394`).
 - GoingToCamp map hierarchy must be traversed park-by-park via the `resourceLocationId → childMapId` mapping from `/api/maps` links. Starting from region maps returns ALL parks' sites.
 - Registry has 1,370 campgrounds: 1,242 rec.gov (WA/OR/ID/MT/WY/NorCal) + 75 WA State Parks + 53 OR State Parks. Re-seed with `scripts/seed_registry.py`, `scripts/seed_wa_state.py`, and `scripts/seed_or_state.py`

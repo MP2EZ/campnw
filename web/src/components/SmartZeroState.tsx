@@ -10,6 +10,8 @@ interface SmartZeroStateProps {
   actionChips?: ActionChip[];
   searchDates?: { start: string; end: string };
   searchId?: string;
+  /** Checked campgrounds whose requested nights aren't released yet. */
+  notReleased?: number;
   onSearch: (params: SearchParams, mode: SearchMode) => void;
 }
 
@@ -20,6 +22,7 @@ export const SmartZeroState = memo(function SmartZeroState({
   actionChips,
   searchDates,
   searchId,
+  notReleased = 0,
   onSearch,
 }: SmartZeroStateProps) {
   const hasDiagnosis = diagnosis != null;
@@ -71,9 +74,11 @@ export const SmartZeroState = memo(function SmartZeroState({
         <p className="smart-zero-explanation">
           {hasDiagnosis
             ? diagnosis.explanation
-            : "No availability found for these dates."}
+            : notReleased > 0
+              ? "These dates haven't been released for booking yet."
+              : "No availability found for these dates."}
         </p>
-        {!hasDiagnosis && (
+        {!hasDiagnosis && notReleased === 0 && (
           <p className="no-results-hint">
             Try different dates, a wider date range, or fewer nights.
             {searchDates &&

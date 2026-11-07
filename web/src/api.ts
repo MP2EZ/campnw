@@ -131,6 +131,11 @@ function isSSECoverage(
     && (data as Record<string, unknown>).type === "coverage";
 }
 
+function isSSENotReleased(data: unknown): data is { type: "not_released" } & NotReleasedSummary {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "not_released";
+}
+
 function isCampgroundResult(data: unknown): data is CampgroundResult {
   return typeof data === "object" && data !== null
     && typeof (data as Record<string, unknown>).facility_id === "string"
@@ -176,6 +181,20 @@ export interface CampgroundResult {
   weather_precip_pct?: number;
   image_urls?: string[];
   image_attribution?: string;
+  /** Requested nights not yet released for booking, and when the first opens. */
+  not_released_nights?: number;
+  releases_on?: string | null;
+}
+
+/**
+ * Checked campgrounds with requested nights not yet released for booking —
+ * including those with no availability, which aren't in `results` — and the
+ * span of release dates (YYYY-MM-DD) from their first to last such night.
+ */
+export interface NotReleasedSummary {
+  not_released_campgrounds: number;
+  releases_on_earliest: string | null;
+  releases_on_latest: string | null;
 }
 
 export interface SearchWarning {
@@ -206,7 +225,7 @@ export interface ActionChip {
   params: Record<string, unknown>;
 }
 
-export interface SearchResponse {
+export interface SearchResponse extends Partial<NotReleasedSummary> {
   campgrounds_checked: number;
   /**
    * Campgrounds that passed every registry, tag and distance filter — the
@@ -297,6 +316,7 @@ export async function searchCampsitesStream(
   onProgress?: (checked: number, total: number) => void,
   onWarnings?: (warnings: SearchWarning[]) => void,
   onCoverage?: (matched: number, checked: number) => void,
+  onNotReleased?: (summary: NotReleasedSummary) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   if (params.q) {
@@ -354,6 +374,12 @@ export async function searchCampsitesStream(
               onWarnings(parsed.warnings);
             } else if (isSSECoverage(parsed) && onCoverage) {
               onCoverage(parsed.campgrounds_matched, parsed.campgrounds_checked);
+            } else if (isSSENotReleased(parsed) && onNotReleased) {
+              onNotReleased({
+                not_released_campgrounds: parsed.not_released_campgrounds,
+                releases_on_earliest: parsed.releases_on_earliest,
+                releases_on_latest: parsed.releases_on_latest,
+              });
             } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
               onDiagnosis(parsed);
             } else if (isCampgroundResult(parsed)) {
