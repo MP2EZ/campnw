@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 from curl_cffi import requests as curl_requests
 
-from pnw_campsites.providers.errors import WAFBlockedError
+from pnw_campsites.providers.errors import RateLimitedError, WAFBlockedError
 from pnw_campsites.registry.models import (
     AvailabilityStatus,
     CampgroundAvailability,
@@ -83,6 +83,8 @@ class GoingToCampClient:
             resp = self._session.get(f"{BASE_URL}{path}", params=params, timeout=30)
             if resp.status_code == 403:
                 raise WAFBlockedError("GoingToCamp WAF blocked the request")
+            if resp.status_code == 429:
+                raise RateLimitedError("GoingToCamp rate limited the request")
             if resp.status_code >= 500 and attempt == 0:
                 time.sleep(1)
                 continue
@@ -208,7 +210,6 @@ class GoingToCampClient:
         end_date: date,
     ) -> dict:
         """Fetch availability for a single map node."""
-        assert self._session is not None
         params = {
             "mapId": map_id,
             "bookingCategoryId": 0,
@@ -221,11 +222,7 @@ class GoingToCampClient:
             "subEquipmentCategoryId": NON_GROUP_EQUIPMENT,
             "filterData": "[]",
         }
-        resp = self._session.get(
-            f"{BASE_URL}/api/availability/map", params=params, timeout=30
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return self._get_sync("/api/availability/map", params)
 
     def _build_campsites(
         self,

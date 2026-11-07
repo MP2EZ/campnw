@@ -1016,7 +1016,12 @@ class SearchEngine:
             return CampgroundResult(campground=campground, error="rate_limited")
         except WAFBlockedError:
             return CampgroundResult(campground=campground, error="waf_blocked")
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "%s availability check failed for %s: %s: %s",
+                campground.booking_system.value, campground.facility_id,
+                type(exc).__name__, exc,
+            )
             return CampgroundResult(campground=campground, error="unavailable")
 
     def _cache_get(
