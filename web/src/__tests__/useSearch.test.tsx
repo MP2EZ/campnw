@@ -12,6 +12,8 @@ let capturedOnResult: ((r: CampgroundResult) => void) | null = null;
 let capturedOnDone: (() => void) | null = null;
 let capturedOnError: ((err: Error) => void) | null = null;
 let capturedOnWarnings: ((w: unknown[]) => void) | null = null;
+let capturedOnDiagnosis: ((e: unknown) => void) | null = null;
+let capturedOnNotReleased: ((s: unknown) => void) | null = null;
 
 vi.mock("../api", () => ({
   searchCampsitesStream: vi.fn(
@@ -27,8 +29,10 @@ vi.mock("../api", () => ({
       capturedOnError = onError;
       // after (params, onResult, onDone, onError) the rest are:
       // 0 onDiagnosis, 1 signal, 2 onParsed, 3 onSummary, 4 onProgress,
-      // 5 onWarnings
+      // 5 onWarnings, 6 onNotReleased
+      capturedOnDiagnosis = (rest[0] as ((e: unknown) => void)) ?? null;
       capturedOnWarnings = (rest[5] as ((w: unknown[]) => void)) ?? null;
+      capturedOnNotReleased = (rest[6] as ((s: unknown) => void)) ?? null;
     },
   ),
   saveSearchHistory: vi.fn(),
@@ -308,6 +312,65 @@ describe("useSearch provider warnings", () => {
     expect(result.current.results?.warnings).toHaveLength(1);
   });
 })
+
+describe("useSearch end-of-stream frames", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/");
+    vi.clearAllMocks();
+  });
+
+  async function startSearch() {
+    const hook = renderHook(() => useSearch(null));
+    await act(async () => {
+      hook.result.current.handleSearch(
+        { start_date: "2027-06-04", end_date: "2027-06-27" } as SearchParams,
+        "find",
+      );
+    });
+    return hook;
+  }
+
+  // The diagnosis frame arrives just before [DONE], and onDone rebuilt
+  // `results` from scratch, so the zero-results screen never saw it.
+  test("the diagnosis survives the end of the stream", async () => {
+    const { result } = await startSearch();
+    await act(async () => {
+      capturedOnDiagnosis?.({
+        type: "diagnosis",
+        diagnosis: {
+          registry_matches: 40, distance_filtered: 0, checked_for_availability: 20,
+          binding_constraint: "not_released", explanation: "18 of 20 campgrounds…",
+        },
+        date_suggestions: [],
+        action_chips: [{ action: "watch", label: "Set a watch", params: {} }],
+      });
+    });
+    await act(async () => capturedOnDone?.());
+
+    expect(result.current.results?.diagnosis?.binding_constraint).toBe("not_released");
+    expect(result.current.results?.action_chips).toHaveLength(1);
+  });
+
+  test("a not_released frame lands in results and survives the end", async () => {
+    const { result } = await startSearch();
+    await act(async () => {
+      capturedOnNotReleased?.({
+        type: "not_released",
+        not_released_campgrounds: 18,
+        releases_on_earliest: "2026-12-04",
+        releases_on_latest: "2026-12-25",
+      });
+    });
+    await act(async () => capturedOnResult?.(MOCK_RESULT));
+    await act(async () => capturedOnDone?.());
+
+    expect(result.current.results).toMatchObject({
+      not_released_campgrounds: 18,
+      releases_on_earliest: "2026-12-04",
+      releases_on_latest: "2026-12-25",
+    });
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Regression: sourceFilter must bail out when the source set is unchanged
