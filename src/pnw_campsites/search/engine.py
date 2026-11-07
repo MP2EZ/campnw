@@ -80,6 +80,11 @@ class CampgroundResult:
     estimated_drive_minutes: int | None = None
     error: str | None = None
 
+    @property
+    def boat_in(self) -> bool:
+        """Only reachable by boat: any drive time is to the shore, not the site."""
+        return "boat-in" in self.campground.tags
+
 
 @dataclass
 class SearchWarning:
@@ -581,11 +586,11 @@ class SearchEngine:
             sum(1 for r in all_results if r.total_available_sites > 0),
         )
 
-        # Step 4: Attach drive times to results
+        # Step 4: Attach drive times to results (never to boat-in campgrounds)
         if drive_times:
             for r in all_results:
                 fid = r.campground.facility_id
-                if fid in drive_times:
+                if fid in drive_times and not r.boat_in:
                     r.estimated_drive_minutes = drive_times[fid]
 
         warnings = aggregate_warnings(all_results)
@@ -628,8 +633,9 @@ class SearchEngine:
 
         # Sort by distance if filtering by location, otherwise by availability
         if from_coords:
+            # Boat-in campgrounds sort after every drive-in campground
             results.results.sort(
-                key=lambda r: r.estimated_drive_minutes or 9999
+                key=lambda r: (r.boat_in, r.estimated_drive_minutes or 9999)
             )
         else:
             results.results.sort(
@@ -928,7 +934,7 @@ class SearchEngine:
 
             if drive_times:
                 fid = r.campground.facility_id
-                if fid in drive_times:
+                if fid in drive_times and not r.boat_in:
                     r.estimated_drive_minutes = drive_times[fid]
             if r.error:
                 errored.append(r)
