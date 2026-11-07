@@ -638,3 +638,50 @@ class TestCampsiteDataFields:
 
         assert result == json_response
         assert "resourceAvailabilities" in result
+
+
+class TestParkIndexLoad:
+    """The park index must appear whole or not at all.
+
+    It was filled in place, so a response that broke partway through the
+    loop left a partial index behind, and the "already loaded" check then
+    treated that partial index as complete forever: every park after the
+    break silently returned zero sites. Concurrent searches could also read
+    it half-built during the first successful load.
+    """
+
+    def test_malformed_maps_response_leaves_no_partial_index(self) -> None:
+        client = GoingToCampClient()
+        client._get_sync = MagicMock(return_value=[
+            {"mapLinks": [{"resourceLocationId": 1, "childMapId": 10}]},
+            {"mapLinks": None},  # not iterable: fails after park 1 was read
+        ])
+
+        with pytest.raises(TypeError):
+            client._ensure_park_index_sync()
+
+        assert client._park_map_ids == {}
+
+    def test_failed_build_is_not_refetched_until_cooldown(self, monkeypatch) -> None:
+        # A response that breaks mid-build counts as a failed load, so a
+        # search fan-out doesn't refetch /api/maps once per park.
+        client = GoingToCampClient()
+        client._get_sync = MagicMock(side_effect=[
+            [{"mapLinks": None}],
+            [{"mapLinks": [{"resourceLocationId": 1, "childMapId": 10}]}],
+        ])
+        now = [100.0]
+        monkeypatch.setattr(
+            "pnw_campsites.providers.goingtocamp.time.monotonic", lambda: now[0],
+        )
+
+        with pytest.raises(TypeError):
+            client._ensure_park_index_sync()
+        now[0] += 30
+        with pytest.raises(TypeError):
+            client._ensure_park_index_sync()
+        assert client._get_sync.call_count == 1
+
+        now[0] += 31
+        client._ensure_park_index_sync()
+        assert client._park_map_ids == {1: 10}

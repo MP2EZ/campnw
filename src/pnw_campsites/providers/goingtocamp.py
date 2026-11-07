@@ -97,19 +97,25 @@ class GoingToCampClient:
                 and time.monotonic() - self._index_failed_at < INDEX_RETRY_SECONDS
             ):
                 raise self._index_error.with_traceback(None)
+            # Built aside and swapped in whole: readers skip the lock once the
+            # index is non-empty, so filling it in place would let them act on
+            # a half-built index, and a response that broke mid-loop would
+            # leave a partial one that never got rebuilt.
+            index: dict[int, int] = {}
             try:
                 maps = self._get_sync("/api/maps")
+                for m in maps:
+                    for link in m.get("mapLinks", []):
+                        rl_id = link.get("resourceLocationId")
+                        child_map = link.get("childMapId")
+                        if rl_id is not None and child_map is not None:
+                            index[rl_id] = child_map
             except Exception as exc:
                 self._index_error = exc
                 self._index_failed_at = time.monotonic()
                 raise
             self._index_error = None
-            for m in maps:
-                for link in m.get("mapLinks", []):
-                    rl_id = link.get("resourceLocationId")
-                    child_map = link.get("childMapId")
-                    if rl_id is not None and child_map is not None:
-                        self._park_map_ids[rl_id] = child_map
+            self._park_map_ids = index
 
     async def _get(self, path: str, params: dict | None = None) -> dict | list:
         """GET with WAF bypass, run in thread to avoid blocking the event loop."""
