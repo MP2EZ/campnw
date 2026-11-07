@@ -55,6 +55,24 @@ jobs:
           echo "$body" | grep -q '"campgrounds_checked"' || {
             echo "::error::/api/search response missing campgrounds_checked"; exit 1; }
 
+      - name: WA State Parks availability — prod's own view
+        # /api/check runs in the prod process, through its provider client and
+        # Fly's egress IP. The dependency sweep below runs from this runner, so
+        # it cannot see a provider blocking Fly: in Nov 2026 GoingToCamp 403'd
+        # every WA request from prod while the sweep here reported ok. A single
+        # park, so no rec.gov calls. Oregon is not gated here until #131 lands.
+        run: |
+          start=$(date -u -d "+45 days" +%Y-%m-%d)
+          end=$(date -u -d "+47 days" +%Y-%m-%d)
+          url="$PROD_URL/api/check/-2147483646?start_date=$start&end_date=$end&source=wa_state"
+          body=$(curl -sf --max-time 60 "$url") || {
+            echo "::error::/api/check (wa_state) did not return 2xx"; exit 1; }
+          err=$(echo "$body" | jq -r '.error // empty')
+          if [ -n "$err" ]; then
+            echo "::error::WA State Parks availability failing in prod: $err"; exit 1
+          fi
+          echo "wa_state ok: $(echo "$body" | jq -r '.name')"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
