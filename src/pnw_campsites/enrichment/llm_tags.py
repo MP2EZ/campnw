@@ -49,7 +49,8 @@ VALID_TAGS = [
     "swimming",
     "fishing",
     "boating",
-    "boat-launch",
+    "boat-launch",  # a boat ramp, not boat-only access (see boat-in)
+    "boat-in",      # only reachable by boat; no road access
     "equestrian",  # includes former horse-camp
     "climbing",
     "winter-camping",
@@ -111,6 +112,12 @@ Description: {description[:2000]}
 
 Return a JSON object with a "tags" array containing only tags from this list:
 {json.dumps(VALID_TAGS)}
+
+Tag definitions that are easy to confuse:
+- boat-in: only reachable by boat or kayak; no road access (marine-park islands).
+- boat-launch: has a boat ramp. Does not mean boat-in.
+- walk-in: a hike from the car. Does not mean boat-in.
+- beach: a real sand or pebble beach (saltwater or a lake swim beach). Not a river bank.
 
 Only include tags that are clearly supported by the description. Be conservative.
 Return ONLY the JSON object, nothing else."""

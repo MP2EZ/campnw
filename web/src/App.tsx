@@ -22,6 +22,7 @@ const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").th
 import { UserMenu } from "./components/UserMenu";
 import { ProBadge } from "./components/ProBadge";
 import { SmartZeroState } from "./components/SmartZeroState";
+import { SearchCoverage } from "./components/SearchCoverage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Lockup } from "./components/brand/Lockup";
 import { IconSun, IconMoon, IconClose, IconChevronUp, IconChevronDown, IconList, IconGrid, IconSearch } from "./icons";
@@ -740,7 +741,7 @@ export default function App() {
     activeSearchParams, formCollapsed, setFormCollapsed,
     focusedCardIndex, setFocusedCardIndex,
     liveAnnouncement, setLiveAnnouncement,
-    cardRefs, maxResults, handleSearch, toggleSource, resetSearch, searchId,
+    cardRefs, maxResults, handleSearch, checkRest, toggleSource, resetSearch, searchId,
   } = useSearch(user ?? null);
 
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
@@ -1111,10 +1112,15 @@ export default function App() {
         return (
         <div className="results">
           <div className="results-header">
-            <p className="results-summary">
-              Checked {Math.min(results.campgrounds_checked, maxResults)} campgrounds —{" "}
-              {withAvailability} with availability
-            </p>
+            <SearchCoverage
+              checked={results.campgrounds_checked}
+              matched={results.campgrounds_matched}
+              limit={maxResults}
+              withAvailability={withAvailability}
+              nearby={!!activeSearchParams?.from_location}
+              loading={loading}
+              onCheckRest={checkRest}
+            />
             <div className="results-toolbar-right">
               <div className="view-toggle">
                 <button
