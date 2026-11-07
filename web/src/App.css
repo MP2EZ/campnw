@@ -643,6 +643,18 @@ header p {
   color: var(--text-muted);
 }
 
+/* Calm, not a warning: dates not yet released aren't a failure. */
+.not-released-notice {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-muted);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+
 .results-summary-action {
   background: none;
   border: none;

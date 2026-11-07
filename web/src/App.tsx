@@ -23,6 +23,7 @@ import { UserMenu } from "./components/UserMenu";
 import { ProBadge } from "./components/ProBadge";
 import { SmartZeroState } from "./components/SmartZeroState";
 import { SearchCoverage } from "./components/SearchCoverage";
+import { NotReleasedNotice } from "./components/NotReleasedNotice";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Lockup } from "./components/brand/Lockup";
 import { IconSun, IconMoon, IconClose, IconChevronUp, IconChevronDown, IconList, IconGrid, IconSearch } from "./icons";
@@ -1156,6 +1157,7 @@ export default function App() {
               </div>
             </div>
           </div>
+          {withAvailability > 0 && <NotReleasedNotice summary={results} />}
           {resultSources.size > 1 && (
           <div className="source-toggle" role="group" aria-label="Filter by source">
             {[...resultSources].map((src) => {
@@ -1256,6 +1258,7 @@ export default function App() {
               actionChips={results?.action_chips}
               searchDates={searchDates || undefined}
               searchId={searchId}
+              notReleased={results.not_released_campgrounds}
               onSearch={handleSearch}
             />
           )}
