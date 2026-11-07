@@ -73,11 +73,15 @@ jobs:
           fi
           echo "wa_state ok: $(echo "$body" | jq -r '.name')"
 
+      # always(): the sweep explains a failure, so it must run when a
+      # detector above has failed — that is when it is needed.
       - uses: actions/setup-python@v5
+        if: always()
         with:
           python-version: "3.12"
 
       - name: Dependency sweep — which upstream is down?
+        if: always()
         env:
           RIDB_API_KEY: ${{ secrets.RIDB_API_KEY }}
         # DIAGNOSTIC, NOT A GATE — deliberately continue-on-error. This runs
@@ -93,6 +97,7 @@ jobs:
         continue-on-error: true
         run: |
           pip install -e ".[api]"
+          echo "Runner egress IP: $(curl -s --max-time 10 https://api.ipify.org || echo unknown)"
           python -m pnw_campsites doctor --only provider,notify --json \
             > dependency-sweep.json || true
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
