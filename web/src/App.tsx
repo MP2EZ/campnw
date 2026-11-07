@@ -32,6 +32,7 @@ import { useSearch } from "./hooks/useSearch";
 import type { SearchMode } from "./hooks/useSearch";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { SearchContext } from "./contexts/SearchContext";
+import { useUiVersion } from "./results/uiVersion";
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const MapView = lazy(() => import("./pages/MapView"));
 const TripsPage = lazy(() => import("./pages/TripsPage"));
@@ -39,6 +40,7 @@ const TripDetail = lazy(() => import("./pages/TripDetail"));
 const SharedView = lazy(() => import("./pages/SharedView"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));
+const ResultsPage = lazy(() => import("./results/ResultsPage"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 import { Footer } from "./components/Footer";
@@ -742,8 +744,9 @@ export default function App() {
     activeSearchParams, formCollapsed, setFormCollapsed,
     focusedCardIndex, setFocusedCardIndex,
     liveAnnouncement, setLiveAnnouncement,
-    cardRefs, maxResults, handleSearch, checkRest, toggleSource, resetSearch, searchId,
+    cardRefs, maxResults, completedAt, handleSearch, checkRest, toggleSource, resetSearch, searchId,
   } = useSearch(user ?? null);
+  const uiVersion = useUiVersion();
 
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -1108,7 +1111,13 @@ export default function App() {
 
       {loading && (!results || results.results.length === 0) && <ResultsSkeleton />}
 
-      {results && (() => {
+      {/* v1.48 switch point: results v2 lives in src/results/ (D1). */}
+      {results && uiVersion === "v2" ? (
+        <Suspense fallback={null}>
+          <ResultsPage maxResults={maxResults} onCheckRest={checkRest} completedAt={completedAt}
+            onSearch={handleSearch} searchId={searchId} />
+        </Suspense>
+      ) : results && (() => {
         const withAvailability = availableCards.length;
         return (
         <div className="results">

@@ -43,16 +43,18 @@ Brand colors are defined in `web/src/tokens.css` as `--brand-green`, `--brand-bl
 
 | Role | Font | Weights | Usage |
 |------|------|---------|-------|
-| Headings | Plus Jakarta Sans | 500 (medium), 700 (bold) | Wordmark, h1-h3, result card names, nav |
+| Headings | Bricolage Grotesque (variable, self-hosted) | 500, 600, 700 | Answer line, section and card headings. Results v2 only until the v1.48 flip; v1 headings use the system stack |
 | Body | System stack | 400, 500, 600, 700 | All body text, form controls, data |
 
 **System stack:** `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
 
-**CSS tokens:** `--font-heading`, `--font-body` in `tokens.css`.
+**CSS tokens:** `--font-heading`, `--font-body` in `tokens.css`. Results v2 sets `--font-heading` to Bricolage inside `.results-v2`.
+
+**Decision (v1.48, D11, 2026-11-07):** Bricolage Grotesque for headings, replacing the never-loaded Plus Jakarta Sans. Self-hosted from `@fontsource-variable/bricolage-grotesque` (wght + opsz axes, `font-display: swap`) rather than Google Fonts: no third-party request, and it works offline in the native app. Only the lazy results-v2 chunk loads it (latin subset ≈77 KB).
 
 **Rules:**
 - Never use more than 2 font families
-- Headings: medium (500) for regular, bold (700) for emphasis
+- Headings: semibold (600) for the answer line and section headings; medium (500) and bold (700) where the design calls for them
 - Body: let the system font do the work — it's faster and matches the OS
 
 ## Logo

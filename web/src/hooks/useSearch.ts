@@ -111,6 +111,8 @@ export interface UseSearchReturn {
   setLiveAnnouncement: (s: string) => void;
   cardRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
   maxResults: number;
+  /** When the last search finished streaming (ms epoch); null before one has. */
+  completedAt: number | null;
   handleSearch: (params: SearchParams, mode: SearchMode) => Promise<void>;
   /** Re-run the current search with a higher `limit` to check more campgrounds. */
   checkRest: (limit: number) => void;
@@ -122,6 +124,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [searchSummary, setSearchSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [completedAt, setCompletedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultsView, setResultsView] = useState<ResultsView>("dates");
   const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
@@ -301,6 +304,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           rafId = null;
         }
         setLoading(false);
+        setCompletedAt(Date.now());
         searchAbortRef.current = null;
         const final = snapshot();
         const withAvail = final.campgrounds_with_availability;
@@ -446,6 +450,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     setLiveAnnouncement,
     cardRefs,
     maxResults,
+    completedAt,
     handleSearch,
     checkRest,
     toggleSource,
