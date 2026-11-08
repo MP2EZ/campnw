@@ -359,6 +359,13 @@ class TestSecurityHeaders:
         assert "cdn.recreation.gov" in csp
         assert "reserveamerica.com" in csp
 
+    def test_csp_img_src_allows_map_tiles(self, api_client: TestClient):
+        """v1.48: results map tiles (Mapbox raster, OSM fallback) are <img>s."""
+        resp = api_client.get("/api/perf")
+        img_src = resp.headers["Content-Security-Policy"].split("img-src")[1].split(";")[0]
+        assert "https://api.mapbox.com" in img_src
+        assert "https://*.tile.openstreetmap.org" in img_src
+
 
 # ---------------------------------------------------------------------------
 # TEST-06: Date suggestion probes
