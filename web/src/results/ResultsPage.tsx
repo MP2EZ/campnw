@@ -6,7 +6,7 @@ import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
 import { SmartZeroState } from "../components/SmartZeroState";
 import { AnswerHeader } from "./AnswerHeader";
-import { CampgroundCard } from "./CampgroundCard";
+import { DriveBands } from "./DriveBands";
 import { ResultsNotices } from "./ResultsNotices";
 import { answerSentence, searchedAgo } from "./answer";
 
@@ -61,11 +61,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
         }}
       />
       <ResultsNotices results={results} />
-      <div className="rv2-list">
-        {cards.map((r, i) => (
-          <CampgroundCard key={r.facility_id} result={r} params={searchParams} rank={i} />
-        ))}
-      </div>
+      <DriveBands results={cards} params={searchParams} />
       {!loading && cards.length === 0 && (
         <SmartZeroState
           diagnosis={results.diagnosis}

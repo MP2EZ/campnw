@@ -164,7 +164,7 @@ describe("Accessibility: results v2", () => {
 
   test("interactive targets are at least 44px tall", () => {
     const css = readFileSync(join(__dirname, "../results/results.css"), "utf-8");
-    for (const selector of [".rv2-chip", ".rv2-chip-more"]) {
+    for (const selector of [".rv2-chip", ".rv2-chip-more", ".rv2-band-more"]) {
       const body = css.match(new RegExp(`\\n\\${selector}\\s*{([^}]*)}`))?.[1] ?? "";
       const rem = Number(body.match(/min-height:\s*([\d.]+)rem/)?.[1] ?? 0);
       expect(rem * 16, `${selector} min-height`).toBeGreaterThanOrEqual(44);
