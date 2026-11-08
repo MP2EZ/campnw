@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import zlib
+from collections.abc import AsyncIterator
 from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -817,9 +819,25 @@ async def search_stream(
 
         yield "data: [DONE]\n\n"
 
+    if "gzip" in request.headers.get("accept-encoding", ""):
+        return StreamingResponse(
+            _gzip_events(event_generator()),
+            media_type="text/event-stream",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
     return StreamingResponse(
         event_generator(), media_type="text/event-stream"
     )
+
+
+async def _gzip_events(events: AsyncIterator[str]) -> AsyncIterator[bytes]:
+    """gzip an SSE stream, flushed after every event so each still arrives
+    when it's sent. A broad search is megabytes of repetitive JSON and
+    Cloudflare won't compress text/event-stream itself (R2)."""
+    z = zlib.compressobj(6, zlib.DEFLATED, 31)
+    async for event in events:
+        yield z.compress(event.encode()) + z.flush(zlib.Z_SYNC_FLUSH)
+    yield z.flush()
 
 
 @router.get("/check/{facility_id}", response_model=CampgroundResultResponse)
