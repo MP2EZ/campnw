@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   barToParams, compactLabel, DEFAULT_BAR, driveLabel, monthOptions, monthRange,
-  nextWeekend, paramsToBar, thisWeekend, whenLabel, whereLabel, whoLabel,
+  nextWeekend, paramsToBar, quickDates, thisWeekend, whenLabel, whereLabel, whoLabel,
   type BarState,
 } from "../results/searchState";
 import { parseSearchParamsFromUrl } from "../hooks/useSearch";
@@ -184,5 +184,48 @@ describe("labels", () => {
       title: "This weekend",
       detail: "Ohanapecosh · 2 people",
     });
+  });
+});
+
+describe("quickDates", () => {
+  const labels = (b: BarState, today = SAT) => quickDates(b, today).map((c) => c.label);
+
+  test("this weekend, next weekend and the current month, with the searched days", () => {
+    expect(labels(bar())).toEqual(["This weekend", "Next weekend", "November weekends"]);
+    expect(labels(bar({ days: "3,4,5,6" }))).toEqual(["This weekend", "Next weekend", "November long weekends"]);
+    expect(labels(bar({ days: "0,1,2,3,4" }))[2]).toBe("November weekdays");
+    expect(labels(bar({ days: "" }))[2]).toBe("November");
+    expect(labels(bar({ days: "0,2" }))[2]).toBe("November");
+  });
+
+  test("the searched month is the month chip, and it's pressed", () => {
+    const chips = quickDates(bar({ when: { kind: "month", month: "2027-06" } }), SAT);
+    expect(chips.map((c) => [c.label, c.pressed])).toEqual([
+      ["This weekend", false], ["Next weekend", false], ["June weekends", true],
+    ]);
+    expect(chips[2].when).toEqual({ kind: "month", month: "2027-06" });
+    expect(chips[2].year).toBe("2027");
+    expect(chips[0].year).toBeUndefined();
+  });
+
+  test("the chip matching the search is pressed; a range or exact dates press none", () => {
+    expect(quickDates(bar({ when: { kind: "next-weekend" } }), SAT).map((c) => c.pressed)).toEqual([false, true, false]);
+    expect(quickDates(bar({ when: { kind: "this-weekend" } }), SAT).map((c) => c.pressed)).toEqual([true, false, false]);
+    const exact = bar({ when: { kind: "exact", start: "2026-12-02", end: "2026-12-04" } });
+    expect(quickDates(exact, SAT).some((c) => c.pressed)).toBe(false);
+  });
+
+  test("late in a month the month chip moves on, once the weekends cover what's left", () => {
+    // Wed Nov 25: this weekend Nov 27–29, next weekend Dec 4–6, so November adds nothing.
+    expect(labels(bar(), "2026-11-25")[2]).toBe("December weekends");
+    expect(quickDates(bar(), "2026-11-25")[2].when).toEqual({ kind: "month", month: "2026-12" });
+    // Wed Nov 18: next weekend ends Nov 29, November still has the 30th.
+    expect(labels(bar(), "2026-11-18")[2]).toBe("November weekends");
+  });
+
+  test("each chip searches through barToParams", () => {
+    const [weekend, , month] = quickDates(bar(), SAT);
+    expect(barToParams({ ...bar(), when: weekend.when }, SAT)).toMatchObject({ start_date: "2026-11-07", end_date: "2026-11-08" });
+    expect(barToParams({ ...bar(), when: month.when }, SAT)).toMatchObject({ start_date: "2026-11-07", end_date: "2026-11-30" });
   });
 });

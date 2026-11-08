@@ -203,6 +203,44 @@ function daysWord(days: string): string {
   return DAY_WORDS[days] ?? days.split(",").map((d) => DAY_SHORT[Number(d)]).join("/");
 }
 
+export interface QuickDate {
+  label: string;
+  /** The month chip's year, for screen readers. */
+  year?: string;
+  when: When;
+  pressed: boolean;
+}
+
+const sameWhen = (a: When, b: When) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * The results page's date chips (P4a, mobile): this weekend, next weekend and
+ * a month. The month is the searched one, else the current month, unless the
+ * two weekend chips already cover what's left of it.
+ */
+export function quickDates(bar: BarState, today: string): QuickDate[] {
+  let month = today.slice(0, 7);
+  if (bar.when.kind === "month") month = bar.when.month;
+  else if (monthRange(month, today).end <= nextWeekend(today).end) month = monthOptions(today)[1];
+  const days = DAY_WORDS[bar.days]?.toLowerCase();
+  const name = monthName(month);
+  const chips: Array<Omit<QuickDate, "pressed">> = [
+    { label: "This weekend", when: { kind: "this-weekend" } },
+    { label: "Next weekend", when: { kind: "next-weekend" } },
+    { label: days ? `${name} ${days}` : name, year: month.slice(0, 4), when: { kind: "month", month } },
+  ];
+  return chips.map((c) => ({ ...c, pressed: sameWhen(c.when, bar.when) }));
+}
+
+/** Ask the v2 search bar to open on its dates (the results page's "Pick dates"). */
+export const EDIT_DATES_EVENT = "campable:edit-dates";
+
+/** Today as YYYY-MM-DD in the device's time zone. */
+export function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** The When segment without nights: "Weekends in June", "This weekend", "Jul 2 – 5". */
 export function whenTitle(bar: BarState): string {
   const { when } = bar;

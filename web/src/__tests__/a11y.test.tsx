@@ -217,6 +217,14 @@ describe("Accessibility: results v2", () => {
     }
   });
 
+  test("date chips (P4a) are a labelled group of 44px toggles", () => {
+    renderV2();
+    const group = screen.getByRole("group", { name: "Dates" });
+    expect(within(group).getAllByRole("button", { pressed: true })).toHaveLength(1);
+    const css = readFileSync(join(__dirname, "../results/results.css"), "utf-8");
+    expect(minTarget(css, ".rv2-date")).toBeGreaterThanOrEqual(44);
+  });
+
   test("on desktop the map is a labelled region beside the list, and passes axe", async () => {
     const matchMedia = window.matchMedia;
     window.matchMedia = ((q: string) => ({ ...matchMedia(q), matches: q.includes("min-width: 1024px") })) as typeof matchMedia;
