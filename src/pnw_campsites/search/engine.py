@@ -23,7 +23,12 @@ from pnw_campsites.registry.models import (
     CampsiteAvailability,
     SiteFit,
 )
-from pnw_campsites.search.release import format_release_range, release_date
+from pnw_campsites.search.release import (
+    NotReleasedRange,
+    format_release_range,
+    not_released_ranges,
+    release_date,
+)
 from pnw_campsites.search.site_fit import fit_from_recgov_type, wa_site_fit
 
 logger = logging.getLogger("pnw_campsites.search")
@@ -89,6 +94,8 @@ class CampgroundResult:
     not_released_nights: int = 0
     releases_on: date | None = None
     releases_through: date | None = None
+    # Which nights: runs of them, each with its first night's release date.
+    not_released_ranges: list[NotReleasedRange] = field(default_factory=list)
 
     @property
     def boat_in(self) -> bool:
@@ -169,6 +176,8 @@ class StreamProgressEvent:
 
     checked: int
     total: int
+    # The campground just checked, which had nothing to book (or failed).
+    result: CampgroundResult | None = None
 
 
 @dataclass
@@ -418,6 +427,7 @@ def _process_availability(
         result.releases_on = release_date(system, nights[0], today)
         if result.releases_on:
             result.releases_through = release_date(system, nights[-1], today)
+        result.not_released_ranges = not_released_ranges(nights, system, today)
     result.total_sites = len(availability.campsites)
     seen_sites: set[str] = set()
     fcfs_count = 0
@@ -1078,7 +1088,7 @@ class SearchEngine:
                 if not r.error:
                     all_unavailable += 1
                 yield StreamProgressEvent(
-                    checked=checked_count, total=total,
+                    checked=checked_count, total=total, result=r,
                 )
 
         # Report provider degradation. The non-streaming endpoint has always

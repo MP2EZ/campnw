@@ -16,6 +16,7 @@ let capturedOnDiagnosis: ((e: unknown) => void) | null = null;
 let capturedOnNotReleased: ((s: unknown) => void) | null = null;
 let capturedOnCoverage: ((matched: number, checked: number) => void) | null = null;
 let capturedSignal: AbortSignal | null = null;
+let capturedOnUnavailable: ((r: CampgroundResult) => void) | null = null;
 
 vi.mock("../api", () => ({
   searchCampsitesStream: vi.fn(
@@ -38,6 +39,7 @@ vi.mock("../api", () => ({
       capturedOnCoverage =
         (rest[6] as ((matched: number, checked: number) => void)) ?? null;
       capturedOnNotReleased = (rest[7] as ((s: unknown) => void)) ?? null;
+      capturedOnUnavailable = (rest[8] as ((r: CampgroundResult) => void)) ?? null;
     },
   ),
   saveSearchHistory: vi.fn(),
@@ -215,6 +217,21 @@ describe("useSearch", () => {
     await search();
     act(() => capturedOnError?.(new Error("The search stopped responding")));
     expect(result.current.completedAt).toBeNull();
+  });
+
+  test("unavailable campgrounds collect apart from results and survive the end", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => {
+      result.current.handleSearch({ start_date: "2026-06-01", end_date: "2026-06-30" }, "find");
+    });
+    const full = { ...MOCK_RESULT, facility_id: "9", name: "Kachess", total_available_sites: 0 };
+    act(() => {
+      capturedOnResult?.(MOCK_RESULT);
+      capturedOnUnavailable?.(full);
+      capturedOnDone?.();
+    });
+    expect(result.current.results?.results.map((r) => r.name)).toEqual(["Ohanapecosh"]);
+    expect(result.current.results?.unavailable?.map((r) => r.name)).toEqual(["Kachess"]);
   });
 
   test("toggleSource: first click isolates, then clicks toggle on/off", async () => {

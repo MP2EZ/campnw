@@ -92,6 +92,10 @@ class TestProcessAvailabilityNotReleased:
         )
         assert r.not_released_nights == 2
         assert r.releases_through == date(2098, 12, 6)
+        # Fri-Sat run, then Monday: which nights, not just how many.
+        assert [(x.start, x.end, x.releases_on) for x in r.not_released_ranges] == [
+            (date(2099, 6, 5), date(2099, 6, 6), date(2098, 12, 5)),
+        ]
 
     def test_only_sites_that_fit_the_party_count(self) -> None:
         # The site big enough for 10 isn't released; the small one is booked.
@@ -285,9 +289,13 @@ class TestApiCarriesNotReleased:
 
     def test_search_endpoint(self, api_client, monkeypatch) -> None:
         from pnw_campsites.search.engine import SearchResults
+        from pnw_campsites.search.release import NotReleasedRange
 
         partly = _result(nights=3, first=date(2026, 12, 25), last=date(2026, 12, 27))
         partly.total_available_sites = 1
+        partly.not_released_ranges = [
+            NotReleasedRange(date(2027, 6, 25), date(2027, 6, 27), date(2026, 12, 25)),
+        ]
 
         class FakeEngine:
             async def search(self, query):
@@ -305,6 +313,9 @@ class TestApiCarriesNotReleased:
         assert body["releases_on_latest"] == "2026-12-27"
         assert body["results"][0]["not_released_nights"] == 3
         assert body["results"][0]["releases_on"] == "2026-12-25"
+        assert body["results"][0]["not_released_ranges"] == [
+            {"start": "2027-06-25", "end": "2027-06-27", "releases_on": "2026-12-25"},
+        ]
 
     def test_stream_emits_a_not_released_frame(self, api_client, monkeypatch) -> None:
         async def fake_stream(query):
@@ -328,3 +339,61 @@ class TestApiCarriesNotReleased:
             "releases_on_earliest": "2026-12-04",
             "releases_on_latest": "2026-12-27",
         } in frames
+
+
+class TestStreamSendsUnavailableCampgrounds:
+    """v1.48 D4: the "Full or not released yet" group lists checked
+    campgrounds with nothing to book, so the stream must send them."""
+
+    async def test_engine_attaches_the_result_to_its_progress_event(self, registry) -> None:
+        from pnw_campsites.search.engine import StreamProgressEvent
+
+        events = [
+            e async for e in _nyr_engine(registry).search_stream(
+                _query(date(2099, 6, 4), date(2099, 6, 27), max_campgrounds=5),
+            )
+        ]
+        progress = [e for e in events if isinstance(e, StreamProgressEvent)]
+        assert progress and all(e.result is not None for e in progress)
+        assert progress[0].result.not_released_ranges
+
+    def test_stream_emits_an_unavailable_frame(self, api_client, monkeypatch) -> None:
+        from pnw_campsites.search.engine import StreamProgressEvent
+        from pnw_campsites.search.release import NotReleasedRange
+
+        full = _result()
+        nyr = _result(nights=2, first=date(2026, 12, 4), last=date(2026, 12, 5))
+        nyr.not_released_ranges = [
+            NotReleasedRange(date(2027, 6, 4), date(2027, 6, 5), date(2026, 12, 4)),
+        ]
+        broken = _result()
+        broken.error = "waf_blocked"
+
+        async def fake_stream(query):
+            yield StreamProgressEvent(checked=1, total=3, result=full)
+            yield StreamProgressEvent(checked=2, total=3, result=nyr)
+            yield StreamProgressEvent(checked=3, total=3, result=broken)
+
+        class FakeEngine:
+            search_stream = staticmethod(fake_stream)
+
+        monkeypatch.setattr(
+            __import__("pnw_campsites.routes.search", fromlist=["x"]), "get_engine",
+            lambda: FakeEngine(),
+        )
+        resp = api_client.get(
+            "/api/search/stream",
+            params={"start_date": "2027-06-04", "end_date": "2027-06-27"},
+        )
+        frames = [
+            json.loads(line[6:]) for line in resp.text.splitlines()
+            if line.startswith("data: {")
+        ]
+        assert [f["checked"] for f in frames if f["type"] == "progress"] == [1, 2, 3]
+        unavailable = [f["result"] for f in frames if f["type"] == "unavailable"]
+        # An errored check couldn't be checked: it's a warning, not "full".
+        assert len(unavailable) == 2
+        assert unavailable[0]["windows"] == []
+        assert unavailable[1]["not_released_ranges"] == [
+            {"start": "2027-06-04", "end": "2027-06-05", "releases_on": "2026-12-04"},
+        ]
