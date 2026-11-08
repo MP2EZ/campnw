@@ -21,12 +21,10 @@ from pnw_campsites.registry.models import SiteFit
 _WA_TENTS = {-32768, -32767, -32766, -32761}  # 1-3 tents; group tents
 _WA_VAN = -32765  # 1 Van/Camper
 _WA_GROUP_TRAILERS = -32760  # no length band
-# RV/Trailer bands. Ids aren't in length order. "Over 40'" (-32757) states no
-# upper limit, so it reports 40, the longest length GoingToCamp states.
-_WA_RV_BANDS_FT = {
-    -32764: 20, -32763: 25, -32759: 30, -32762: 35, -32758: 40, -32757: 40,
-}
-_WA_KNOWN = _WA_TENTS | {_WA_VAN, _WA_GROUP_TRAILERS} | set(_WA_RV_BANDS_FT)
+# RV/Trailer bands. Ids aren't in length order.
+_WA_RV_BANDS_FT = {-32764: 20, -32763: 25, -32759: 30, -32762: 35, -32758: 40}
+_WA_RV_OVER_40 = -32757  # no upper limit: max_rv_ft stays None
+_WA_KNOWN = _WA_TENTS | {_WA_VAN, _WA_GROUP_TRAILERS, _WA_RV_OVER_40} | set(_WA_RV_BANDS_FT)
 
 
 def fit_from_wa_equipment(allowed: list[dict] | None) -> SiteFit:
@@ -37,11 +35,12 @@ def fit_from_wa_equipment(allowed: list[dict] | None) -> SiteFit:
     if not ids & _WA_KNOWN:
         return SiteFit()
     lengths = [_WA_RV_BANDS_FT[i] for i in ids if i in _WA_RV_BANDS_FT]
+    unbounded = _WA_RV_OVER_40 in ids
     return SiteFit(
         fits_tent=bool(ids & _WA_TENTS),
         fits_van=_WA_VAN in ids,
-        fits_rv=bool(lengths) or _WA_GROUP_TRAILERS in ids,
-        max_rv_ft=max(lengths) if lengths else None,
+        fits_rv=bool(lengths) or unbounded or _WA_GROUP_TRAILERS in ids,
+        max_rv_ft=max(lengths) if lengths and not unbounded else None,
     )
 
 

@@ -26,7 +26,7 @@ class AvailabilityStatus(StrEnum):
 class SiteFit(BaseModel):
     """What a site takes, as far as the booking system says. None = unknown.
 
-    `fits_rv` with `max_rv_ft` None means RVs fit but no length is listed.
+    `fits_rv` with `max_rv_ft` None means RVs fit, no upper length stated.
     """
 
     model_config = ConfigDict(frozen=True)
