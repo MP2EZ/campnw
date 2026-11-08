@@ -140,6 +140,11 @@ function isSSENotReleased(data: unknown): data is { type: "not_released" } & Not
     && (data as Record<string, unknown>).type === "not_released";
 }
 
+function isSSEUnavailable(data: unknown): data is { type: "unavailable"; result: CampgroundResult } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "unavailable";
+}
+
 function isCampgroundResult(data: unknown): data is CampgroundResult {
   return typeof data === "object" && data !== null
     && typeof (data as Record<string, unknown>).facility_id === "string"
@@ -196,6 +201,16 @@ export interface CampgroundResult {
   /** Requested nights not yet released for booking, and when the first opens. */
   not_released_nights?: number;
   releases_on?: string | null;
+  /** Which nights: consecutive runs; night N of a run opens on releases_on + N days. */
+  not_released_ranges?: NotReleasedRange[];
+}
+
+export interface NotReleasedRange {
+  /** First and last night, YYYY-MM-DD. */
+  start: string;
+  end: string;
+  /** When `start` opens for booking; null when the booking system has no rule. */
+  releases_on: string | null;
 }
 
 /**
@@ -247,6 +262,11 @@ export interface SearchResponse extends Partial<NotReleasedSummary> {
   campgrounds_matched?: number;
   campgrounds_with_availability: number;
   results: CampgroundResult[];
+  /**
+   * Checked campgrounds with nothing to book (full, or not released yet),
+   * from the stream's `unavailable` frames. Results v2 lists them (D4).
+   */
+  unavailable?: CampgroundResult[];
   warnings: SearchWarning[];
   diagnosis?: Diagnosis;
   date_suggestions?: DateSuggestion[];
@@ -343,6 +363,7 @@ export async function searchCampsitesStream(
   onWarnings?: (warnings: SearchWarning[]) => void,
   onCoverage?: (matched: number, checked: number) => void,
   onNotReleased?: (summary: NotReleasedSummary) => void,
+  onUnavailable?: (result: CampgroundResult) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   if (params.q) {
@@ -421,6 +442,8 @@ export async function searchCampsitesStream(
                   releases_on_earliest: parsed.releases_on_earliest,
                   releases_on_latest: parsed.releases_on_latest,
                 });
+              } else if (isSSEUnavailable(parsed)) {
+                onUnavailable?.(parsed.result);
               } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
                 onDiagnosis(parsed);
               } else if (isCampgroundResult(parsed)) {

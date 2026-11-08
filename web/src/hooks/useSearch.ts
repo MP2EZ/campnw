@@ -261,6 +261,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     }
 
     const streamedResults: CampgroundResult[] = [];
+    const streamedUnavailable: CampgroundResult[] = [];
     // Warnings arrive as their own SSE frame near the end of the stream. They
     // were hardcoded to [] at every setResults call, so provider outages
     // reached the UI as silently fewer results.
@@ -281,6 +282,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         (r) => r.total_available_sites > 0,
       ).length,
       results: [...streamedResults],
+      unavailable: [...streamedUnavailable],
       warnings: streamedWarnings,
       ...streamedEnd,
     });
@@ -403,6 +405,15 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       (notReleased) => {
         streamedEnd = { ...streamedEnd, ...notReleased };
         setResults((prev) => (prev ? { ...prev, ...notReleased } : prev));
+      },
+      (unavailable) => {
+        streamedUnavailable.push(unavailable);
+        if (!rafId) {
+          rafId = requestAnimationFrame(() => {
+            rafId = null;
+            if (current()) setResults(snapshot());
+          });
+        }
       },
     );
   }, [user]);

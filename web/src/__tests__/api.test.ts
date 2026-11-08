@@ -68,6 +68,30 @@ describe('API: Search coverage', () => {
   })
 })
 
+describe('API: Search unavailable campgrounds', () => {
+  test('an unavailable frame reaches onUnavailable, not onResult', async () => {
+    const frames = [
+      'data: {"type":"unavailable","result":{"facility_id":"9","name":"Kachess","windows":[]}}\n\n',
+      'data: [DONE]\n\n',
+    ].join('')
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: new ReadableStream({
+        start(c) { c.enqueue(new TextEncoder().encode(frames)); c.close() },
+      }),
+    })
+    const onResult = vi.fn()
+    const onUnavailable = vi.fn()
+    await searchCampsitesStream(
+      { start_date: '2026-06-01', end_date: '2026-06-30' }, onResult, vi.fn(), vi.fn(),
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      onUnavailable,
+    )
+    expect(onResult).not.toHaveBeenCalled()
+    expect(onUnavailable).toHaveBeenCalledWith(expect.objectContaining({ name: 'Kachess' }))
+  })
+})
+
 describe('API: Search stream always settles', () => {
   const run = (body: ReadableStream) => {
     mockFetch.mockResolvedValueOnce({ ok: true, body })

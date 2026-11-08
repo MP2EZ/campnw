@@ -62,6 +62,15 @@ class WindowResponse(BaseModel):
     walk_in: bool | None = None
 
 
+class NotReleasedRangeResponse(BaseModel):
+    """Consecutive not-released nights. Night N of the range opens for
+    booking on releases_on + N days; None when the system has no rule."""
+
+    start: date
+    end: date
+    releases_on: date | None = None
+
+
 class CampgroundResultResponse(BaseModel):
     facility_id: str
     name: str
@@ -91,6 +100,7 @@ class CampgroundResultResponse(BaseModel):
     # (None when the booking system has no reliable rule).
     not_released_nights: int = 0
     releases_on: date | None = None
+    not_released_ranges: list[NotReleasedRangeResponse] = []
 
 
 class SearchWarningResponse(BaseModel):
@@ -361,6 +371,10 @@ def _format_result(
         image_attribution="" if photos_disabled else cg.image_attribution,
         not_released_nights=r.not_released_nights,
         releases_on=r.releases_on,
+        not_released_ranges=[
+            NotReleasedRangeResponse(start=x.start, end=x.end, releases_on=x.releases_on)
+            for x in r.not_released_ranges
+        ],
     )
 
 
@@ -663,6 +677,14 @@ async def search_stream(
             if isinstance(item, StreamProgressEvent):
                 progress = {"type": "progress", "checked": item.checked, "total": item.total}
                 yield f"data: {json.dumps(progress)}\n\n"
+                # The campground itself, for v2's "Full or not released yet"
+                # group (v1.48 D4). A failed check is a warning, not "full".
+                if item.result is not None and not item.result.error:
+                    unavailable = _format_result(
+                        item.result, booking_system or BookingSystem.RECGOV,
+                    )
+                    payload = {"type": "unavailable", "result": unavailable.model_dump(mode="json")}
+                    yield f"data: {json.dumps(payload)}\n\n"
                 continue
 
             # StreamWarningsEvent = a provider degraded. Reuses
