@@ -30,7 +30,8 @@ const six = ["A", "B", "C", "D", "E", "F"];
 
 describe("WindowChips", () => {
   test("one link per weekend, named for the dates, count and hand-off", () => {
-    renderChips(["04", "11"].flatMap((d) => six.map((s) => win(s, `2027-06-${d}`, `2027-06-${Number(d) + 1}`))));
+    renderChips(["04", "11"].flatMap((d) => six.map((s) =>
+      win(s, `2027-06-${d}`, `2027-06-${String(Number(d) + 2).padStart(2, "0")}`))));
     const group = screen.getByRole("group", { name: "Weekends at Dash Point" });
     const chips = within(group).getAllByRole("link");
     expect(chips.map((c) => c.textContent)).toEqual([
@@ -56,8 +57,9 @@ describe("WindowChips", () => {
 
   test("more stays than fit stay behind a button that shows them", async () => {
     const days = ["01", "03", "05", "07", "09", "11"];
-    renderChips(days.map((d) => win(d, `2027-06-${d}`, `2027-06-${d}`)), { ...juneWeekends, days_of_week: undefined });
-    expect(screen.getByRole("group", { name: "Open dates at Dash Point" })).toBeInTheDocument();
+    renderChips(days.map((d) => win(d, `2027-06-${d}`, `2027-06-${d}`)),
+      { ...juneWeekends, days_of_week: undefined, nights: 1 });
+    expect(screen.getByRole("group", { name: "1-night stays at Dash Point" })).toBeInTheDocument();
     expect(screen.getAllByRole("link")).toHaveLength(4);
     const more = screen.getByRole("button", { name: "+2 more" });
     expect(more).toHaveAttribute("aria-expanded", "false");
