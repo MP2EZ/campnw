@@ -96,6 +96,7 @@ dependency, run concurrently, reported as a table.
 $ .venv/bin/python3 -m pnw_campsites doctor
 
   DATA      registry.db           ok       243ms  1,368 campgrounds (CA:335, OR:302, ID:219)
+  DATA      WA site metadata      ok        12ms  75 WA parks seeded (7,000 sites)
   DATA      watch.db              ok       243ms  10 active watch(es)
   PROVIDER  rec.gov RIDB          ok     1,991ms  191 WA facilities indexed
   PROVIDER  rec.gov availability  ok       299ms  151 sites for Oct 2026
@@ -111,7 +112,7 @@ $ .venv/bin/python3 -m pnw_campsites doctor
   NOTIFY    Pushover              skip            not configured (PUSHOVER_API_TOKEN, ...)
   LLM       Anthropic             ok       320ms  key valid, 1 model(s) listed
 
-  13 ok · 1 fail · 1 skip
+  14 ok · 1 fail · 1 skip
 ```
 
 ### Flags
@@ -135,6 +136,12 @@ shell or CI step directly.
 - **skip** — the credentials aren't configured here. **Not** a failure: an
   unconfigured optional integration is not an outage, and rendering it red is
   how you train yourself to ignore red.
+
+`WA site metadata` fails when an enabled WA park has no rows in
+`wa_state_sites`, so its windows show raw resource ids and unknown site fit.
+Prod can't reach GoingToCamp, so re-seed from a laptop
+(`scripts/seed_wa_state_metadata.py --only-missing`) and ship the regenerated
+`registry/fixtures/wa_state_sites.json`. The next boot imports it.
 
 ### Where to run it
 

@@ -2101,7 +2101,7 @@ All five are addressed in the v2 canvas.
 | # | Item | Status |
 |---|------|--------|
 | 1 | WA site types are hardcoded `STANDARD`. Decode `wa_state_sites.allowed_equipment` with GoingToCamp `/api/equipment` (tent / van / RV length bands 20′–40′+), plus loop descriptions for hookups | Open |
-| 2 | WA site metadata is seeded for only 25 of the 75 parks. Seeding must run from a network GoingToCamp doesn't block | Open |
+| 2 | WA site metadata is seeded for only 25 of the 75 parks. Seeding must run from a network GoingToCamp doesn't block | **Done**: P1b seeded all 75 locally; prod imports `registry/fixtures/wa_state_sites.json` at startup |
 | 3 | `boat-in` tag | **Done**: #170 (on `dev`) |
 | 4 | Not-yet-released (`NYR`) collapsed into "unavailable" | **Done**: #171 engine, #172 API, #173 UI notice, #175 WA 9-month window (on `dev`) |
 | 5 | River parks tagged `beach` | **Done**: #170 curated overrides, applied as a startup migration (on `dev`) |
