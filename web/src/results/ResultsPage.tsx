@@ -5,6 +5,7 @@ import type { SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
 import { AnswerHeader } from "./AnswerHeader";
+import { DateChips } from "./DateChips";
 import { DriveBands } from "./DriveBands";
 import { FullGroup } from "./FullGroup";
 import { fullGroupTitle } from "./candidates";
@@ -92,6 +93,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
           onCheckRest,
         }}
       />
+      <DateChips params={searchParams} onSearch={onSearch} />
       <ResultsNotices results={results} withNotReleased={!zero} />
       {!loading && (
         <QuickPicks results={cards} params={searchParams}

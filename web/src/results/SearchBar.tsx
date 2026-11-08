@@ -5,7 +5,7 @@ import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
 import { IconSearch } from "../icons";
 import {
-  barToParams, compactLabel, DEFAULT_BAR, driveLabel, paramsToBar, whenLabel, whereLabel, whoLabel,
+  barToParams, compactLabel, DEFAULT_BAR, driveLabel, EDIT_DATES_EVENT, localToday, paramsToBar, whenLabel, whereLabel, whoLabel,
   type BarState,
 } from "./searchState";
 import { DrivePanel, WhenPanel, WhoPanel, type PanelProps } from "./SearchPanels";
@@ -26,11 +26,6 @@ const SEGMENTS: Array<{ key: SegmentKey; title: string; label: (b: BarState) => 
   { key: "who", title: "Who", label: whoLabel, Panel: WhoPanel },
   { key: "drive", title: "Drive", label: driveLabel, Panel: DrivePanel },
 ];
-
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -192,6 +187,19 @@ export default function SearchBar({ onSearch, onAsk, userDefaults }: Props) {
   // One of the four popovers, or the mobile sheet.
   const [open, setOpen] = useState<SegmentKey | "sheet" | null>(null);
   const close = useCallback(() => setOpen(null), []);
+  // The results page's "Pick dates" opens the sheet at When (it's phone-only).
+  useEffect(() => {
+    const edit = () => {
+      setOpen("sheet");
+      requestAnimationFrame(() => {
+        const when = document.querySelector<HTMLElement>('.sb-sheet [aria-label="When"]');
+        when?.scrollIntoView?.({ block: "start" });
+        (when?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? when?.querySelector("button"))?.focus();
+      });
+    };
+    window.addEventListener(EDIT_DATES_EVENT, edit);
+    return () => window.removeEventListener(EDIT_DATES_EVENT, edit);
+  }, []);
   const panelProps: PanelProps = { bar, onChange: setBar, today };
 
   return (
