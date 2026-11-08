@@ -322,6 +322,22 @@ export async function searchCampsites(
   return fetchJson<SearchResponse>(`${API_BASE}/api/search?${query}`);
 }
 
+/** A registry campground, as `/api/campgrounds` lists it (trimmed to what the UI reads). */
+export interface CampgroundMatch {
+  facility_id: string;
+  name: string;
+  booking_system: string;
+  state: string;
+  region: string;
+  drive_minutes_from_base: number | null;
+}
+
+/** Campgrounds whose name contains `name`, for the search bar's typeahead. */
+export async function findCampgrounds(name: string, signal?: AbortSignal): Promise<CampgroundMatch[]> {
+  const query = new URLSearchParams({ name, limit: "8" });
+  return fetchJson<CampgroundMatch[]>(`${API_BASE}/api/campgrounds?${query}`, { signal });
+}
+
 // ---------------------------------------------------------------------------
 // Streaming search (SSE)
 // ---------------------------------------------------------------------------
