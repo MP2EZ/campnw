@@ -124,6 +124,8 @@
 
   /* ── Results v2 (v1.48, D12) ─────────────────────────────────── */
   --surface-card: #fffdf8;
+  --surface-tile: #ebe8dc;       /* quick picks, "camp sooner" options */
+  --pick-kicker: #4a6b3a;
   --chip-open-bg: #fbefe4;
   --chip-open-text: #8a4413;
   --chip-few-dot: #b4561a;
@@ -137,6 +139,14 @@
   --text-title: 1.375rem;        /* card and drive-band titles */
   --leading-display: 1.1;
   --radius-2xl: 16px;
+  /* Map pins (D13): shape carries the meaning, colour only reinforces it. */
+  --pin-open: #2d5016;
+  --pin-boat: #1d4a5a;
+  --pin-halo: #fffdf8;
+  --pin-muted: #77746a;
+  --pin-muted-fill: #f1efe6;
+  --pin-selected: #b4561a;
+  --map-surface: #ebe8da;
 }
 
 [data-theme="dark"] {
@@ -172,6 +182,8 @@
 
   /* ── Results v2 ("night camp") ───────────────────────────────── */
   --surface-card: #21211e;
+  --surface-tile: #2a2924;
+  --pick-kicker: #a5c48f;
   --chip-open-bg: #3a2414;
   --chip-open-text: #f2b384;
   --chip-few-dot: #e8894a;
@@ -181,6 +193,13 @@
   --notice-info-bg: #15282e;
   --notice-info-text: #9fd0de;
   --focus-ring: #e8894a;
+  --pin-open: #a5c48f;
+  --pin-boat: #9fd0de;
+  --pin-halo: #1a1a17;
+  --pin-muted: #8f8c80;
+  --pin-muted-fill: #2b2a25;
+  --pin-selected: #e8894a;
+  --map-surface: #23221e;
 
   /* ── Shadows (darker for contrast on dark surfaces) ──────────── */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);

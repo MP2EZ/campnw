@@ -56,6 +56,9 @@ jobs:
           # production signup silently fails (mixed-content blocked).
           VITE_PUBLIC_SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
           VITE_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.VITE_PUBLIC_SUPABASE_ANON_KEY }}
+          # v1.48 map tiles. Optional: unset falls back to OpenStreetMap.
+          # Use a public (pk.) token restricted to campable.co.
+          VITE_PUBLIC_MAPBOX_TOKEN: ${{ secrets.VITE_PUBLIC_MAPBOX_TOKEN }}
         run: |
           npm ci
           npm run build

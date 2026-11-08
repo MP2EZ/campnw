@@ -63,6 +63,9 @@ export function parseSearchParamsFromUrl(
   assign("max_drive", num("max_drive"));
   assign("mode", str("mode"));
   assign("limit", num("limit"));
+  assign("people", num("people"));
+  assign("equipment", str("equipment"));
+  assign("rig_length", num("rig_length"));
   if (q.get("no_groups") === "true") params.no_groups = true;
   if (q.get("include_fcfs") === "true") params.include_fcfs = true;
 
@@ -226,7 +229,12 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     // would be more invasive than the correlation is worth.
     getPosthog()?.register({ search_id: searchId });
 
+    // Callbacks from a search this one replaced (an abort can lose the race
+    // with its last frame) must not settle or overwrite this one.
+    const current = () => searchIdRef.current === searchId;
+
     setLoading(true);
+    setCompletedAt(null);
     setError(null);
     setSearchSummary(null);
     setResultsView(mode === "find" ? "dates" : "sites");
@@ -256,6 +264,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     }
 
     const streamedResults: CampgroundResult[] = [];
+    const streamedUnavailable: CampgroundResult[] = [];
     // Warnings arrive as their own SSE frame near the end of the stream. They
     // were hardcoded to [] at every setResults call, so provider outages
     // reached the UI as silently fewer results.
@@ -276,6 +285,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         (r) => r.total_available_sites > 0,
       ).length,
       results: [...streamedResults],
+      unavailable: [...streamedUnavailable],
       warnings: streamedWarnings,
       ...streamedEnd,
     });
@@ -294,11 +304,12 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
-            setResults(snapshot());
+            if (current()) setResults(snapshot());
           });
         }
       },
       () => {
+        if (!current()) return;
         if (rafId) {
           cancelAnimationFrame(rafId);
           rafId = null;
@@ -330,6 +341,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         }
       },
       (err) => {
+        if (!current()) return;
         setError(err.message);
         setLoading(false);
         searchAbortRef.current = null;
@@ -374,7 +386,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
-            setResults(snapshot());
+            if (current()) setResults(snapshot());
           });
         }
       },
@@ -396,6 +408,15 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       (notReleased) => {
         streamedEnd = { ...streamedEnd, ...notReleased };
         setResults((prev) => (prev ? { ...prev, ...notReleased } : prev));
+      },
+      (unavailable) => {
+        streamedUnavailable.push(unavailable);
+        if (!rafId) {
+          rafId = requestAnimationFrame(() => {
+            rafId = null;
+            if (current()) setResults(snapshot());
+          });
+        }
       },
     );
   }, [user]);
@@ -455,6 +476,12 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     checkRest,
     toggleSource,
     resetSearch: useCallback(() => {
+      // Stop the running search too, or it keeps "Checking…" and refills
+      // the results it was asked to clear.
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
+      searchIdRef.current = "";
+      setLoading(false);
       setResults(null);
       setFormCollapsed(false);
       setSearchSummary("");

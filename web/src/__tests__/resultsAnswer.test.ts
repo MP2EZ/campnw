@@ -79,6 +79,16 @@ describe("answerSentence", () => {
     );
   });
 
+  test("a search that didn't finish says so instead of claiming nothing matched", () => {
+    const p = juneWeekends;
+    expect(answerSentence({ params: p, open: 0, checked: 0, notReleased: 0, loading: false, failed: true }))
+      .toBe("The search couldn’t finish.");
+    expect(answerSentence({ params: p, open: 0, checked: 12, notReleased: 0, loading: false, failed: true }))
+      .toBe("The search stopped after checking 12 campgrounds, and none of them have a June weekend open.");
+    expect(answerSentence({ params: p, open: 3, checked: 12, notReleased: 0, loading: false, failed: true }))
+      .toBe("3 campgrounds have a June weekend open within 3 hours of Seattle, from a search that didn’t finish.");
+  });
+
   test("while loading it describes the search, not a count", () => {
     expect(answerSentence({ ...done, params: juneWeekends, open: 3, loading: true })).toBe(
       "Checking campgrounds for a June weekend open within 3 hours of Seattle…",

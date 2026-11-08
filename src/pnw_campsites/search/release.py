@@ -7,7 +7,8 @@ NYR status, so it returns None.
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, timedelta
 
 from pnw_campsites.registry.models import BookingSystem
 
@@ -73,6 +74,42 @@ def release_date(
         return None
     released = rule(night)
     return released if released >= today else None
+
+
+@dataclass(frozen=True)
+class NotReleasedRange:
+    """A run of consecutive not-released nights. Each night opens one day
+    after the one before it, so night N opens on releases_on + N days."""
+
+    start: date
+    end: date
+    releases_on: date | None
+
+
+def not_released_ranges(
+    nights: list[date], booking_system: BookingSystem, today: date,
+) -> list[NotReleasedRange]:
+    """Group sorted not-released nights into ranges, splitting at gaps and
+    wherever release dates stop advancing a day per night (month-end
+    clamping, or a rule date that has passed)."""
+    ranges: list[NotReleasedRange] = []
+    prev: tuple[date, date | None] | None = None
+    for night in nights:
+        released = release_date(booking_system, night, today)
+        if prev is not None and ranges:
+            prev_night, prev_released = prev
+            follows = night == prev_night + timedelta(days=1)
+            if prev_released is None or released is None:
+                same_rule = prev_released is None and released is None
+            else:
+                same_rule = released == prev_released + timedelta(days=1)
+            if follows and same_rule:
+                ranges[-1] = NotReleasedRange(ranges[-1].start, night, ranges[-1].releases_on)
+                prev = (night, released)
+                continue
+        ranges.append(NotReleasedRange(night, night, released))
+        prev = (night, released)
+    return ranges
 
 
 def format_release_range(first: date, last: date) -> str:

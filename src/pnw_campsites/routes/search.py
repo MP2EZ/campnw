@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import zlib
+from collections.abc import AsyncIterator
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -36,6 +39,9 @@ router = APIRouter(prefix="/api", tags=["search"])
 
 _search_logger = logging.getLogger("pnw_campsites.api")
 
+# The `who` filter's rig (search/who.py)
+Equipment = Literal["tent", "van", "trailer"]
+
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------
@@ -60,6 +66,20 @@ class WindowResponse(BaseModel):
     max_rv_ft: int | None = None
     hookups: bool | None = None
     walk_in: bool | None = None
+
+
+class NotReleasedRangeResponse(BaseModel):
+    """Consecutive not-released nights. Night N of the range opens for
+    booking on releases_on + N days; None when the system has no rule."""
+
+    start: date
+    end: date
+    releases_on: date | None = None
+
+
+class NightRangeResponse(BaseModel):
+    start: date
+    end: date
 
 
 class CampgroundResultResponse(BaseModel):
@@ -91,6 +111,9 @@ class CampgroundResultResponse(BaseModel):
     # (None when the booking system has no reliable rule).
     not_released_nights: int = 0
     releases_on: date | None = None
+    not_released_ranges: list[NotReleasedRangeResponse] = []
+    # Nights nothing can be reserved online: closed, first-come only, no data.
+    closed_ranges: list[NightRangeResponse] = []
 
 
 class SearchWarningResponse(BaseModel):
@@ -361,6 +384,11 @@ def _format_result(
         image_attribution="" if photos_disabled else cg.image_attribution,
         not_released_nights=r.not_released_nights,
         releases_on=r.releases_on,
+        not_released_ranges=[
+            NotReleasedRangeResponse(start=x.start, end=x.end, releases_on=x.releases_on)
+            for x in r.not_released_ranges
+        ],
+        closed_ranges=[NightRangeResponse(start=x.start, end=x.end) for x in r.closed_ranges],
     )
 
 
@@ -455,6 +483,11 @@ async def search(
     no_groups: bool = Query(False, description="Exclude group sites"),
     include_fcfs: bool = Query(False, description="Include FCFS sites"),
     limit: int = Query(20, ge=1, le=50, description="Max campgrounds to check"),
+    people: int | None = Query(None, ge=1, le=50, description="Party size"),
+    equipment: Equipment | None = Query(None, description="tent, van or trailer"),
+    rig_length: int | None = Query(
+        None, ge=1, le=100, description="Trailer/RV length in feet (trailer only)",
+    ),
 ):
     engine = get_engine()
     days_set = (
@@ -478,6 +511,9 @@ async def search(
         include_fcfs=include_fcfs,
         max_campgrounds=limit,
         booking_system=booking_system,
+        max_people=people,
+        equipment=equipment,
+        rig_length=rig_length if equipment == "trailer" else None,
     )
 
     # Redact custom addresses in logs — only log known base names
@@ -571,6 +607,9 @@ async def search_stream(
     no_groups: bool = Query(False),
     include_fcfs: bool = Query(False),
     limit: int = Query(20, ge=1, le=50),
+    people: int | None = Query(None, ge=1, le=50),
+    equipment: Equipment | None = Query(None),
+    rig_length: int | None = Query(None, ge=1, le=100),
     q: str | None = Query(None, description="Natural language search query"),
 ):
     """SSE streaming search — yields results as each batch completes."""
@@ -635,6 +674,9 @@ async def search_stream(
         include_fcfs=include_fcfs,
         max_campgrounds=limit,
         booking_system=booking_system,
+        max_people=people,
+        equipment=equipment,
+        rig_length=rig_length if equipment == "trailer" else None,
     )
 
     async def event_generator():
@@ -663,6 +705,14 @@ async def search_stream(
             if isinstance(item, StreamProgressEvent):
                 progress = {"type": "progress", "checked": item.checked, "total": item.total}
                 yield f"data: {json.dumps(progress)}\n\n"
+                # The campground itself, for v2's "Full or not released yet"
+                # group (v1.48 D4). A failed check is a warning, not "full".
+                if item.result is not None and not item.result.error:
+                    unavailable = _format_result(
+                        item.result, booking_system or BookingSystem.RECGOV,
+                    )
+                    payload = {"type": "unavailable", "result": unavailable.model_dump(mode="json")}
+                    yield f"data: {json.dumps(payload)}\n\n"
                 continue
 
             # StreamWarningsEvent = a provider degraded. Reuses
@@ -787,9 +837,25 @@ async def search_stream(
 
         yield "data: [DONE]\n\n"
 
+    if "gzip" in request.headers.get("accept-encoding", ""):
+        return StreamingResponse(
+            _gzip_events(event_generator()),
+            media_type="text/event-stream",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
     return StreamingResponse(
         event_generator(), media_type="text/event-stream"
     )
+
+
+async def _gzip_events(events: AsyncIterator[str]) -> AsyncIterator[bytes]:
+    """gzip an SSE stream, flushed after every event so each still arrives
+    when it's sent. A broad search is megabytes of repetitive JSON and
+    Cloudflare won't compress text/event-stream itself (R2)."""
+    z = zlib.compressobj(6, zlib.DEFLATED, 31)
+    async for event in events:
+        yield z.compress(event.encode()) + z.flush(zlib.Z_SYNC_FLUSH)
+    yield z.flush()
 
 
 @router.get("/check/{facility_id}", response_model=CampgroundResultResponse)

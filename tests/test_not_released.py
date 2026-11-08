@@ -92,6 +92,10 @@ class TestProcessAvailabilityNotReleased:
         )
         assert r.not_released_nights == 2
         assert r.releases_through == date(2098, 12, 6)
+        # Fri-Sat run, then Monday: which nights, not just how many.
+        assert [(x.start, x.end, x.releases_on) for x in r.not_released_ranges] == [
+            (date(2099, 6, 5), date(2099, 6, 6), date(2098, 12, 5)),
+        ]
 
     def test_only_sites_that_fit_the_party_count(self) -> None:
         # The site big enough for 10 isn't released; the small one is booked.
@@ -285,9 +289,13 @@ class TestApiCarriesNotReleased:
 
     def test_search_endpoint(self, api_client, monkeypatch) -> None:
         from pnw_campsites.search.engine import SearchResults
+        from pnw_campsites.search.release import NotReleasedRange
 
         partly = _result(nights=3, first=date(2026, 12, 25), last=date(2026, 12, 27))
         partly.total_available_sites = 1
+        partly.not_released_ranges = [
+            NotReleasedRange(date(2027, 6, 25), date(2027, 6, 27), date(2026, 12, 25)),
+        ]
 
         class FakeEngine:
             async def search(self, query):
@@ -305,6 +313,9 @@ class TestApiCarriesNotReleased:
         assert body["releases_on_latest"] == "2026-12-27"
         assert body["results"][0]["not_released_nights"] == 3
         assert body["results"][0]["releases_on"] == "2026-12-25"
+        assert body["results"][0]["not_released_ranges"] == [
+            {"start": "2027-06-25", "end": "2027-06-27", "releases_on": "2026-12-25"},
+        ]
 
     def test_stream_emits_a_not_released_frame(self, api_client, monkeypatch) -> None:
         async def fake_stream(query):
@@ -328,3 +339,127 @@ class TestApiCarriesNotReleased:
             "releases_on_earliest": "2026-12-04",
             "releases_on_latest": "2026-12-27",
         } in frames
+
+
+class TestStreamSendsUnavailableCampgrounds:
+    """v1.48 D4: the "Full or not released yet" group lists checked
+    campgrounds with nothing to book, so the stream must send them."""
+
+    async def test_engine_attaches_the_result_to_its_progress_event(self, registry) -> None:
+        from pnw_campsites.search.engine import StreamProgressEvent
+
+        events = [
+            e async for e in _nyr_engine(registry).search_stream(
+                _query(date(2099, 6, 4), date(2099, 6, 27), max_campgrounds=5),
+            )
+        ]
+        progress = [e for e in events if isinstance(e, StreamProgressEvent)]
+        assert progress and all(e.result is not None for e in progress)
+        assert progress[0].result.not_released_ranges
+
+    def test_stream_emits_an_unavailable_frame(self, api_client, monkeypatch) -> None:
+        from pnw_campsites.search.engine import StreamProgressEvent
+        from pnw_campsites.search.release import NotReleasedRange
+
+        full = _result()
+        nyr = _result(nights=2, first=date(2026, 12, 4), last=date(2026, 12, 5))
+        nyr.not_released_ranges = [
+            NotReleasedRange(date(2027, 6, 4), date(2027, 6, 5), date(2026, 12, 4)),
+        ]
+        broken = _result()
+        broken.error = "waf_blocked"
+
+        async def fake_stream(query):
+            yield StreamProgressEvent(checked=1, total=3, result=full)
+            yield StreamProgressEvent(checked=2, total=3, result=nyr)
+            yield StreamProgressEvent(checked=3, total=3, result=broken)
+
+        class FakeEngine:
+            search_stream = staticmethod(fake_stream)
+
+        monkeypatch.setattr(
+            __import__("pnw_campsites.routes.search", fromlist=["x"]), "get_engine",
+            lambda: FakeEngine(),
+        )
+        resp = api_client.get(
+            "/api/search/stream",
+            params={"start_date": "2027-06-04", "end_date": "2027-06-27"},
+        )
+        frames = [
+            json.loads(line[6:]) for line in resp.text.splitlines()
+            if line.startswith("data: {")
+        ]
+        assert [f["checked"] for f in frames if f["type"] == "progress"] == [1, 2, 3]
+        unavailable = [f["result"] for f in frames if f["type"] == "unavailable"]
+        # An errored check couldn't be checked: it's a warning, not "full".
+        assert len(unavailable) == 2
+        assert unavailable[0]["windows"] == []
+        assert unavailable[1]["not_released_ranges"] == [
+            {"start": "2027-06-04", "end": "2027-06-05", "releases_on": "2026-12-04"},
+        ]
+
+
+class TestRangesForCandidateWindows:
+    """not_released_ranges / closed_ranges feed v2's per-weekend status, so
+    they must not call a weekend "full" when it isn't."""
+
+    def test_a_night_any_site_hasnt_released_is_in_a_range(self) -> None:
+        # Denny Creek, June 2027: one site released (and booked), the rest
+        # NYR. The strict count says 0; the weekend still isn't "full".
+        avail = _avail(
+            _site("1", {"2099-06-04": "Reserved", "2099-06-05": "Reserved"}),
+            _site("2", {"2099-06-04": "NYR", "2099-06-05": "NYR"}),
+        )
+        r = _process_availability(
+            make_campground(), avail, _query(date(2099, 6, 4), date(2099, 6, 5)),
+        )
+        assert r.not_released_nights == 0
+        assert [(x.start, x.end) for x in r.not_released_ranges] == [
+            (date(2099, 6, 4), date(2099, 6, 5)),
+        ]
+
+    def test_nights_nothing_can_be_reserved_are_closed(self) -> None:
+        # Tinkham in November: no availability data at all. A seasonal
+        # closure or first-come-only night is not "full" either.
+        avail = _avail(
+            _site("1", {"2099-06-04": "Closed", "2099-06-05": "Reserved", "2099-06-06": "Not Reservable"}),
+            _site("2", {"2099-06-04": "Not Available"}),
+        )
+        r = _process_availability(
+            make_campground(), avail, _query(date(2099, 6, 4), date(2099, 6, 7)),
+        )
+        assert [(x.start, x.end) for x in r.closed_ranges] == [
+            (date(2099, 6, 4), date(2099, 6, 4)),
+            (date(2099, 6, 6), date(2099, 6, 7)),
+        ]
+
+    def test_closed_nights_respect_the_searched_days(self) -> None:
+        # 2099-06-05 is a Friday, 06-06 Saturday, 06-08 Monday.
+        avail = _avail(_site("1", {}))
+        r = _process_availability(
+            make_campground(), avail,
+            _query(date(2099, 6, 5), date(2099, 6, 8), days_of_week={4, 5}),
+        )
+        assert [(x.start, x.end) for x in r.closed_ranges] == [
+            (date(2099, 6, 5), date(2099, 6, 6)),
+        ]
+
+    def test_api_sends_closed_ranges(self, api_client, monkeypatch) -> None:
+        from pnw_campsites.search.engine import NightRange, SearchResults
+
+        r = _result()
+        r.total_available_sites = 1
+        r.closed_ranges = [NightRange(date(2026, 11, 13), date(2026, 11, 15))]
+
+        class FakeEngine:
+            async def search(self, query):
+                return SearchResults(query=query, results=[r], campgrounds_checked=1,
+                                     campgrounds_with_availability=1)
+
+        from pnw_campsites.routes import search as search_routes
+
+        monkeypatch.setattr(search_routes, "get_engine", lambda: FakeEngine())
+        body = api_client.get(
+            "/api/search", params={"start_date": "2026-11-13", "end_date": "2026-11-15"},
+        ).json()
+        assert body["results"][0]["closed_ranges"] == [{"start": "2026-11-13", "end": "2026-11-15"}]

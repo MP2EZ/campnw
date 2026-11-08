@@ -140,6 +140,11 @@ function isSSENotReleased(data: unknown): data is { type: "not_released" } & Not
     && (data as Record<string, unknown>).type === "not_released";
 }
 
+function isSSEUnavailable(data: unknown): data is { type: "unavailable"; result: CampgroundResult } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "unavailable";
+}
+
 function isCampgroundResult(data: unknown): data is CampgroundResult {
   return typeof data === "object" && data !== null
     && typeof (data as Record<string, unknown>).facility_id === "string"
@@ -196,6 +201,18 @@ export interface CampgroundResult {
   /** Requested nights not yet released for booking, and when the first opens. */
   not_released_nights?: number;
   releases_on?: string | null;
+  /** Which nights: consecutive runs; night N of a run opens on releases_on + N days. */
+  not_released_ranges?: NotReleasedRange[];
+  /** Nights nothing can be reserved online: closed, first-come only, or no data. Not "full". */
+  closed_ranges?: { start: string; end: string }[];
+}
+
+export interface NotReleasedRange {
+  /** First and last night, YYYY-MM-DD. */
+  start: string;
+  end: string;
+  /** When `start` opens for booking; null when the booking system has no rule. */
+  releases_on: string | null;
 }
 
 /**
@@ -247,6 +264,11 @@ export interface SearchResponse extends Partial<NotReleasedSummary> {
   campgrounds_matched?: number;
   campgrounds_with_availability: number;
   results: CampgroundResult[];
+  /**
+   * Checked campgrounds with nothing to book (full, or not released yet),
+   * from the stream's `unavailable` frames. Results v2 lists them (D4).
+   */
+  unavailable?: CampgroundResult[];
   warnings: SearchWarning[];
   diagnosis?: Diagnosis;
   date_suggestions?: DateSuggestion[];
@@ -269,6 +291,31 @@ export interface SearchParams {
   no_groups?: boolean;
   include_fcfs?: boolean;
   limit?: number;
+  /**
+   * Who's going (v1.48 D5). The API drops windows at sites known not to fit;
+   * sites with no type or capacity data always stay.
+   */
+  people?: number;
+  equipment?: string;
+  /** Feet, trailers only. */
+  rig_length?: number;
+}
+
+const EQUIPMENT = new Set(["tent", "van", "trailer"]);
+
+/**
+ * Add the `who` filter to a search query. Values the API would reject (a
+ * hand-edited URL) are left out rather than failing the search.
+ */
+function setWho(query: URLSearchParams, params: SearchParams): void {
+  const inRange = (n: number | undefined, max: number) =>
+    n !== undefined && Number.isInteger(n) && n >= 1 && n <= max;
+  if (inRange(params.people, 50)) query.set("people", String(params.people));
+  if (!params.equipment || !EQUIPMENT.has(params.equipment)) return;
+  query.set("equipment", params.equipment);
+  if (params.equipment === "trailer" && inRange(params.rig_length, 100)) {
+    query.set("rig_length", String(params.rig_length));
+  }
 }
 
 export async function searchCampsites(
@@ -289,8 +336,25 @@ export async function searchCampsites(
   if (params.no_groups) query.set("no_groups", "true");
   if (params.include_fcfs) query.set("include_fcfs", "true");
   if (params.limit) query.set("limit", String(params.limit));
+  setWho(query, params);
 
   return fetchJson<SearchResponse>(`${API_BASE}/api/search?${query}`);
+}
+
+/** A registry campground, as `/api/campgrounds` lists it (trimmed to what the UI reads). */
+export interface CampgroundMatch {
+  facility_id: string;
+  name: string;
+  booking_system: string;
+  state: string;
+  region: string;
+  drive_minutes_from_base: number | null;
+}
+
+/** Campgrounds whose name contains `name`, for the search bar's typeahead. */
+export async function findCampgrounds(name: string, signal?: AbortSignal): Promise<CampgroundMatch[]> {
+  const query = new URLSearchParams({ name, limit: "8" });
+  return fetchJson<CampgroundMatch[]>(`${API_BASE}/api/campgrounds?${query}`, { signal });
 }
 
 // ---------------------------------------------------------------------------
@@ -316,6 +380,20 @@ export interface ParsedParams {
   days_of_week?: string | null;
 }
 
+/**
+ * How long the stream may go without a byte before the search is abandoned.
+ * Every checked campground sends a frame, so this only trips when the server
+ * has stalled (prod saw ~85 s gaps in a slow Oregon search that did finish).
+ */
+export const STREAM_IDLE_MS = 120_000;
+const STREAM_STALLED = "The search stopped responding, so some campgrounds weren’t checked.";
+const STREAM_CUT_OFF = "The search was cut off, so some campgrounds weren’t checked.";
+
+/**
+ * Stream a search. Always ends in exactly one of onDone (the server sent
+ * [DONE]) or onError (it failed, went quiet for STREAM_IDLE_MS, or closed
+ * early), except when `signal` aborts it: the caller started that.
+ */
 export async function searchCampsitesStream(
   params: SearchParams,
   onResult: (result: CampgroundResult) => void,
@@ -329,6 +407,7 @@ export async function searchCampsitesStream(
   onWarnings?: (warnings: SearchWarning[]) => void,
   onCoverage?: (matched: number, checked: number) => void,
   onNotReleased?: (summary: NotReleasedSummary) => void,
+  onUnavailable?: (result: CampgroundResult) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   if (params.q) {
@@ -348,6 +427,7 @@ export async function searchCampsitesStream(
   if (params.no_groups) query.set("no_groups", "true");
   if (params.include_fcfs) query.set("include_fcfs", "true");
   if (params.limit) query.set("limit", String(params.limit));
+  setWho(query, params);
 
   try {
     const resp = await authFetch(`${API_BASE}/api/search/stream?${query}`, { signal });
@@ -358,54 +438,76 @@ export async function searchCampsitesStream(
 
     const decoder = new TextDecoder();
     let buffer = "";
+    // Cancelling the reader ends a pending read() as done, so a stalled
+    // server can't hold the search in "Checking…" forever.
+    let stalled = false;
+    let idle: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(idle);
+      idle = setTimeout(() => {
+        stalled = true;
+        reader.cancel().catch(() => {});
+      }, STREAM_IDLE_MS);
+    };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      arm();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        arm();
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") {
-            onDone();
-            return;
-          }
-          try {
-            const parsed: unknown = JSON.parse(data);
-            if (isSSEParsedParams(parsed) && onParsed) {
-              onParsed(parsed.params);
-            } else if (isSSEProgress(parsed) && onProgress) {
-              onProgress(parsed.checked, parsed.total);
-            } else if (isSSESummary(parsed) && onSummary) {
-              onSummary(parsed.text);
-            } else if (isSSEWarnings(parsed) && onWarnings) {
-              onWarnings(parsed.warnings);
-            } else if (isSSECoverage(parsed) && onCoverage) {
-              onCoverage(parsed.campgrounds_matched, parsed.campgrounds_checked);
-            } else if (isSSENotReleased(parsed) && onNotReleased) {
-              onNotReleased({
-                not_released_campgrounds: parsed.not_released_campgrounds,
-                releases_on_earliest: parsed.releases_on_earliest,
-                releases_on_latest: parsed.releases_on_latest,
-              });
-            } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
-              onDiagnosis(parsed);
-            } else if (isCampgroundResult(parsed)) {
-              onResult(parsed);
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") {
+              clearTimeout(idle);
+              onDone();
+              return;
             }
-          } catch {
-            // skip malformed lines
+            try {
+              const parsed: unknown = JSON.parse(data);
+              if (isSSEParsedParams(parsed) && onParsed) {
+                onParsed(parsed.params);
+              } else if (isSSEProgress(parsed) && onProgress) {
+                onProgress(parsed.checked, parsed.total);
+              } else if (isSSESummary(parsed) && onSummary) {
+                onSummary(parsed.text);
+              } else if (isSSEWarnings(parsed) && onWarnings) {
+                onWarnings(parsed.warnings);
+              } else if (isSSECoverage(parsed) && onCoverage) {
+                onCoverage(parsed.campgrounds_matched, parsed.campgrounds_checked);
+              } else if (isSSENotReleased(parsed) && onNotReleased) {
+                onNotReleased({
+                  not_released_campgrounds: parsed.not_released_campgrounds,
+                  releases_on_earliest: parsed.releases_on_earliest,
+                  releases_on_latest: parsed.releases_on_latest,
+                });
+              } else if (isSSEUnavailable(parsed)) {
+                onUnavailable?.(parsed.result);
+              } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
+                onDiagnosis(parsed);
+              } else if (isCampgroundResult(parsed)) {
+                onResult(parsed);
+              }
+            } catch {
+              // skip malformed lines
+            }
           }
         }
       }
+    } finally {
+      clearTimeout(idle);
     }
-    onDone();
+    if (signal?.aborted) return;
+    // The server always ends with [DONE]; without it the search is partial.
+    throw new Error(stalled ? STREAM_STALLED : STREAM_CUT_OFF);
   } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") return;
+    if (signal?.aborted || (e instanceof DOMException && e.name === "AbortError")) return;
     onError(e instanceof Error ? e : new Error("Stream failed"));
   }
 }

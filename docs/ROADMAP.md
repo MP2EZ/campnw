@@ -1,12 +1,13 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
 **Last updated:** 2026-11-07
-**Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`; no version bump since August). Last release: PR #166 (`dev → main`, 2026-11-07). v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; App Store/Play still pending. Next planned milestone: **v1.48 "Answer-first Results"** (designed, not started).
+**Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`; no version bump since August). Last release: PR #183 (`dev → main`, 2026-11-07): 21 PRs, including the watch poller fix, all 75 WA parks seeded, and v1.48 P1a/P1b/P2a/P2b behind the `results_v2` flag (off by default; `?ui=v2` to see it). v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; App Store/Play still pending. Current milestone: **v1.48 "Answer-first Results"** (in progress).
 
 **Open problems:**
 - **WA State Parks dark in prod since ~2026-11-05.** GoingToCamp's Azure WAF blocks prod's outbound IPs: first the shared Datacamp address `79.127.185.38`, and since 2026-11-07 also prod's dedicated Fly egress IP `209.71.113.243`, which is in Fly's own range and was blocked immediately. Staging (shared CDN77 `79.127.255.236`) and GitHub's Azure runners (`52.159.243.197`, 2026-11-07) still get through, so the block targets particular IPs and ranges, not datacenters as a class. Prod survives the block (#165) and labels it `waf_blocked`. Tracked by open alert #167. Fix options are below ("Restoring WA State Parks"). **Decision 2026-11-07: documented, not started.**
+- **Searches that include Oregon parks stall for minutes (found 2026-11-07, deferred).** A Seattle "Any day" search on prod took over 3 minutes, with ~85 s of no outbound traffic and 502s from the PostHog proxy. Likely cause: prod has 1 CPU, so the default thread pool has 5 workers. ReserveAmerica (1 s sleep between pages, ~2 MB pages) and GoingToCamp hold them through `asyncio.to_thread`, and DNS lookups for Recreation.gov and PostHog queue behind them. Probably started when Oregon came back on the egress IP; before that Oregon failed fast. Fix: a dedicated executor for blocking provider calls, and Oregon's 1 req/s limit made app-wide instead of per thread. **Deferred because there are no users yet. Fix before inviting users or flipping v2, or sooner if the prod monitor's search starts timing out.**
 - **#135** — a provider can go dark without the monitor failing. Largely addressed: #165 makes the monitor check prod's own WA view, and #168 runs the diagnostic sweep on failure and keeps one issue per outage. Oregon isn't covered by a prod-view check yet.
-- **Watch poller** sent WA watches (ids 7, 9) to the Recreation.gov URL and kept polling past-dated watches, so it got 400s every cycle (seen in prod logs 2026-11-06). **Fixed on `fix/watch-poller-dispatch` (PR to dev, ships next release).** Cause: the create route never stored a watch's source, so every watch was saved as `recgov`, and the poller's self-heal looked the facility up in the registry filtered to rec.gov, so it never found a WA or OR park. Now the create route stores the source, a startup migration corrects existing rows (registry first; a negative GoingToCamp id means WA), and template watches keep each park's provider. Past-dated watches are skipped, not changed: they stay enabled, the API marks them `expired`, and the UI shows "Past". A partly past watch polls from today on (Pacific). A WAF block or rate limit stops that provider for the rest of the cycle and logs one warning. Notification links go to each park's own booking site.
+- **Watch poller** sent WA watches (ids 7, 9) to the Recreation.gov URL and kept polling past-dated watches, so it got 400s every cycle (seen in prod logs 2026-11-06). **Fixed in #185, released in #183 (2026-11-07).** Not yet confirmed in prod logs: check that the 15-minute cycle no longer fails on watches 2–10. Cause: the create route never stored a watch's source, so every watch was saved as `recgov`, and the poller's self-heal looked the facility up in the registry filtered to rec.gov, so it never found a WA or OR park. Now the create route stores the source, a startup migration corrects existing rows (registry first; a negative GoingToCamp id means WA), and template watches keep each park's provider. Past-dated watches are skipped, not changed: they stay enabled, the API marks them `expired`, and the UI shows "Past". A partly past watch polls from today on (Pacific). A WAF block or rate limit stops that provider for the rest of the cycle and logs one warning. Notification links go to each park's own booking site.
 
 **Resolved 2026-11-07: Oregon State Parks restored.** Prod was given a dedicated app-scoped Fly egress IP (`fly ips allocate-egress -a campnw -r sjc`, about $4/mo). ReserveAmerica blocked the shared Datacamp/CDN77 and Azure addresses but not Fly's own range, so the 53 Oregon parks work from prod again (`doctor` ok; Silver Falls returns availability). That supersedes #131's conclusion that every datacenter IP is blocked.
 
@@ -2071,7 +2072,7 @@ Notes:
 
 ---
 
-## v1.48 "Answer-first Results" [DESIGNED 2026-11-06 — not started]
+## v1.48 "Answer-first Results" [IN PROGRESS — P1a, P1b, P2a, P2b released behind `results_v2` on 2026-11-07]
 
 ### Theme
 The results page answers the question in one line ("22 campgrounds have a June weekend open within 3 hours of Seattle"), then groups places by drive time with the bookable weekends on each card. Design canvas: https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private; 5 artboards, built on real June 2027 data).
@@ -2100,14 +2101,26 @@ All five are addressed in the v2 canvas.
 ### Data prerequisites
 | # | Item | Status |
 |---|------|--------|
-| 1 | WA site types are hardcoded `STANDARD`. Decode `wa_state_sites.allowed_equipment` with GoingToCamp `/api/equipment` (tent / van / RV length bands 20′–40′+), plus loop descriptions for hookups | Open |
+| 1 | WA site types are hardcoded `STANDARD`. Decode `wa_state_sites.allowed_equipment` with GoingToCamp `/api/equipment` (tent / van / RV length bands 20′–40′+), plus loop descriptions for hookups | **Done**: P1a #181/#182. Every window carries `fits_tent`, `fits_van`, `fits_rv`, `max_rv_ft`, `hookups`, `walk_in` (`null` = unknown) for WA, Oregon and Recreation.gov |
 | 2 | WA site metadata is seeded for only 25 of the 75 parks. Seeding must run from a network GoingToCamp doesn't block | **Done**: P1b seeded all 75 locally; prod imports `registry/fixtures/wa_state_sites.json` at startup |
 | 3 | `boat-in` tag | **Done**: #170 (on `dev`) |
 | 4 | Not-yet-released (`NYR`) collapsed into "unavailable" | **Done**: #171 engine, #172 API, #173 UI notice, #175 WA 9-month window (on `dev`) |
 | 5 | River parks tagged `beach` | **Done**: #170 curated overrides, applied as a startup migration (on `dev`) |
 | 6 | Search silently checks only the N closest campgrounds | **Done**: #169 `campgrounds_matched` plus "Checked N of M" / "Check the rest" (on `dev`) |
 
-Also on `dev`: #174 (Recreation.gov stay-continuation nights were counted as FCFS) and #168 (monitor dedupe). None of these are released to `main` yet.
+Also released: #174 (Recreation.gov stay-continuation nights were counted as FCFS) and #168 (monitor dedupe). Everything above shipped in #183.
+
+### Found testing v2 on prod (2026-11-07)
+| Issue | Where it goes |
+|---|---|
+| In "Any day" searches, chips show runs of open dates, not stays ("Sun Nov 22 – Sat Dec 19 · 1 left"), and overlap ("Nov 22–24", "Nov 22–25", "Nov 22–30") | P2c. Chips only work cleanly for weekend searches; flexible searches need stay chips, e.g. the earliest 2-night arrivals |
+| The answer header still said "Checking campgrounds…" 3 minutes in. Either the search was still running (see the Oregon stall in Open problems) or the header misses the end of the stream | P2c. Check after the stall fix |
+| Oregon fit lines claim "RV ≤96′" (Stub Stewart) and "RV ≤81′" (Champoeg). P1a's ReserveAmerica length decode reads the wrong field or units | Fix at the start of P1c, before the `who` filter trusts `max_rv_ft` |
+| Cottonwood Canyon's AI pitch says "Remote Utah canyon" (it's in Oregon) | Backlog: pitch/tag quality pass |
+| Recreation.gov registry names are uppercase in the v2 typeahead and answer sentence ("OHANAPECOSH CAMPGROUND") | Backlog: title-case on display (found in P3a) |
+| Exact-date searches: window chips label the checkout day as a night ("Sat 21 – Mon 23" for a checkout on the 23rd) | Backlog: candidates treat `end_date` as a night in exact mode (found in P3a) |
+| v1: "Checked 1 campgrounds" plural; `SmartZeroState` "Expand to N min" doesn't apply the new limit | Backlog, or drop at the v2 flip (found in P2c) |
+| v2 map uses toned OpenStreetMap tiles until a public, URL-restricted Mapbox token is added as GitHub secret `VITE_PUBLIC_MAPBOX_TOKEN` (the backend `MAPBOX_ACCESS_TOKEN` funds drive-time calls, so don't expose it) | User action (P2d) |
 
 ---
 

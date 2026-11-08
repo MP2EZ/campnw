@@ -14,12 +14,17 @@ function moreLabel(band: DriveBand, n: number): string {
   return `Show ${n} more`;
 }
 
-function Band({ band, params, firstRank }: { band: DriveBand; params: SearchParams | null; firstRank: number }) {
+function Band({ band, params, firstRank, reveal }: {
+  band: DriveBand; params: SearchParams | null; firstRank: number; reveal?: string | null;
+}) {
   const [all, setAll] = useState(false);
   // Hiding one card behind a button saves nothing.
   const cut = band.results.length > BAND_LIMIT + 1 ? BAND_LIMIT : band.results.length;
   const hidden = band.results.length - cut;
-  const shown = all ? band.results : band.results.slice(0, cut);
+  // A quick pick folded away opens its band.
+  const revealed = !!reveal && band.results.findIndex((r) => r.facility_id === reveal) >= cut;
+  const open = all || revealed;
+  const shown = open ? band.results : band.results.slice(0, cut);
   const id = `rv2-band-${band.key}`;
 
   const body = (
@@ -31,8 +36,8 @@ function Band({ band, params, firstRank }: { band: DriveBand; params: SearchPara
         ))}
       </div>
       {hidden > 0 && (
-        <button type="button" className="rv2-band-more" aria-expanded={all} onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : moreLabel(band, hidden)}
+        <button type="button" className="rv2-band-more" aria-expanded={open} onClick={() => setAll(!open)}>
+          {open ? "Show fewer" : moreLabel(band, hidden)}
         </button>
       )}
     </>
@@ -56,12 +61,17 @@ function Band({ band, params, firstRank }: { band: DriveBand; params: SearchPara
  * boat-in places, which have no drive time to the site. Ranks for analytics
  * follow the order on screen.
  */
-export function DriveBands({ results, params }: { results: CampgroundResult[]; params: SearchParams | null }) {
+export function DriveBands({ results, params, reveal }: {
+  results: CampgroundResult[];
+  params: SearchParams | null;
+  /** A card to show even if its band is folded (a quick pick's). */
+  reveal?: string | null;
+}) {
   const bands = groupByDriveBand(results);
   const starts = bands.map((_, i) => bands.slice(0, i).reduce((n, b) => n + b.results.length, 0));
   return (
     <div className="rv2-bands">
-      {bands.map((b, i) => <Band key={b.key} band={b} params={params} firstRank={starts[i]} />)}
+      {bands.map((b, i) => <Band key={b.key} band={b} params={params} firstRank={starts[i]} reveal={reveal} />)}
     </div>
   );
 }

@@ -1,0 +1,230 @@
+/* Results v2 map (D13). Loads with the lazy map chunk. */
+.rv2-map {
+  position: relative;
+  height: 100%;
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  background: var(--map-surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.rv2-map-canvas {
+  height: 100%;
+  background: var(--map-surface);
+  font: inherit;
+}
+
+/* OpenStreetMap's tiles, toned down to the cream palette (no Mapbox token). */
+.rv2-map--osm .leaflet-tile-pane {
+  filter: saturate(0.45) sepia(0.18) brightness(1.03) contrast(0.92);
+}
+
+[data-theme="dark"] .rv2-map--osm .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) saturate(0.35) brightness(0.85) contrast(0.9);
+}
+
+/* MapView.css inverts every tile pane in dark mode; Mapbox has its own dark style. */
+/* Mapbox light-v11 is a cool grey; warm it to the cream palette. Mapbox has
+   its own dark style, so undo MapView.css's dark-mode tile inversion. */
+.rv2-map--mapbox .leaflet-tile-pane {
+  filter: sepia(0.22) saturate(1.15) brightness(0.98);
+}
+
+[data-theme="dark"] .rv2-map--mapbox .leaflet-tile-pane {
+  filter: none;
+}
+
+/* ── Pins ─────────────────────────────────────────────────────────── */
+
+.rv2-marker,
+.rv2-cluster {
+  background: none;
+  border: 0;
+}
+
+.rv2-marker {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  transition: transform var(--transition-fast);
+}
+
+.rv2-marker:not(.rv2-marker--muted) {
+  cursor: pointer;
+}
+
+.rv2-marker:hover {
+  transform: scale(1.15);
+}
+
+/* Selected: bigger, raised, ringed, and named in a tooltip. */
+.rv2-marker.is-selected {
+  transform: scale(1.4);
+}
+
+.rv2-marker.is-selected .rv2-pin-halo {
+  stroke: var(--pin-selected);
+  stroke-width: 2;
+}
+
+.rv2-cluster.has-selected {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 3px var(--pin-selected), var(--shadow-sm);
+}
+
+.rv2-marker:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 0;
+}
+
+.rv2-pin {
+  display: block;
+  overflow: visible;
+}
+
+.rv2-pin-halo {
+  fill: var(--pin-halo);
+}
+
+.rv2-pin-fill {
+  fill: var(--pin-open);
+}
+
+.rv2-pin-body {
+  fill: var(--pin-halo);
+  stroke: var(--pin-open);
+  stroke-width: 2.5;
+}
+
+.rv2-pin--ring .rv2-pin-body {
+  stroke-width: 3;
+}
+
+.rv2-pin--diamond .rv2-pin-body {
+  stroke: var(--pin-boat);
+}
+
+.rv2-pin--muted .rv2-pin-halo {
+  fill: none;
+}
+
+.rv2-pin--muted .rv2-pin-body {
+  fill: var(--pin-muted-fill);
+  stroke: var(--pin-muted);
+  stroke-width: 1.75;
+  stroke-dasharray: 3 2;
+}
+
+/* ── Clusters ─────────────────────────────────────────────────────── */
+
+.rv2-cluster {
+  display: grid;
+  place-items: center;
+  /* A numbered badge, unlike any pin shape. */
+  border-radius: 50%;
+  background: var(--surface-card);
+  color: var(--text);
+  box-shadow: 0 0 0 2px var(--pin-open), var(--shadow-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  transition: transform var(--transition-fast);
+}
+
+.rv2-cluster:hover {
+  transform: scale(1.08);
+}
+
+.rv2-cluster:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* ── Controls ─────────────────────────────────────────────────────── */
+
+.rv2-map .leaflet-bar {
+  border: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-overlay);
+}
+
+.rv2-map .leaflet-bar a {
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
+  font-size: var(--text-lg);
+  background: var(--surface-card);
+  color: var(--text);
+  border-bottom-color: var(--border);
+  transition: background var(--transition-fast);
+}
+
+.rv2-map .leaflet-bar a:hover {
+  background: var(--surface-tile);
+}
+
+.rv2-map .leaflet-control-attribution {
+  background: var(--surface-card);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm) 0 0 0;
+}
+
+.rv2-map .leaflet-control-attribution a {
+  color: var(--text-muted);
+}
+
+.rv2-map .leaflet-tooltip {
+  background: var(--surface-card);
+  color: var(--text);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semi);
+}
+
+.rv2-map .leaflet-tooltip-top::before {
+  border-top-color: var(--surface-card);
+}
+
+/* ── Legend ───────────────────────────────────────────────────────── */
+
+.rv2-map-legend {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-6);
+  z-index: 500;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  max-width: calc(100% - 2 * var(--space-4));
+  padding: var(--space-2) var(--space-3);
+  border-radius: 14px;
+  background: var(--surface-card);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--text-sm);
+  color: var(--text);
+  pointer-events: none;
+}
+
+.rv2-map-legend-title {
+  margin: 0;
+  font-weight: var(--weight-bold);
+}
+
+.rv2-map-legend ul {
+  display: contents;
+  list-style: none;
+}
+
+.rv2-map-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.rv2-map-legend-pin .rv2-pin {
+  width: 18px;
+  height: 18px;
+}

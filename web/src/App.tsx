@@ -41,6 +41,7 @@ const SharedView = lazy(() => import("./pages/SharedView"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));
 const ResultsPage = lazy(() => import("./results/ResultsPage"));
+const SearchBar = lazy(() => import("./results/SearchBar"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 import { Footer } from "./components/Footer";
@@ -1083,6 +1084,13 @@ export default function App() {
             </Suspense>
           ) : (
           <>
+          {/* v1.48 switch point: the v2 search bar replaces the NL bar, form and summary. */}
+          {uiVersion === "v2" ? (
+            <Suspense fallback={null}>
+              <SearchBar onSearch={handleSearch} onAsk={handleNlSearch}
+                userDefaults={user ? { from: resolveHomeBase(user.home_base) || user.default_from, nights: user.default_nights } : undefined} />
+            </Suspense>
+          ) : <>
           <NlSearchBar onSubmit={handleNlSearch} />
           {formCollapsed && activeSearchParams && searchDates ? (
             <SearchSummaryBar
@@ -1102,10 +1110,11 @@ export default function App() {
               initialValues={activeSearchParams}
             />
           )}
+          </>}
 
       {user?.recommendations_enabled && <RecommendationRow onSearch={handleSearch} />}
 
-      {!results && !loading && !error && <FirstVisitState onSearch={handleSearch} />}
+      {!results && !loading && !error && uiVersion !== "v2" && <FirstVisitState onSearch={handleSearch} />}
 
       {error && <div className="error-banner" role="alert">{error}</div>}
 
@@ -1115,7 +1124,7 @@ export default function App() {
       {results && uiVersion === "v2" ? (
         <Suspense fallback={null}>
           <ResultsPage maxResults={maxResults} onCheckRest={checkRest} completedAt={completedAt}
-            onSearch={handleSearch} searchId={searchId} />
+            onSearch={handleSearch} searchId={searchId} failed={!!error} />
         </Suspense>
       ) : results && (() => {
         const withAvailability = availableCards.length;

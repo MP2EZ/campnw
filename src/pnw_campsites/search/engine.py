@@ -23,8 +23,14 @@ from pnw_campsites.registry.models import (
     CampsiteAvailability,
     SiteFit,
 )
-from pnw_campsites.search.release import format_release_range, release_date
+from pnw_campsites.search.release import (
+    NotReleasedRange,
+    format_release_range,
+    not_released_ranges,
+    release_date,
+)
 from pnw_campsites.search.site_fit import fit_from_recgov_type, wa_site_fit
+from pnw_campsites.search.who import fits_equipment, fits_party
 
 logger = logging.getLogger("pnw_campsites.search")
 
@@ -49,7 +55,9 @@ class SearchQuery:
     # Availability filters
     min_consecutive_nights: int = 1
     include_group_sites: bool = True
-    max_people: int | None = None  # filter sites by capacity
+    max_people: int | None = None  # party size: drops sites known to be smaller
+    equipment: str | None = None  # tent | van | trailer (search/who.py)
+    rig_length: int | None = None  # feet, trailers only
     days_of_week: set[int] | None = None  # 0=Mon, 6=Sun; None means all days
     include_fcfs: bool = False  # include FCFS/not-reservable site details
 
@@ -73,6 +81,25 @@ class AvailableWindow:
     fit: SiteFit = field(default_factory=SiteFit)
 
 
+@dataclass(frozen=True)
+class NightRange:
+    """A run of consecutive nights, first and last included."""
+
+    start: date
+    end: date
+
+
+def night_ranges(nights: list[date]) -> list[NightRange]:
+    """Group sorted nights into runs of consecutive nights."""
+    ranges: list[NightRange] = []
+    for night in nights:
+        if ranges and night == ranges[-1].end + timedelta(days=1):
+            ranges[-1] = NightRange(ranges[-1].start, night)
+        else:
+            ranges.append(NightRange(night, night))
+    return ranges
+
+
 @dataclass
 class CampgroundResult:
     """Availability results for a single campground."""
@@ -89,6 +116,13 @@ class CampgroundResult:
     not_released_nights: int = 0
     releases_on: date | None = None
     releases_through: date | None = None
+    # For per-weekend status (v1.48 D4): runs of requested nights some
+    # matching site hasn't released, each with its first night's release
+    # date (looser than not_released_nights, which needs every site NYR),
+    # and runs of nights nothing could be reserved online at all (closed,
+    # first-come only, or no data). Neither of those is "full".
+    not_released_ranges: list[NotReleasedRange] = field(default_factory=list)
+    closed_ranges: list[NightRange] = field(default_factory=list)
 
     @property
     def boat_in(self) -> bool:
@@ -169,6 +203,8 @@ class StreamProgressEvent:
 
     checked: int
     total: int
+    # The campground just checked, which had nothing to book (or failed).
+    result: CampgroundResult | None = None
 
 
 @dataclass
@@ -351,11 +387,24 @@ def _find_consecutive_windows(
     return windows
 
 
-def _site_matches(site: CampsiteAvailability, query: SearchQuery) -> bool:
-    """Group-site and capacity filters."""
-    if not query.include_group_sites and "GROUP" in site.campsite_type.upper():
-        return False
-    return not (query.max_people and site.max_num_people < query.max_people)
+def _site_matches(
+    site: CampsiteAvailability, query: SearchQuery, system: BookingSystem,
+) -> bool:
+    """Group-site filter plus the `who` filter."""
+    return _site_in_scope(site, query) and _fits_who(site, query, system)
+
+
+def _site_in_scope(site: CampsiteAvailability, query: SearchQuery) -> bool:
+    """Group-site filter only."""
+    return query.include_group_sites or "GROUP" not in site.campsite_type.upper()
+
+
+def _fits_who(site: CampsiteAvailability, query: SearchQuery, system: BookingSystem) -> bool:
+    """Party size and rig (v1.48 D5). Unknown capacity or type never drops a site."""
+    capacity = site.max_num_people if site.max_people_known else None
+    return fits_party(capacity, query.max_people) and fits_equipment(
+        _site_fit(site, system), query.equipment, query.rig_length,
+    )
 
 
 def _site_fit(site: CampsiteAvailability, system: BookingSystem) -> SiteFit:
@@ -371,7 +420,7 @@ def _site_fit(site: CampsiteAvailability, system: BookingSystem) -> SiteFit:
 
 
 def _not_released_nights(
-    availability: CampgroundAvailability, query: SearchQuery,
+    availability: CampgroundAvailability, query: SearchQuery, system: BookingSystem,
 ) -> list[date]:
     """Requested nights none of the matching sites has been released for.
 
@@ -382,7 +431,7 @@ def _not_released_nights(
     nyr: set[str] = set()
     released: set[str] = set()
     for site in availability.campsites.values():
-        if not _site_matches(site, query):
+        if not _site_matches(site, query, system):
             continue
         for day, status in site.availabilities.items():
             if status == AvailabilityStatus.NYR:
@@ -403,6 +452,47 @@ def _not_released_nights(
     return nights
 
 
+def _requested_nights(query: SearchQuery) -> list[date]:
+    if not query.start_date or not query.end_date:
+        return []
+    nights = []
+    night = query.start_date
+    while night <= query.end_date:
+        if query.days_of_week is None or night.weekday() in query.days_of_week:
+            nights.append(night)
+        night += timedelta(days=1)
+    return nights
+
+
+def _night_statuses(
+    availability: CampgroundAvailability, query: SearchQuery, system: BookingSystem,
+) -> tuple[list[date], list[date]]:
+    """Requested nights some matching site hasn't released (NYR), and nights
+    no site can be reserved at all (no Available, Reserved or NYR).
+
+    Closed ignores the `who` filter: a trailer search at a tent-only park
+    must not read as "closed".
+    """
+    nyr: set[str] = set()
+    reservable: set[str] = set()
+    for site in availability.campsites.values():
+        if not _site_in_scope(site, query):
+            continue
+        fits = _fits_who(site, query, system)
+        for day, status in site.availabilities.items():
+            if status == AvailabilityStatus.NYR and fits:
+                nyr.add(day[:10])
+            if status in (
+                AvailabilityStatus.AVAILABLE, AvailabilityStatus.RESERVED, AvailabilityStatus.NYR,
+            ):
+                reservable.add(day[:10])
+    requested = _requested_nights(query)
+    return (
+        [n for n in requested if n.isoformat() in nyr],
+        [n for n in requested if n.isoformat() not in reservable],
+    )
+
+
 def _process_availability(
     campground: Campground,
     availability: CampgroundAvailability,
@@ -410,7 +500,7 @@ def _process_availability(
 ) -> CampgroundResult:
     """Process raw availability into structured results."""
     result = CampgroundResult(campground=campground)
-    nights = _not_released_nights(availability, query)
+    nights = _not_released_nights(availability, query, campground.booking_system)
     if nights:
         today = date.today()
         system = campground.booking_system
@@ -418,6 +508,11 @@ def _process_availability(
         result.releases_on = release_date(system, nights[0], today)
         if result.releases_on:
             result.releases_through = release_date(system, nights[-1], today)
+    any_nyr, closed = _night_statuses(availability, query, campground.booking_system)
+    result.not_released_ranges = not_released_ranges(
+        any_nyr, campground.booking_system, date.today(),
+    )
+    result.closed_ranges = night_ranges(closed)
     result.total_sites = len(availability.campsites)
     seen_sites: set[str] = set()
     fcfs_count = 0
@@ -426,7 +521,9 @@ def _process_availability(
         # Always count FCFS sites
         if site.is_fcfs:
             fcfs_count += 1
-            if not query.include_fcfs:
+            if not query.include_fcfs or not _fits_who(
+                site, query, campground.booking_system,
+            ):
                 continue
             # For FCFS sites included in results, create a single
             # window spanning the full date range to surface them
@@ -447,7 +544,7 @@ def _process_availability(
             seen_sites.add(site_id)
             continue
 
-        if not _site_matches(site, query):
+        if not _site_matches(site, query, campground.booking_system):
             continue
 
         windows = _find_consecutive_windows(
@@ -910,6 +1007,8 @@ class SearchEngine:
                 min_consecutive_nights=query.min_consecutive_nights,
                 include_group_sites=query.include_group_sites,
                 max_people=query.max_people,
+                equipment=query.equipment,
+                rig_length=query.rig_length,
                 days_of_week=query.days_of_week,
                 max_campgrounds=5,
             )))
@@ -1078,7 +1177,7 @@ class SearchEngine:
                 if not r.error:
                     all_unavailable += 1
                 yield StreamProgressEvent(
-                    checked=checked_count, total=total,
+                    checked=checked_count, total=total, result=r,
                 )
 
         # Report provider degradation. The non-streaming endpoint has always
@@ -1140,6 +1239,7 @@ class SearchEngine:
             campsite.loop = info.loop_title or ""
             if info.max_capacity is not None:
                 campsite.max_num_people = info.max_capacity
+                campsite.max_people_known = True
             campsite.fit = wa_site_fit(
                 info.name, info.allowed_equipment, info.loop_description,
             )

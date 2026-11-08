@@ -7,8 +7,8 @@ import ResultsPage from "../results/ResultsPage";
 vi.mock("../results/CampgroundCard", () => ({
   CampgroundCard: ({ result }: { result: CampgroundResult }) => <article>{result.name}</article>,
 }));
-vi.mock("../components/SmartZeroState", () => ({
-  SmartZeroState: () => <div>zero state</div>,
+vi.mock("../results/ZeroResults", () => ({
+  ZeroResults: () => <div>zero state</div>,
 }));
 
 const place = (name: string, open: number) =>
@@ -26,7 +26,7 @@ const results: SearchResponse = {
   releases_on_latest: "2026-12-25",
 };
 
-function renderPage(overrides: Partial<SearchContextValue> = {}) {
+function renderPage(overrides: Partial<SearchContextValue> = {}, failed = false) {
   const ctx: SearchContextValue = {
     results,
     loading: false,
@@ -39,12 +39,29 @@ function renderPage(overrides: Partial<SearchContextValue> = {}) {
   };
   return render(
     <SearchContext.Provider value={ctx}>
-      <ResultsPage maxResults={20} onCheckRest={() => {}} completedAt={Date.now()} onSearch={() => {}} />
+      <ResultsPage maxResults={20} onCheckRest={() => {}} completedAt={failed ? null : Date.now()}
+        onSearch={() => {}} failed={failed} />
     </SearchContext.Provider>,
   );
 }
 
 describe("ResultsPage", () => {
+  test("places with nothing to book are counted, linked and listed after the open ones", () => {
+    const full = { ...place("Kachess", 0), windows: [], estimated_drive_minutes: 77 } as CampgroundResult;
+    renderPage({ results: { ...results, unavailable: [full] } });
+    const link = screen.getByRole("link", { name: "1 full or not released yet" });
+    expect(link).toHaveAttribute("href", "#rv2-full");
+    expect(screen.getByRole("region", { name: "Full or not released yet" })).toHaveTextContent("Kachess");
+  });
+
+  test("a failed search leaves “Checking…” and says it didn't finish", () => {
+    renderPage({ results: { ...results, results: [] }, filteredResults: [] }, true);
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+      "The search stopped after checking 20 campgrounds",
+    );
+    expect(screen.queryByText(/searched/)).not.toBeInTheDocument();
+  });
+
   test("answers first, then coverage, notices and the open places", () => {
     renderPage();
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(

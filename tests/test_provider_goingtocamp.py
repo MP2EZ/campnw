@@ -75,6 +75,7 @@ class TestBuildCampsites:
         assert campsite.site == "2147482394"
         assert campsite.loop == ""
         assert campsite.max_num_people == 8
+        assert campsite.max_people_known is False  # placeholder, not real capacity
         assert (
             campsite.availabilities["2026-06-01T00:00:00.000Z"]
             == AvailabilityStatus.AVAILABLE

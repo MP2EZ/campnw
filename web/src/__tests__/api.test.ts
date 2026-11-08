@@ -15,6 +15,7 @@ vi.mock('../lib/supabase', () => ({
 import {
   searchCampsites,
   searchCampsitesStream,
+  STREAM_IDLE_MS,
   getWatches,
   createWatch,
   deleteWatch,
@@ -64,6 +65,90 @@ describe('API: Search coverage', () => {
     )
 
     expect(onCoverage).toHaveBeenCalledWith(46, 20)
+  })
+})
+
+describe('API: Search unavailable campgrounds', () => {
+  test('an unavailable frame reaches onUnavailable, not onResult', async () => {
+    const frames = [
+      'data: {"type":"unavailable","result":{"facility_id":"9","name":"Kachess","windows":[]}}\n\n',
+      'data: [DONE]\n\n',
+    ].join('')
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: new ReadableStream({
+        start(c) { c.enqueue(new TextEncoder().encode(frames)); c.close() },
+      }),
+    })
+    const onResult = vi.fn()
+    const onUnavailable = vi.fn()
+    await searchCampsitesStream(
+      { start_date: '2026-06-01', end_date: '2026-06-30' }, onResult, vi.fn(), vi.fn(),
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      onUnavailable,
+    )
+    expect(onResult).not.toHaveBeenCalled()
+    expect(onUnavailable).toHaveBeenCalledWith(expect.objectContaining({ name: 'Kachess' }))
+  })
+})
+
+describe('API: Search stream always settles', () => {
+  const run = (body: ReadableStream) => {
+    mockFetch.mockResolvedValueOnce({ ok: true, body })
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    const p = searchCampsitesStream(
+      { start_date: '2026-06-01', end_date: '2026-06-30' }, vi.fn(), onDone, onError,
+    )
+    return { p, onDone, onError }
+  }
+
+  test('a stream that closes without [DONE] is an error, not a finished search', async () => {
+    const { p, onDone, onError } = run(new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode('data: {"type":"progress","checked":1,"total":9}\n\n'))
+        c.close()
+      },
+    }))
+    await p
+    expect(onDone).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringMatching(/cut off/),
+    }))
+  })
+
+  test('a stream that goes quiet is abandoned with an error', async () => {
+    vi.useFakeTimers()
+    try {
+      const { p, onDone, onError } = run(new ReadableStream({ start() { /* never sends */ } }))
+      await vi.advanceTimersByTimeAsync(STREAM_IDLE_MS - 1)
+      expect(onError).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      await p
+      expect(onDone).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringMatching(/stopped responding/),
+      }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('each frame resets the quiet timer', async () => {
+    vi.useFakeTimers()
+    try {
+      let ctl!: ReadableStreamDefaultController
+      const { p, onDone, onError } = run(new ReadableStream({ start(c) { ctl = c } }))
+      await vi.advanceTimersByTimeAsync(STREAM_IDLE_MS - 10)
+      ctl.enqueue(new TextEncoder().encode('data: {"type":"progress","checked":1,"total":9}\n\n'))
+      await vi.advanceTimersByTimeAsync(STREAM_IDLE_MS - 10)
+      ctl.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+      await p
+      expect(onError).not.toHaveBeenCalled()
+      expect(onDone).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
@@ -449,5 +534,47 @@ describe('API: Search History', () => {
     await expect(
       saveSearchHistory(params, 0)
     ).resolves.toBeUndefined()
+  })
+})
+
+describe('API: Search who filter (v1.48 D5)', () => {
+  const emptyStream = () => ({
+    ok: true,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+        controller.close()
+      },
+    }),
+  })
+  const searchJson = () => ({
+    ok: true,
+    json: async () => ({ campgrounds_checked: 0, campgrounds_with_availability: 0, results: [], warnings: [] }),
+  })
+  const run = async (kind: 'stream' | 'json', params: SearchParams) => {
+    if (kind === 'stream') {
+      mockFetch.mockResolvedValueOnce(emptyStream())
+      await searchCampsitesStream(params, vi.fn(), vi.fn(), vi.fn())
+    } else {
+      mockFetch.mockResolvedValueOnce(searchJson())
+      await searchCampsites(params)
+    }
+    return new URL(mockFetch.mock.calls[0][0], 'http://x').searchParams
+  }
+  const dates = { start_date: '2026-06-01', end_date: '2026-06-30' }
+
+  test.each(['stream', 'json'] as const)('%s sends people, equipment and trailer length', async (kind) => {
+    const q = await run(kind, { ...dates, people: 5, equipment: 'trailer', rig_length: 30 })
+    expect([q.get('people'), q.get('equipment'), q.get('rig_length')]).toEqual(['5', 'trailer', '30'])
+  })
+
+  test.each(['stream', 'json'] as const)('%s sends no length for non-trailers', async (kind) => {
+    const q = await run(kind, { ...dates, equipment: 'van', rig_length: 30 })
+    expect([q.get('equipment'), q.get('rig_length')]).toEqual(['van', null])
+  })
+
+  test.each(['stream', 'json'] as const)('%s drops an unknown rig from the URL instead of failing', async (kind) => {
+    const q = await run(kind, { ...dates, people: 99, equipment: 'boat' })
+    expect([q.get('people'), q.get('equipment')]).toEqual([null, null])
   })
 })

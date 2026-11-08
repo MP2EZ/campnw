@@ -16,6 +16,8 @@ export interface AnswerInput {
   checked: number;
   notReleased: number;
   loading: boolean;
+  /** The search ended in an error (stalled, cut off, failed) before finishing. */
+  failed?: boolean;
 }
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -92,14 +94,20 @@ function campgrounds(n: number, p: SearchParams | null): string {
   return p?.name ? `${noun} matching “${p.name}”` : noun;
 }
 
-export function answerSentence({ params, open, checked, notReleased, loading }: AnswerInput): string {
+export function answerSentence({ params, open, checked, notReleased, loading, failed }: AnswerInput): string {
   const what = whatOpen(params);
   const where = within(params);
   if (loading) {
     return what === "sites open" ? "Checking campgrounds…" : `Checking campgrounds for ${what}${where}…`;
   }
   if (open > 0) {
-    return `${open} ${campgrounds(open, params)} ${open === 1 ? "has" : "have"} ${what}${where}.`;
+    const found = `${open} ${campgrounds(open, params)} ${open === 1 ? "has" : "have"} ${what}${where}`;
+    return failed ? `${found}, from a search that didn’t finish.` : `${found}.`;
+  }
+  if (failed) {
+    if (checked === 0) return "The search couldn’t finish.";
+    const n = checked === 1 ? "1 campground, and it doesn’t" : `${checked} campgrounds, and none of them`;
+    return `The search stopped after checking ${n} have ${what}.`;
   }
   if (checked === 0) return "No campgrounds matched this search.";
   if (notReleased >= checked) {
