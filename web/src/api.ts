@@ -316,6 +316,20 @@ export interface ParsedParams {
   days_of_week?: string | null;
 }
 
+/**
+ * How long the stream may go without a byte before the search is abandoned.
+ * Every checked campground sends a frame, so this only trips when the server
+ * has stalled (prod saw ~85 s gaps in a slow Oregon search that did finish).
+ */
+export const STREAM_IDLE_MS = 120_000;
+const STREAM_STALLED = "The search stopped responding, so some campgrounds weren’t checked.";
+const STREAM_CUT_OFF = "The search was cut off, so some campgrounds weren’t checked.";
+
+/**
+ * Stream a search. Always ends in exactly one of onDone (the server sent
+ * [DONE]) or onError (it failed, went quiet for STREAM_IDLE_MS, or closed
+ * early), except when `signal` aborts it: the caller started that.
+ */
 export async function searchCampsitesStream(
   params: SearchParams,
   onResult: (result: CampgroundResult) => void,
@@ -358,54 +372,74 @@ export async function searchCampsitesStream(
 
     const decoder = new TextDecoder();
     let buffer = "";
+    // Cancelling the reader ends a pending read() as done, so a stalled
+    // server can't hold the search in "Checking…" forever.
+    let stalled = false;
+    let idle: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(idle);
+      idle = setTimeout(() => {
+        stalled = true;
+        reader.cancel().catch(() => {});
+      }, STREAM_IDLE_MS);
+    };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      arm();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        arm();
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") {
-            onDone();
-            return;
-          }
-          try {
-            const parsed: unknown = JSON.parse(data);
-            if (isSSEParsedParams(parsed) && onParsed) {
-              onParsed(parsed.params);
-            } else if (isSSEProgress(parsed) && onProgress) {
-              onProgress(parsed.checked, parsed.total);
-            } else if (isSSESummary(parsed) && onSummary) {
-              onSummary(parsed.text);
-            } else if (isSSEWarnings(parsed) && onWarnings) {
-              onWarnings(parsed.warnings);
-            } else if (isSSECoverage(parsed) && onCoverage) {
-              onCoverage(parsed.campgrounds_matched, parsed.campgrounds_checked);
-            } else if (isSSENotReleased(parsed) && onNotReleased) {
-              onNotReleased({
-                not_released_campgrounds: parsed.not_released_campgrounds,
-                releases_on_earliest: parsed.releases_on_earliest,
-                releases_on_latest: parsed.releases_on_latest,
-              });
-            } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
-              onDiagnosis(parsed);
-            } else if (isCampgroundResult(parsed)) {
-              onResult(parsed);
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") {
+              clearTimeout(idle);
+              onDone();
+              return;
             }
-          } catch {
-            // skip malformed lines
+            try {
+              const parsed: unknown = JSON.parse(data);
+              if (isSSEParsedParams(parsed) && onParsed) {
+                onParsed(parsed.params);
+              } else if (isSSEProgress(parsed) && onProgress) {
+                onProgress(parsed.checked, parsed.total);
+              } else if (isSSESummary(parsed) && onSummary) {
+                onSummary(parsed.text);
+              } else if (isSSEWarnings(parsed) && onWarnings) {
+                onWarnings(parsed.warnings);
+              } else if (isSSECoverage(parsed) && onCoverage) {
+                onCoverage(parsed.campgrounds_matched, parsed.campgrounds_checked);
+              } else if (isSSENotReleased(parsed) && onNotReleased) {
+                onNotReleased({
+                  not_released_campgrounds: parsed.not_released_campgrounds,
+                  releases_on_earliest: parsed.releases_on_earliest,
+                  releases_on_latest: parsed.releases_on_latest,
+                });
+              } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
+                onDiagnosis(parsed);
+              } else if (isCampgroundResult(parsed)) {
+                onResult(parsed);
+              }
+            } catch {
+              // skip malformed lines
+            }
           }
         }
       }
+    } finally {
+      clearTimeout(idle);
     }
-    onDone();
+    if (signal?.aborted) return;
+    // The server always ends with [DONE]; without it the search is partial.
+    throw new Error(stalled ? STREAM_STALLED : STREAM_CUT_OFF);
   } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") return;
+    if (signal?.aborted || (e instanceof DOMException && e.name === "AbortError")) return;
     onError(e instanceof Error ? e : new Error("Stream failed"));
   }
 }

@@ -26,7 +26,7 @@ const results: SearchResponse = {
   releases_on_latest: "2026-12-25",
 };
 
-function renderPage(overrides: Partial<SearchContextValue> = {}) {
+function renderPage(overrides: Partial<SearchContextValue> = {}, failed = false) {
   const ctx: SearchContextValue = {
     results,
     loading: false,
@@ -39,12 +39,21 @@ function renderPage(overrides: Partial<SearchContextValue> = {}) {
   };
   return render(
     <SearchContext.Provider value={ctx}>
-      <ResultsPage maxResults={20} onCheckRest={() => {}} completedAt={Date.now()} onSearch={() => {}} />
+      <ResultsPage maxResults={20} onCheckRest={() => {}} completedAt={failed ? null : Date.now()}
+        onSearch={() => {}} failed={failed} />
     </SearchContext.Provider>,
   );
 }
 
 describe("ResultsPage", () => {
+  test("a failed search leaves “Checking…” and says it didn't finish", () => {
+    renderPage({ results: { ...results, results: [] }, filteredResults: [] }, true);
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+      "The search stopped after checking 20 campgrounds",
+    );
+    expect(screen.queryByText(/searched/)).not.toBeInTheDocument();
+  });
+
   test("answers first, then coverage, notices and the open places", () => {
     renderPage();
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(

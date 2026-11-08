@@ -226,7 +226,12 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     // would be more invasive than the correlation is worth.
     getPosthog()?.register({ search_id: searchId });
 
+    // Callbacks from a search this one replaced (an abort can lose the race
+    // with its last frame) must not settle or overwrite this one.
+    const current = () => searchIdRef.current === searchId;
+
     setLoading(true);
+    setCompletedAt(null);
     setError(null);
     setSearchSummary(null);
     setResultsView(mode === "find" ? "dates" : "sites");
@@ -294,11 +299,12 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
-            setResults(snapshot());
+            if (current()) setResults(snapshot());
           });
         }
       },
       () => {
+        if (!current()) return;
         if (rafId) {
           cancelAnimationFrame(rafId);
           rafId = null;
@@ -330,6 +336,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         }
       },
       (err) => {
+        if (!current()) return;
         setError(err.message);
         setLoading(false);
         searchAbortRef.current = null;
@@ -374,7 +381,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
-            setResults(snapshot());
+            if (current()) setResults(snapshot());
           });
         }
       },
@@ -455,6 +462,12 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     checkRest,
     toggleSource,
     resetSearch: useCallback(() => {
+      // Stop the running search too, or it keeps "Checking…" and refills
+      // the results it was asked to clear.
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
+      searchIdRef.current = "";
+      setLoading(false);
       setResults(null);
       setFormCollapsed(false);
       setSearchSummary("");

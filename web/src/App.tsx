@@ -1115,7 +1115,7 @@ export default function App() {
       {results && uiVersion === "v2" ? (
         <Suspense fallback={null}>
           <ResultsPage maxResults={maxResults} onCheckRest={checkRest} completedAt={completedAt}
-            onSearch={handleSearch} searchId={searchId} />
+            onSearch={handleSearch} searchId={searchId} failed={!!error} />
         </Suspense>
       ) : results && (() => {
         const withAvailability = availableCards.length;

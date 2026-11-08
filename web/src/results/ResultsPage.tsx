@@ -17,6 +17,8 @@ interface Props {
   completedAt: number | null;
   onSearch: (params: SearchParams, mode: SearchMode) => void;
   searchId?: string;
+  /** The search ended in an error before it finished. */
+  failed?: boolean;
 }
 
 // A clock that ticks every 30s, so the "searched … ago" label stays current.
@@ -31,7 +33,7 @@ const readClock = () => Math.floor(Date.now() / TICK) * TICK;
  * Results v2 (v1.48): the answer, then the notices that qualify it, then
  * places. Mounted from App's one switch point when `useUiVersion()` is "v2".
  */
-export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId }: Props) {
+export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId, failed }: Props) {
   const { results, loading, searchParams, searchDates, filteredResults } = useSearchContext();
   const now = useSyncExternalStore(subscribeClock, readClock);
   if (!results) return null;
@@ -43,6 +45,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
     checked: results.campgrounds_checked,
     notReleased: results.not_released_campgrounds ?? 0,
     loading,
+    failed,
   });
 
   return (
@@ -62,7 +65,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
       />
       <ResultsNotices results={results} />
       <DriveBands results={cards} params={searchParams} />
-      {!loading && cards.length === 0 && (
+      {!loading && !failed && cards.length === 0 && (
         <SmartZeroState
           diagnosis={results.diagnosis}
           dateSuggestions={results.date_suggestions}
