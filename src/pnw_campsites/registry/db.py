@@ -13,6 +13,7 @@ from typing import NamedTuple
 from pnw_campsites.geo import haversine_miles
 from pnw_campsites.registry.models import BookingSystem, Campground
 from pnw_campsites.registry.tag_overrides import apply_tag_overrides
+from pnw_campsites.registry.wa_site_fixture import apply_wa_site_fixture
 
 
 class WaSiteInfo(NamedTuple):
@@ -117,6 +118,11 @@ CREATE TABLE IF NOT EXISTS wa_state_sites (
 );
 
 CREATE INDEX IF NOT EXISTS idx_wa_sites_park ON wa_state_sites(park_facility_id);
+
+CREATE TABLE IF NOT EXISTS registry_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
@@ -207,6 +213,9 @@ class CampgroundRegistry:
         # Curated tag fixes (boat-in, river parks wrongly tagged beach). Prod's
         # registry.db is never re-seeded, so these ship as an idempotent migration.
         apply_tag_overrides(self._conn)
+        # WA site names, capacity and equipment, seeded off-box (GoingToCamp
+        # blocks Fly) and shipped as a fixture.
+        apply_wa_site_fixture(self._conn)
 
     def close(self) -> None:
         self._conn.close()
