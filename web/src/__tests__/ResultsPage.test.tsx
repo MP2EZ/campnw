@@ -4,8 +4,8 @@ import type { CampgroundResult, SearchResponse } from "../api";
 import { SearchContext, type SearchContextValue } from "../contexts/SearchContext";
 import ResultsPage from "../results/ResultsPage";
 
-vi.mock("../components/ResultCard", () => ({
-  ResultCard: ({ result }: { result: CampgroundResult }) => <article>{result.name}</article>,
+vi.mock("../results/CampgroundCard", () => ({
+  CampgroundCard: ({ result }: { result: CampgroundResult }) => <article>{result.name}</article>,
 }));
 vi.mock("../components/SmartZeroState", () => ({
   SmartZeroState: () => <div>zero state</div>,

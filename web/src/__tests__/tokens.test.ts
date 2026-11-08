@@ -10,7 +10,7 @@ import { join } from "node:path";
  */
 
 const ROOT = join(__dirname, "..");
-const FILES = ["App.css", "tokens.css", "pages/MapView.css"];
+const FILES = ["App.css", "tokens.css", "pages/MapView.css", "results/results.css"];
 
 function read(f: string) {
   return readFileSync(join(ROOT, f), "utf-8");

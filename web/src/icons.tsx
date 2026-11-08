@@ -122,3 +122,27 @@ export function IconCalendar({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconClock({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7 V12 L15 14"/>
+    </svg>
+  );
+}
+
+export function IconBoat({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 17 L21 17 L18 21 L6 21 Z"/><path d="M12 17 V4 L19 13 H12"/>
+    </svg>
+  );
+}
+
+export function IconTent({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 20 L13 4"/><path d="M20 20 L11 4"/><path d="M9 20 L12 14 L15 20"/><path d="M2 20 H22"/>
+    </svg>
+  );
+}

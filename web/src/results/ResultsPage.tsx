@@ -4,9 +4,9 @@ import { useSyncExternalStore } from "react";
 import type { SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
-import { ResultCard } from "../components/ResultCard";
 import { SmartZeroState } from "../components/SmartZeroState";
 import { AnswerHeader } from "./AnswerHeader";
+import { CampgroundCard } from "./CampgroundCard";
 import { ResultsNotices } from "./ResultsNotices";
 import { answerSentence, searchedAgo } from "./answer";
 
@@ -30,7 +30,6 @@ const readClock = () => Math.floor(Date.now() / TICK) * TICK;
 /**
  * Results v2 (v1.48): the answer, then the notices that qualify it, then
  * places. Mounted from App's one switch point when `useUiVersion()` is "v2".
- * The card list is v1's ResultCard until P2b.
  */
 export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId }: Props) {
   const { results, loading, searchParams, searchDates, filteredResults } = useSearchContext();
@@ -64,7 +63,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
       <ResultsNotices results={results} />
       <div className="rv2-list">
         {cards.map((r, i) => (
-          <ResultCard key={r.facility_id} index={i} result={r} view={searchParams?.mode === "exact" ? "sites" : "dates"} searchDates={searchDates || undefined} />
+          <CampgroundCard key={r.facility_id} result={r} params={searchParams} rank={i} />
         ))}
       </div>
       {!loading && cards.length === 0 && (

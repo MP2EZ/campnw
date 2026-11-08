@@ -18,3 +18,11 @@ export const SOURCE_LABELS: Record<string, string> = {
 export function sourceLabel(bookingSystem: string): string {
   return SOURCE_LABELS[bookingSystem] || bookingSystem;
 }
+
+/** Full names, for copy: "Book via WA State Parks", "Oregon State Parks campgrounds". */
+export const SOURCE_NAMES: Record<string, string> = {
+  recgov: "Recreation.gov",
+  wa_state: "WA State Parks",
+  or_state: "Oregon State Parks",
+  id_state: "Idaho State Parks",
+};
