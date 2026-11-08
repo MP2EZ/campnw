@@ -57,6 +57,21 @@
   transform: scale(1.15);
 }
 
+/* Selected: bigger, raised, ringed, and named in a tooltip. */
+.rv2-marker.is-selected {
+  transform: scale(1.4);
+}
+
+.rv2-marker.is-selected .rv2-pin-halo {
+  stroke: var(--pin-selected);
+  stroke-width: 2;
+}
+
+.rv2-cluster.has-selected {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 3px var(--pin-selected), var(--shadow-sm);
+}
+
 .rv2-marker:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 0;

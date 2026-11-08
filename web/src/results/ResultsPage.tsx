@@ -1,6 +1,6 @@
 import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "./results.css";
-import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
@@ -14,6 +14,7 @@ import { ResultsNotices } from "./ResultsNotices";
 import { answerSentence, searchedAgo } from "./answer";
 import { groupByDriveBand } from "./bands";
 import { useMediaQuery } from "./media";
+import { createSelectionStore, SelectionContext } from "./selection";
 
 // Leaflet comes with this chunk, and only on screens wide enough for the split.
 const ResultsMap = lazy(() => import("./ResultsMap"));
@@ -46,6 +47,12 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
   const { results, loading, searchParams, filteredResults } = useSearchContext();
   const now = useSyncExternalStore(subscribeClock, readClock);
   const split = useMediaQuery(SPLIT_QUERY);
+  const [selection] = useState(createSelectionStore);
+  // Memoised: a new array would rebuild every pin (and drop the selection).
+  const mapPlaces = useMemo(() => !split || !results ? [] : [
+    ...groupByDriveBand(filteredResults.filter((r) => r.total_available_sites > 0)).flatMap((b) => b.results),
+    ...(results.unavailable ?? []),
+  ], [split, results, filteredResults]);
   // A quick pick: open its band, then move to its card (n re-runs a repeat pick).
   const [pick, setPick] = useState<{ id: string; n: number } | null>(null);
   useEffect(() => {
@@ -99,19 +106,26 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
       )}
     </section>
   );
-  if (!split) return <div className="rv2-split">{page}</div>;
+  // A pin opens its card's band, scrolls to it and moves focus there, like a quick pick.
+  const onPin = (id: string) => {
+    selection.select(id, "map");
+    setPick((p) => ({ id, n: (p?.n ?? 0) + 1 }));
+  };
 
-  const mapPlaces = [...groupByDriveBand(cards).flatMap((b) => b.results), ...unavailable];
   return (
-    <div className="rv2-split rv2-split--map">
-      {page}
-      <aside className="rv2-map-aside" aria-labelledby="rv2-map-h">
-        <h2 id="rv2-map-h" className="sr-only">Map of results</h2>
-        <p className="sr-only">The list has the same places.</p>
-        <Suspense fallback={<div className="rv2-map-loading" />}>
-          <ResultsMap places={mapPlaces} searchKey={searchParams} />
-        </Suspense>
-      </aside>
-    </div>
+    <SelectionContext.Provider value={selection}>
+      <div className={split ? "rv2-split rv2-split--map" : "rv2-split"}>
+        {page}
+        {split && (
+          <aside className="rv2-map-aside" aria-labelledby="rv2-map-h">
+            <h2 id="rv2-map-h" className="sr-only">Map of results</h2>
+            <p className="sr-only">The list has the same places.</p>
+            <Suspense fallback={<div className="rv2-map-loading" />}>
+              <ResultsMap places={mapPlaces} searchKey={searchParams} selection={selection} onSelect={onPin} />
+            </Suspense>
+          </aside>
+        )}
+      </div>
+    </SelectionContext.Provider>
   );
 }
