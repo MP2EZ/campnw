@@ -127,11 +127,15 @@ const v2Place = (id: string, name: string, drive: number | null, extra: Partial<
 function renderV2() {
   const results = [
     v2Place("1", "Dash Point State Park", 48),
-    v2Place("2", "Kanaskat-Palmer State Park", 72),
+    v2Place("2", "Kanaskat-Palmer State Park", 72, {
+      windows: [site("A", "2027-06-04", "2027-06-04")],
+      not_released_ranges: [{ start: "2027-06-25", end: "2027-06-30", releases_on: "2026-09-25" }],
+    }),
     v2Place("3", "Blake Island State Park", null, { boat_in: true, tags: ["boat-in", "beach"] }),
   ];
   const ctx: SearchContextValue = {
-    results: { campgrounds_checked: 3, campgrounds_with_availability: 3, results, warnings: [] },
+    results: { campgrounds_checked: 4, campgrounds_with_availability: 3, results, warnings: [],
+      unavailable: [v2Place("4", "Wallace Falls State Park", 88, { windows: [], total_available_sites: 0 })] },
     loading: false,
     searchDates: { start: "2027-06-01", end: "2027-06-30" },
     searchParams: { start_date: "2027-06-01", end_date: "2027-06-30", nights: 1, days_of_week: "4,5,6",
@@ -152,6 +156,13 @@ describe("Accessibility: results v2", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  test("full and not-released chips say so in words, not just a dashed border", () => {
+    const { container } = renderV2();
+    const full = [...container.querySelectorAll(".rv2-chip-full")];
+    expect(full.length).toBeGreaterThan(0);
+    for (const chip of full) expect(chip.textContent).toMatch(/Full|Opens|Not released/);
+  });
+
   test("few is never colour alone: the chip says \u201cleft\u201d and the dot is hidden", () => {
     const { container } = renderV2();
     const few = [...container.querySelectorAll(".rv2-chip")].filter((c) => c.querySelector(".rv2-chip-dot"));
@@ -164,7 +175,7 @@ describe("Accessibility: results v2", () => {
 
   test("interactive targets are at least 44px tall", () => {
     const css = readFileSync(join(__dirname, "../results/results.css"), "utf-8");
-    for (const selector of [".rv2-chip", ".rv2-chip-more", ".rv2-band-more"]) {
+    for (const selector of [".rv2-chip", ".rv2-chip-more", ".rv2-band-more", ".rv2-full-action"]) {
       const body = css.match(new RegExp(`\\n\\${selector}\\s*{([^}]*)}`))?.[1] ?? "";
       const rem = Number(body.match(/min-height:\s*([\d.]+)rem/)?.[1] ?? 0);
       expect(rem * 16, `${selector} min-height`).toBeGreaterThanOrEqual(44);

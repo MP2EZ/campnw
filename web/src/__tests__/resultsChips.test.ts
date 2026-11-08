@@ -21,15 +21,18 @@ const place = (windows: Window[], extra: Partial<CampgroundResult> = {}) =>
     windows, ...extra }) as CampgroundResult;
 
 const labels = (r: ReturnType<typeof buildWindowChips>) => r.shown.map((c) => c.label);
+/** Weekend searches also list the weekends that aren't open; most tests look only at the open ones. */
+const openOnly = (r: ReturnType<typeof buildWindowChips>) =>
+  ({ shown: [...r.shown, ...r.more].filter((c) => c.status === "open"), more: [] });
 
 describe("buildWindowChips: weekend searches", () => {
   test("one chip per weekend, counting distinct sites across the weekend's stays", () => {
-    const r = buildWindowChips(place([
+    const r = openOnly(buildWindowChips(place([
       win("A", "2027-06-04", "2027-06-05"),
       win("B", "2027-06-05", "2027-06-06"),
       win("C", "2027-06-04", "2027-06-06"),
       win("A", "2027-06-11", "2027-06-12"),
-    ]), juneWeekends);
+    ]), juneWeekends));
     expect(r.shown).toEqual([
       expect.objectContaining({ start: "2027-06-04", end: "2027-06-06", label: "Fri 4 – Sun 6", open: 3 }),
       expect.objectContaining({ start: "2027-06-11", end: "2027-06-13", label: "Fri 11 – Sun 13", open: 1 }),
@@ -38,34 +41,34 @@ describe("buildWindowChips: weekend searches", () => {
   });
 
   test("a site open on two separate nights of one weekend counts once", () => {
-    const r = buildWindowChips(place([
+    const r = openOnly(buildWindowChips(place([
       win("A", "2027-06-04", "2027-06-04", { nights: 1 }),
       win("A", "2027-06-06", "2027-06-06", { nights: 1 }),
-    ]), { ...juneWeekends, nights: 1 });
+    ]), { ...juneWeekends, nights: 1 }));
     expect(r.shown).toHaveLength(1);
     expect(r.shown[0].open).toBe(1);
   });
 
   test("a weekend cut by the search range only spans the searched nights", () => {
-    const r = buildWindowChips(place([win("A", "2027-06-05", "2027-06-06")]),
-      { ...juneWeekends, start_date: "2027-06-05" });
+    const r = openOnly(buildWindowChips(place([win("A", "2027-06-05", "2027-06-06")]),
+      { ...juneWeekends, start_date: "2027-06-05" }));
     expect(r.shown[0]).toMatchObject({ start: "2027-06-05", end: "2027-06-06", label: "Sat 5 – Sun 6" });
   });
 
   test("searches across months put the month in the label", () => {
-    const r = buildWindowChips(place([
+    const r = openOnly(buildWindowChips(place([
       win("A", "2027-07-30", "2027-07-31"),
       win("B", "2027-06-04", "2027-06-05"),
-    ]), { ...juneWeekends, end_date: "2027-08-31" });
+    ]), { ...juneWeekends, end_date: "2027-08-31" }));
     expect(labels(r)).toEqual(["Fri Jun 4 – Sun 6", "Fri Jul 30 – Sun Aug 1"]);
   });
 
   test("long weekends and day sets that wrap the week group the same way", () => {
-    const thuSun = buildWindowChips(place([win("A", "2027-06-03", "2027-06-05")]),
-      { ...juneWeekends, days_of_week: "3,4,5,6" });
+    const thuSun = openOnly(buildWindowChips(place([win("A", "2027-06-03", "2027-06-05")]),
+      { ...juneWeekends, days_of_week: "3,4,5,6" }));
     expect(labels(thuSun)).toEqual(["Thu 3 – Sun 6"]);
-    const sunMon = buildWindowChips(place([win("A", "2027-06-06", "2027-06-07")]),
-      { ...juneWeekends, days_of_week: "6,0" });
+    const sunMon = openOnly(buildWindowChips(place([win("A", "2027-06-06", "2027-06-07")]),
+      { ...juneWeekends, days_of_week: "6,0" }));
     expect(labels(sunMon)).toEqual(["Sun 6 – Mon 7"]);
   });
 });
@@ -192,39 +195,70 @@ describe("buildWindowChips: partial weekend stays", () => {
   });
 });
 
+describe("buildWindowChips: weekends that aren't open (D4)", () => {
+  test("a weekend search lists every weekend, open or not, in date order", () => {
+    const r = buildWindowChips(place([win("A", "2027-06-11", "2027-06-12")], {
+      not_released_ranges: [{ start: "2027-06-18", end: "2027-06-30", releases_on: "2026-12-18" }],
+    }), juneWeekends);
+    expect(r.shown.map((c) => [c.label, c.status, c.open, c.releasesOn])).toEqual([
+      ["Fri 4 – Sun 6", "full", 0, null],
+      ["Fri 11 – Sun 13", "open", 1, null],
+      ["Fri 18 – Sun 20", "not_released", 0, "2026-12-18"],
+      ["Fri 25 – Sun 27", "not_released", 0, "2026-12-25"],
+    ]);
+    expect(r.shown.filter((c) => c.status !== "open").every((c) => c.href === null)).toBe(true);
+  });
+
+  test("they say so in words", () => {
+    const [full, , nyr] = buildWindowChips(place([], {
+      not_released_ranges: [{ start: "2027-06-25", end: "2027-06-27", releases_on: null }],
+    }), { ...juneWeekends, start_date: "2027-06-11" }).shown;
+    expect(chipCountText(full)).toBe("Full");
+    expect(chipCountText(nyr)).toBe("Not released yet");
+    expect(chipCountText({ ...nyr, releasesOn: "2026-12-25" })).toBe("Opens Dec 25");
+  });
+
+  test("flexible and exact searches only show what's open", () => {
+    const r = buildWindowChips(place([win("A", "2027-06-08", "2027-06-09")]),
+      { start_date: "2027-06-01", end_date: "2027-06-30", mode: "find", nights: 2 });
+    expect([...r.shown, ...r.more].every((c) => c.status === "open")).toBe(true);
+  });
+});
+
 describe("buildWindowChips: every chip", () => {
   test("leaves out first-come, first-served sites, which can't be booked", () => {
-    const r = buildWindowChips(place([
+    const r = openOnly(buildWindowChips(place([
       win("A", "2027-06-04", "2027-06-05"),
       win("F", "2027-06-01", "2027-06-30", { is_fcfs: true, nights: 0, booking_url: null }),
-    ]), juneWeekends);
+    ]), juneWeekends));
     expect(r.shown.map((c) => c.open)).toEqual([1]);
   });
 
   test("is open, fits everyone until there's a party filter, and is few at 5 or under", () => {
     const five = ["A", "B", "C", "D", "E"].map((s) => win(s, "2027-06-04", "2027-06-05"));
     const six = ["A", "B", "C", "D", "E", "F"].map((s) => win(s, "2027-06-11", "2027-06-12"));
-    const [a, b] = buildWindowChips(place([...five, ...six]), juneWeekends).shown;
+    const [a, b] = openOnly(buildWindowChips(place([...five, ...six]), juneWeekends)).shown;
     expect(a).toMatchObject({ status: "open", open: 5, fit: 5, few: true });
     expect(b).toMatchObject({ status: "open", open: 6, fit: 6, few: false });
   });
 
   test("hands off to the one site's booking page, else the campground's", () => {
     const one = win("A", "2027-06-04", "2027-06-05");
-    const r = buildWindowChips(place([
+    const r = openOnly(buildWindowChips(place([
       one,
       win("B", "2027-06-11", "2027-06-12"), win("C", "2027-06-11", "2027-06-12"),
       win("D", "2027-06-18", "2027-06-19", { booking_url: null }),
-    ]), juneWeekends);
+    ]), juneWeekends));
     expect(r.shown.map((c) => c.href)).toEqual([one.booking_url, "https://park", "https://park"]);
   });
 });
 
 describe("chipCountText", () => {
   test("“left” when few, so the count isn't carried by colour alone", () => {
-    expect(chipCountText({ open: 3, few: true, minNights: null })).toBe("3 left");
-    expect(chipCountText({ open: 1, few: true, minNights: null })).toBe("1 left");
-    expect(chipCountText({ open: 40, few: false, minNights: null })).toBe("40 open");
-    expect(chipCountText({ open: 40, few: false, minNights: 2 })).toBe("40 open · 2+ nights");
+    const open = { status: "open" as const, releasesOn: null };
+    expect(chipCountText({ ...open, open: 3, few: true, minNights: null })).toBe("3 left");
+    expect(chipCountText({ ...open, open: 1, few: true, minNights: null })).toBe("1 left");
+    expect(chipCountText({ ...open, open: 40, few: false, minNights: null })).toBe("40 open");
+    expect(chipCountText({ ...open, open: 40, few: false, minNights: 2 })).toBe("40 open · 2+ nights");
   });
 });

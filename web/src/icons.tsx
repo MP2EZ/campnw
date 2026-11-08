@@ -146,3 +146,11 @@ export function IconTent({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconBell({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 16 V11 a6 6 0 0 1 12 0 V16 L19.5 18 H4.5 Z"/><path d="M10 21 H14"/>
+    </svg>
+  );
+}

@@ -1,6 +1,6 @@
 import type { CampgroundResult, SearchParams, Window } from "../api";
 import { parseIsoDate } from "../lib/dates";
-import { addDays, blockAround, nightsIn, searchedDays } from "./candidates";
+import { addDays, blockAround, candidateStatus, candidateWindows, nightsIn, searchedDays } from "./candidates";
 
 /**
  * Window chips (v1.48 D3): the stays a card offers, one chip per weekend (or
@@ -31,8 +31,13 @@ export interface WindowChip {
    * nights". Null when every site has every night.
    */
   minNights: number | null;
-  /** Only "open" so far: "full" and "not_released" need D4's candidate windows (P2c). */
+  /**
+   * Weekend and day-filter searches also list the blocks with nothing open
+   * (D4): "full", or "not_released" with when booking opens.
+   */
   status: ChipStatus;
+  /** When a not-released chip opens for booking; null if unknown or not that status. */
+  releasesOn: string | null;
   /** The one site's booking page, else the campground's. */
   href: string | null;
 }
@@ -123,9 +128,24 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
       return {
         start, end, label, open, fit: open, few: open <= FEW_LEFT,
         minNights: shortest < nightsIn(start, end) ? shortest : null,
-        status: "open", href: only ?? result.availability_url,
+        status: "open", releasesOn: null, href: only ?? result.availability_url,
       };
     });
+
+  // Blocks of searched days with nothing open: full or not released yet.
+  if (days && !exact) {
+    const open = new Set(chips.map((c) => c.start));
+    for (const c of candidateWindows(params)) {
+      if (open.has(c.start)) continue;
+      const s = candidateStatus(result, c);
+      if (s.status === "open") continue;
+      chips.push({
+        start: c.start, end: c.end, label: chipLabel(c.start, c.end, withMonth), open: 0, fit: 0, few: false,
+        minNights: null, status: s.status, releasesOn: s.status === "not_released" ? s.releasesOn : null, href: null,
+      });
+    }
+    chips.sort((a, b) => a.start.localeCompare(b.start));
+  }
 
   // Hiding a single chip behind "+1 more" saves nothing.
   const cut = chips.length > CHIP_LIMIT + 1 ? CHIP_LIMIT : chips.length;
@@ -134,9 +154,18 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
 
 /**
  * "3 left" or "40 open": the word, not just the colour, says it's nearly
- * gone. "· 1+ nights" when not every site has the whole chip.
+ * gone. "· 1+ nights" when not every site has the whole chip. "Full" and
+ * "Opens Dec 18" for blocks with nothing open.
  */
-export function chipCountText({ open, few, minNights }: Pick<WindowChip, "open" | "few" | "minNights">): string {
+export function chipCountText(
+  { open, few, minNights, status, releasesOn }: Pick<WindowChip, "open" | "few" | "minNights" | "status" | "releasesOn">,
+): string {
+  if (status === "full") return "Full";
+  if (status === "not_released") {
+    return releasesOn
+      ? `Opens ${parseIsoDate(releasesOn).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+      : "Not released yet";
+  }
   const count = few ? `${open} left` : `${open} open`;
   return minNights ? `${count} · ${minNights}+ nights` : count;
 }
