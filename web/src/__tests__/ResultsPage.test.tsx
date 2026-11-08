@@ -46,6 +46,14 @@ function renderPage(overrides: Partial<SearchContextValue> = {}, failed = false)
 }
 
 describe("ResultsPage", () => {
+  test("places with nothing to book are counted, linked and listed after the open ones", () => {
+    const full = { ...place("Kachess", 0), windows: [], estimated_drive_minutes: 77 } as CampgroundResult;
+    renderPage({ results: { ...results, unavailable: [full] } });
+    const link = screen.getByRole("link", { name: "1 full or not released yet" });
+    expect(link).toHaveAttribute("href", "#rv2-full");
+    expect(screen.getByRole("region", { name: "Full or not released yet" })).toHaveTextContent("Kachess");
+  });
+
   test("a failed search leaves “Checking…” and says it didn't finish", () => {
     renderPage({ results: { ...results, results: [] }, filteredResults: [] }, true);
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(

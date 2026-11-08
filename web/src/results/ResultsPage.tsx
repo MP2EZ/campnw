@@ -7,6 +7,7 @@ import { useSearchContext } from "../contexts/SearchContext";
 import { SmartZeroState } from "../components/SmartZeroState";
 import { AnswerHeader } from "./AnswerHeader";
 import { DriveBands } from "./DriveBands";
+import { FullGroup } from "./FullGroup";
 import { ResultsNotices } from "./ResultsNotices";
 import { answerSentence, searchedAgo } from "./answer";
 
@@ -39,6 +40,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
   if (!results) return null;
 
   const cards = filteredResults.filter((r) => r.total_available_sites > 0);
+  const unavailable = results.unavailable ?? [];
   const sentence = answerSentence({
     params: searchParams,
     open: cards.length,
@@ -53,6 +55,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
       <AnswerHeader
         sentence={sentence}
         searched={!loading && completedAt ? searchedAgo(completedAt, Math.max(now, completedAt)) : null}
+        full={unavailable.length}
         coverage={{
           checked: results.campgrounds_checked,
           matched: results.campgrounds_matched,
@@ -65,6 +68,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
       />
       <ResultsNotices results={results} />
       <DriveBands results={cards} params={searchParams} />
+      <FullGroup places={unavailable} params={searchParams} />
       {!loading && !failed && cards.length === 0 && (
         <SmartZeroState
           diagnosis={results.diagnosis}

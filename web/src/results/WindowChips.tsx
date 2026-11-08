@@ -42,6 +42,10 @@ export function WindowChips({ chips, name, params, source, onBook }: Props) {
           </>
         );
         const key = `${c.start}→${c.end}`;
+        if (c.status !== "open") {
+          // Watch / Remind me arrive with P3c / P3d; until then this only says what's there.
+          return <span key={key} className="rv2-chip rv2-chip-full">{body}</span>;
+        }
         return c.href ? (
           <a key={key} className="rv2-chip" href={c.href} target="_blank" rel="noopener" onClick={() => onBook(c)}>
             {body}
