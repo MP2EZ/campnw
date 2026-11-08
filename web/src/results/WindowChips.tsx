@@ -14,7 +14,8 @@ interface Props {
 function groupLabel(params: SearchParams | null): string {
   if (params?.mode === "exact") return "Your dates";
   const days = (params?.days_of_week ?? "").split(",").filter(Boolean).map(Number).sort().join(",");
-  return days === "4,5,6" || days === "3,4,5,6" ? "Weekends" : "Open dates";
+  if (days === "4,5,6" || days === "3,4,5,6") return "Weekends";
+  return days && days !== "0,1,2,3,4,5,6" ? "Open dates" : `${params?.nights ?? 2}-night stays`;
 }
 
 /**
