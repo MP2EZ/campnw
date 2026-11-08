@@ -7,8 +7,12 @@ import { IconCalendar } from "../icons";
  * opens) and booking systems that couldn't be checked. Both change how the
  * answer above should be read, so they sit directly under it.
  */
-export function ResultsNotices({ results }: { results: SearchResponse }) {
-  const notReleased = notReleasedMessage(results);
+export function ResultsNotices({ results, withNotReleased = true }: {
+  results: SearchResponse;
+  /** False on the zero page, whose release timeline says it in full. */
+  withNotReleased?: boolean;
+}) {
+  const notReleased = withNotReleased ? notReleasedMessage(results) : null;
   const warnings = results.warnings ?? [];
   if (!notReleased && warnings.length === 0) return null;
 

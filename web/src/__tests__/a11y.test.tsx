@@ -162,6 +162,26 @@ describe("Accessibility: results v2", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  test("the zero-results page has no axe violations", async () => {
+    const nyr = v2Place("9", "Kachess", 77, { windows: [], total_available_sites: 0, booking_system: "recgov",
+      not_released_ranges: [{ start: "2027-06-01", end: "2027-06-30", releases_on: "2026-12-01" }] });
+    const ctx: SearchContextValue = {
+      results: { campgrounds_checked: 1, campgrounds_with_availability: 0, results: [], warnings: [], unavailable: [nyr] },
+      loading: false,
+      searchDates: { start: "2027-06-01", end: "2027-06-30" },
+      searchParams: { start_date: "2027-06-01", end_date: "2027-06-30", nights: 2, days_of_week: "4,5,6" },
+      sourceFilter: new Set(),
+      filteredResults: [],
+    };
+    const { container } = render(
+      <SearchContext.Provider value={ctx}>
+        <ResultsPage maxResults={20} onCheckRest={() => {}} completedAt={Date.now()} onSearch={() => {}} />
+      </SearchContext.Provider>,
+    );
+    expect(screen.getAllByRole("region", { name: /When each weekend opens|Not released yet/ })).toHaveLength(2);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
   test("full and not-released chips say so in words, not just a dashed border", () => {
     const { container } = renderV2();
     const full = [...container.querySelectorAll(".rv2-chip-full")];
@@ -181,7 +201,8 @@ describe("Accessibility: results v2", () => {
 
   test("interactive targets are at least 44px tall", () => {
     const css = readFileSync(join(__dirname, "../results/results.css"), "utf-8");
-    for (const selector of [".rv2-chip", ".rv2-chip-more", ".rv2-band-more", ".rv2-full-action", ".rv2-pick"]) {
+    for (const selector of [".rv2-chip", ".rv2-chip-more", ".rv2-band-more", ".rv2-full-action", ".rv2-pick",
+      ".rv2-zero-remind-btn", ".rv2-sooner"]) {
       const body = css.match(new RegExp(`\\n\\${selector}\\s*{([^}]*)}`))?.[1] ?? "";
       const rem = Number(body.match(/min-height:\s*([\d.]+)rem/)?.[1] ?? 0);
       expect(rem * 16, `${selector} min-height`).toBeGreaterThanOrEqual(44);
