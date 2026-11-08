@@ -177,9 +177,22 @@ class TestRecgovType:
 class TestReserveAmericaAttributes:
     def test_standard_with_hookups_and_length(self) -> None:
         fit = fit_from_ra_attributes(
-            "STANDARD", ["RV Site", "Tent Site", "Trailer Site"], max_vehicle_ft="47", electric="50",
+            "STANDARD", ["RV Site", "Tent Site", "Trailer Site"], max_vehicle_ft="39", electric="50",
         )
-        assert fit == SiteFit(fits_tent=True, fits_van=True, fits_rv=True, max_rv_ft=47, hookups=True)
+        assert fit == SiteFit(fits_tent=True, fits_van=True, fits_rv=True, max_rv_ft=39, hookups=True)
+
+    @pytest.mark.parametrize("driveway_ft", ["46", "83", "96", "100"])
+    def test_driveway_longer_than_any_rig_has_no_limit(self, driveway_ft: str) -> None:
+        # RA's "Maximum Vehicle Length" is the driveway (it equals attribute 11
+        # "Driveway Length" on 84% of Oregon RV sites, 2026-11-08). Pull-throughs
+        # run to 100 ft because they count the tow vehicle, so prod cards read
+        # "RV ≤96′". Past the longest single rig it's no upper limit.
+        fit = fit_from_ra_attributes("STANDARD - FULL", ["RV Site"], driveway_ft, electric="30")
+        assert (fit.fits_rv, fit.max_rv_ft) == (True, None)
+
+    def test_longest_rig_is_still_a_limit(self) -> None:
+        fit = fit_from_ra_attributes("STANDARD", ["RV Site"], max_vehicle_ft="45", electric=None)
+        assert fit.max_rv_ft == 45
 
     def test_tent_site_ignores_parking_length(self) -> None:
         # Tent sites list a Maximum Vehicle Length too: it's the parking spur.
