@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import L from "../leaflet-setup";
 import "leaflet.markercluster";
 import type { CampgroundResult } from "../api";
 import { pinLabel, pinLegend, pinStyle, pinSvg } from "./pins";
+import type { SelectionStore } from "./selection";
 import { tileLayerConfig, type Theme } from "./tiles";
 import "./ResultsMap.css";
 
@@ -11,6 +12,9 @@ declare module "leaflet" {
   interface MarkerCluster extends Marker {
     getChildCount(): number;
     zoomToBounds(): void;
+  }
+  interface MarkerClusterGroup {
+    getVisibleParent(marker: Marker): Marker | null;
   }
 }
 
@@ -50,6 +54,10 @@ interface Props {
   places: CampgroundResult[];
   /** Changes when a new search starts, so the map refits to its results. */
   searchKey: unknown;
+  /** Shared with the list: hovering a card highlights its pin. */
+  selection?: SelectionStore;
+  /** A pin was clicked or activated from the keyboard. */
+  onSelect?: (facilityId: string) => void;
 }
 
 /**
@@ -57,13 +65,46 @@ interface Props {
  * with this chunk. The list on the left has the same places, so the map adds
  * where, not what.
  */
-export default function ResultsMap({ places, searchKey }: Props) {
+export default function ResultsMap({ places, searchKey, selection, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
   // The user moved the map since this search started: stop refitting.
   const movedRef = useRef(false);
   const fittingRef = useRef(false);
+  const markersRef = useRef(new Map<string, L.Marker>());
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  const paintedRef = useRef<{ marker?: L.Marker; cluster?: HTMLElement }>({});
+
+  // Mark the selected pin, or the cluster hiding it. Leaflet recreates icons
+  // as clusters split and merge, so this re-runs after every zoom and pan.
+  const paint = useCallback(() => {
+    const prev = paintedRef.current;
+    prev.marker?.getElement()?.classList.remove("is-selected");
+    prev.marker?.setZIndexOffset(0);
+    prev.marker?.closeTooltip();
+    prev.cluster?.classList.remove("has-selected");
+    paintedRef.current = {};
+    const id = selection?.get().id;
+    const marker = id ? markersRef.current.get(id) : undefined;
+    const visible = marker && clusterRef.current?.getVisibleParent(marker);
+    if (!marker || !visible) return;
+    if (visible === marker) {
+      marker.getElement()?.classList.add("is-selected");
+      marker.setZIndexOffset(1000);
+      marker.openTooltip();
+      paintedRef.current = { marker };
+    } else {
+      const el = visible.getElement();
+      el?.classList.add("has-selected");
+      paintedRef.current = { marker, cluster: el };
+    }
+  }, [selection]);
+
+  const paintRef = useRef(paint);
+  useEffect(() => { paintRef.current = paint; }, [paint]);
+  useEffect(() => selection?.subscribe(paint), [selection, paint]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -82,6 +123,7 @@ export default function ResultsMap({ places, searchKey }: Props) {
       if (!fittingRef.current) movedRef.current = true;
     });
     map.on("moveend", () => { fittingRef.current = false; });
+    map.on("zoomend moveend", () => paintRef.current());
     const cluster = L.markerClusterGroup({
       // Cluster only pins that would overlap, and never once zoomed in.
       maxClusterRadius: 20,
@@ -93,6 +135,7 @@ export default function ResultsMap({ places, searchKey }: Props) {
       const key = (e as L.LeafletKeyboardEvent).originalEvent.key;
       if (key === "Enter" || key === " ") (e as L.LeafletEvent & { layer: L.MarkerCluster }).layer.zoomToBounds();
     });
+    cluster.on("animationend", () => paintRef.current());
     map.addLayer(cluster);
     // The aside resizes with the window and the sticky height.
     const resize = new ResizeObserver(() => map.invalidateSize());
@@ -117,6 +160,8 @@ export default function ResultsMap({ places, searchKey }: Props) {
     const cluster = clusterRef.current;
     if (!map || !cluster) return;
     cluster.clearLayers();
+    markersRef.current.clear();
+    paintedRef.current = {};
     const shown = places.filter(hasCoords);
     for (const r of shown) {
       const muted = r.total_available_sites <= 0;
@@ -126,7 +171,18 @@ export default function ResultsMap({ places, searchKey }: Props) {
         keyboard: !muted,
         zIndexOffset: muted ? -1000 : 0,
       });
-      if (!muted) marker.bindTooltip(escapeHtml(r.name), { direction: "top", offset: [0, -12] });
+      if (!muted) {
+        const id = r.facility_id;
+        marker.bindTooltip(escapeHtml(r.name), { direction: "top", offset: [0, -12] });
+        marker.on("click", () => onSelectRef.current?.(id));
+        marker.on("keydown", (e) => {
+          const key = (e as L.LeafletKeyboardEvent).originalEvent;
+          if (key.key !== "Enter" && key.key !== " ") return;
+          key.preventDefault();
+          onSelectRef.current?.(id);
+        });
+        markersRef.current.set(id, marker);
+      }
       cluster.addLayer(marker);
     }
     if (shown.length && !movedRef.current) {
@@ -135,7 +191,8 @@ export default function ResultsMap({ places, searchKey }: Props) {
         { padding: [48, 48], maxZoom: 11, animate: false });
       fittingRef.current = false;
     }
-  }, [places]);
+    paint();
+  }, [places, paint]);
 
   const legend = useMemo(() => pinLegend(places.filter(hasCoords).map(pinStyle)), [places]);
 

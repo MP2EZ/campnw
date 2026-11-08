@@ -96,6 +96,12 @@
   border-radius: 20px;
   background: var(--surface-card);
   box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-base);
+}
+
+/* The card whose pin was chosen on the map. */
+.rv2-card.is-selected {
+  box-shadow: 0 0 0 2px var(--pin-selected), var(--shadow-sm);
 }
 
 .rv2-thumb {

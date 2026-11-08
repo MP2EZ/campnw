@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { axe, toHaveNoViolations } from "jest-axe";
 import { readFileSync } from "node:fs";
@@ -8,6 +8,8 @@ import App from "../App";
 import ResultsPage from "../results/ResultsPage";
 import { SearchContext, type SearchContextValue } from "../contexts/SearchContext";
 import type { CampgroundResult, Window } from "../api";
+import { CampgroundCard } from "../results/CampgroundCard";
+import { createSelectionStore, SelectionContext } from "../results/selection";
 
 expect.extend(toHaveNoViolations);
 
@@ -23,6 +25,9 @@ vi.mock("../hooks/useAuth", () => ({
   }),
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
+
+// The split layout's map, without Leaflet (ResultsMap.test covers the real one).
+vi.mock("../results/ResultsMap", () => ({ default: () => <div data-testid="results-map" /> }));
 
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
@@ -207,5 +212,38 @@ describe("Accessibility: results v2", () => {
       const rem = Number(body.match(/min-height:\s*([\d.]+)rem/)?.[1] ?? 0);
       expect(rem * 16, `${selector} min-height`).toBeGreaterThanOrEqual(44);
     }
+  });
+
+  test("on desktop the map is a labelled region beside the list, and passes axe", async () => {
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ ...matchMedia(q), matches: q.includes("min-width: 1024px") })) as typeof matchMedia;
+    try {
+      const { container } = renderV2();
+      const aside = screen.getByRole("complementary", { name: "Map of results" });
+      expect(aside).toHaveTextContent("The list has the same places.");
+      expect(await within(aside).findByTestId("results-map")).toBeInTheDocument();
+      expect(await axe(container)).toHaveNoViolations();
+    } finally {
+      window.matchMedia = matchMedia;
+    }
+  });
+
+  test("hovering or focusing a card selects it for the map; a pin's card is marked", () => {
+    const store = createSelectionStore();
+    const { container } = render(
+      <SelectionContext.Provider value={store}>
+        <CampgroundCard result={v2Place("1", "Dash Point State Park", 48)} params={null} rank={0} />
+      </SelectionContext.Provider>,
+    );
+    const card = container.querySelector("article")!;
+    fireEvent.mouseEnter(card);
+    expect(store.get()).toEqual({ id: "1", from: "list" });
+    fireEvent.mouseLeave(card);
+    expect(store.get().id).toBeNull();
+    fireEvent.focus(within(card).getAllByRole("link")[0]);
+    expect(store.get()).toEqual({ id: "1", from: "list" });
+    expect(card).not.toHaveClass("is-selected");
+    act(() => store.select("1", "map"));
+    expect(card).toHaveClass("is-selected");
   });
 });

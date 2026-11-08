@@ -6,6 +6,7 @@ import { IconBoat, IconClock, IconSun, IconTent } from "../icons";
 import { buildWindowChips, type WindowChip } from "./chips";
 import { fitLine, NOT_LISTED } from "./fit";
 import { PlaceThumb } from "./PlaceThumb";
+import { useCardSelection } from "./selection";
 import { WindowChips } from "./WindowChips";
 
 interface Props {
@@ -49,8 +50,10 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
     has_photo: result.image_urls?.length ? 1 : 0,
   });
 
+  const { selected, ...selection } = useCardSelection(result.facility_id);
+
   return (
-    <article className="rv2-card" aria-labelledby={id}>
+    <article className={selected ? "rv2-card is-selected" : "rv2-card"} aria-labelledby={id} {...selection}>
       <PlaceThumb result={result} />
       <div className="rv2-card-head">
         <h3 id={id} className="rv2-card-name" tabIndex={-1}>{result.name}</h3>
