@@ -1,3 +1,4 @@
+import "./searchBar.css";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { track, type SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
