@@ -87,6 +87,8 @@
 }
 
 .rv2-card {
+  /* A quick pick or pin scrolls here: stop clear of the status bar. */
+  scroll-margin-top: max(var(--space-4), calc(env(safe-area-inset-top) + var(--space-2)));
   display: grid;
   grid-template-columns: 7rem minmax(0, 1fr);
   grid-template-rows: auto 1fr;
@@ -697,9 +699,11 @@ a.rv2-chip:hover {
 }
 
 .rv2-map-aside {
+  /* An iPad in the native shell scrolls under the status bar: clear it. */
+  --aside-top: max(var(--space-4), calc(env(safe-area-inset-top) + var(--space-2)));
   position: sticky;
-  top: var(--space-4);
-  height: min(760px, calc(100dvh - 2 * var(--space-4)));
+  top: var(--aside-top);
+  height: min(760px, calc(100dvh - var(--aside-top) - var(--space-4)));
 }
 
 .rv2-map-loading {
