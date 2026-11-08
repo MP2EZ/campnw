@@ -1,6 +1,6 @@
 import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "./results.css";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import type { SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
@@ -12,6 +12,12 @@ import { QuickPicks } from "./QuickPicks";
 import { ZeroResults } from "./ZeroResults";
 import { ResultsNotices } from "./ResultsNotices";
 import { answerSentence, searchedAgo } from "./answer";
+import { groupByDriveBand } from "./bands";
+import { useMediaQuery } from "./media";
+
+// Leaflet comes with this chunk, and only on screens wide enough for the split.
+const ResultsMap = lazy(() => import("./ResultsMap"));
+export const SPLIT_QUERY = "(min-width: 1024px)";
 
 interface Props {
   maxResults: number;
@@ -39,6 +45,7 @@ const readClock = () => Math.floor(Date.now() / TICK) * TICK;
 export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId, failed }: Props) {
   const { results, loading, searchParams, filteredResults } = useSearchContext();
   const now = useSyncExternalStore(subscribeClock, readClock);
+  const split = useMediaQuery(SPLIT_QUERY);
   // A quick pick: open its band, then move to its card (n re-runs a repeat pick).
   const [pick, setPick] = useState<{ id: string; n: number } | null>(null);
   useEffect(() => {
@@ -61,7 +68,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
     failed,
   });
 
-  return (
+  const page = (
     <section className="results results-v2" aria-labelledby="rv2-answer">
       <AnswerHeader
         sentence={sentence}
@@ -91,5 +98,20 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
         <FullGroup places={unavailable} params={searchParams} />
       )}
     </section>
+  );
+  if (!split) return <div className="rv2-split">{page}</div>;
+
+  const mapPlaces = [...groupByDriveBand(cards).flatMap((b) => b.results), ...unavailable];
+  return (
+    <div className="rv2-split rv2-split--map">
+      {page}
+      <aside className="rv2-map-aside" aria-labelledby="rv2-map-h">
+        <h2 id="rv2-map-h" className="sr-only">Map of results</h2>
+        <p className="sr-only">The list has the same places.</p>
+        <Suspense fallback={<div className="rv2-map-loading" />}>
+          <ResultsMap places={mapPlaces} searchKey={searchParams} />
+        </Suspense>
+      </aside>
+    </div>
   );
 }
