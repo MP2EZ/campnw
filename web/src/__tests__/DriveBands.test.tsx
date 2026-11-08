@@ -61,4 +61,12 @@ describe("DriveBands", () => {
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     expect(screen.getAllByRole("article")).toHaveLength(2);
   });
+  test("a quick pick folded away opens its band", () => {
+    const many = Array.from({ length: 8 }, (_, i) => place(`P${i}`, 70 + i));
+    const { rerender } = render(<DriveBands params={null} results={many} />);
+    expect(screen.queryByRole("article", { name: "P7" })).not.toBeInTheDocument();
+    rerender(<DriveBands params={null} results={many} reveal="P7" />);
+    expect(screen.getByRole("article", { name: "P7" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show fewer" })).toHaveAttribute("aria-expanded", "true");
+  });
 });

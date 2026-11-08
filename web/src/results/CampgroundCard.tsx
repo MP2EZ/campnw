@@ -53,7 +53,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
     <article className="rv2-card" aria-labelledby={id}>
       <PlaceThumb result={result} />
       <div className="rv2-card-head">
-        <h3 id={id} className="rv2-card-name">{result.name}</h3>
+        <h3 id={id} className="rv2-card-name" tabIndex={-1}>{result.name}</h3>
         <p className="rv2-card-meta">
           {result.boat_in ? (
             <span className="rv2-boat"><IconBoat className="rv2-icon" />Boat-in only</span>
