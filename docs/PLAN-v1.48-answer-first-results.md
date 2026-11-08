@@ -50,12 +50,12 @@ Every PR goes to `dev`, stays under 400 changed lines, and keeps tests green. Ph
 - **P1b: seed all 75 WA parks.**
   - Prod can't reach GoingToCamp, so run the seeder locally, export to a JSON fixture in the repo, and import it with an idempotent startup migration (same pattern as #170).
   - Add a `doctor` line for parks with zero seeded sites.
-- **P1c: `who` filter.** `people`, `equipment`, `rig_length` on `/api/search` and the stream; windows are filtered server-side. Consider a per-window summary to shrink the payload (R2).
+- **P1c: `who` filter.** `people`, `equipment`, `rig_length` on `/api/search` and the stream; windows are filtered server-side. Consider a per-window summary to shrink the payload (R2). **First** fix the Oregon RV-length decode: prod shows "RV ≤96′" and "RV ≤81′" (found 2026-11-07).
 
 ### Phase 2: results v2 (behind the flag)
 - **P2a: scaffolding.** Flag plumbing (D1), `web/src/results/` module, new tokens plus the self-hosted font (D11/D12), `AnswerHeader` (answer line plus coverage "Checked N of M"), and notices (not-released, provider warnings).
 - **P2b: cards.** `CampgroundCard`, `WindowChips` (D3, TDD), drive-band grouping, the "Boat-in only" group, fit line, weather.
-- **P2c: missing states.** "Full or not released yet" group (D4) with Watch / Remind-me stubs, `QuickPicks` (D6), and the zero-results page (release timeline, "camp sooner" options).
+- **P2c: missing states.** "Full or not released yet" group (D4) with Watch / Remind-me stubs, `QuickPicks` (D6), and the zero-results page (release timeline, "camp sooner" options). Also from prod testing (2026-11-07): stay chips for flexible "Any day" searches (today's chips show runs of open dates and overlap), and the answer header must leave "Checking…" when the stream ends.
 - **P2d: layout.** Desktop split layout with a sticky map, map restyle and pin shapes (D13), and list↔map selection.
 
 ### Phase 3: search and decisions
