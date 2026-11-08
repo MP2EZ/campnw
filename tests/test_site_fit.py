@@ -42,8 +42,11 @@ class TestWaEquipment:
         assert fit_from_wa_equipment(FORT_EBEY_20).max_rv_ft == 40
         assert fit_from_wa_equipment(_equip(-32764, -32762)).max_rv_ft == 35
 
-    def test_over_40_reports_the_longest_stated_limit(self) -> None:
-        assert fit_from_wa_equipment(_equip(-32758, -32757)).max_rv_ft == 40
+    def test_over_40_has_no_upper_limit(self) -> None:
+        # Real over-40 sites always list the bounded bands too; -32757 still wins.
+        fit = fit_from_wa_equipment(_equip(-32764, -32758, -32757))
+        assert (fit.fits_rv, fit.max_rv_ft) == (True, None)
+        assert fit_from_wa_equipment(_equip(-32757)).fits_van is False
 
     def test_rv_without_tent(self) -> None:
         fit = fit_from_wa_equipment(_equip(-32765, -32764, -32763))
