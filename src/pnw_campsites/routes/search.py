@@ -6,6 +6,7 @@ import json
 import logging
 import os
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -35,6 +36,9 @@ from pnw_campsites.urls import (
 router = APIRouter(prefix="/api", tags=["search"])
 
 _search_logger = logging.getLogger("pnw_campsites.api")
+
+# The `who` filter's rig (search/who.py)
+Equipment = Literal["tent", "van", "trailer"]
 
 # ---------------------------------------------------------------------------
 # Response models
@@ -477,6 +481,11 @@ async def search(
     no_groups: bool = Query(False, description="Exclude group sites"),
     include_fcfs: bool = Query(False, description="Include FCFS sites"),
     limit: int = Query(20, ge=1, le=50, description="Max campgrounds to check"),
+    people: int | None = Query(None, ge=1, le=50, description="Party size"),
+    equipment: Equipment | None = Query(None, description="tent, van or trailer"),
+    rig_length: int | None = Query(
+        None, ge=1, le=100, description="Trailer/RV length in feet (trailer only)",
+    ),
 ):
     engine = get_engine()
     days_set = (
@@ -500,6 +509,9 @@ async def search(
         include_fcfs=include_fcfs,
         max_campgrounds=limit,
         booking_system=booking_system,
+        max_people=people,
+        equipment=equipment,
+        rig_length=rig_length if equipment == "trailer" else None,
     )
 
     # Redact custom addresses in logs — only log known base names
@@ -593,6 +605,9 @@ async def search_stream(
     no_groups: bool = Query(False),
     include_fcfs: bool = Query(False),
     limit: int = Query(20, ge=1, le=50),
+    people: int | None = Query(None, ge=1, le=50),
+    equipment: Equipment | None = Query(None),
+    rig_length: int | None = Query(None, ge=1, le=100),
     q: str | None = Query(None, description="Natural language search query"),
 ):
     """SSE streaming search — yields results as each batch completes."""
@@ -657,6 +672,9 @@ async def search_stream(
         include_fcfs=include_fcfs,
         max_campgrounds=limit,
         booking_system=booking_system,
+        max_people=people,
+        equipment=equipment,
+        rig_length=rig_length if equipment == "trailer" else None,
     )
 
     async def event_generator():

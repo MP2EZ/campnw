@@ -315,6 +315,7 @@ class GoingToCampClient:
                 type_of_use="Overnight",
                 min_num_people=0,
                 max_num_people=8,  # default; GoingToCamp doesn't expose per-site capacity
+                max_people_known=False,
                 availabilities=availabilities,
             )
 

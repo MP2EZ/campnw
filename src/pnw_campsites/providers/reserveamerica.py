@@ -290,6 +290,7 @@ def _record_to_campsite(
         type_of_use=type_of_use,
         min_num_people=min_people,
         max_num_people=max_people,
+        max_people_known=bool(max_people_str),
         availabilities=availabilities,
         fit=fit_from_ra_attributes(
             prod_grp,
