@@ -291,6 +291,13 @@ export interface SearchParams {
   no_groups?: boolean;
   include_fcfs?: boolean;
   limit?: number;
+  /**
+   * Who's going (v1.48 D5). Carried in the search state and URL, but not sent
+   * to the API yet: the backend `who` filter is P1c.
+   */
+  people?: number;
+  equipment?: string;
+  rig_length?: number;
 }
 
 export async function searchCampsites(
