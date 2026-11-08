@@ -154,3 +154,11 @@ export function IconBell({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconMap({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6 L9 3 L15 6 L21 3 V18 L15 21 L9 18 L3 21 Z"/><path d="M9 3 V18"/><path d="M15 6 V21"/>
+    </svg>
+  );
+}

@@ -1,0 +1,136 @@
+/* Map sheet (v1.48 P4a, D10): under 1024px the results map is a bottom sheet.
+   .rv2-sheet scrolls; its snap points are shut (the spacer), half (the
+   marker) and full (the panel's end). Dragging is native scrolling. */
+.rv2-sheet-launch-wrap {
+  position: sticky;
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  z-index: var(--z-sticky);
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-4);
+  pointer-events: none;
+}
+
+.rv2-sheet-launch {
+  pointer-events: auto;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-5);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  box-shadow: var(--shadow-card);
+  font: inherit;
+  font-weight: var(--weight-semi);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.rv2-sheet-launch:hover { background: var(--accent-hover); }
+.rv2-sheet-launch .icon { width: 1.1em; height: 1.1em; }
+
+.rv2-sheet {
+  --sheet-top: calc(env(safe-area-inset-top) + var(--space-6));
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  background: rgba(26, 26, 26, 0.4);
+}
+.rv2-sheet::-webkit-scrollbar { display: none; }
+
+.rv2-sheet-spacer {
+  height: 100%;
+  scroll-snap-align: start;
+}
+
+.rv2-sheet-panel {
+  position: relative;
+  height: calc(100% - var(--sheet-top));
+  display: flex;
+  flex-direction: column;
+  padding: 0 calc(var(--space-3) + env(safe-area-inset-right)) env(safe-area-inset-bottom)
+    calc(var(--space-3) + env(safe-area-inset-left));
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: var(--shadow-card);
+  scroll-snap-align: end;
+}
+
+.rv2-sheet-half {
+  position: absolute;
+  top: calc(62% - 1px);
+  left: 0;
+  width: 1px;
+  height: 1px;
+  scroll-snap-align: end;
+}
+
+/* Title, handle, close in one row: the handle sits centred on the sheet's
+   top edge, where people reach to drag it. */
+.rv2-sheet-head {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-1) var(--space-2);
+}
+
+.rv2-sheet-handle {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.rv2-sheet-handle:hover { background: var(--surface-card); }
+
+.rv2-sheet-grip {
+  width: 40px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+
+
+.rv2-sheet-title {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semi);
+}
+
+.rv2-sheet-close {
+  justify-self: end;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+.rv2-sheet-close:hover { border-color: var(--accent); }
+.rv2-sheet-close .icon { width: 18px; height: 18px; }
+
+.rv2-sheet-map {
+  flex: none;
+  min-height: 160px;
+}
