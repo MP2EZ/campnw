@@ -68,7 +68,7 @@ Every PR goes to `dev`, stays under 400 changed lines, and keeps tests green. Ph
 - **P3d: release reminders** (D9): backend watch type, scheduler, push, and UI.
 
 ### Phase 4: mobile and flip
-- **P4a: mobile.** Bottom sheet (D10), date quick-chips (This weekend / Next weekend / month), safe areas.
+- **P4a: mobile.** Bottom sheet (D10), date quick-chips (This weekend / Next weekend / month), safe areas. **Done** (#213–#216). **Decided 2026-11-08:** phones get a sticky "Map" button that opens the map in a modal sheet, not the Mobile artboard's map-always-on-top layout. Leaflet loads only when asked, and the list (the answer) stays first. A static map thumbnail is the fallback if a glance at locations is missed.
 - **P4b: flip.**
   - Make v2 the default and delete the v1 results path from `App.tsx`.
   - Update `e2e/tests/prod-smoke.spec.ts` selectors **in the same PR**, because the prod monitor runs them daily.
