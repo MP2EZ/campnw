@@ -15,6 +15,7 @@ vi.mock('../lib/supabase', () => ({
 import {
   searchCampsites,
   searchCampsitesStream,
+  STREAM_IDLE_MS,
   getWatches,
   createWatch,
   deleteWatch,
@@ -64,6 +65,66 @@ describe('API: Search coverage', () => {
     )
 
     expect(onCoverage).toHaveBeenCalledWith(46, 20)
+  })
+})
+
+describe('API: Search stream always settles', () => {
+  const run = (body: ReadableStream) => {
+    mockFetch.mockResolvedValueOnce({ ok: true, body })
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    const p = searchCampsitesStream(
+      { start_date: '2026-06-01', end_date: '2026-06-30' }, vi.fn(), onDone, onError,
+    )
+    return { p, onDone, onError }
+  }
+
+  test('a stream that closes without [DONE] is an error, not a finished search', async () => {
+    const { p, onDone, onError } = run(new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode('data: {"type":"progress","checked":1,"total":9}\n\n'))
+        c.close()
+      },
+    }))
+    await p
+    expect(onDone).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringMatching(/cut off/),
+    }))
+  })
+
+  test('a stream that goes quiet is abandoned with an error', async () => {
+    vi.useFakeTimers()
+    try {
+      const { p, onDone, onError } = run(new ReadableStream({ start() { /* never sends */ } }))
+      await vi.advanceTimersByTimeAsync(STREAM_IDLE_MS - 1)
+      expect(onError).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      await p
+      expect(onDone).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringMatching(/stopped responding/),
+      }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('each frame resets the quiet timer', async () => {
+    vi.useFakeTimers()
+    try {
+      let ctl!: ReadableStreamDefaultController
+      const { p, onDone, onError } = run(new ReadableStream({ start(c) { ctl = c } }))
+      await vi.advanceTimersByTimeAsync(STREAM_IDLE_MS - 10)
+      ctl.enqueue(new TextEncoder().encode('data: {"type":"progress","checked":1,"total":9}\n\n'))
+      await vi.advanceTimersByTimeAsync(STREAM_IDLE_MS - 10)
+      ctl.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+      await p
+      expect(onError).not.toHaveBeenCalled()
+      expect(onDone).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

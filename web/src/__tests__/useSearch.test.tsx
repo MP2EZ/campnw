@@ -15,6 +15,7 @@ let capturedOnWarnings: ((w: unknown[]) => void) | null = null;
 let capturedOnDiagnosis: ((e: unknown) => void) | null = null;
 let capturedOnNotReleased: ((s: unknown) => void) | null = null;
 let capturedOnCoverage: ((matched: number, checked: number) => void) | null = null;
+let capturedSignal: AbortSignal | null = null;
 
 vi.mock("../api", () => ({
   searchCampsitesStream: vi.fn(
@@ -32,6 +33,7 @@ vi.mock("../api", () => ({
       // 0 onDiagnosis, 1 signal, 2 onParsed, 3 onSummary, 4 onProgress,
       // 5 onWarnings, 6 onCoverage, 7 onNotReleased
       capturedOnDiagnosis = (rest[0] as ((e: unknown) => void)) ?? null;
+      capturedSignal = (rest[1] as AbortSignal) ?? null;
       capturedOnWarnings = (rest[5] as ((w: unknown[]) => void)) ?? null;
       capturedOnCoverage =
         (rest[6] as ((matched: number, checked: number) => void)) ?? null;
@@ -169,6 +171,50 @@ describe("useSearch", () => {
 
     expect(result.current.error).toBe("Network timeout");
     expect(result.current.loading).toBe(false);
+  });
+
+  test("a superseded search's end or error doesn't settle the new one", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    const search = () => act(async () => {
+      result.current.handleSearch({ start_date: "2026-06-01", end_date: "2026-06-30" }, "find");
+    });
+    await search();
+    const firstDone = capturedOnDone!;
+    const firstError = capturedOnError!;
+    await search();
+
+    act(() => {
+      firstDone();
+      firstError(new Error("aborted late"));
+    });
+    expect(result.current.loading).toBe(true);
+    expect(result.current.error).toBeNull();
+
+    act(() => capturedOnDone?.());
+    expect(result.current.loading).toBe(false);
+  });
+
+  test("resetSearch stops the running search", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => {
+      result.current.handleSearch({ start_date: "2026-06-01", end_date: "2026-06-30" }, "find");
+    });
+    act(() => result.current.resetSearch());
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(result.current.loading).toBe(false);
+  });
+
+  test("a failed search forgets when the previous one finished", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    const search = () => act(async () => {
+      result.current.handleSearch({ start_date: "2026-06-01", end_date: "2026-06-30" }, "find");
+    });
+    await search();
+    act(() => capturedOnDone?.());
+    expect(result.current.completedAt).not.toBeNull();
+    await search();
+    act(() => capturedOnError?.(new Error("The search stopped responding")));
+    expect(result.current.completedAt).toBeNull();
   });
 
   test("toggleSource: first click isolates, then clicks toggle on/off", async () => {
