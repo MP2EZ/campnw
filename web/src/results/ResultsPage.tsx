@@ -4,11 +4,11 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
-import { SmartZeroState } from "../components/SmartZeroState";
 import { AnswerHeader } from "./AnswerHeader";
 import { DriveBands } from "./DriveBands";
 import { FullGroup } from "./FullGroup";
 import { QuickPicks } from "./QuickPicks";
+import { ZeroResults } from "./ZeroResults";
 import { ResultsNotices } from "./ResultsNotices";
 import { answerSentence, searchedAgo } from "./answer";
 
@@ -36,7 +36,7 @@ const readClock = () => Math.floor(Date.now() / TICK) * TICK;
  * places. Mounted from App's one switch point when `useUiVersion()` is "v2".
  */
 export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId, failed }: Props) {
-  const { results, loading, searchParams, searchDates, filteredResults } = useSearchContext();
+  const { results, loading, searchParams, filteredResults } = useSearchContext();
   const now = useSyncExternalStore(subscribeClock, readClock);
   // A quick pick: open its band, then move to its card (n re-runs a repeat pick).
   const [pick, setPick] = useState<{ id: string; n: number } | null>(null);
@@ -50,6 +50,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
 
   const cards = filteredResults.filter((r) => r.total_available_sites > 0);
   const unavailable = results.unavailable ?? [];
+  const zero = !loading && !failed && cards.length === 0;
   const sentence = answerSentence({
     params: searchParams,
     open: cards.length,
@@ -75,23 +76,17 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
           onCheckRest,
         }}
       />
-      <ResultsNotices results={results} />
+      <ResultsNotices results={results} withNotReleased={!zero} />
       {!loading && (
         <QuickPicks results={cards} params={searchParams}
           onPick={(id) => setPick((p) => ({ id, n: (p?.n ?? 0) + 1 }))} />
       )}
       <DriveBands results={cards} params={searchParams} reveal={pick?.id} />
-      <FullGroup places={unavailable} params={searchParams} />
-      {!loading && !failed && cards.length === 0 && (
-        <SmartZeroState
-          diagnosis={results.diagnosis}
-          dateSuggestions={results.date_suggestions}
-          actionChips={results.action_chips}
-          searchDates={searchDates || undefined}
-          searchId={searchId}
-          notReleased={results.not_released_campgrounds}
-          onSearch={onSearch}
-        />
+      {zero ? (
+        <ZeroResults results={results} places={unavailable} params={searchParams} onSearch={onSearch}
+          searchId={searchId} />
+      ) : (
+        <FullGroup places={unavailable} params={searchParams} />
       )}
     </section>
   );

@@ -7,8 +7,8 @@ import ResultsPage from "../results/ResultsPage";
 vi.mock("../results/CampgroundCard", () => ({
   CampgroundCard: ({ result }: { result: CampgroundResult }) => <article>{result.name}</article>,
 }));
-vi.mock("../components/SmartZeroState", () => ({
-  SmartZeroState: () => <div>zero state</div>,
+vi.mock("../results/ZeroResults", () => ({
+  ZeroResults: () => <div>zero state</div>,
 }));
 
 const place = (name: string, open: number) =>
