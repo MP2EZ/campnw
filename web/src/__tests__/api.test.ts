@@ -536,3 +536,45 @@ describe('API: Search History', () => {
     ).resolves.toBeUndefined()
   })
 })
+
+describe('API: Search who filter (v1.48 D5)', () => {
+  const emptyStream = () => ({
+    ok: true,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+        controller.close()
+      },
+    }),
+  })
+  const searchJson = () => ({
+    ok: true,
+    json: async () => ({ campgrounds_checked: 0, campgrounds_with_availability: 0, results: [], warnings: [] }),
+  })
+  const run = async (kind: 'stream' | 'json', params: SearchParams) => {
+    if (kind === 'stream') {
+      mockFetch.mockResolvedValueOnce(emptyStream())
+      await searchCampsitesStream(params, vi.fn(), vi.fn(), vi.fn())
+    } else {
+      mockFetch.mockResolvedValueOnce(searchJson())
+      await searchCampsites(params)
+    }
+    return new URL(mockFetch.mock.calls[0][0], 'http://x').searchParams
+  }
+  const dates = { start_date: '2026-06-01', end_date: '2026-06-30' }
+
+  test.each(['stream', 'json'] as const)('%s sends people, equipment and trailer length', async (kind) => {
+    const q = await run(kind, { ...dates, people: 5, equipment: 'trailer', rig_length: 30 })
+    expect([q.get('people'), q.get('equipment'), q.get('rig_length')]).toEqual(['5', 'trailer', '30'])
+  })
+
+  test.each(['stream', 'json'] as const)('%s sends no length for non-trailers', async (kind) => {
+    const q = await run(kind, { ...dates, equipment: 'van', rig_length: 30 })
+    expect([q.get('equipment'), q.get('rig_length')]).toEqual(['van', null])
+  })
+
+  test.each(['stream', 'json'] as const)('%s drops an unknown rig from the URL instead of failing', async (kind) => {
+    const q = await run(kind, { ...dates, people: 99, equipment: 'boat' })
+    expect([q.get('people'), q.get('equipment')]).toEqual([null, null])
+  })
+})

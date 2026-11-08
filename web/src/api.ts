@@ -292,12 +292,30 @@ export interface SearchParams {
   include_fcfs?: boolean;
   limit?: number;
   /**
-   * Who's going (v1.48 D5). Carried in the search state and URL, but not sent
-   * to the API yet: the backend `who` filter is P1c.
+   * Who's going (v1.48 D5). The API drops windows at sites known not to fit;
+   * sites with no type or capacity data always stay.
    */
   people?: number;
   equipment?: string;
+  /** Feet, trailers only. */
   rig_length?: number;
+}
+
+const EQUIPMENT = new Set(["tent", "van", "trailer"]);
+
+/**
+ * Add the `who` filter to a search query. Values the API would reject (a
+ * hand-edited URL) are left out rather than failing the search.
+ */
+function setWho(query: URLSearchParams, params: SearchParams): void {
+  const inRange = (n: number | undefined, max: number) =>
+    n !== undefined && Number.isInteger(n) && n >= 1 && n <= max;
+  if (inRange(params.people, 50)) query.set("people", String(params.people));
+  if (!params.equipment || !EQUIPMENT.has(params.equipment)) return;
+  query.set("equipment", params.equipment);
+  if (params.equipment === "trailer" && inRange(params.rig_length, 100)) {
+    query.set("rig_length", String(params.rig_length));
+  }
 }
 
 export async function searchCampsites(
@@ -318,6 +336,7 @@ export async function searchCampsites(
   if (params.no_groups) query.set("no_groups", "true");
   if (params.include_fcfs) query.set("include_fcfs", "true");
   if (params.limit) query.set("limit", String(params.limit));
+  setWho(query, params);
 
   return fetchJson<SearchResponse>(`${API_BASE}/api/search?${query}`);
 }
@@ -408,6 +427,7 @@ export async function searchCampsitesStream(
   if (params.no_groups) query.set("no_groups", "true");
   if (params.include_fcfs) query.set("include_fcfs", "true");
   if (params.limit) query.set("limit", String(params.limit));
+  setWho(query, params);
 
   try {
     const resp = await authFetch(`${API_BASE}/api/search/stream?${query}`, { signal });
