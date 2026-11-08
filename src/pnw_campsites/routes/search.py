@@ -71,6 +71,11 @@ class NotReleasedRangeResponse(BaseModel):
     releases_on: date | None = None
 
 
+class NightRangeResponse(BaseModel):
+    start: date
+    end: date
+
+
 class CampgroundResultResponse(BaseModel):
     facility_id: str
     name: str
@@ -101,6 +106,8 @@ class CampgroundResultResponse(BaseModel):
     not_released_nights: int = 0
     releases_on: date | None = None
     not_released_ranges: list[NotReleasedRangeResponse] = []
+    # Nights nothing can be reserved online: closed, first-come only, no data.
+    closed_ranges: list[NightRangeResponse] = []
 
 
 class SearchWarningResponse(BaseModel):
@@ -375,6 +382,7 @@ def _format_result(
             NotReleasedRangeResponse(start=x.start, end=x.end, releases_on=x.releases_on)
             for x in r.not_released_ranges
         ],
+        closed_ranges=[NightRangeResponse(start=x.start, end=x.end) for x in r.closed_ranges],
     )
 
 

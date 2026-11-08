@@ -38,6 +38,15 @@ describe("FullGroup", () => {
     expect(remind).toHaveAccessibleDescription(/coming soon/);
   });
 
+  test("a place taking no reservations gets no alert button", () => {
+    render(<FullGroup params={juneWeekends} places={[place("Tinkham", 54, {
+      not_released_ranges: [], closed_ranges: [{ start: "2027-06-01", end: "2027-06-30" }],
+    })]} />);
+    expect(screen.getByRole("region", { name: "Nothing to book" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem")).toHaveTextContent("Not reservable these weekends");
+    expect(screen.queryByRole("button", { name: /Tinkham/ })).not.toBeInTheDocument();
+  });
+
   test("past six places the rest wait behind a button", async () => {
     render(<FullGroup params={juneWeekends}
       places={Array.from({ length: 9 }, (_, i) => place(`P${i}`, 60 + i))} />);

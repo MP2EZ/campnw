@@ -203,6 +203,8 @@ export interface CampgroundResult {
   releases_on?: string | null;
   /** Which nights: consecutive runs; night N of a run opens on releases_on + N days. */
   not_released_ranges?: NotReleasedRange[];
+  /** Nights nothing can be reserved online: closed, first-come only, or no data. Not "full". */
+  closed_ranges?: { start: string; end: string }[];
 }
 
 export interface NotReleasedRange {

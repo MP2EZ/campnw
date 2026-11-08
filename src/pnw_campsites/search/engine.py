@@ -78,6 +78,25 @@ class AvailableWindow:
     fit: SiteFit = field(default_factory=SiteFit)
 
 
+@dataclass(frozen=True)
+class NightRange:
+    """A run of consecutive nights, first and last included."""
+
+    start: date
+    end: date
+
+
+def night_ranges(nights: list[date]) -> list[NightRange]:
+    """Group sorted nights into runs of consecutive nights."""
+    ranges: list[NightRange] = []
+    for night in nights:
+        if ranges and night == ranges[-1].end + timedelta(days=1):
+            ranges[-1] = NightRange(ranges[-1].start, night)
+        else:
+            ranges.append(NightRange(night, night))
+    return ranges
+
+
 @dataclass
 class CampgroundResult:
     """Availability results for a single campground."""
@@ -94,8 +113,13 @@ class CampgroundResult:
     not_released_nights: int = 0
     releases_on: date | None = None
     releases_through: date | None = None
-    # Which nights: runs of them, each with its first night's release date.
+    # For per-weekend status (v1.48 D4): runs of requested nights some
+    # matching site hasn't released, each with its first night's release
+    # date (looser than not_released_nights, which needs every site NYR),
+    # and runs of nights nothing could be reserved online at all (closed,
+    # first-come only, or no data). Neither of those is "full".
     not_released_ranges: list[NotReleasedRange] = field(default_factory=list)
+    closed_ranges: list[NightRange] = field(default_factory=list)
 
     @property
     def boat_in(self) -> bool:
@@ -412,6 +436,42 @@ def _not_released_nights(
     return nights
 
 
+def _requested_nights(query: SearchQuery) -> list[date]:
+    if not query.start_date or not query.end_date:
+        return []
+    nights = []
+    night = query.start_date
+    while night <= query.end_date:
+        if query.days_of_week is None or night.weekday() in query.days_of_week:
+            nights.append(night)
+        night += timedelta(days=1)
+    return nights
+
+
+def _night_statuses(
+    availability: CampgroundAvailability, query: SearchQuery,
+) -> tuple[list[date], list[date]]:
+    """Requested nights some matching site hasn't released (NYR), and nights
+    no matching site can be reserved at all (no Available, Reserved or NYR)."""
+    nyr: set[str] = set()
+    reservable: set[str] = set()
+    for site in availability.campsites.values():
+        if not _site_matches(site, query):
+            continue
+        for day, status in site.availabilities.items():
+            if status == AvailabilityStatus.NYR:
+                nyr.add(day[:10])
+            if status in (
+                AvailabilityStatus.AVAILABLE, AvailabilityStatus.RESERVED, AvailabilityStatus.NYR,
+            ):
+                reservable.add(day[:10])
+    requested = _requested_nights(query)
+    return (
+        [n for n in requested if n.isoformat() in nyr],
+        [n for n in requested if n.isoformat() not in reservable],
+    )
+
+
 def _process_availability(
     campground: Campground,
     availability: CampgroundAvailability,
@@ -427,7 +487,11 @@ def _process_availability(
         result.releases_on = release_date(system, nights[0], today)
         if result.releases_on:
             result.releases_through = release_date(system, nights[-1], today)
-        result.not_released_ranges = not_released_ranges(nights, system, today)
+    any_nyr, closed = _night_statuses(availability, query)
+    result.not_released_ranges = not_released_ranges(
+        any_nyr, campground.booking_system, date.today(),
+    )
+    result.closed_ranges = night_ranges(closed)
     result.total_sites = len(availability.campsites)
     seen_sites: set[str] = set()
     fcfs_count = 0

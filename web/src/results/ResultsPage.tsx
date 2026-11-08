@@ -7,6 +7,7 @@ import { useSearchContext } from "../contexts/SearchContext";
 import { AnswerHeader } from "./AnswerHeader";
 import { DriveBands } from "./DriveBands";
 import { FullGroup } from "./FullGroup";
+import { fullGroupTitle } from "./candidates";
 import { QuickPicks } from "./QuickPicks";
 import { ZeroResults } from "./ZeroResults";
 import { ResultsNotices } from "./ResultsNotices";
@@ -66,6 +67,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
         sentence={sentence}
         searched={!loading && completedAt ? searchedAgo(completedAt, Math.max(now, completedAt)) : null}
         full={unavailable.length}
+        fullTitle={fullGroupTitle(unavailable, searchParams)}
         coverage={{
           checked: results.campgrounds_checked,
           matched: results.campgrounds_matched,

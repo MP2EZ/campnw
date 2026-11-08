@@ -101,6 +101,15 @@ describe("zeroLede", () => {
       juneWeekends)).toBe("1 of the 2 campgrounds with nothing to book hasn’t released these dates yet. The other is full.");
   });
 
+  test("places taking no reservations aren't called full", () => {
+    const closed = { not_released_ranges: [], closed_ranges: [{ start: "2027-06-01", end: "2027-06-30" }] };
+    expect(zeroLede(response(), [place("A", closed), place("B", closed)], juneWeekends)).toBe(
+      "The 2 campgrounds checked aren’t taking reservations online for these dates: they’re closed, or first-come, first-served only.",
+    );
+    expect(zeroLede(response(), [place("A", closed), place("B"), place("C", { not_released_ranges: [] })], juneWeekends))
+      .toBe("Of the 3 campgrounds with nothing to book, 1 hasn’t released these dates yet, 1 is full and 1 isn’t taking reservations online.");
+  });
+
   test("a booking system that couldn't be checked is named, so nothing reads as everything", () => {
     const r = response({ warnings: [{ kind: "waf_blocked", count: 9, source: "wa_state", message: "" }] });
     expect(zeroLede(r, [place("A")], juneWeekends)).toMatch(

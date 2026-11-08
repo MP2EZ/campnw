@@ -397,3 +397,69 @@ class TestStreamSendsUnavailableCampgrounds:
         assert unavailable[1]["not_released_ranges"] == [
             {"start": "2027-06-04", "end": "2027-06-05", "releases_on": "2026-12-04"},
         ]
+
+
+class TestRangesForCandidateWindows:
+    """not_released_ranges / closed_ranges feed v2's per-weekend status, so
+    they must not call a weekend "full" when it isn't."""
+
+    def test_a_night_any_site_hasnt_released_is_in_a_range(self) -> None:
+        # Denny Creek, June 2027: one site released (and booked), the rest
+        # NYR. The strict count says 0; the weekend still isn't "full".
+        avail = _avail(
+            _site("1", {"2099-06-04": "Reserved", "2099-06-05": "Reserved"}),
+            _site("2", {"2099-06-04": "NYR", "2099-06-05": "NYR"}),
+        )
+        r = _process_availability(
+            make_campground(), avail, _query(date(2099, 6, 4), date(2099, 6, 5)),
+        )
+        assert r.not_released_nights == 0
+        assert [(x.start, x.end) for x in r.not_released_ranges] == [
+            (date(2099, 6, 4), date(2099, 6, 5)),
+        ]
+
+    def test_nights_nothing_can_be_reserved_are_closed(self) -> None:
+        # Tinkham in November: no availability data at all. A seasonal
+        # closure or first-come-only night is not "full" either.
+        avail = _avail(
+            _site("1", {"2099-06-04": "Closed", "2099-06-05": "Reserved", "2099-06-06": "Not Reservable"}),
+            _site("2", {"2099-06-04": "Not Available"}),
+        )
+        r = _process_availability(
+            make_campground(), avail, _query(date(2099, 6, 4), date(2099, 6, 7)),
+        )
+        assert [(x.start, x.end) for x in r.closed_ranges] == [
+            (date(2099, 6, 4), date(2099, 6, 4)),
+            (date(2099, 6, 6), date(2099, 6, 7)),
+        ]
+
+    def test_closed_nights_respect_the_searched_days(self) -> None:
+        # 2099-06-05 is a Friday, 06-06 Saturday, 06-08 Monday.
+        avail = _avail(_site("1", {}))
+        r = _process_availability(
+            make_campground(), avail,
+            _query(date(2099, 6, 5), date(2099, 6, 8), days_of_week={4, 5}),
+        )
+        assert [(x.start, x.end) for x in r.closed_ranges] == [
+            (date(2099, 6, 5), date(2099, 6, 6)),
+        ]
+
+    def test_api_sends_closed_ranges(self, api_client, monkeypatch) -> None:
+        from pnw_campsites.search.engine import NightRange, SearchResults
+
+        r = _result()
+        r.total_available_sites = 1
+        r.closed_ranges = [NightRange(date(2026, 11, 13), date(2026, 11, 15))]
+
+        class FakeEngine:
+            async def search(self, query):
+                return SearchResults(query=query, results=[r], campgrounds_checked=1,
+                                     campgrounds_with_availability=1)
+
+        from pnw_campsites.routes import search as search_routes
+
+        monkeypatch.setattr(search_routes, "get_engine", lambda: FakeEngine())
+        body = api_client.get(
+            "/api/search", params={"start_date": "2026-11-13", "end_date": "2026-11-15"},
+        ).json()
+        assert body["results"][0]["closed_ranges"] == [{"start": "2026-11-13", "end": "2026-11-15"}]

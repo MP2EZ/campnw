@@ -94,7 +94,7 @@ export function ZeroResults({ results, places, params, onSearch, searchId }: Pro
         </section>
       )}
 
-      <FullGroup places={places} params={params} title={allNyr ? "Not released yet" : "Full or not released yet"} />
+      <FullGroup places={places} params={params} title={allNyr ? "Not released yet" : undefined} />
     </div>
   );
 }

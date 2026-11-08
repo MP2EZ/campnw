@@ -9,16 +9,19 @@ interface Props {
   searched: string | null;
   /** Checked places with nothing to book, linked to their group. */
   full?: number;
+  /** The group's name, for the link. */
+  fullTitle?: string;
 }
 
 /**
  * The answer first, then how much was checked. An h2 until the v2 header
  * replaces the wordmark's h1 (P3a); then this becomes the page's h1.
  */
-export function AnswerHeader({ sentence, coverage, searched, full = 0 }: Props) {
+export function AnswerHeader({ sentence, coverage, searched, full = 0, fullTitle = "Full or not released yet" }: Props) {
+  const linkText = fullTitle === "Nothing to book" ? `${full} with nothing to book` : `${full} full or not released yet`;
   const after = (
     <>
-      {full > 0 && <> · <a href={`#${FULL_GROUP_ID}`} className="rv2-answer-link">{full} full or not released yet</a></>}
+      {full > 0 && <> · <a href={`#${FULL_GROUP_ID}`} className="rv2-answer-link">{linkText}</a></>}
       {searched && ` · ${searched}`}
     </>
   );
