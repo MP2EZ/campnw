@@ -560,6 +560,7 @@ async def timing_middleware(request: Request, call_next):
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:"
         " https://*.tile.openstreetmap.org"
+        " https://api.mapbox.com"
         " https://cdn.recreation.gov"
         " https://www.reserveamerica.com; "
         f"connect-src 'self' https://*.tile.openstreetmap.org {_supabase_csp_origin()}; "
