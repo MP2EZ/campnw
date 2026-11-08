@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 /** The API's ceiling on how many campgrounds one search may check (`limit`). */
 export const MAX_SEARCH_LIMIT = 50;
 
@@ -12,6 +14,8 @@ interface Props {
   nearby: boolean;
   loading: boolean;
   onCheckRest: (limit: number) => void;
+  /** Appended to the line (results v2: when the search ran). */
+  after?: ReactNode;
 }
 
 /**
@@ -20,7 +24,7 @@ interface Props {
  * than letting a capped search read as a complete one.
  */
 export function SearchCoverage({
-  checked, matched, limit, withAvailability, nearby, loading, onCheckRest,
+  checked, matched, limit, withAvailability, nearby, loading, onCheckRest, after,
 }: Props) {
   const capped = matched !== undefined && matched > checked;
   const availability = `${withAvailability} with availability`;
@@ -28,7 +32,7 @@ export function SearchCoverage({
   if (!capped) {
     return (
       <p className="results-summary">
-        Checked {checked} campgrounds — {availability}
+        Checked {checked} campgrounds — {availability}{after}
       </p>
     );
   }
@@ -55,6 +59,7 @@ export function SearchCoverage({
       ) : (
         !loading && ` · Showing the ${limit} closest`
       )}
+      {after}
     </p>
   );
 }
