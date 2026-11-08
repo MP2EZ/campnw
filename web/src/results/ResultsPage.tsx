@@ -1,6 +1,6 @@
 import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "./results.css";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
@@ -8,6 +8,7 @@ import { SmartZeroState } from "../components/SmartZeroState";
 import { AnswerHeader } from "./AnswerHeader";
 import { DriveBands } from "./DriveBands";
 import { FullGroup } from "./FullGroup";
+import { QuickPicks } from "./QuickPicks";
 import { ResultsNotices } from "./ResultsNotices";
 import { answerSentence, searchedAgo } from "./answer";
 
@@ -37,6 +38,14 @@ const readClock = () => Math.floor(Date.now() / TICK) * TICK;
 export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId, failed }: Props) {
   const { results, loading, searchParams, searchDates, filteredResults } = useSearchContext();
   const now = useSyncExternalStore(subscribeClock, readClock);
+  // A quick pick: open its band, then move to its card (n re-runs a repeat pick).
+  const [pick, setPick] = useState<{ id: string; n: number } | null>(null);
+  useEffect(() => {
+    if (!pick) return;
+    const name = document.getElementById(`rv2-card-${pick.id}`);
+    name?.closest("article")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    name?.focus({ preventScroll: true });
+  }, [pick]);
   if (!results) return null;
 
   const cards = filteredResults.filter((r) => r.total_available_sites > 0);
@@ -67,7 +76,11 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
         }}
       />
       <ResultsNotices results={results} />
-      <DriveBands results={cards} params={searchParams} />
+      {!loading && (
+        <QuickPicks results={cards} params={searchParams}
+          onPick={(id) => setPick((p) => ({ id, n: (p?.n ?? 0) + 1 }))} />
+      )}
+      <DriveBands results={cards} params={searchParams} reveal={pick?.id} />
       <FullGroup places={unavailable} params={searchParams} />
       {!loading && !failed && cards.length === 0 && (
         <SmartZeroState

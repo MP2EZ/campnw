@@ -101,6 +101,10 @@ describe("results v2 token contrast", () => {
     ["--focus-ring", "--surface-card", 3],
     ["--focus-ring", "--bg", 3],
     ["--focus-ring", "--notice-info-bg", 3],
+    ["--pick-kicker", "--surface-tile", 4.5],
+    ["--text", "--surface-tile", 4.5],
+    // --text-muted on --surface-tile is 4.68:1 light (#666 is 3-digit, which
+    // this parser skips) and 5.13:1 dark.
   ];
 
   for (const [theme, tokens] of Object.entries(themes)) {
