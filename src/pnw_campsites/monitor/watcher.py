@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from pnw_campsites.monitor.db import Snapshot, Watch, WatchDB
+from pnw_campsites.providers.errors import RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
@@ -18,8 +21,68 @@ from pnw_campsites.registry.models import (
     BookingSystem,
     CampgroundAvailability,
 )
+from pnw_campsites.urls import availability_url
 
 _logger = logging.getLogger(__name__)
+
+_PACIFIC = ZoneInfo("America/Los_Angeles")
+
+# A provider that answers with one of these is refusing us, not failing on one
+# park. Stop asking it for the rest of the cycle; the next cycle tries again.
+_BLOCK_ERRORS = (WAFBlockedError, RateLimitedError)
+
+
+def pacific_today() -> date:
+    """Today where the campgrounds are. A watch's dates are local nights."""
+    return datetime.now(_PACIFIC).date()
+
+
+def resolve_booking_system(
+    facility_id: str, stored: str, registry: CampgroundRegistry | None,
+) -> str:
+    """The provider a watch's facility belongs to.
+
+    Watches used to be saved with the column default 'recgov' whatever the
+    park, so a stored 'recgov' is a default, not a fact; any other value was
+    set on purpose. GoingToCamp resourceLocationIds are negative and no rec.gov
+    or ReserveAmerica id is (checked against the registry 2026-11-07), which
+    settles WA parks the registry doesn't list.
+    """
+    if stored != BookingSystem.RECGOV:
+        return stored
+    if registry is not None:
+        systems = registry.booking_systems_for(facility_id)
+        if BookingSystem.RECGOV not in systems and len(systems) == 1:
+            return systems[0].value
+    if facility_id.startswith("-"):
+        return BookingSystem.WA_STATE.value
+    return stored
+
+
+def heal_booking_systems(
+    watch_db: WatchDB,
+    registry: CampgroundRegistry | None,
+    watches: list[Watch] | None = None,
+) -> int:
+    """Store the right provider on watches saved under 'recgov' by default.
+
+    Idempotent. Runs at startup over every watch (paused ones included) and
+    on each poll cycle over the watches it loads. Returns how many changed.
+    """
+    if watches is None:
+        watches = watch_db.list_watches(enabled_only=False)
+    healed = 0
+    for watch in watches:
+        if watch.watch_type == "template":
+            continue
+        resolved = resolve_booking_system(
+            watch.facility_id, watch.booking_system, registry,
+        )
+        if resolved != watch.booking_system:
+            watch.booking_system = resolved
+            watch_db.update_watch_booking_system(watch.id, resolved)
+            healed += 1
+    return healed
 
 
 @dataclass
@@ -45,6 +108,7 @@ class PollResult:
     changes: list[AvailabilityChange] = field(default_factory=list)
     current_available: int = 0  # total available sites right now
     error: str | None = None
+    booking_url: str = ""  # availability page on the watch's own booking site
 
     @property
     def has_changes(self) -> bool:
@@ -111,23 +175,30 @@ async def poll_watch(
     watch_db: WatchDB,
     registry: CampgroundRegistry | None = None,
     reserveamerica: ReserveAmericaClient | None = None,
+    blocked: set[str] | None = None,
 ) -> PollResult:
-    """Poll a single watch: fetch availability, diff, store snapshot."""
+    """Poll a single watch: fetch availability, diff, store snapshot.
+
+    `blocked` is the poll cycle's set of providers that refused a request;
+    their watches are skipped, and a refusal here adds to it unlogged (poll_all
+    logs one line per provider).
+    """
     result = PollResult(watch=watch)
+    if blocked is not None and watch.booking_system in blocked:
+        result.error = f"{watch.booking_system} refused requests this cycle"
+        return result
 
     try:
+        booking_system = BookingSystem(watch.booking_system)
         start = date.fromisoformat(watch.start_date)
         end = date.fromisoformat(watch.end_date)
-
-        # Use stored booking system; self-heal from registry if needed
-        booking_system = BookingSystem(watch.booking_system)
-        if booking_system == BookingSystem.RECGOV and registry:
-            cg = registry.get_by_facility_id(watch.facility_id)
-            if cg and cg.booking_system != BookingSystem.RECGOV:
-                booking_system = cg.booking_system
-                watch_db.update_watch_booking_system(
-                    watch.id, booking_system.value,
-                )
+        slug = ""
+        if booking_system == BookingSystem.OR_STATE and registry:
+            cg = registry.get_by_facility_id(watch.facility_id, booking_system)
+            slug = cg.booking_url_slug if cg else ""
+        result.booking_url = availability_url(
+            watch.facility_id, booking_system, start, end, slug=slug,
+        )
 
         availability = await _fetch_availability(
             watch.facility_id, start, end,
@@ -212,11 +283,33 @@ async def poll_watch(
             )
         )
 
+    except _BLOCK_ERRORS as e:
+        result.error = repr(e)
+        if blocked is None:
+            _logger.warning("Poll failed for watch %s: %r", watch.id, e)
+        else:
+            blocked.add(watch.booking_system)
     except Exception as e:
         result.error = repr(e)
-        _logger.warning("Poll failed for watch %s: %r", watch.id, e)
+        _logger.warning(
+            "Poll failed for watch %s (%s): %r", watch.id, watch.booking_system, e,
+        )
 
     return result
+
+
+def _from_today(watch: Watch, today: date) -> Watch | None:
+    """The watch's dates from today on, or None once its last night is past."""
+    try:
+        start = date.fromisoformat(watch.start_date)
+        end = date.fromisoformat(watch.end_date)
+    except ValueError:
+        return watch  # poll_watch reports the bad date as this watch's error
+    if end < today:
+        return None
+    if start < today:
+        return dataclasses.replace(watch, start_date=today.isoformat())
+    return watch
 
 
 async def poll_all(
@@ -227,8 +320,13 @@ async def poll_all(
     tranche: int | None = None,
     reserveamerica: ReserveAmericaClient | None = None,
     tier_filter: str = "all",
+    today: date | None = None,
 ) -> list[PollResult]:
     """Poll all enabled watches, grouping by facility to minimize API calls.
+
+    Watches whose last night is before `today` (Pacific) are skipped, not
+    changed: they stay enabled and listed, and the API reports them expired.
+    A watch that has partly passed is polled from today on.
 
     Args:
         tranche: If set (0 or 1), only poll watches where id % 2 == tranche.
@@ -239,19 +337,21 @@ async def poll_all(
     """
     from pnw_campsites.monitor.expand import expand_template
 
+    today = today or pacific_today()
     watches = watch_db.list_watches_for_polling(tier=tier_filter)
     if tranche is not None:
         watches = [w for w in watches if w.id % 2 == tranche]
+    watches = [w for w in (_from_today(w, today) for w in watches) if w]
+    heal_booking_systems(watch_db, registry, watches)
 
     # Expand template watches into virtual single watches
     expanded: list[Watch] = []
     for watch in watches:
         if watch.watch_type == "template" and watch.search_params and registry:
-            facility_ids = expand_template(watch.search_params, registry)
-            for fid in facility_ids:
+            for cg in expand_template(watch.search_params, registry):
                 virtual = Watch(
                     id=watch.id,
-                    facility_id=fid,
+                    facility_id=cg.facility_id,
                     name=watch.name,
                     start_date=watch.start_date,
                     end_date=watch.end_date,
@@ -261,45 +361,51 @@ async def poll_all(
                     user_id=watch.user_id,
                     notification_channel=watch.notification_channel,
                     enabled=True,
+                    booking_system=cg.booking_system.value,
                     watch_type="single",  # poll as single
                 )
                 expanded.append(virtual)
         else:
             expanded.append(watch)
 
-    # Group watches by facility_id to share availability data
-    by_facility: dict[str, list[Watch]] = defaultdict(list)
+    # Group watches by facility to share availability data
+    by_facility: dict[tuple[str, str], list[Watch]] = defaultdict(list)
     for watch in expanded:
-        by_facility[watch.facility_id].append(watch)
+        by_facility[(watch.booking_system, watch.facility_id)].append(watch)
+    blocked: set[str] = set()
 
     # Pre-warm cache: for each facility, fetch the widest date range needed
     # so individual poll_watch calls all hit cache
     sem = asyncio.Semaphore(3)
 
-    async def prefetch_facility(fid: str, watches: list[Watch]) -> None:
+    async def prefetch_facility(key: tuple[str, str], watches: list[Watch]) -> None:
         """Fetch availability once for the widest date range across watches."""
+        source, fid = key
         starts = [date.fromisoformat(w.start_date) for w in watches]
         ends = [date.fromisoformat(w.end_date) for w in watches]
         wide_start, wide_end = min(starts), max(ends)
-        booking_system = BookingSystem(watches[0].booking_system)
         async with sem:
+            if source in blocked:
+                return
             try:
                 await asyncio.wait_for(
                     _fetch_availability(
-                        fid, wide_start, wide_end, booking_system,
+                        fid, wide_start, wide_end, BookingSystem(source),
                         recgov, goingtocamp, watch_db,
                         reserveamerica=reserveamerica,
                     ),
                     timeout=15.0,
                 )
+            except _BLOCK_ERRORS:
+                blocked.add(source)
             except Exception as exc:
                 _logger.debug("Prefetch for %s failed (will retry per-watch): %s", fid, exc)
 
     # Only prefetch facilities with multiple watches (single-watch facilities
     # get fetched normally in poll_watch)
     multi_facility_tasks = [
-        prefetch_facility(fid, watches)
-        for fid, watches in by_facility.items()
+        prefetch_facility(key, watches)
+        for key, watches in by_facility.items()
         if len(watches) > 1
     ]
     if multi_facility_tasks:
@@ -312,7 +418,7 @@ async def poll_all(
                 return await asyncio.wait_for(
                     poll_watch(
                         watch, recgov, goingtocamp, watch_db, registry,
-                        reserveamerica=reserveamerica,
+                        reserveamerica=reserveamerica, blocked=blocked,
                     ),
                     timeout=15.0,
                 )
@@ -325,4 +431,10 @@ async def poll_all(
         *[poll_limited(w) for w in all_watches],
     )
 
+    for source in sorted(blocked):
+        skipped = sum(1 for r in results if r.error and r.watch.booking_system == source)
+        _logger.warning(
+            "%s refused requests (WAF block or rate limit): %d watch(es) not "
+            "polled this cycle", source, skipped,
+        )
     return list(results)

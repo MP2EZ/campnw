@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from pnw_campsites.geo import format_drive_time
 from pnw_campsites.monitor.db import Watch, WatchDB
 from pnw_campsites.monitor.notify import notify_console, notify_ntfy
-from pnw_campsites.monitor.watcher import poll_all
+from pnw_campsites.monitor.watcher import poll_all, resolve_booking_system
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
@@ -345,12 +345,13 @@ async def cmd_watch_add(args: argparse.Namespace) -> None:
     days_of_week = list(_parse_days(args.days)) if args.days else None
 
     # Look up name from registry if possible
+    registry = CampgroundRegistry()
+    booking_system = resolve_booking_system(args.facility_id, "recgov", registry)
     name = args.name or ""
     if not name:
-        registry = CampgroundRegistry()
-        cg = registry.get_by_facility_id(args.facility_id)
+        cg = registry.get_by_facility_id(args.facility_id, BookingSystem(booking_system))
         name = cg.name if cg else f"Facility {args.facility_id}"
-        registry.close()
+    registry.close()
 
     watch = Watch(
         facility_id=args.facility_id,
@@ -360,6 +361,7 @@ async def cmd_watch_add(args: argparse.Namespace) -> None:
         min_nights=args.nights,
         days_of_week=days_of_week,
         notify_topic=args.ntfy_topic or "",
+        booking_system=booking_system,
     )
 
     with WatchDB() as db:

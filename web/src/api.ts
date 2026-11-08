@@ -428,6 +428,8 @@ export interface WatchData {
   created_at: string;
   watch_type?: string;
   search_params?: Record<string, unknown> | null;
+  /** Last night has passed (Pacific); the poller no longer checks it. */
+  expired?: boolean;
 }
 
 // ---------------------------------------------------------------------------

@@ -36,7 +36,7 @@ class TestExpandTemplate:
             make_campground(facility_id="bbb", drive_minutes_from_base=120),
         ]
         result = expand_template('{"state": "WA"}', registry)
-        assert result == ["aaa", "bbb"]
+        assert [c.facility_id for c in result] == ["aaa", "bbb"]
 
     def test_caps_at_20(self):
         from tests.conftest import make_campground
@@ -57,7 +57,7 @@ class TestExpandTemplate:
             make_campground(facility_id="mid", drive_minutes_from_base=120),
         ]
         result = expand_template('{"state": "WA"}', registry)
-        assert result == ["close", "mid", "far"]
+        assert [c.facility_id for c in result] == ["close", "mid", "far"]
 
     def test_invalid_json_returns_empty(self):
         registry = MagicMock()
@@ -68,7 +68,7 @@ class TestExpandTemplate:
         registry = MagicMock()
         registry.search.return_value = [make_campground(facility_id="x")]
         result = expand_template("{}", registry)
-        assert result == ["x"]
+        assert [c.facility_id for c in result] == ["x"]
 
     def test_passes_filters_to_registry(self):
         registry = MagicMock()

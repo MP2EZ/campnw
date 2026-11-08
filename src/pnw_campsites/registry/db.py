@@ -414,6 +414,14 @@ class CampgroundRegistry:
         ).fetchone()
         return self._row_to_campground(row) if row else None
 
+    def booking_systems_for(self, facility_id: str) -> list[BookingSystem]:
+        """Every booking system with a campground under this facility id."""
+        rows = self._conn.execute(
+            "SELECT booking_system FROM campgrounds WHERE facility_id=?",
+            (facility_id,),
+        ).fetchall()
+        return [BookingSystem(r[0]) for r in rows]
+
     def search(
         self,
         *,
