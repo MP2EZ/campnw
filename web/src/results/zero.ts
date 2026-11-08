@@ -118,21 +118,34 @@ export function zeroLede(results: SearchResponse, places: CampgroundResult[], p:
   const parts: string[] = [];
   const kinds = places.map((r) => unavailability(r, p).kind);
   const n = places.length;
-  const nyr = kinds.filter((k) => k !== "full").length;
+  const nyr = kinds.filter((k) => k === "not_released" || k === "mixed").length;
+  const closed = kinds.filter((k) => k === "closed").length;
+  const full = n - nyr - closed;
+  const are = (k: number, one: string, many: string) => (k === 1 ? one : many);
   if (n > 0 && nyr === n) {
     const systems = new Set(places.map((r) => r.booking_system));
     const source = systems.size === 1 ? `${SOURCE_NAMES[[...systems][0]] ?? ""} ` : "";
     const month = p?.start_date && p.end_date && p.start_date.slice(0, 7) === p.end_date.slice(0, 7)
       ? `${parseIsoDate(p.start_date).toLocaleDateString("en-US", { month: "long" })} ` : "";
     const what = searchedDays(p) && p?.mode !== "exact" ? `${month}weekends` : "dates";
-    parts.push(`The ${n} ${source}campground${n === 1 ? "" : "s"} checked ${n === 1 ? "isn’t" : "aren’t"} full.`
-      + ` ${n === 1 ? "Its" : "Their"} ${what} just haven’t opened for booking.`);
-  } else if (n > 0 && nyr === 0) {
-    parts.push(`The ${plural(n, "campground")} checked ${n === 1 ? "is" : "are"} full on your dates.`);
-  } else if (n > 0) {
-    const full = n - nyr;
-    parts.push(`${nyr} of the ${n} campgrounds with nothing to book ${nyr === 1 ? "hasn’t" : "haven’t"} released these dates yet.`
+    parts.push(`The ${n} ${source}campground${n === 1 ? "" : "s"} checked ${are(n, "isn’t", "aren’t")} full.`
+      + ` ${are(n, "Its", "Their")} ${what} just haven’t opened for booking.`);
+  } else if (n > 0 && full === n) {
+    parts.push(`The ${plural(n, "campground")} checked ${are(n, "is", "are")} full on your dates.`);
+  } else if (n > 0 && closed === n) {
+    parts.push(`The ${plural(n, "campground")} checked ${are(n, "isn’t", "aren’t")} taking reservations online`
+      + ` for these dates: ${are(n, "it’s", "they’re")} closed, or first-come, first-served only.`);
+  } else if (n > 0 && closed === 0) {
+    parts.push(`${nyr} of the ${n} campgrounds with nothing to book ${are(nyr, "hasn’t", "haven’t")} released these dates yet.`
       + ` The other${full === 1 ? " is" : "s are"} full.`);
+  } else if (n > 0) {
+    const bits = [
+      nyr && `${nyr} ${are(nyr, "hasn’t", "haven’t")} released these dates yet`,
+      full && `${full} ${are(full, "is", "are")} full`,
+      `${closed} ${are(closed, "isn’t", "aren’t")} taking reservations online`,
+    ].filter(Boolean) as string[];
+    const list = bits.length > 1 ? `${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}` : bits[0];
+    parts.push(`Of the ${n} campgrounds with nothing to book, ${list}.`);
   }
   for (const source of new Set((results.warnings ?? []).map((w) => w.source))) {
     const name = SOURCE_NAMES[source] ?? "A booking system";

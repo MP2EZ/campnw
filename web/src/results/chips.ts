@@ -8,7 +8,7 @@ import { addDays, blockAround, candidateStatus, candidateWindows, nightsIn, sear
  * date for a flexible range ("stay chips": the searched number of nights from
  * that arrival). Dates are nights, like a window's start/end.
  */
-export type ChipStatus = "open" | "full" | "not_released";
+export type ChipStatus = "open" | "full" | "not_released" | "closed";
 
 export interface WindowChip {
   /** First and last night, YYYY-MM-DD. */
@@ -127,7 +127,8 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
       const shortest = Math.min(...[...sites.values()].map((s) => longestRun(s.spans)));
       return {
         start, end, label, open, fit: open, few: open <= FEW_LEFT,
-        minNights: shortest < nightsIn(start, end) ? shortest : null,
+        // Two nights is a whole weekend, so only a shorter shortest stay is said.
+        minNights: shortest < Math.min(nightsIn(start, end), 2) ? shortest : null,
         status: "open", releasesOn: null, href: only ?? result.availability_url,
       };
     });
@@ -154,13 +155,14 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
 
 /**
  * "3 left" or "40 open": the word, not just the colour, says it's nearly
- * gone. "· 1+ nights" when not every site has the whole chip. "Full" and
- * "Opens Dec 18" for blocks with nothing open.
+ * gone. "· 1+ nights" when some site has only one night of the chip.
+ * "Full", "Opens Dec 18" and "Not reservable" for blocks with nothing open.
  */
 export function chipCountText(
   { open, few, minNights, status, releasesOn }: Pick<WindowChip, "open" | "few" | "minNights" | "status" | "releasesOn">,
 ): string {
   if (status === "full") return "Full";
+  if (status === "closed") return "Not reservable";
   if (status === "not_released") {
     return releasesOn
       ? `Opens ${parseIsoDate(releasesOn).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`

@@ -180,12 +180,14 @@ describe("buildWindowChips: partial weekend stays", () => {
     expect(r.shown[0].minNights).toBeNull();
   });
 
-  test("two-night stays in a three-night weekend say 2+ nights", () => {
+  test("two-night stays are a whole weekend: no “2+ nights” on a Fri–Sun chip", () => {
+    // Local data put "· 2+ nights" on nearly every chip: noise, since the
+    // search asked for two nights and a weekend is two nights.
     const r = buildWindowChips(place([
       win("A", "2027-06-04", "2027-06-05"),
       win("B", "2027-06-05", "2027-06-06"),
     ]), juneWeekends);
-    expect(chipCountText(r.shown[0])).toBe("2 left · 2+ nights");
+    expect(chipCountText(r.shown[0])).toBe("2 left");
   });
 
   test("says nothing extra when every site has the whole weekend", () => {
@@ -209,6 +211,13 @@ describe("buildWindowChips: weekends that aren't open (D4)", () => {
     expect(r.shown.filter((c) => c.status !== "open").every((c) => c.href === null)).toBe(true);
   });
 
+  test("weekends nothing can be reserved are “not reservable”, not full", () => {
+    const r = buildWindowChips(place([win("A", "2027-06-04", "2027-06-05")], {
+      closed_ranges: [{ start: "2027-06-10", end: "2027-06-30" }],
+    }), juneWeekends);
+    expect(r.shown.map((c) => c.status)).toEqual(["open", "closed", "closed", "closed"]);
+  });
+
   test("they say so in words", () => {
     const [full, , nyr] = buildWindowChips(place([], {
       not_released_ranges: [{ start: "2027-06-25", end: "2027-06-27", releases_on: null }],
@@ -216,6 +225,7 @@ describe("buildWindowChips: weekends that aren't open (D4)", () => {
     expect(chipCountText(full)).toBe("Full");
     expect(chipCountText(nyr)).toBe("Not released yet");
     expect(chipCountText({ ...nyr, releasesOn: "2026-12-25" })).toBe("Opens Dec 25");
+    expect(chipCountText({ ...nyr, status: "closed" })).toBe("Not reservable");
   });
 
   test("flexible and exact searches only show what's open", () => {

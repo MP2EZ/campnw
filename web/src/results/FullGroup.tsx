@@ -3,7 +3,7 @@ import type { CampgroundResult, SearchParams } from "../api";
 import { formatDriveTime } from "../lib/dates";
 import { SOURCE_NAMES } from "../lib/sources";
 import { IconBell } from "../icons";
-import { unavailability, unavailableText } from "./candidates";
+import { fullGroupTitle, unavailability, unavailableText } from "./candidates";
 
 const ROW_LIMIT = 6;
 export const FULL_GROUP_ID = "rv2-full";
@@ -18,7 +18,7 @@ const byDrive = (a: CampgroundResult, b: CampgroundResult) =>
  * alert that would help. The alerts are stubs until P3c (Watch) and P3d
  * (release reminders), so the buttons are disabled and the note says so.
  */
-export function FullGroup({ places, params, title = "Full or not released yet" }: {
+export function FullGroup({ places, params, title = fullGroupTitle(places, params) }: {
   places: CampgroundResult[];
   params: SearchParams | null;
   title?: string;
@@ -38,7 +38,8 @@ export function FullGroup({ places, params, title = "Full or not released yet" }
         <span className="rv2-band-rule" aria-hidden="true" />
       </div>
       <p id={noteId} className="rv2-band-note">
-        Nothing to book on your dates. Alerts for when a site frees up, or when booking opens, are coming soon.
+        {title === "Nothing to book" ? "Nothing open on your dates. " : "Nothing to book on your dates. "}
+        Alerts for when a site frees up, or when booking opens, are coming soon.
       </p>
       <ul className="rv2-full-list">
         {shown.map((r) => {
@@ -54,10 +55,12 @@ export function FullGroup({ places, params, title = "Full or not released yet" }
                 <p className="rv2-full-meta">{[where, source].filter(Boolean).join(" · ")}</p>
               </div>
               <span className="rv2-full-status">{status}</span>
-              <button type="button" className="rv2-full-action" aria-disabled="true"
-                aria-label={`${action}: ${r.name}`} aria-describedby={noteId}>
-                <IconBell className="rv2-icon" />{action}
-              </button>
+              {action && (
+                <button type="button" className="rv2-full-action" aria-disabled="true"
+                  aria-label={`${action}: ${r.name}`} aria-describedby={noteId}>
+                  <IconBell className="rv2-icon" />{action}
+                </button>
+              )}
             </li>
           );
         })}

@@ -17,8 +17,8 @@ const win = (start: string, end: string, extra: Partial<Window> = {}): Window =>
 });
 const range = (start: string, end: string, releases_on: string | null): NotReleasedRange =>
   ({ start, end, releases_on });
-const place = (windows: Window[], ranges: NotReleasedRange[] = []) =>
-  ({ facility_id: "1", name: "Kachess", windows, not_released_ranges: ranges }) as CampgroundResult;
+const place = (windows: Window[], ranges: NotReleasedRange[] = [], closed: { start: string; end: string }[] = []) =>
+  ({ facility_id: "1", name: "Kachess", windows, not_released_ranges: ranges, closed_ranges: closed }) as CampgroundResult;
 
 const spans = (p: SearchParams | null) => candidateWindows(p).map((c) => `${c.start}→${c.end}`);
 
@@ -85,6 +85,14 @@ describe("candidateStatus", () => {
     expect(candidateStatus(r, w1)).toEqual({ status: "not_released", releasesOn: null });
   });
 
+  test("not reservable when no night of it can be booked online (closed, first-come only)", () => {
+    const r = place([], [], [{ start: "2027-06-01", end: "2027-06-06" }]);
+    expect(candidateStatus(r, w1)).toEqual({ status: "closed" });
+    // Part closed, part booked: someone booked it, so it's full.
+    const part = place([], [], [{ start: "2027-06-04", end: "2027-06-05" }]);
+    expect(candidateStatus(part, w1)).toEqual({ status: "full" });
+  });
+
   test("a stay is open only if one window holds all of it", () => {
     const [d1, d2] = candidateWindows(anyDay);
     const r = place([win("2027-06-02", "2027-06-03")]);
@@ -123,6 +131,25 @@ describe("unavailability and its wording", () => {
     expect(u).toMatchObject({ kind: "mixed", full: 2, notReleased: 2 });
     expect(unavailableText(u, juneWeekends))
       .toEqual({ status: "2 weekends full · 2 open Dec 18 – 25", action: "Remind me" });
+  });
+
+  test("not reservable anywhere: no alert to offer", () => {
+    const r = place([], [], [{ start: "2027-06-01", end: "2027-06-30" }]);
+    const u = unavailability(r, juneWeekends);
+    expect(u).toMatchObject({ kind: "closed", closed: 4 });
+    expect(unavailableText(u, juneWeekends)).toEqual({ status: "Not reservable these weekends", action: null });
+    expect(unavailableText(unavailability(r, anyDay), anyDay).status).toBe("Not reservable on your dates");
+  });
+
+  test("a mix with closed weekends names each part", () => {
+    const r = place([], [{ start: "2027-06-25", end: "2027-06-27", releases_on: "2026-12-25" }],
+      [{ start: "2027-06-01", end: "2027-06-13" }]);
+    expect(unavailableText(unavailability(r, juneWeekends), juneWeekends)).toEqual({
+      status: "1 weekend full · 2 not reservable · 1 open Dec 25", action: "Remind me",
+    });
+    const noNyr = place([], [], [{ start: "2027-06-01", end: "2027-06-13" }]);
+    expect(unavailableText(unavailability(noNyr, juneWeekends), juneWeekends))
+      .toEqual({ status: "2 weekends full · 2 not reservable", action: "Watch" });
   });
 
   test("flexible and exact searches speak of dates, not weekends", () => {
