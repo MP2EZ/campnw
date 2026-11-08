@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { CampgroundResult, SearchParams, Window } from "../api";
 import { CampgroundCard } from "../results/CampgroundCard";
@@ -75,5 +75,15 @@ describe("CampgroundCard", () => {
     render(<CampgroundCard result={unknown} params={juneWeekends} rank={0} />);
     expect(screen.getByText("Site types not listed yet")).toBeInTheDocument();
     expect(screen.queryByText(/first-come/)).not.toBeInTheDocument();
+  });
+
+  test("shows the first photo, decorative, and falls back to a drawn tile if it fails", () => {
+    const { container } = render(<CampgroundCard result={{ ...dashPoint, image_urls: ["https://cdn.recreation.gov/a.jpg"] }}
+      params={juneWeekends} rank={0} />);
+    const img = container.querySelector(".rv2-thumb img")!;
+    expect(img).toHaveAttribute("alt", "");
+    fireEvent.error(img);
+    expect(container.querySelector(".rv2-thumb img")).toBeNull();
+    expect(container.querySelector(".rv2-thumb svg")).toHaveAttribute("aria-hidden", "true");
   });
 });

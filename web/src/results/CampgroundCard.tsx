@@ -5,6 +5,7 @@ import { SOURCE_NAMES } from "../lib/sources";
 import { IconBoat, IconClock, IconSun, IconTent } from "../icons";
 import { buildWindowChips, type WindowChip } from "./chips";
 import { fitLine, NOT_LISTED } from "./fit";
+import { PlaceThumb } from "./PlaceThumb";
 import { WindowChips } from "./WindowChips";
 
 interface Props {
@@ -50,6 +51,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
 
   return (
     <article className="rv2-card" aria-labelledby={id}>
+      <PlaceThumb result={result} />
       <div className="rv2-card-head">
         <h3 id={id} className="rv2-card-name">{result.name}</h3>
         <p className="rv2-card-meta">
