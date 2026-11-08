@@ -63,6 +63,9 @@ export function parseSearchParamsFromUrl(
   assign("max_drive", num("max_drive"));
   assign("mode", str("mode"));
   assign("limit", num("limit"));
+  assign("people", num("people"));
+  assign("equipment", str("equipment"));
+  assign("rig_length", num("rig_length"));
   if (q.get("no_groups") === "true") params.no_groups = true;
   if (q.get("include_fcfs") === "true") params.include_fcfs = true;
 
