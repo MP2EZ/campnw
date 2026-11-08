@@ -1,5 +1,6 @@
 import type { CampgroundResult, SearchParams, Window } from "../api";
 import { parseIsoDate } from "../lib/dates";
+import { addDays, blockAround, nightsIn, searchedDays } from "./candidates";
 
 /**
  * Window chips (v1.48 D3): the stays a card offers, one chip per weekend (or
@@ -45,31 +46,6 @@ export interface WindowChips {
 export const CHIP_LIMIT = 4;
 export const FEW_LEFT = 5;
 
-/** Python's weekday (0 = Monday), which `days_of_week` uses. */
-const weekday = (iso: string) => (parseIsoDate(iso).getDay() + 6) % 7;
-
-function addDays(iso: string, n: number): string {
-  const d = parseIsoDate(iso);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/** The searched days, or null when every day counts (no blocks to group by). */
-function searchedDays(p: SearchParams | null): Set<number> | null {
-  const days = new Set((p?.days_of_week ?? "").split(",").filter(Boolean).map(Number));
-  return days.size > 0 && days.size < 7 ? days : null;
-}
-
-/** The run of searched days around `night`, inside the search range. */
-function blockAround(night: string, days: Set<number>, p: SearchParams): [string, string] {
-  let start = night;
-  let end = night;
-  const inRange = (d: string) => (!p.start_date || d >= p.start_date) && (!p.end_date || d <= p.end_date);
-  for (let prev = addDays(start, -1); days.has(weekday(prev)) && inRange(prev); prev = addDays(prev, -1)) start = prev;
-  for (let next = addDays(end, 1); days.has(weekday(next)) && inRange(next); next = addDays(next, 1)) end = next;
-  return [start, end];
-}
-
 // Intl orders weekday + day as "4 Fri"; build the parts in the design's order.
 const part = (d: Date, unit: "weekday" | "month") => d.toLocaleDateString("en-US", { [unit]: "short" });
 const day = (d: Date, month: boolean) =>
@@ -81,9 +57,6 @@ function chipLabel(start: string, end: string, withMonth: boolean): string {
   const newMonth = s.getMonth() !== e.getMonth();
   return `${day(s, withMonth || newMonth)} – ${day(e, newMonth)}`;
 }
-
-const nightsIn = (start: string, end: string) =>
-  Math.round((parseIsoDate(end).getTime() - parseIsoDate(start).getTime()) / 86_400_000) + 1;
 
 /** Longest run of consecutive nights the spans cover. */
 function longestRun(spans: [string, string][]): number {
