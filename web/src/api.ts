@@ -33,6 +33,10 @@ export interface PostHogInstance {
   opt_out_capturing?(): void;
   opt_in_capturing?(): void;
   has_opted_out_capturing?(): boolean;
+  /** Undefined until flags load (always, on the snippet's stub). */
+  isFeatureEnabled?(key: string): boolean | undefined;
+  /** Runs when flags load or reload; returns an unsubscribe on the real SDK. */
+  onFeatureFlags?(callback: () => void): (() => void) | void;
 }
 
 export function getPosthog(): PostHogInstance | undefined {
