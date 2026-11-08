@@ -678,3 +678,26 @@ a.rv2-chip:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Split layout (P2d): list left, sticky map right, desktop only ── */
+.rv2-split--map {
+  --rv2-split-w: min(1360px, calc(100vw - 2 * var(--space-7)));
+  width: var(--rv2-split-w);
+  margin-inline: calc((100% - var(--rv2-split-w)) / 2);
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--space-7);
+  align-items: start;
+}
+
+.rv2-map-aside {
+  position: sticky;
+  top: var(--space-4);
+  height: min(760px, calc(100dvh - 2 * var(--space-4)));
+}
+
+.rv2-map-loading {
+  height: 100%;
+  border-radius: var(--radius-2xl);
+  background: var(--map-surface);
+}
