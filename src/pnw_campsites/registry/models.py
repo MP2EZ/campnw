@@ -49,6 +49,9 @@ class CampsiteAvailability(BaseModel):
     type_of_use: str  # e.g. "Overnight"
     min_num_people: int  # can be 0
     max_num_people: int
+    # False when max_num_people is a provider placeholder (unseeded WA, RA
+    # without the attribute): party-size filtering treats it as unknown.
+    max_people_known: bool = True
     availabilities: dict[str, AvailabilityStatus]  # ISO datetime str -> status
     fit: SiteFit | None = None  # set by WA enrichment and ReserveAmerica
 
