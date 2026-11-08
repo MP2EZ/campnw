@@ -103,6 +103,11 @@ describe("results v2 token contrast", () => {
     ["--focus-ring", "--notice-info-bg", 3],
     ["--pick-kicker", "--surface-tile", 4.5],
     ["--text", "--surface-tile", 4.5],
+    // Map pins (D13): each pin's edge against its own halo, so it reads on any tile.
+    ["--pin-open", "--pin-halo", 3],
+    ["--pin-boat", "--pin-halo", 3],
+    ["--pin-muted", "--pin-muted-fill", 3],
+    ["--pin-selected", "--pin-halo", 3],
     // --text-muted on --surface-tile is 4.68:1 light (#666 is 3-digit, which
     // this parser skips) and 5.13:1 dark.
   ];
