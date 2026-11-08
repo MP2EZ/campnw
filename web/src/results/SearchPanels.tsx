@@ -162,9 +162,6 @@ export function WhoPanel({ bar, onChange }: PanelProps) {
           </select>
         </label>
       )}
-      <p className="sb-note">
-        Party size and rig don’t filter results yet. Each place lists the site types it has.
-      </p>
     </>
   );
 }

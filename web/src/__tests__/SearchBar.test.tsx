@@ -106,14 +106,14 @@ describe("SearchBar", () => {
     }), "exact");
   });
 
-  test("who: people and a trailer length, carried but labelled as not filtering yet", async () => {
+  test("who: people and a trailer length go into the search", async () => {
     const user = userEvent.setup();
     const { segment, bar, onSearch } = setup();
     await user.click(segment(/^Who/));
     await user.click(screen.getByRole("button", { name: "More people" }));
     await user.click(screen.getByRole("button", { name: "Trailer or RV" }));
     await user.selectOptions(screen.getByLabelText("Length"), "30");
-    expect(screen.getByText(/don’t filter results yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/don’t filter results yet/)).not.toBeInTheDocument();
     expect(segment(/^Who/)).toHaveTextContent("3 people · 30′ trailer");
     await user.click(within(bar).getAllByRole("button", { name: "Search" })[0]);
     expect(onSearch.mock.calls[0][0]).toMatchObject({ people: 3, equipment: "trailer", rig_length: 30 });
