@@ -134,6 +134,7 @@
   --notice-info-text: #1d4a5a;
   --focus-ring: #b4561a;
   --text-display: 2.5rem;
+  --text-title: 1.375rem;        /* card and drive-band titles */
   --leading-display: 1.1;
   --radius-2xl: 16px;
 }

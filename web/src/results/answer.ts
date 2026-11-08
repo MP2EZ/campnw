@@ -1,5 +1,6 @@
 import type { SearchParams } from "../api";
 import { formatDateRange, parseIsoDate } from "../lib/dates";
+import { SOURCE_NAMES } from "../lib/sources";
 
 /**
  * The results page's headline: what the search found, in one sentence built
@@ -20,9 +21,6 @@ export interface AnswerInput {
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const STATES: Record<string, string> = {
   WA: "Washington", OR: "Oregon", ID: "Idaho", MT: "Montana", WY: "Wyoming", CA: "California",
-};
-const SOURCES: Record<string, string> = {
-  recgov: "Recreation.gov", wa_state: "WA State Parks", or_state: "Oregon State Parks",
 };
 // SearchForm's drive-from keys; anything else came from the NL parser or a
 // profile and is shown as typed.
@@ -89,7 +87,7 @@ function within(p: SearchParams | null): string {
 }
 
 function campgrounds(n: number, p: SearchParams | null): string {
-  const scope = (p?.source && SOURCES[p.source]) || (p?.state && STATES[p.state]);
+  const scope = (p?.source && SOURCE_NAMES[p.source]) || (p?.state && STATES[p.state]);
   const noun = `${scope ? `${scope} ` : ""}campground${n === 1 ? "" : "s"}`;
   return p?.name ? `${noun} matching “${p.name}”` : noun;
 }
