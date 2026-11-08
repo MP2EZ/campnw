@@ -1,11 +1,14 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { axe, toHaveNoViolations } from "jest-axe";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import App from "../App";
 import ResultsPage from "../results/ResultsPage";
+import SearchBar from "../results/SearchBar";
+import { UI_STORAGE_KEY } from "../results/uiVersion";
 import { SearchContext, type SearchContextValue } from "../contexts/SearchContext";
 import type { CampgroundResult, Window } from "../api";
 import { CampgroundCard } from "../results/CampgroundCard";
@@ -245,5 +248,91 @@ describe("Accessibility: results v2", () => {
     expect(card).not.toHaveClass("is-selected");
     act(() => store.select("1", "map"));
     expect(card).toHaveClass("is-selected");
+  });
+});
+
+// ── v2 search bar (v1.48 P3a) ────────────────────────────────────────
+
+function renderBar() {
+  const ctx: SearchContextValue = {
+    results: null, loading: false, searchDates: null, sourceFilter: new Set(), filteredResults: [],
+    searchParams: { start_date: "2027-06-01", end_date: "2027-06-30", nights: 2, days_of_week: "4,5,6",
+      from_location: "seattle", max_drive: 180, people: 2, equipment: "tent" },
+  };
+  return render(
+    <SearchContext.Provider value={ctx}>
+      <SearchBar onSearch={() => {}} onAsk={() => {}} />
+    </SearchContext.Provider>,
+  );
+}
+
+/** min-height (or height) in px from every rule whose selector list names `selector`. */
+function minTarget(css: string, selector: string): number {
+  let best = 0;
+  for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (!sel.split(",").some((s) => s.trim() === selector)) continue;
+    for (const [, n, unit] of body.matchAll(/(?:^|[\s;])(?:min-)?height:\s*([\d.]+)(px|rem)/g)) {
+      best = Math.max(best, Number(n) * (unit === "rem" ? 16 : 1));
+    }
+  }
+  return best;
+}
+
+describe("Accessibility: v2 search bar", () => {
+  test("the bar, each popover and the typeahead pass axe", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockResolvedValue({ ok: true, json: async () => [
+      { facility_id: "1", name: "Ohanapecosh", state: "WA", region: "", booking_system: "recgov", drive_minutes_from_base: 140 },
+    ] });
+    const { container } = renderBar();
+    expect(await axe(container)).toHaveNoViolations();
+    const bar = screen.getByRole("search", { name: "Campsite search" });
+    for (const name of [/^When/, /^Who/, /^Drive/, /^Where/]) {
+      await user.click(within(bar).getByRole("button", { name }));
+      expect(await axe(container)).toHaveNoViolations();
+    }
+    const box = screen.getByRole("combobox", { name: "Or a campground by name" });
+    await user.type(box, "oha");
+    await waitFor(() => expect(box).toHaveAttribute("aria-expanded", "true"));
+    await user.keyboard("{ArrowDown}");
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  test("the mobile sheet passes axe", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBar();
+    await user.click(screen.getByRole("button", { name: /^Edit search/ }));
+    expect(screen.getByRole("dialog", { name: "Edit search" })).toBeInTheDocument();
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  test("search bar targets are at least 44px", () => {
+    const css = readFileSync(join(__dirname, "../results/searchBar.css"), "utf-8");
+    for (const selector of [".sb-seg-btn", ".sb-submit", ".sb-chip", ".sb-done", ".sb-go", ".sb-step", ".sb-link",
+      ".sb-select", ".sb-input", ".sb-option", ".sb-ask-input", ".sb-ask-go", ".sb-compact-btn"]) {
+      expect(minTarget(css, selector), `${selector} height`).toBeGreaterThanOrEqual(44);
+    }
+  });
+});
+
+describe("v2 search bar switch", () => {
+  test("v2 replaces the v1 form, NL bar and first-visit state", async () => {
+    localStorage.setItem(UI_STORAGE_KEY, "v2");
+    try {
+      renderRoute("/");
+      expect(await screen.findByRole("search", { name: "Campsite search" })).toBeInTheDocument();
+      expect(screen.queryByRole("textbox", { name: "Search in plain language" })).toBeNull();
+      expect(screen.queryByText("Find your next campsite")).toBeNull();
+      expect(screen.getByRole("textbox", { name: "Or ask" })).toBeInTheDocument();
+    } finally {
+      localStorage.removeItem(UI_STORAGE_KEY);
+    }
+  });
+
+  test("v1 is unchanged", () => {
+    renderRoute("/");
+    expect(screen.getByRole("textbox", { name: "Search in plain language" })).toBeInTheDocument();
+    expect(screen.getByText("Find your next campsite")).toBeInTheDocument();
+    expect(screen.queryByRole("search", { name: "Campsite search" })).toBeNull();
   });
 });

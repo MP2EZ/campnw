@@ -2117,6 +2117,10 @@ Also released: #174 (Recreation.gov stay-continuation nights were counted as FCF
 | The answer header still said "Checking campgrounds…" 3 minutes in. Either the search was still running (see the Oregon stall in Open problems) or the header misses the end of the stream | P2c. Check after the stall fix |
 | Oregon fit lines claim "RV ≤96′" (Stub Stewart) and "RV ≤81′" (Champoeg). P1a's ReserveAmerica length decode reads the wrong field or units | Fix at the start of P1c, before the `who` filter trusts `max_rv_ft` |
 | Cottonwood Canyon's AI pitch says "Remote Utah canyon" (it's in Oregon) | Backlog: pitch/tag quality pass |
+| Recreation.gov registry names are uppercase in the v2 typeahead and answer sentence ("OHANAPECOSH CAMPGROUND") | Backlog: title-case on display (found in P3a) |
+| Exact-date searches: window chips label the checkout day as a night ("Sat 21 – Mon 23" for a checkout on the 23rd) | Backlog: candidates treat `end_date` as a night in exact mode (found in P3a) |
+| v1: "Checked 1 campgrounds" plural; `SmartZeroState` "Expand to N min" doesn't apply the new limit | Backlog, or drop at the v2 flip (found in P2c) |
+| v2 map uses toned OpenStreetMap tiles until a public, URL-restricted Mapbox token is added as GitHub secret `VITE_PUBLIC_MAPBOX_TOKEN` (the backend `MAPBOX_ACCESS_TOKEN` funds drive-time calls, so don't expose it) | User action (P2d) |
 
 ---
 

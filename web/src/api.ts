@@ -291,6 +291,13 @@ export interface SearchParams {
   no_groups?: boolean;
   include_fcfs?: boolean;
   limit?: number;
+  /**
+   * Who's going (v1.48 D5). Carried in the search state and URL, but not sent
+   * to the API yet: the backend `who` filter is P1c.
+   */
+  people?: number;
+  equipment?: string;
+  rig_length?: number;
 }
 
 export async function searchCampsites(
@@ -313,6 +320,22 @@ export async function searchCampsites(
   if (params.limit) query.set("limit", String(params.limit));
 
   return fetchJson<SearchResponse>(`${API_BASE}/api/search?${query}`);
+}
+
+/** A registry campground, as `/api/campgrounds` lists it (trimmed to what the UI reads). */
+export interface CampgroundMatch {
+  facility_id: string;
+  name: string;
+  booking_system: string;
+  state: string;
+  region: string;
+  drive_minutes_from_base: number | null;
+}
+
+/** Campgrounds whose name contains `name`, for the search bar's typeahead. */
+export async function findCampgrounds(name: string, signal?: AbortSignal): Promise<CampgroundMatch[]> {
+  const query = new URLSearchParams({ name, limit: "8" });
+  return fetchJson<CampgroundMatch[]>(`${API_BASE}/api/campgrounds?${query}`, { signal });
 }
 
 // ---------------------------------------------------------------------------
