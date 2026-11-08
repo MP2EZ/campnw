@@ -3,7 +3,8 @@
    marker) and full (the panel's end). Dragging is native scrolling. */
 .rv2-sheet-launch-wrap {
   position: sticky;
-  bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  /* max(): the shell may already inset the edge (ios.contentInset). */
+  bottom: max(var(--space-4), calc(env(safe-area-inset-bottom) + var(--space-2)));
   z-index: var(--z-sticky);
   display: flex;
   justify-content: center;
@@ -32,7 +33,7 @@
 .rv2-sheet-launch .icon { width: 1.1em; height: 1.1em; }
 
 .rv2-sheet {
-  --sheet-top: calc(env(safe-area-inset-top) + var(--space-6));
+  --sheet-top: max(var(--space-6), calc(env(safe-area-inset-top) + var(--space-3)));
   position: fixed;
   inset: 0;
   z-index: var(--z-modal);
@@ -54,8 +55,8 @@
   height: calc(100% - var(--sheet-top));
   display: flex;
   flex-direction: column;
-  padding: 0 calc(var(--space-3) + env(safe-area-inset-right)) env(safe-area-inset-bottom)
-    calc(var(--space-3) + env(safe-area-inset-left));
+  padding: 0 max(var(--space-3), env(safe-area-inset-right)) env(safe-area-inset-bottom)
+    max(var(--space-3), env(safe-area-inset-left));
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
   background: var(--bg);
   color: var(--text);
