@@ -53,6 +53,8 @@ export interface LegendEntry {
 /** Legend rows for the kinds of pin on the map, in a fixed order. */
 export function pinLegend(styles: PinStyle[]): LegendEntry[] {
   const present = new Set(styles.map((s) => s.tier));
+  // A full boat-in place is still a diamond.
+  if (styles.some((s) => s.shape === "diamond")) present.add("boat");
   return LEGEND.filter(([tier]) => present.has(tier))
     .map(([tier, text, shape]) => ({ text, style: { tier, shape, muted: tier === "none" } }));
 }

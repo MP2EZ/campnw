@@ -64,6 +64,11 @@ describe("pinLegend", () => {
       .toEqual(["Under 1 h", "Boat-in", "Nothing to book"]);
   });
 
+  test("a full boat-in place adds both the boat-in and the nothing-to-book rows", () => {
+    expect(pinLegend([{ tier: "none", shape: "diamond", muted: true }]).map((e) => e.text))
+      .toEqual(["Boat-in", "Nothing to book"]);
+  });
+
   test("every kind has words, so the legend never relies on colour", () => {
     const all = pinLegend((["near", "mid", "far", "unknown", "boat", "none"] as const).map(s));
     expect(all.map((e) => e.text)).toEqual(
