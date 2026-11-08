@@ -195,6 +195,12 @@ def fit_from_recgov_type(campsite_type: str) -> SiteFit:
 # ---------------------------------------------------------------------------
 
 
+# RA's "Maximum Vehicle Length" is the driveway length in feet, tow vehicle
+# included on pull-throughs (Oregon: back-ins to 90, pull-throughs to 100).
+# Past the longest single rig it's no upper limit, like WA's "over 40'".
+_RA_LONGEST_RIG_FT = 45
+
+
 def fit_from_ra_attributes(
     prod_grp: str,
     categories: list[str] | None,
@@ -211,7 +217,8 @@ def fit_from_ra_attributes(
     fits_rv = bool(cats & {"rv site", "trailer site"})
     max_rv_ft = None
     if fits_rv and max_vehicle_ft and max_vehicle_ft.strip().isdigit():
-        max_rv_ft = int(max_vehicle_ft)
+        length = int(max_vehicle_ft)
+        max_rv_ft = length if length <= _RA_LONGEST_RIG_FT else None
     return SiteFit(
         fits_tent="tent site" in cats,
         fits_van=fits_rv,
