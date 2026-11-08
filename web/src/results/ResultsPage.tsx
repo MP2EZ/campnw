@@ -14,10 +14,12 @@ import { ZeroResults } from "./ZeroResults";
 import { ResultsNotices } from "./ResultsNotices";
 import { answerSentence, searchedAgo } from "./answer";
 import { groupByDriveBand } from "./bands";
+import { MapSheet } from "./MapSheet";
 import { useMediaQuery } from "./media";
 import { createSelectionStore, SelectionContext } from "./selection";
 
-// Leaflet comes with this chunk, and only on screens wide enough for the split.
+// Leaflet comes with this chunk: beside the list when it's wide enough, else
+// in MapSheet once it's opened.
 const ResultsMap = lazy(() => import("./ResultsMap"));
 export const SPLIT_QUERY = "(min-width: 1024px)";
 
@@ -50,10 +52,10 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
   const split = useMediaQuery(SPLIT_QUERY);
   const [selection] = useState(createSelectionStore);
   // Memoised: a new array would rebuild every pin (and drop the selection).
-  const mapPlaces = useMemo(() => !split || !results ? [] : [
+  const mapPlaces = useMemo(() => !results ? [] : [
     ...groupByDriveBand(filteredResults.filter((r) => r.total_available_sites > 0)).flatMap((b) => b.results),
     ...(results.unavailable ?? []),
-  ], [split, results, filteredResults]);
+  ], [results, filteredResults]);
   // A quick pick: open its band, then move to its card (n re-runs a repeat pick).
   const [pick, setPick] = useState<{ id: string; n: number } | null>(null);
   useEffect(() => {
@@ -118,6 +120,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
     <SelectionContext.Provider value={selection}>
       <div className={split ? "rv2-split rv2-split--map" : "rv2-split"}>
         {page}
+        {!split && <MapSheet places={mapPlaces} searchKey={searchParams} selection={selection} onSelect={onPin} />}
         {split && (
           <aside className="rv2-map-aside" aria-labelledby="rv2-map-h">
             <h2 id="rv2-map-h" className="sr-only">Map of results</h2>

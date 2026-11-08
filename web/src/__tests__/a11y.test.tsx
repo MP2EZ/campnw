@@ -239,6 +239,26 @@ describe("Accessibility: results v2", () => {
     }
   });
 
+  test("under 1024px the map sheet (P4a) passes axe open, with 44px controls", async () => {
+    const { container } = renderV2();
+    await userEvent.click(screen.getByRole("button", { name: "Map" }));
+    const sheet = screen.getByRole("dialog", { name: "Map of results" });
+    expect(await within(sheet).findByTestId("results-map")).toBeInTheDocument();
+    expect(await axe(container)).toHaveNoViolations();
+    const css = readFileSync(join(__dirname, "../results/mapSheet.css"), "utf-8");
+    for (const selector of [".rv2-sheet-launch", ".rv2-sheet-handle", ".rv2-sheet-close"]) {
+      expect(minTarget(css, selector), `${selector} height`).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("the sheet's and date chips' controls show focus: no outline is removed", () => {
+    const css = ["results.css", "mapSheet.css"]
+      .map((f) => readFileSync(join(__dirname, "../results", f), "utf-8")).join("\n");
+    const sheetRules = [...css.matchAll(/([^{}]*\.rv2-(?:sheet|date)[^{}]*)\{([^}]*)\}/g)];
+    expect(sheetRules.length).toBeGreaterThan(5);
+    for (const [, sel, body] of sheetRules) expect(body, sel).not.toMatch(/outline:\s*(none|0)/);
+  });
+
   test("hovering or focusing a card selects it for the map; a pin's card is marked", () => {
     const store = createSelectionStore();
     const { container } = render(
