@@ -8,10 +8,21 @@ import sqlite3
 import unicodedata
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 from pnw_campsites.geo import haversine_miles
 from pnw_campsites.registry.models import BookingSystem, Campground
 from pnw_campsites.registry.tag_overrides import apply_tag_overrides
+
+
+class WaSiteInfo(NamedTuple):
+    """One wa_state_sites row joined to its loop."""
+
+    name: str
+    loop_title: str | None
+    max_capacity: int | None
+    allowed_equipment: list[dict]
+    loop_description: str
 
 
 def slugify(name: str) -> str:
@@ -943,18 +954,16 @@ class CampgroundRegistry:
         self._conn.commit()
         return len(sites)
 
-    def get_wa_site_index(
-        self, park_facility_id: str
-    ) -> dict[int, tuple[str, str | None, int | None]]:
-        """Return cached site/loop names + capacity for a WA park.
+    def get_wa_site_index(self, park_facility_id: str) -> dict[int, WaSiteInfo]:
+        """Return cached site metadata for a WA park, keyed by resource_id.
 
-        Maps resource_id → (site_name, loop_title or None, max_capacity or None).
         Used by the search engine to enrich CampsiteAvailability with
-        human-readable labels and real per-site capacity.
+        human-readable labels, real per-site capacity and site fit.
         """
         rows = self._conn.execute(
             """\
-            SELECT s.resource_id, s.name, l.title AS loop_title, s.max_capacity
+            SELECT s.resource_id, s.name, l.title AS loop_title, s.max_capacity,
+                   s.allowed_equipment, l.description AS loop_description
             FROM wa_state_sites AS s
             LEFT JOIN wa_state_loops AS l ON s.loop_map_id = l.map_id
             WHERE s.park_facility_id = ?
@@ -962,6 +971,12 @@ class CampgroundRegistry:
             (park_facility_id,),
         ).fetchall()
         return {
-            row["resource_id"]: (row["name"], row["loop_title"], row["max_capacity"])
+            row["resource_id"]: WaSiteInfo(
+                row["name"],
+                row["loop_title"],
+                row["max_capacity"],
+                json.loads(row["allowed_equipment"] or "[]"),
+                row["loop_description"] or "",
+            )
             for row in rows
         }

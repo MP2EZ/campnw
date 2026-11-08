@@ -1,10 +1,11 @@
 """Site fit decoding: WA equipment ids, WA loop descriptions, Recreation.gov
-campsite types → SiteFit. None means unknown."""
+campsite types and ReserveAmerica attributes → SiteFit. None means unknown."""
 
 import pytest
 
 from pnw_campsites.registry.models import SiteFit
 from pnw_campsites.search.site_fit import (
+    fit_from_ra_attributes,
     fit_from_recgov_type,
     fit_from_wa_equipment,
     parse_loop_site_types,
@@ -171,3 +172,27 @@ class TestRecgovType:
 
     def test_never_invents_rv_length(self) -> None:
         assert fit_from_recgov_type("RV NONELECTRIC").max_rv_ft is None
+
+
+class TestReserveAmericaAttributes:
+    def test_standard_with_hookups_and_length(self) -> None:
+        fit = fit_from_ra_attributes(
+            "STANDARD", ["RV Site", "Tent Site", "Trailer Site"], max_vehicle_ft="47", electric="50",
+        )
+        assert fit == SiteFit(fits_tent=True, fits_van=True, fits_rv=True, max_rv_ft=47, hookups=True)
+
+    def test_tent_site_ignores_parking_length(self) -> None:
+        # Tent sites list a Maximum Vehicle Length too: it's the parking spur.
+        fit = fit_from_ra_attributes("TENT SITE", ["Tent Site"], max_vehicle_ft="24", electric=None)
+        assert fit == SiteFit(fits_tent=True, fits_van=False, fits_rv=False, hookups=False)
+
+    def test_yurt(self) -> None:
+        fit = fit_from_ra_attributes("YURT", ["Cabin and Lodging"], max_vehicle_ft="20", electric=None)
+        assert (fit.fits_tent, fit.fits_van, fit.fits_rv) == (False, False, False)
+
+    def test_bad_length_is_unknown(self) -> None:
+        fit = fit_from_ra_attributes("STANDARD", ["RV Site"], max_vehicle_ft="n/a", electric=None)
+        assert (fit.fits_rv, fit.max_rv_ft) == (True, None)
+
+    def test_no_attributes_is_unknown(self) -> None:
+        assert fit_from_ra_attributes("STANDARD", None, max_vehicle_ft=None, electric=None) == SiteFit()

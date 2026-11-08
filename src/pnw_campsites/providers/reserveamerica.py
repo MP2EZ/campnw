@@ -28,6 +28,7 @@ from pnw_campsites.registry.models import (
     CampgroundAvailability,
     CampsiteAvailability,
 )
+from pnw_campsites.search.site_fit import fit_from_ra_attributes
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,10 @@ _REDUX_RE = re.compile(r'(\{"application"\s*:\s*\{.+\})\s*</script>')
 # Attribute IDs for min/max occupants
 _ATTR_MIN_PEOPLE = 111
 _ATTR_MAX_PEOPLE = 12
+# Attribute IDs for site fit (seen on Oregon parks, 2026-11-07)
+_ATTR_MAX_VEHICLE_FT = 109  # "Maximum Vehicle Length"
+_ATTR_ELECTRIC = 218  # "Electricity Hookup" (amps)
+_ATTR_CATEGORIES = 99999  # "Looking For Category": Tent / RV / Trailer Site
 
 
 class ReserveAmericaClient:
@@ -245,14 +250,19 @@ def _parse_availability_grid(
     return avail
 
 
-def _get_attribute_value(record: dict, attr_id: int) -> str | None:
-    """Extract an attribute value from a record's details."""
+def _get_attribute_values(record: dict, attr_id: int) -> list[str] | None:
+    """Extract an attribute's values from a record's details, None if absent."""
     attrs = record.get("details", {}).get("attributes", [])
     for attr in attrs:
         if attr.get("id") == attr_id:
-            vals = attr.get("value", [])
-            return vals[0] if vals else None
+            return attr.get("value") or []
     return None
+
+
+def _get_attribute_value(record: dict, attr_id: int) -> str | None:
+    """Extract an attribute's first value from a record's details."""
+    vals = _get_attribute_values(record, attr_id)
+    return vals[0] if vals else None
 
 
 def _record_to_campsite(
@@ -281,4 +291,10 @@ def _record_to_campsite(
         min_num_people=min_people,
         max_num_people=max_people,
         availabilities=availabilities,
+        fit=fit_from_ra_attributes(
+            prod_grp,
+            _get_attribute_values(record, _ATTR_CATEGORIES),
+            _get_attribute_value(record, _ATTR_MAX_VEHICLE_FT),
+            _get_attribute_value(record, _ATTR_ELECTRIC),
+        ),
     )
