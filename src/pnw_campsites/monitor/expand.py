@@ -6,6 +6,7 @@ import json
 import logging
 
 from pnw_campsites.registry.db import CampgroundRegistry
+from pnw_campsites.registry.models import Campground
 
 _logger = logging.getLogger(__name__)
 
@@ -15,8 +16,8 @@ MAX_EXPANDED = 20
 def expand_template(
     search_params_json: str,
     registry: CampgroundRegistry,
-) -> list[str]:
-    """Expand template watch search params to a list of facility_ids.
+) -> list[Campground]:
+    """Expand template watch search params to the campgrounds it matches.
 
     Caps at MAX_EXPANDED, sorted by drive time (closest first).
     """
@@ -38,4 +39,4 @@ def expand_template(
         key=lambda c: c.drive_minutes_from_base if c.drive_minutes_from_base else 9999,
     )
 
-    return [c.facility_id for c in candidates[:MAX_EXPANDED]]
+    return candidates[:MAX_EXPANDED]

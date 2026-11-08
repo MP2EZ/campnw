@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 from starlette.responses import Response
 
 from pnw_campsites import billing
+from pnw_campsites.monitor import watcher
 from pnw_campsites.monitor.db import Watch
+from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import (
     SESSION_COOKIE,
     get_current_user,
@@ -53,6 +55,7 @@ class WatchResponse(BaseModel):
     created_at: str
     watch_type: str = "single"
     search_params: dict | None = None
+    expired: bool = False  # last night has passed; no longer polled
 
 
 # ---------------------------------------------------------------------------
@@ -117,10 +120,13 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
             detail="Single watches require facility_id",
         )
 
+    booking_system = watcher.resolve_booking_system(
+        body.facility_id, BookingSystem.RECGOV.value, registry,
+    )
     # Look up name from registry if not provided
     name = body.name
     if not name and body.facility_id:
-        cg = registry.get_by_facility_id(body.facility_id)
+        cg = registry.get_by_facility_id(body.facility_id, BookingSystem(booking_system))
         name = cg.name if cg else f"Facility {body.facility_id}"
     if not name and body.watch_type == "template":
         name = "Search pattern watch"
@@ -136,6 +142,7 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         notification_channel=body.notification_channel,
         session_token=token,
         user_id=user_id,
+        booking_system=booking_system,
         watch_type=body.watch_type,
         search_params=_json.dumps(body.search_params) if body.search_params else "",
     )
@@ -163,6 +170,7 @@ def _watch_to_response(w: Watch) -> WatchResponse:
         created_at=w.created_at,
         watch_type=w.watch_type,
         search_params=_json.loads(w.search_params) if w.search_params else None,
+        expired=w.end_date < watcher.pacific_today().isoformat(),
     )
 
 

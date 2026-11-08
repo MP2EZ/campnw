@@ -27,11 +27,9 @@ from pnw_campsites.search.engine import (
     StreamWarningsEvent,
 )
 from pnw_campsites.urls import (
-    or_state_availability_url,
+    availability_url,
     or_state_campsite_booking_url,
-    recgov_availability_url,
     recgov_campsite_booking_url,
-    wa_state_availability_url,
 )
 
 router = APIRouter(prefix="/api", tags=["search"])
@@ -272,20 +270,6 @@ def _iso(d: date | None) -> str | None:
     return d.isoformat() if d else None
 
 
-def _build_availability_url(
-    facility_id: str,
-    booking_system: BookingSystem,
-    start_date: date | None,
-    end_date: date | None = None,
-    slug: str = "",
-) -> str:
-    if booking_system == BookingSystem.WA_STATE:
-        return wa_state_availability_url(facility_id, start_date, end_date)
-    if booking_system == BookingSystem.OR_STATE:
-        return or_state_availability_url(facility_id, slug, start_date, end_date)
-    return recgov_availability_url(facility_id, start_date)
-
-
 def _build_booking_url(
     facility_id: str,
     campsite_id: str,
@@ -364,7 +348,7 @@ def _format_result(
         best_for=cg.best_for,
         estimated_drive_minutes=None if r.boat_in else r.estimated_drive_minutes,
         boat_in=r.boat_in,
-        availability_url=_build_availability_url(
+        availability_url=availability_url(
             cg.facility_id, cg.booking_system, start, end,
             slug=cg.booking_url_slug,
         ) if start else None,

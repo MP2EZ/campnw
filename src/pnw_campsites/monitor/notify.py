@@ -9,7 +9,15 @@ from datetime import date
 import httpx
 
 from pnw_campsites.monitor.watcher import AvailabilityChange, PollResult
-from pnw_campsites.urls import recgov_availability_url
+from pnw_campsites.urls import availability_url
+
+
+def booking_link(result: PollResult) -> str:
+    """Availability page on the watch's own booking site."""
+    watch = result.watch
+    return result.booking_url or availability_url(
+        watch.facility_id, watch.booking_system, date.fromisoformat(watch.start_date),
+    )
 
 
 def format_change(change: AvailabilityChange) -> str:
@@ -33,10 +41,7 @@ def _urgency_prefix(urgency: int) -> str:
 def format_poll_result(result: PollResult) -> str:
     """Format a poll result with changes into a notification message."""
     watch = result.watch
-    url = recgov_availability_url(
-        watch.facility_id,
-        date.fromisoformat(watch.start_date),
-    )
+    url = booking_link(result)
 
     # Use LLM-enriched context message if available
     context_msg = ""
@@ -77,10 +82,7 @@ async def notify_ntfy(
 ) -> None:
     """Send a notification via ntfy."""
     message = format_poll_result(result)
-    url = recgov_availability_url(
-        result.watch.facility_id,
-        date.fromisoformat(result.watch.start_date),
-    )
+    url = booking_link(result)
 
     async with httpx.AsyncClient() as client:
         await client.post(
@@ -102,10 +104,7 @@ async def notify_pushover(
 ) -> None:
     """Send a notification via Pushover."""
     message = format_poll_result(result)
-    url = recgov_availability_url(
-        result.watch.facility_id,
-        date.fromisoformat(result.watch.start_date),
-    )
+    url = booking_link(result)
 
     async with httpx.AsyncClient() as client:
         await client.post(
