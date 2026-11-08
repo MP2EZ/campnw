@@ -42,6 +42,7 @@ enrichment = [
 "pnw_campsites" = [
     "templates/*.html",
     "seo-static/*",
+    "registry/fixtures/*.json",
 ]
 
 [tool.ruff]

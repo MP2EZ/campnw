@@ -20,16 +20,16 @@ from pnw_campsites.routes.deps import (
 )
 from pnw_campsites.search.engine import (
     SearchQuery,
+    StreamCoverageEvent,
     StreamDiagnosisEvent,
+    StreamNotReleasedEvent,
     StreamProgressEvent,
     StreamWarningsEvent,
 )
 from pnw_campsites.urls import (
-    or_state_availability_url,
+    availability_url,
     or_state_campsite_booking_url,
-    recgov_availability_url,
     recgov_campsite_booking_url,
-    wa_state_availability_url,
 )
 
 router = APIRouter(prefix="/api", tags=["search"])
@@ -52,6 +52,14 @@ class WindowResponse(BaseModel):
     max_people: int
     is_fcfs: bool = False
     booking_url: str | None = None
+    # Site fit; None = the booking system doesn't say. fits_rv with no
+    # max_rv_ft means RVs fit but no length is listed.
+    fits_tent: bool | None = None
+    fits_van: bool | None = None
+    fits_rv: bool | None = None
+    max_rv_ft: int | None = None
+    hookups: bool | None = None
+    walk_in: bool | None = None
 
 
 class CampgroundResultResponse(BaseModel):
@@ -70,6 +78,7 @@ class CampgroundResultResponse(BaseModel):
     description_rewrite: str = ""
     best_for: str = ""
     estimated_drive_minutes: int | None = None
+    boat_in: bool = False  # only reachable by boat; no drive time is shown
     availability_url: str | None = None
     windows: list[WindowResponse]
     error: str | None = None
@@ -78,6 +87,10 @@ class CampgroundResultResponse(BaseModel):
     weather_precip_pct: int | None = None
     image_urls: list[str] = []
     image_attribution: str = ""
+    # Requested nights not yet released for booking, and when the first opens
+    # (None when the booking system has no reliable rule).
+    not_released_nights: int = 0
+    releases_on: date | None = None
 
 
 class SearchWarningResponse(BaseModel):
@@ -154,12 +167,21 @@ class ActionChipResponse(BaseModel):
 
 class SearchResponse(BaseModel):
     campgrounds_checked: int
+    # Everything that passed the registry, tag and distance filters — the pool
+    # the `limit` cap selects from. matched > checked means the search was capped.
+    campgrounds_matched: int
     campgrounds_with_availability: int
     results: list[CampgroundResultResponse]
     warnings: list[SearchWarningResponse] = []
     diagnosis: DiagnosisResponse | None = None
     date_suggestions: list[DateSuggestionResponse] = []
     action_chips: list[ActionChipResponse] = []
+    # Checked campgrounds with requested nights not yet released, including
+    # those with no availability (which aren't in `results`), and the span of
+    # release dates from their first to their last not-released night.
+    not_released_campgrounds: int = 0
+    releases_on_earliest: date | None = None
+    releases_on_latest: date | None = None
 
 
 class CampgroundResponse(BaseModel):
@@ -190,9 +212,18 @@ async def _generate_search_summary(
     query: SearchQuery,
     posthog_distinct_id: str | None = None,
 ) -> str | None:
-    """Generate a brief AI summary of search results. Returns None on failure."""
+    """Generate a brief AI summary of search results. Returns None on failure.
+
+    Off unless SEARCH_SUMMARY_ENABLED is truthy. Dropped 2026-11-07: it stated
+    upstream data bugs as fact ("only 1 site for June 2027" from a not-yet-
+    released month) and its urgency contradicted docs/BRAND.md. The key gate
+    alone couldn't turn it off: NL search and the planner share the key.
+    """
     import asyncio
     import os
+
+    if os.getenv("SEARCH_SUMMARY_ENABLED", "").strip().lower() not in ("1", "true", "yes"):
+        return None
 
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key:
@@ -235,18 +266,8 @@ async def _generate_search_summary(
         return None
 
 
-def _build_availability_url(
-    facility_id: str,
-    booking_system: BookingSystem,
-    start_date: date | None,
-    end_date: date | None = None,
-    slug: str = "",
-) -> str:
-    if booking_system == BookingSystem.WA_STATE:
-        return wa_state_availability_url(facility_id, start_date, end_date)
-    if booking_system == BookingSystem.OR_STATE:
-        return or_state_availability_url(facility_id, slug, start_date, end_date)
-    return recgov_availability_url(facility_id, start_date)
+def _iso(d: date | None) -> str | None:
+    return d.isoformat() if d else None
 
 
 def _build_booking_url(
@@ -305,6 +326,7 @@ def _format_result(
                 max_people=w.max_people,
                 is_fcfs=w.is_fcfs,
                 booking_url=booking_url,
+                **w.fit.model_dump(),
             )
         )
 
@@ -324,8 +346,9 @@ def _format_result(
         elevator_pitch=cg.elevator_pitch,
         description_rewrite=cg.description_rewrite,
         best_for=cg.best_for,
-        estimated_drive_minutes=r.estimated_drive_minutes,
-        availability_url=_build_availability_url(
+        estimated_drive_minutes=None if r.boat_in else r.estimated_drive_minutes,
+        boat_in=r.boat_in,
+        availability_url=availability_url(
             cg.facility_id, cg.booking_system, start, end,
             slug=cg.booking_url_slug,
         ) if start else None,
@@ -336,6 +359,8 @@ def _format_result(
         weather_precip_pct=round(weather[2]) if weather else None,
         image_urls=[] if photos_disabled else cg.image_urls,
         image_attribution="" if photos_disabled else cg.image_attribution,
+        not_released_nights=r.not_released_nights,
+        releases_on=r.releases_on,
     )
 
 
@@ -476,6 +501,7 @@ async def search(
 
     return SearchResponse(
         campgrounds_checked=results.campgrounds_checked,
+        campgrounds_matched=results.campgrounds_matched,
         campgrounds_with_availability=results.campgrounds_with_availability,
         results=[
             _format_result(
@@ -522,6 +548,9 @@ async def search(
             )
             for c in results.action_chips
         ],
+        not_released_campgrounds=results.not_released.campgrounds,
+        releases_on_earliest=results.not_released.releases_on_earliest,
+        releases_on_latest=results.not_released.releases_on_latest,
     )
 
 
@@ -656,6 +685,28 @@ async def search_stream(
                     yield f"data: {json.dumps(payload)}\n\n"
                 continue
 
+            # StreamCoverageEvent = matched vs checked, so a capped search is
+            # never mistaken for a complete one.
+            if isinstance(item, StreamCoverageEvent):
+                coverage = {
+                    "type": "coverage",
+                    "campgrounds_matched": item.campgrounds_matched,
+                    "campgrounds_checked": item.campgrounds_checked,
+                }
+                yield f"data: {json.dumps(coverage)}\n\n"
+                continue
+
+            if isinstance(item, StreamNotReleasedEvent):
+                s = item.summary
+                payload = {
+                    "type": "not_released",
+                    "not_released_campgrounds": s.campgrounds,
+                    "releases_on_earliest": _iso(s.releases_on_earliest),
+                    "releases_on_latest": _iso(s.releases_on_latest),
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                continue
+
             # StreamDiagnosisEvent = zero results, emit diagnosis
             if isinstance(item, StreamDiagnosisEvent):
                 if item.diagnosis or item.date_suggestions:
@@ -712,7 +763,7 @@ async def search_stream(
                 item, booking_system or BookingSystem.RECGOV,
                 weather=weather,
             )
-            yield f"data: {json.dumps(data.model_dump())}\n\n"
+            yield f"data: {json.dumps(data.model_dump(mode='json'))}\n\n"
             if item.total_available_sites > 0:
                 available_count += 1
                 summary_data.append({

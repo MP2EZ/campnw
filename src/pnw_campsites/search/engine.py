@@ -16,11 +16,15 @@ from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import (
+    AvailabilityStatus,
     BookingSystem,
     Campground,
     CampgroundAvailability,
     CampsiteAvailability,
+    SiteFit,
 )
+from pnw_campsites.search.release import format_release_range, release_date
+from pnw_campsites.search.site_fit import fit_from_recgov_type, wa_site_fit
 
 logger = logging.getLogger("pnw_campsites.search")
 
@@ -66,6 +70,7 @@ class AvailableWindow:
     nights: int
     max_people: int
     is_fcfs: bool = False  # True for FCFS/not-reservable sites
+    fit: SiteFit = field(default_factory=SiteFit)
 
 
 @dataclass
@@ -79,6 +84,16 @@ class CampgroundResult:
     total_sites: int = 0  # total sites at this campground
     estimated_drive_minutes: int | None = None
     error: str | None = None
+    # Requested nights not yet released for booking (NYR), and when the first
+    # and last of them open. Dates are None when the system has no rule.
+    not_released_nights: int = 0
+    releases_on: date | None = None
+    releases_through: date | None = None
+
+    @property
+    def boat_in(self) -> bool:
+        """Only reachable by boat: any drive time is to the shore, not the site."""
+        return "boat-in" in self.campground.tags
 
 
 @dataclass
@@ -88,6 +103,16 @@ class SearchWarning:
     kind: str  # "rate_limited", "waf_blocked", "unavailable"
     count: int
     source: str  # "recgov", "wa_state"
+
+
+@dataclass
+class NotReleasedSummary:
+    """Checked campgrounds with requested nights not yet released (NYR), and
+    the span from the first to the last of those nights' release dates."""
+
+    campgrounds: int = 0
+    releases_on_earliest: date | None = None
+    releases_on_latest: date | None = None
 
 
 @dataclass
@@ -132,6 +157,10 @@ class _PreparedSearch:
     start_month: date
     end_month: date
     from_coords: tuple | None
+    # Size of the pool the per-source cap selects from: everything that passed
+    # the registry, tag and distance filters. registry_count is *pre*-distance,
+    # so it cannot answer "how many matched?".
+    matched_count: int = 0
 
 
 @dataclass
@@ -163,17 +192,40 @@ class StreamWarningsEvent:
 
 
 @dataclass
+class StreamCoverageEvent:
+    """Yielded by search_stream once per search, after every check finishes.
+
+    Carries the same two numbers /api/search returns, so a capped search is
+    never mistaken for a complete one.
+    """
+
+    campgrounds_matched: int
+    campgrounds_checked: int
+
+
+@dataclass
+class StreamNotReleasedEvent:
+    """Yielded by search_stream once every campground has been checked, when
+    any had requested nights not yet released. Most such campgrounds have no
+    availability, so they never reach the client as results."""
+
+    summary: NotReleasedSummary
+
+
+@dataclass
 class SearchResults:
     """Complete results from a discovery search."""
 
     query: SearchQuery
     results: list[CampgroundResult] = field(default_factory=list)
     campgrounds_checked: int = 0
+    campgrounds_matched: int = 0
     campgrounds_with_availability: int = 0
     warnings: list[SearchWarning] = field(default_factory=list)
     diagnosis: SearchDiagnosis | None = None
     date_suggestions: list[DateSuggestion] = field(default_factory=list)
     action_chips: list[ActionChip] = field(default_factory=list)
+    not_released: NotReleasedSummary = field(default_factory=NotReleasedSummary)
 
     @property
     def has_availability(self) -> bool:
@@ -196,6 +248,18 @@ def aggregate_warnings(results: list[CampgroundResult]) -> list[SearchWarning]:
         SearchWarning(kind=kind, count=count, source=source)
         for (kind, source), count in counts.items()
     ]
+
+
+def summarize_not_released(results: list[CampgroundResult]) -> NotReleasedSummary:
+    """Roll per-campground not-released nights up for the whole search."""
+    unreleased = [r for r in results if r.not_released_nights]
+    firsts = [r.releases_on for r in unreleased if r.releases_on]
+    lasts = [r.releases_through for r in unreleased if r.releases_through]
+    return NotReleasedSummary(
+        campgrounds=len(unreleased),
+        releases_on_earliest=min(firsts, default=None),
+        releases_on_latest=max(lasts, default=None),
+    )
 
 
 def _find_consecutive_windows(
@@ -287,6 +351,58 @@ def _find_consecutive_windows(
     return windows
 
 
+def _site_matches(site: CampsiteAvailability, query: SearchQuery) -> bool:
+    """Group-site and capacity filters."""
+    if not query.include_group_sites and "GROUP" in site.campsite_type.upper():
+        return False
+    return not (query.max_people and site.max_num_people < query.max_people)
+
+
+def _site_fit(site: CampsiteAvailability, system: BookingSystem) -> SiteFit:
+    """The provider's or WA enrichment's fit; else Recreation.gov's type.
+
+    WA's campsite_type is a placeholder, so unenriched WA sites stay unknown.
+    """
+    if site.fit is not None:
+        return site.fit
+    if system == BookingSystem.RECGOV:
+        return fit_from_recgov_type(site.campsite_type)
+    return SiteFit()
+
+
+def _not_released_nights(
+    availability: CampgroundAvailability, query: SearchQuery,
+) -> list[date]:
+    """Requested nights none of the matching sites has been released for.
+
+    A night counts when some site is NYR and none is Available or Reserved.
+    Partial NYR doesn't count: at Deception Pass one loop is NYR all summer
+    while the rest is bookable, and that night isn't "not released".
+    """
+    nyr: set[str] = set()
+    released: set[str] = set()
+    for site in availability.campsites.values():
+        if not _site_matches(site, query):
+            continue
+        for day, status in site.availabilities.items():
+            if status == AvailabilityStatus.NYR:
+                nyr.add(day[:10])
+            elif status in (AvailabilityStatus.AVAILABLE, AvailabilityStatus.RESERVED):
+                released.add(day[:10])
+
+    nights = []
+    for day in sorted(nyr - released):
+        night = date.fromisoformat(day)
+        if query.start_date and night < query.start_date:
+            continue
+        if query.end_date and night > query.end_date:
+            continue
+        if query.days_of_week is not None and night.weekday() not in query.days_of_week:
+            continue
+        nights.append(night)
+    return nights
+
+
 def _process_availability(
     campground: Campground,
     availability: CampgroundAvailability,
@@ -294,6 +410,14 @@ def _process_availability(
 ) -> CampgroundResult:
     """Process raw availability into structured results."""
     result = CampgroundResult(campground=campground)
+    nights = _not_released_nights(availability, query)
+    if nights:
+        today = date.today()
+        system = campground.booking_system
+        result.not_released_nights = len(nights)
+        result.releases_on = release_date(system, nights[0], today)
+        if result.releases_on:
+            result.releases_through = release_date(system, nights[-1], today)
     result.total_sites = len(availability.campsites)
     seen_sites: set[str] = set()
     fcfs_count = 0
@@ -317,17 +441,13 @@ def _process_availability(
                     nights=0,  # unknown — FCFS
                     max_people=site.max_num_people,
                     is_fcfs=True,
+                    fit=_site_fit(site, campground.booking_system),
                 )
             )
             seen_sites.add(site_id)
             continue
 
-        # Filter group sites
-        if not query.include_group_sites and "GROUP" in site.campsite_type.upper():
-            continue
-
-        # Filter by capacity
-        if query.max_people and site.max_num_people < query.max_people:
+        if not _site_matches(site, query):
             continue
 
         windows = _find_consecutive_windows(
@@ -339,6 +459,9 @@ def _process_availability(
         )
 
         if windows:
+            fit = _site_fit(site, campground.booking_system)
+            for w in windows:
+                w.fit = fit
             result.available_windows.extend(windows)
             seen_sites.add(site_id)
 
@@ -465,6 +588,10 @@ class SearchEngine:
                 key=lambda cg: drive_times.get(cg.facility_id, 9999)
             )
 
+        # The pool the cap selects from. Counted after distance filtering and
+        # before the cap, so matched >= checked always holds.
+        matched_count = len(campgrounds)
+
         if not query.booking_system:
             by_source: dict[str, list] = {}
             for cg in campgrounds:
@@ -501,6 +628,7 @@ class SearchEngine:
             start_month=start_month,
             end_month=end_month,
             from_coords=from_coords,
+            matched_count=matched_count,
         )
 
     async def search(
@@ -514,7 +642,9 @@ class SearchEngine:
         from_coords = prep.from_coords
 
         if not campgrounds:
-            empty_results = SearchResults(query=query)
+            empty_results = SearchResults(
+                query=query, campgrounds_matched=prep.matched_count,
+            )
             if not _skip_diagnosis:
                 diagnosis, chips = self._diagnose_zero_results(
                     query, prep.registry_count, prep.distance_filtered, 0, 0,
@@ -557,14 +687,15 @@ class SearchEngine:
             sum(1 for r in all_results if r.total_available_sites > 0),
         )
 
-        # Step 4: Attach drive times to results
+        # Step 4: Attach drive times to results (never to boat-in campgrounds)
         if drive_times:
             for r in all_results:
                 fid = r.campground.facility_id
-                if fid in drive_times:
+                if fid in drive_times and not r.boat_in:
                     r.estimated_drive_minutes = drive_times[fid]
 
         warnings = aggregate_warnings(all_results)
+        not_released = summarize_not_released(all_results)
 
         campgrounds_with_availability = sum(
             1 for r in all_results if r.total_available_sites > 0
@@ -577,8 +708,10 @@ class SearchEngine:
                 if r.total_available_sites > 0 or r.fcfs_sites > 0
             ],
             campgrounds_checked=len(all_results),
+            campgrounds_matched=prep.matched_count,
             campgrounds_with_availability=campgrounds_with_availability,
             warnings=warnings,
+            not_released=not_released,
         )
 
         # Diagnose zero-result searches
@@ -589,7 +722,7 @@ class SearchEngine:
             )
             diagnosis, chips = self._diagnose_zero_results(
                 query, prep.registry_count, prep.distance_filtered,
-                len(all_results), all_unavailable,
+                len(all_results), all_unavailable, not_released,
             )
             results.diagnosis = diagnosis
             results.action_chips = chips
@@ -603,8 +736,9 @@ class SearchEngine:
 
         # Sort by distance if filtering by location, otherwise by availability
         if from_coords:
+            # Boat-in campgrounds sort after every drive-in campground
             results.results.sort(
-                key=lambda r: r.estimated_drive_minutes or 9999
+                key=lambda r: (r.boat_in, r.estimated_drive_minutes or 9999)
             )
         else:
             results.results.sort(
@@ -620,9 +754,11 @@ class SearchEngine:
         distance_filtered: int,
         checked: int,
         all_unavailable: int,
+        not_released: NotReleasedSummary | None = None,
     ) -> tuple[SearchDiagnosis, list[ActionChip]]:
         """Analyze why a search returned zero results and suggest actions."""
         chips: list[ActionChip] = []
+        unreleased = not_released.campgrounds if not_released else 0
 
         if registry_matches == 0 and query.name_like:
             binding = "name"
@@ -642,6 +778,30 @@ class SearchEngine:
             explanation = (
                 f"No campgrounds found in {query.state}"
             )
+        elif unreleased:
+            # Ahead of "distance" and "dates": a wider radius or shifted week
+            # hits the same release horizon, and "fully booked" is false.
+            binding = "not_released"
+            if unreleased < checked:
+                explanation = (
+                    f"{unreleased} of {checked} campgrounds haven't released "
+                    f"these dates for booking yet."
+                )
+            elif checked == 1:
+                explanation = (
+                    "This campground hasn't released these dates for booking yet."
+                )
+            else:
+                explanation = (
+                    f"None of the {checked} campgrounds have released these "
+                    f"dates for booking yet."
+                )
+            first = not_released.releases_on_earliest
+            last = not_released.releases_on_latest or first
+            if first:
+                explanation += (
+                    f" Booking typically opens {format_release_range(first, last)}."
+                )
         elif (
             distance_filtered > 0
             and registry_matches > 0
@@ -779,6 +939,7 @@ class SearchEngine:
                 start_month=q.start_date or base_prep.start_month,
                 end_month=q.end_date or base_prep.end_month,
                 from_coords=base_prep.from_coords,
+                matched_count=base_prep.matched_count,
             )
             return await self.search(q, _skip_diagnosis=True, _prep=probe_prep)
 
@@ -840,12 +1001,15 @@ class SearchEngine:
         | StreamProgressEvent
         | StreamDiagnosisEvent
         | StreamWarningsEvent
+        | StreamCoverageEvent
+        | StreamNotReleasedEvent
     ]:
         """Stream search results as each campground check completes.
 
         Yields CampgroundResult for campgrounds with availability,
         StreamProgressEvent for checked campgrounds without availability,
-        a StreamWarningsEvent when any provider degraded, and a final
+        a StreamWarningsEvent when any provider degraded, a
+        StreamCoverageEvent with matched/checked counts, and a final
         StreamDiagnosisEvent if zero results were found.
         """
         prep = await self._prepare_search(query)
@@ -853,6 +1017,9 @@ class SearchEngine:
         drive_times = prep.drive_times
 
         if not campgrounds:
+            yield StreamCoverageEvent(
+                campgrounds_matched=prep.matched_count, campgrounds_checked=0,
+            )
             diagnosis, chips = self._diagnose_zero_results(
                 query, prep.registry_count, prep.distance_filtered, 0, 0,
             )
@@ -870,6 +1037,7 @@ class SearchEngine:
         sem = asyncio.Semaphore(initial_concurrency)
         available_count = 0
         errored: list[CampgroundResult] = []
+        unreleased: list[CampgroundResult] = []
         checked_count = 0
         all_unavailable = 0
         total = len(campgrounds)
@@ -897,10 +1065,12 @@ class SearchEngine:
 
             if drive_times:
                 fid = r.campground.facility_id
-                if fid in drive_times:
+                if fid in drive_times and not r.boat_in:
                     r.estimated_drive_minutes = drive_times[fid]
             if r.error:
                 errored.append(r)
+            if r.not_released_nights:
+                unreleased.append(r)
             if r.total_available_sites > 0 or r.fcfs_sites > 0:
                 available_count += 1
                 yield r
@@ -917,11 +1087,20 @@ class SearchEngine:
         if errored:
             yield StreamWarningsEvent(warnings=aggregate_warnings(errored))
 
+        yield StreamCoverageEvent(
+            campgrounds_matched=prep.matched_count,
+            campgrounds_checked=checked_count,
+        )
+
+        not_released = summarize_not_released(unreleased)
+        if not_released.campgrounds:
+            yield StreamNotReleasedEvent(summary=not_released)
+
         # Yield diagnosis if nothing had availability
         if available_count == 0:
             diagnosis, chips = self._diagnose_zero_results(
                 query, prep.registry_count, prep.distance_filtered,
-                checked_count, all_unavailable,
+                checked_count, all_unavailable, not_released,
             )
             if query.name_like:
                 chips.extend(self._suggest_similar_campgrounds(query))
@@ -935,15 +1114,16 @@ class SearchEngine:
     def _enrich_wa_availability(
         self, park_facility_id: str, availability: CampgroundAvailability
     ) -> None:
-        """Replace synthetic resource_id labels with cached human site/loop names
-        and overwrite the synthetic max-capacity default with the real value.
+        """Replace synthetic resource_id labels with cached human site/loop names,
+        overwrite the synthetic max-capacity default with the real value, and
+        set each site's fit (equipment, hookups, walk-in).
 
         WA State's GoingToCamp availability API returns no human-readable site
-        identifiers and no per-site capacity — the provider hardcodes
-        max_num_people=8 for everyone. Real names + capacity live in the
+        identifiers, per-site capacity or site types — the provider hardcodes
+        max_num_people=8 and STANDARD for everyone. The real values live in the
         wa_state_sites + wa_state_loops cache populated by the metadata seeder.
         Mutates `availability.campsites[*]` in place. No-op if the cache is
-        empty for the park (graceful pre-seed fallback).
+        empty for the park (graceful pre-seed fallback: fit stays unknown).
         """
         index = self._registry.get_wa_site_index(park_facility_id)
         if not index:
@@ -956,11 +1136,13 @@ class SearchEngine:
             info = index.get(res_id)
             if not info:
                 continue
-            name, loop_title, max_capacity = info
-            campsite.site = name
-            campsite.loop = loop_title or ""
-            if max_capacity is not None:
-                campsite.max_num_people = max_capacity
+            campsite.site = info.name
+            campsite.loop = info.loop_title or ""
+            if info.max_capacity is not None:
+                campsite.max_num_people = info.max_capacity
+            campsite.fit = wa_site_fit(
+                info.name, info.allowed_equipment, info.loop_description,
+            )
 
     async def _check_campground(
         self,

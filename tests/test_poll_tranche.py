@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -40,27 +41,18 @@ class TestPollWatch:
     @pytest.mark.asyncio
     async def test_poll_or_state_watch(self, watch_db):
         """poll_watch calls reserveamerica for OR_STATE watches."""
-        from tests.conftest import make_campground
-
         watch = watch_db.add_watch(Watch(
             facility_id="409402", name="OR Park",
             start_date="2026-06-01", end_date="2026-06-30",
+            booking_system=BookingSystem.OR_STATE.value,
         ))
-        registry = MagicMock()
-        cg = make_campground(
-            facility_id="409402",
-            booking_system=BookingSystem.OR_STATE,
-        )
-        registry.get_by_facility_id.return_value = cg
 
         mock_ra = AsyncMock()
         mock_ra.get_availability = AsyncMock(
             return_value=_mock_availability("409402"),
         )
         result = await poll_watch(
-            watch, None, None, watch_db,
-            registry=registry,
-            reserveamerica=mock_ra,
+            watch, None, None, watch_db, reserveamerica=mock_ra,
         )
         assert result.error is None
         mock_ra.get_availability.assert_called_once()
@@ -68,23 +60,14 @@ class TestPollWatch:
     @pytest.mark.asyncio
     async def test_poll_or_state_without_client_raises(self, watch_db):
         """poll_watch returns error if OR_STATE watch but no RA client."""
-        from tests.conftest import make_campground
-
         watch = watch_db.add_watch(Watch(
             facility_id="409402", name="OR Park",
             start_date="2026-06-01", end_date="2026-06-30",
+            booking_system=BookingSystem.OR_STATE.value,
         ))
-        registry = MagicMock()
-        cg = make_campground(
-            facility_id="409402",
-            booking_system=BookingSystem.OR_STATE,
-        )
-        registry.get_by_facility_id.return_value = cg
 
         result = await poll_watch(
-            watch, None, None, watch_db,
-            registry=registry,
-            reserveamerica=None,
+            watch, None, None, watch_db, reserveamerica=None,
         )
         assert result.error is not None
         assert "ReserveAmerica" in result.error
@@ -108,12 +91,6 @@ class TestPollAllWithTemplateWatches:
         cg_b = make_campground(facility_id="bbb", drive_minutes_from_base=120)
         registry = MagicMock()
         registry.search.return_value = [cg_a, cg_b]
-        # poll_watch calls get_by_facility_id to determine booking system —
-        # return real Campground objects so booking_system.value is a string,
-        # not a MagicMock (which would crash SQLite bind).
-        registry.get_by_facility_id.side_effect = lambda fid: {
-            "aaa": cg_a, "bbb": cg_b,
-        }.get(fid)
 
         mock_recgov = AsyncMock()
         mock_recgov.get_availability_range = AsyncMock(
@@ -121,7 +98,7 @@ class TestPollAllWithTemplateWatches:
         )
 
         await poll_all(
-            mock_recgov, None, watch_db, registry,
+            mock_recgov, None, watch_db, registry, today=date(2026, 6, 1),
         )
         # Should have polled 2 expanded campgrounds
         assert mock_recgov.get_availability_range.call_count == 2
@@ -143,6 +120,6 @@ class TestPollAllWithTemplateWatches:
         )
 
         await poll_all(
-            mock_recgov, None, watch_db, None,
+            mock_recgov, None, watch_db, None, today=date(2026, 6, 1),
         )
         assert mock_recgov.get_availability_range.call_count == 1

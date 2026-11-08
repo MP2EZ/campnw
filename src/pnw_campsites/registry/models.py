@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
 # Availability (matches rec.gov undocumented API response)
@@ -19,8 +19,24 @@ class AvailabilityStatus(StrEnum):
     NOT_RESERVABLE = "Not Reservable"  # site exists but can't be reserved online
     NOT_RESERVABLE_MGMT = "Not Reservable Management"  # held by management
     NYR = "NYR"  # Not Yet Released — reservations haven't opened
-    OPEN = "Open"  # FCFS / walk-in only
+    OPEN = "Open"  # FCFS / walk-in, or stay continuation (see continuation_dates)
     CLOSED = "Closed"  # seasonal closure
+
+
+class SiteFit(BaseModel):
+    """What a site takes, as far as the booking system says. None = unknown.
+
+    `fits_rv` with `max_rv_ft` None means RVs fit, no upper length stated.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    fits_tent: bool | None = None
+    fits_van: bool | None = None
+    fits_rv: bool | None = None  # RV or trailer
+    max_rv_ft: int | None = None
+    hookups: bool | None = None  # electric (or more)
+    walk_in: bool | None = None
 
 
 class CampsiteAvailability(BaseModel):
@@ -34,6 +50,7 @@ class CampsiteAvailability(BaseModel):
     min_num_people: int  # can be 0
     max_num_people: int
     availabilities: dict[str, AvailabilityStatus]  # ISO datetime str -> status
+    fit: SiteFit | None = None  # set by WA enrichment and ReserveAmerica
 
     def available_dates(self) -> list[str]:
         """Return sorted list of dates with Available status."""
@@ -41,14 +58,43 @@ class CampsiteAvailability(BaseModel):
             d for d, s in self.availabilities.items() if s == AvailabilityStatus.AVAILABLE
         )
 
+    def continuation_dates(self) -> set[str]:
+        """Open nights bookable only as the tail of a stay that arrives earlier.
+
+        Rec.gov marks the nights just past a campground's arrival window Open
+        until they're released, then NYR beyond. Kirk Creek on 2026-11-07:
+        Reserved/Available to May 7, Open to May 19 (Reserved where a stay
+        runs on), NYR from May 20. So an Open night is continuation when the
+        site's later nights, skipping Open and Reserved, reach NYR. Open that
+        doesn't run into NYR keeps its walk-up meaning (ReserveAmerica WALK_UP).
+        """
+        continuation: set[str] = set()
+        reaches_nyr = False
+        for day in sorted(self.availabilities, reverse=True):
+            status = self.availabilities[day]
+            if status == AvailabilityStatus.NYR:
+                reaches_nyr = True
+            elif status == AvailabilityStatus.OPEN:
+                if reaches_nyr:
+                    continuation.add(day)
+            elif status != AvailabilityStatus.RESERVED:
+                reaches_nyr = False
+        return continuation
+
     @property
     def is_fcfs(self) -> bool:
         """True if this site is FCFS — not bookable online."""
         statuses = set(self.availabilities.values())
-        return not statuses.intersection(
-            {AvailabilityStatus.AVAILABLE, AvailabilityStatus.RESERVED}
-        ) and statuses.intersection(
-            {AvailabilityStatus.NOT_RESERVABLE, AvailabilityStatus.OPEN}
+        if statuses & {AvailabilityStatus.AVAILABLE, AvailabilityStatus.RESERVED}:
+            return False
+        if AvailabilityStatus.NOT_RESERVABLE in statuses:
+            return True
+        if AvailabilityStatus.OPEN not in statuses:
+            return False
+        continuation = self.continuation_dates()
+        return any(
+            status == AvailabilityStatus.OPEN and day not in continuation
+            for day, status in self.availabilities.items()
         )
 
 

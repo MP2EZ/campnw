@@ -111,7 +111,11 @@ export interface UseSearchReturn {
   setLiveAnnouncement: (s: string) => void;
   cardRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
   maxResults: number;
+  /** When the last search finished streaming (ms epoch); null before one has. */
+  completedAt: number | null;
   handleSearch: (params: SearchParams, mode: SearchMode) => Promise<void>;
+  /** Re-run the current search with a higher `limit` to check more campgrounds. */
+  checkRest: (limit: number) => void;
   toggleSource: (src: string) => void;
   resetSearch: () => void;
 }
@@ -120,6 +124,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [searchSummary, setSearchSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [completedAt, setCompletedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultsView, setResultsView] = useState<ResultsView>("dates");
   const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
@@ -255,8 +260,25 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     // were hardcoded to [] at every setResults call, so provider outages
     // reached the UI as silently fewer results.
     let streamedWarnings: SearchWarning[] = [];
+    // Diagnosis and not-released frames arrive just before [DONE]. Every
+    // update rebuilds `results` from this snapshot so the end of the stream
+    // can't drop them — onDone used to, so the zero-results screen never
+    // received a diagnosis.
+    let streamedEnd: Partial<SearchResponse> = {};
     let rafId: number | null = null;
     let checkedCount = 0;
+    // Known only once the stream finishes; undefined until then.
+    let matchedCount: number | undefined;
+    const snapshot = (): SearchResponse => ({
+      campgrounds_checked: checkedCount,
+      campgrounds_matched: matchedCount,
+      campgrounds_with_availability: streamedResults.filter(
+        (r) => r.total_available_sites > 0,
+      ).length,
+      results: [...streamedResults],
+      warnings: streamedWarnings,
+      ...streamedEnd,
+    });
     setResults({
       campgrounds_checked: 0,
       campgrounds_with_availability: 0,
@@ -272,14 +294,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
-            setResults({
-              campgrounds_checked: checkedCount,
-              campgrounds_with_availability: streamedResults.filter(
-                (r) => r.total_available_sites > 0,
-              ).length,
-              results: [...streamedResults],
-              warnings: streamedWarnings,
-            });
+            setResults(snapshot());
           });
         }
       },
@@ -289,16 +304,11 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           rafId = null;
         }
         setLoading(false);
+        setCompletedAt(Date.now());
         searchAbortRef.current = null;
-        const withAvail = streamedResults.filter(
-          (r) => r.total_available_sites > 0,
-        ).length;
-        setResults({
-          campgrounds_checked: checkedCount,
-          campgrounds_with_availability: withAvail,
-          results: [...streamedResults],
-          warnings: streamedWarnings,
-        });
+        const final = snapshot();
+        const withAvail = final.campgrounds_with_availability;
+        setResults(final);
         track("search_executed", {
           search_id: searchId,
           state: params.state || "all",
@@ -332,16 +342,13 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         });
       },
       (diagEvent: DiagnosisEvent) => {
-        setResults((prev) =>
-          prev
-            ? {
-                ...prev,
-                diagnosis: diagEvent.diagnosis ?? undefined,
-                date_suggestions: diagEvent.date_suggestions,
-                action_chips: diagEvent.action_chips,
-              }
-            : prev,
-        );
+        streamedEnd = {
+          ...streamedEnd,
+          diagnosis: diagEvent.diagnosis ?? undefined,
+          date_suggestions: diagEvent.date_suggestions,
+          action_chips: diagEvent.action_chips,
+        };
+        setResults((prev) => (prev ? { ...prev, ...streamedEnd } : prev));
       },
       abortController.signal,
       (parsed) => {
@@ -367,14 +374,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
-            setResults({
-              campgrounds_checked: checkedCount,
-              campgrounds_with_availability: streamedResults.filter(
-                (r) => r.total_available_sites > 0,
-              ).length,
-              results: [...streamedResults],
-              warnings: streamedWarnings,
-            });
+            setResults(snapshot());
           });
         }
       },
@@ -384,8 +384,35 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           prev ? { ...prev, warnings } : prev,
         );
       },
+      (matched, checked) => {
+        matchedCount = matched;
+        checkedCount = checked;
+        setResults((prev) =>
+          prev
+            ? { ...prev, campgrounds_matched: matched, campgrounds_checked: checked }
+            : prev,
+        );
+      },
+      (notReleased) => {
+        streamedEnd = { ...streamedEnd, ...notReleased };
+        setResults((prev) => (prev ? { ...prev, ...notReleased } : prev));
+      },
     );
   }, [user]);
+
+  const checkRest = useCallback((limit: number) => {
+    // activeSearchParams, not the form's params: for a natural-language search
+    // it holds the dates and filters the server parsed, so the re-run does not
+    // pay for (or vary with) a second NL parse.
+    const base = activeSearchParams;
+    if (!base) return;
+    track("check_rest_clicked", {
+      from_limit: base.limit || 20,
+      to_limit: limit,
+      matched: results?.campgrounds_matched ?? 0,
+    });
+    handleSearch({ ...base, limit }, lastSearchMode.current);
+  }, [activeSearchParams, handleSearch, results?.campgrounds_matched]);
 
   // Run the search a shared link describes. Without this the URL round-trip is
   // write-only: the address bar looks right, the form shows defaults, and no
@@ -423,7 +450,9 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     setLiveAnnouncement,
     cardRefs,
     maxResults,
+    completedAt,
     handleSearch,
+    checkRest,
     toggleSource,
     resetSearch: useCallback(() => {
       setResults(null);

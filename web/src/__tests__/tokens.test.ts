@@ -10,7 +10,7 @@ import { join } from "node:path";
  */
 
 const ROOT = join(__dirname, "..");
-const FILES = ["App.css", "tokens.css", "pages/MapView.css"];
+const FILES = ["App.css", "tokens.css", "pages/MapView.css", "results/results.css"];
 
 function read(f: string) {
   return readFileSync(join(ROOT, f), "utf-8");
@@ -64,4 +64,50 @@ describe("CSS custom properties", () => {
       expect(darkBlock, `${token} has no dark-mode value`).toContain(token);
     }
   });
+});
+
+describe("results v2 token contrast", () => {
+  const block = (css: string, selector: RegExp) => {
+    const body = css.match(selector)?.[1] ?? "";
+    return Object.fromEntries(
+      [...body.matchAll(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]),
+    );
+  };
+  const ROOT_RE = /:root\s*{([^}]*)}/;
+  const DARK_RE = /\[data-theme="dark"\]\s*{([^}]*)}/;
+  const themes = {
+    light: { ...block(read("App.css"), ROOT_RE), ...block(read("tokens.css"), ROOT_RE) },
+    dark: { ...block(read("App.css"), DARK_RE), ...block(read("tokens.css"), DARK_RE) },
+  };
+
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  // [foreground, background, minimum]. 4.5:1 for text, 3:1 for non-text.
+  // --chip-full-border is left out on purpose: the dashed edge is decorative
+  // and the chip's "Full" label carries the state.
+  const PAIRS: [string, string, number][] = [
+    ["--chip-open-text", "--chip-open-bg", 4.5],
+    ["--chip-full-text", "--chip-full-bg", 4.5],
+    ["--notice-info-text", "--notice-info-bg", 4.5],
+    ["--chip-few-dot", "--chip-open-bg", 3],
+    ["--focus-ring", "--surface-card", 3],
+    ["--focus-ring", "--bg", 3],
+    ["--focus-ring", "--notice-info-bg", 3],
+  ];
+
+  for (const [theme, tokens] of Object.entries(themes)) {
+    test.each(PAIRS)(`${theme}: %s on %s ≥ %d:1`, (fg, bg, min) => {
+      expect(tokens[fg], `${fg} missing in ${theme}`).toBeDefined();
+      expect(tokens[bg], `${bg} missing in ${theme}`).toBeDefined();
+      expect(contrast(tokens[fg], tokens[bg])).toBeGreaterThanOrEqual(min);
+    });
+  }
 });

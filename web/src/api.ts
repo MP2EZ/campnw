@@ -33,6 +33,10 @@ export interface PostHogInstance {
   opt_out_capturing?(): void;
   opt_in_capturing?(): void;
   has_opted_out_capturing?(): boolean;
+  /** Undefined until flags load (always, on the snippet's stub). */
+  isFeatureEnabled?(key: string): boolean | undefined;
+  /** Runs when flags load or reload; returns an unsubscribe on the real SDK. */
+  onFeatureFlags?(callback: () => void): (() => void) | void;
 }
 
 export function getPosthog(): PostHogInstance | undefined {
@@ -124,6 +128,18 @@ function isSSEWarnings(data: unknown): data is { type: "warnings"; warnings: Sea
     && (data as Record<string, unknown>).type === "warnings";
 }
 
+function isSSECoverage(
+  data: unknown,
+): data is { type: "coverage"; campgrounds_matched: number; campgrounds_checked: number } {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "coverage";
+}
+
+function isSSENotReleased(data: unknown): data is { type: "not_released" } & NotReleasedSummary {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "not_released";
+}
+
 function isCampgroundResult(data: unknown): data is CampgroundResult {
   return typeof data === "object" && data !== null
     && typeof (data as Record<string, unknown>).facility_id === "string"
@@ -141,6 +157,14 @@ export interface Window {
   max_people: number;
   is_fcfs: boolean;
   booking_url: string | null;
+  // Site fit; null = the booking system doesn't say (never "doesn't fit").
+  // fits_rv true with max_rv_ft null means RVs fit but no length is listed.
+  fits_tent: boolean | null;
+  fits_van: boolean | null;
+  fits_rv: boolean | null;
+  max_rv_ft: number | null;
+  hookups: boolean | null;
+  walk_in: boolean | null;
 }
 
 export interface CampgroundResult {
@@ -159,6 +183,8 @@ export interface CampgroundResult {
   description_rewrite?: string;
   best_for?: string;
   estimated_drive_minutes: number | null;
+  /** Only reachable by boat; drive time is omitted and the card says so. */
+  boat_in?: boolean;
   availability_url: string | null;
   windows: Window[];
   error: string | null;
@@ -167,6 +193,20 @@ export interface CampgroundResult {
   weather_precip_pct?: number;
   image_urls?: string[];
   image_attribution?: string;
+  /** Requested nights not yet released for booking, and when the first opens. */
+  not_released_nights?: number;
+  releases_on?: string | null;
+}
+
+/**
+ * Checked campgrounds with requested nights not yet released for booking —
+ * including those with no availability, which aren't in `results` — and the
+ * span of release dates (YYYY-MM-DD) from their first to last such night.
+ */
+export interface NotReleasedSummary {
+  not_released_campgrounds: number;
+  releases_on_earliest: string | null;
+  releases_on_latest: string | null;
 }
 
 export interface SearchWarning {
@@ -197,8 +237,14 @@ export interface ActionChip {
   params: Record<string, unknown>;
 }
 
-export interface SearchResponse {
+export interface SearchResponse extends Partial<NotReleasedSummary> {
   campgrounds_checked: number;
+  /**
+   * Campgrounds that passed every registry, tag and distance filter — the
+   * pool the `limit` cap selects from. `matched > checked` means the search
+   * was capped. Optional because a streaming search only learns it at the end.
+   */
+  campgrounds_matched?: number;
   campgrounds_with_availability: number;
   results: CampgroundResult[];
   warnings: SearchWarning[];
@@ -281,6 +327,8 @@ export async function searchCampsitesStream(
   onSummary?: (text: string) => void,
   onProgress?: (checked: number, total: number) => void,
   onWarnings?: (warnings: SearchWarning[]) => void,
+  onCoverage?: (matched: number, checked: number) => void,
+  onNotReleased?: (summary: NotReleasedSummary) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   if (params.q) {
@@ -336,6 +384,14 @@ export async function searchCampsitesStream(
               onSummary(parsed.text);
             } else if (isSSEWarnings(parsed) && onWarnings) {
               onWarnings(parsed.warnings);
+            } else if (isSSECoverage(parsed) && onCoverage) {
+              onCoverage(parsed.campgrounds_matched, parsed.campgrounds_checked);
+            } else if (isSSENotReleased(parsed) && onNotReleased) {
+              onNotReleased({
+                not_released_campgrounds: parsed.not_released_campgrounds,
+                releases_on_earliest: parsed.releases_on_earliest,
+                releases_on_latest: parsed.releases_on_latest,
+              });
             } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
               onDiagnosis(parsed);
             } else if (isCampgroundResult(parsed)) {
@@ -372,6 +428,8 @@ export interface WatchData {
   created_at: string;
   watch_type?: string;
   search_params?: Record<string, unknown> | null;
+  /** Last night has passed (Pacific); the poller no longer checks it. */
+  expired?: boolean;
 }
 
 // ---------------------------------------------------------------------------

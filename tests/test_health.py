@@ -345,6 +345,41 @@ async def test_registry_check_fails_when_all_disabled(tmp_path, monkeypatch):
         await health._check_registry_db()
 
 
+def _make_wa_registry_db(tmp_path, seeded_fids):
+    import sqlite3
+
+    db = _make_registry_db(tmp_path)
+    conn = sqlite3.connect(db)
+    conn.executescript(
+        """
+        CREATE TABLE wa_state_sites (resource_id INTEGER PRIMARY KEY, park_facility_id TEXT);
+        INSERT INTO campgrounds VALUES (10,'Lake Easton','WA',1,'wa_state','','-10');
+        INSERT INTO campgrounds VALUES (11,'Alta Lake','WA',1,'wa_state','','-11');
+        INSERT INTO campgrounds VALUES (12,'Retired Park','WA',0,'wa_state','','-12');
+        """
+    )
+    conn.executemany(
+        "INSERT INTO wa_state_sites VALUES (?, ?)",
+        [(i, fid) for i, fid in enumerate(seeded_fids)],
+    )
+    conn.commit()
+    conn.close()
+    return db
+
+
+async def test_wa_site_metadata_ok_when_every_enabled_park_is_seeded(tmp_path, monkeypatch):
+    db = _make_wa_registry_db(tmp_path, ["-10", "-10", "-11"])
+    monkeypatch.setattr("pnw_campsites.registry.db.DEFAULT_DB_PATH", db)
+    assert await health._check_wa_site_metadata() == "2 WA parks seeded (3 sites)"
+
+
+async def test_wa_site_metadata_lists_unseeded_parks(tmp_path, monkeypatch):
+    db = _make_wa_registry_db(tmp_path, ["-11"])
+    monkeypatch.setattr("pnw_campsites.registry.db.DEFAULT_DB_PATH", db)
+    with pytest.raises(RuntimeError, match=r"1/2 WA parks have no seeded sites: Lake Easton$"):
+        await health._check_wa_site_metadata()
+
+
 class _FakeGoingToCamp:
     """Stands in for GoingToCampClient: metadata endpoints answer, availability
     does whatever the test says."""

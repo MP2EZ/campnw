@@ -22,6 +22,8 @@ const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").th
 import { UserMenu } from "./components/UserMenu";
 import { ProBadge } from "./components/ProBadge";
 import { SmartZeroState } from "./components/SmartZeroState";
+import { SearchCoverage } from "./components/SearchCoverage";
+import { NotReleasedNotice } from "./components/NotReleasedNotice";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Lockup } from "./components/brand/Lockup";
 import { IconSun, IconMoon, IconClose, IconChevronUp, IconChevronDown, IconList, IconGrid, IconSearch } from "./icons";
@@ -30,6 +32,7 @@ import { useSearch } from "./hooks/useSearch";
 import type { SearchMode } from "./hooks/useSearch";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { SearchContext } from "./contexts/SearchContext";
+import { useUiVersion } from "./results/uiVersion";
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const MapView = lazy(() => import("./pages/MapView"));
 const TripsPage = lazy(() => import("./pages/TripsPage"));
@@ -37,6 +40,7 @@ const TripDetail = lazy(() => import("./pages/TripDetail"));
 const SharedView = lazy(() => import("./pages/SharedView"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));
+const ResultsPage = lazy(() => import("./results/ResultsPage"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 import { Footer } from "./components/Footer";
@@ -740,8 +744,9 @@ export default function App() {
     activeSearchParams, formCollapsed, setFormCollapsed,
     focusedCardIndex, setFocusedCardIndex,
     liveAnnouncement, setLiveAnnouncement,
-    cardRefs, maxResults, handleSearch, toggleSource, resetSearch, searchId,
+    cardRefs, maxResults, completedAt, handleSearch, checkRest, toggleSource, resetSearch, searchId,
   } = useSearch(user ?? null);
+  const uiVersion = useUiVersion();
 
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -1106,15 +1111,26 @@ export default function App() {
 
       {loading && (!results || results.results.length === 0) && <ResultsSkeleton />}
 
-      {results && (() => {
+      {/* v1.48 switch point: results v2 lives in src/results/ (D1). */}
+      {results && uiVersion === "v2" ? (
+        <Suspense fallback={null}>
+          <ResultsPage maxResults={maxResults} onCheckRest={checkRest} completedAt={completedAt}
+            onSearch={handleSearch} searchId={searchId} />
+        </Suspense>
+      ) : results && (() => {
         const withAvailability = availableCards.length;
         return (
         <div className="results">
           <div className="results-header">
-            <p className="results-summary">
-              Checked {Math.min(results.campgrounds_checked, maxResults)} campgrounds —{" "}
-              {withAvailability} with availability
-            </p>
+            <SearchCoverage
+              checked={results.campgrounds_checked}
+              matched={results.campgrounds_matched}
+              limit={maxResults}
+              withAvailability={withAvailability}
+              nearby={!!activeSearchParams?.from_location}
+              loading={loading}
+              onCheckRest={checkRest}
+            />
             <div className="results-toolbar-right">
               <div className="view-toggle">
                 <button
@@ -1150,6 +1166,7 @@ export default function App() {
               </div>
             </div>
           </div>
+          {withAvailability > 0 && <NotReleasedNotice summary={results} />}
           {resultSources.size > 1 && (
           <div className="source-toggle" role="group" aria-label="Filter by source">
             {[...resultSources].map((src) => {
@@ -1250,6 +1267,7 @@ export default function App() {
               actionChips={results?.action_chips}
               searchDates={searchDates || undefined}
               searchId={searchId}
+              notReleased={results.not_released_campgrounds}
               onSearch={handleSearch}
             />
           )}

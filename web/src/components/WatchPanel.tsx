@@ -135,7 +135,7 @@ export const WatchPanel = memo(function WatchPanel({
           {watches.map((w) => (
             <div
               key={w.id}
-              className={`watch-item ${!w.enabled ? "paused" : ""}`}
+              className={`watch-item ${!w.enabled || w.expired ? "paused" : ""}`}
             >
               <div className="watch-item-info">
                 <h3>
@@ -152,7 +152,9 @@ export const WatchPanel = memo(function WatchPanel({
                     {w.days_of_week.map((d) => DAY_NAMES[d]).join(", ")}
                   </p>
                 )}
-                {!w.enabled && (
+                {w.expired ? (
+                  <span className="watch-paused-badge">Past</span>
+                ) : !w.enabled && (
                   <span className="watch-paused-badge">Paused</span>
                 )}
               </div>

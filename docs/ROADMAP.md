@@ -1,12 +1,30 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
-**Last updated:** 2026-10-04
-**Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`). Last release: PR #150 (`dev → main`, 2026-08-26) — audit remediation. v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; App Store/Play still pending.
+**Last updated:** 2026-11-07
+**Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`; no version bump since August). Last release: PR #166 (`dev → main`, 2026-11-07). v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; App Store/Play still pending. Next planned milestone: **v1.48 "Answer-first Results"** (designed, not started).
 
-**Open problems (not yet scheduled):**
-- **#131** — ReserveAmerica blocks Fly egress IPs → all 53 Oregon State Parks return nothing in prod.
-- **#135** — a provider can go fully dark without the prod monitor failing (the monitor has passed 58/58 runs while #131 was live).
-- **#127** — nightly Playwright red since late August. PR #148 fixed the Portal-copy assertion, but as of 2026-10-03 both Stripe flows (`upgrade.spec.ts`, `cancel-reactivate.spec.ts`) time out on a click; `upgrade.spec.ts` also gates PRs.
+**Open problems:**
+- **WA State Parks dark in prod since ~2026-11-05.** GoingToCamp's Azure WAF blocks prod's outbound IPs: first the shared Datacamp address `79.127.185.38`, and since 2026-11-07 also prod's dedicated Fly egress IP `209.71.113.243`, which is in Fly's own range and was blocked immediately. Staging (shared CDN77 `79.127.255.236`) and GitHub's Azure runners (`52.159.243.197`, 2026-11-07) still get through, so the block targets particular IPs and ranges, not datacenters as a class. Prod survives the block (#165) and labels it `waf_blocked`. Tracked by open alert #167. Fix options are below ("Restoring WA State Parks"). **Decision 2026-11-07: documented, not started.**
+- **#135** — a provider can go dark without the monitor failing. Largely addressed: #165 makes the monitor check prod's own WA view, and #168 runs the diagnostic sweep on failure and keeps one issue per outage. Oregon isn't covered by a prod-view check yet.
+- **Watch poller** sent WA watches (ids 7, 9) to the Recreation.gov URL and kept polling past-dated watches, so it got 400s every cycle (seen in prod logs 2026-11-06). **Fixed on `fix/watch-poller-dispatch` (PR to dev, ships next release).** Cause: the create route never stored a watch's source, so every watch was saved as `recgov`, and the poller's self-heal looked the facility up in the registry filtered to rec.gov, so it never found a WA or OR park. Now the create route stores the source, a startup migration corrects existing rows (registry first; a negative GoingToCamp id means WA), and template watches keep each park's provider. Past-dated watches are skipped, not changed: they stay enabled, the API marks them `expired`, and the UI shows "Past". A partly past watch polls from today on (Pacific). A WAF block or rate limit stops that provider for the rest of the cycle and logs one warning. Notification links go to each park's own booking site.
+
+**Resolved 2026-11-07: Oregon State Parks restored.** Prod was given a dedicated app-scoped Fly egress IP (`fly ips allocate-egress -a campnw -r sjc`, about $4/mo). ReserveAmerica blocked the shared Datacamp/CDN77 and Azure addresses but not Fly's own range, so the 53 Oregon parks work from prod again (`doctor` ok; Silver Falls returns availability). That supersedes #131's conclusion that every datacenter IP is blocked.
+
+### Restoring WA State Parks (documented 2026-11-07, not started)
+The egress IP is shared by all of prod's outbound traffic. It can't be split per provider, and it has to stay because it is what keeps Oregon working. So WA needs its own route:
+- **Recommended: proxy GoingToCamp only.**
+  - A tiny Azure VM in West US (~$4–5/mo, smallest size) running `tinyproxy` as an HTTP CONNECT proxy.
+  - Lock it down by source IP (`209.71.113.243`) plus basic auth.
+  - Azure is the only host with evidence: two separate GitHub runner IPs reached GoingToCamp on 2026-11-06 and 2026-11-07, while ReserveAmerica blocks Azure. Other clouds are untested.
+  - CONNECT keeps curl_cffi's Chrome TLS fingerprint intact through the proxy, which is what gets past the WAF.
+- **Code:** a `GOINGTOCAMP_PROXY` env var, used by `GoingToCampClient` (and the `doctor` probe and WA seeder) when set and ignored when unset. Pass it as `proxies={"https": url}` to the curl_cffi `Session`.
+- **Order:**
+  1. Create the VM.
+  2. From the VM, run one curl_cffi request to `/api/maps` and `/api/availability/map` and confirm a 200.
+  3. Set the Fly secret.
+  4. Deploy.
+  5. Confirm with `doctor --only provider` on the prod box and the #167 monitor going green.
+- **Risk:** if GoingToCamp blocked the old IP because of traffic volume rather than its range, the proxy IP could get blocked the same way. The instant block of Fly's range points to range reputation, but this isn't proven. Mitigation: keep WA polling modest, and fix the watch poller bug above.
 
 ---
 
@@ -51,6 +69,8 @@ v1.45   ~PARTIAL~  Native Apps          — Internal iOS TestFlight SHIPPED 2026
 v1.46   ~PARTIAL~  Mobile Polish        — Touch feel + 44px tap targets SHIPPED 2026-08-06 (Themes B+C); safe-area, layout, keyboard (A/D/E) pending
 v1.47   [SHIPPED]  Prod Monitoring      — /healthz, daily prod smoke, `doctor` dependency sweep (v1.47.1). Alert delivery path still unproven — see v1.47 section
 —       [SHIPPED]  Audit Remediation    — Analytics identity fix, SEO/funnel instrumentation, query perf, cache correctness, UX/a11y, shared-link page (2026-08-26, no version bump)
+—       [SHIPPED]  Reliability (Oct–Nov) — Stripe E2E fixed, Portal return path, dependency advisories, Playwright for ubuntu-26.04, WAF-blocked GoingToCamp survivable (2026-10-29 → 11-07)
+v1.48   ------->   Answer-first Results — Results redesign: drive-time bands, weekend chips, fit-aware counts, full/not-released states (designed 2026-11-06)
 v2.0    ------->   Predictions+        — Statistical model, anomaly alerts, post-mortems (~Q1 2027)
 ```
 
@@ -2032,6 +2052,62 @@ Full-repo `--perf --bloat --ux --analytics` audit (2026-08-23), fixed in per-bat
 ### Still open from the audit
 - Very low traffic (≈65 pageviews/month) — most new events are unverified rather than broken.
 - Residual Info-tier polish items in `.audit-report.md` (local, untracked).
+
+---
+
+## Reliability, Oct–Nov 2026 [SHIPPED — releases #154/#156, #164, #166]
+
+| PR | Change |
+|----|--------|
+| #151 | Unblocked CI. Fixed the Stripe Checkout selector (Stripe made the Card radio decorative). Fixed the Portal cancel race, where `networkidle` resolved instantly and aborted the cancel POST, and made the "Pro until" check reload. Also: PyJWT 2.13.0 → 2.15.1, npm audit fix (critical in `@capacitor/ios`), and a scroll-timer test flake. Closed #127. |
+| #153 | The Customer Portal returns to `?billing=portal`. It's tracked as `portal_returned` (it was being counted as `checkout_returned: success`), and status is re-read at 2/4/8/15s until the webhook lands. |
+| #155 | A deploy-gate test called the real Nominatim API (a 429 blocked release #154). It's now mocked, and it now catches the off-by-one it was named for. |
+| #163 | Playwright 1.60 → 1.64.1. `ubuntu-latest` moved to 26.04 around 2026-10-30, so the nightly, the prod monitor and PR smoke died at install. That produced false `prod-down` issues #157–#162, all closed. |
+| #165 | GoingToCamp WAF block: startup survives it, the park index retries with a cooldown and is swapped in whole, 403/429 are classified and logged, and the monitor checks prod's own provider view. |
+
+Notes:
+- `gh pr merge` on a `dev → main` PR asks "Delete the branch locally?". Answering yes deleted `dev` locally and on GitHub on 2026-10-29; it was restored at the same commit. Answer **N**.
+- Fly certs auto-renewed 2026-10-06; next expiry 2027-01-04.
+
+---
+
+## v1.48 "Answer-first Results" [DESIGNED 2026-11-06 — not started]
+
+### Theme
+The results page answers the question in one line ("22 campgrounds have a June weekend open within 3 hours of Seattle"), then groups places by drive time with the bookable weekends on each card. Design canvas: https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private; 5 artboards, built on real June 2027 data).
+
+### Design
+- **Search bar:** Where / When / Who (people + tent/van/trailer and length) / Drive, plus campground-name search.
+- **Results:** a one-line answer, quick picks, and drive-time bands. Each card shows weather, fit ("Fits tents · RVs up to 35′") and weekend chips with fit-aware counts.
+- **New groups:** "Boat-in only", and "Full or not released yet" with Watch / Remind me.
+- **Weekend chip → site list:** shows types, RV length, hookups and capacity before handing off with "Book on WA State Parks ↗".
+- **Watching:** a per-weekend Watch sheet, and release-morning reminders that turn into cancellation watches.
+- **Mobile:** map plus bottom sheet with date quick-chips.
+- **Accessibility:** visible focus, 44px targets, contrast fixes.
+
+**Implementation plan:** `docs/PLAN-v1.48-answer-first-results.md` (decisions D1–D13, PRs P1a–P4b, risks).
+
+### Persona review (2026-11-06)
+Five task-based personas (weekend planner, last-minute mobile, RV owner, cancellation hunter, first-timer) plus an accessibility audit. They agreed on:
+- Full and unreleased places vanished.
+- Counts mixed site types.
+- The booking hand-off was unexplained.
+- Boat-in Blake Island was shown as a drive.
+- The Watch bell was ambiguous.
+
+All five are addressed in the v2 canvas.
+
+### Data prerequisites
+| # | Item | Status |
+|---|------|--------|
+| 1 | WA site types are hardcoded `STANDARD`. Decode `wa_state_sites.allowed_equipment` with GoingToCamp `/api/equipment` (tent / van / RV length bands 20′–40′+), plus loop descriptions for hookups | Open |
+| 2 | WA site metadata is seeded for only 25 of the 75 parks. Seeding must run from a network GoingToCamp doesn't block | **Done**: P1b seeded all 75 locally; prod imports `registry/fixtures/wa_state_sites.json` at startup |
+| 3 | `boat-in` tag | **Done**: #170 (on `dev`) |
+| 4 | Not-yet-released (`NYR`) collapsed into "unavailable" | **Done**: #171 engine, #172 API, #173 UI notice, #175 WA 9-month window (on `dev`) |
+| 5 | River parks tagged `beach` | **Done**: #170 curated overrides, applied as a startup migration (on `dev`) |
+| 6 | Search silently checks only the N closest campgrounds | **Done**: #169 `campgrounds_matched` plus "Checked N of M" / "Check the rest" (on `dev`) |
+
+Also on `dev`: #174 (Recreation.gov stay-continuation nights were counted as FCFS) and #168 (monitor dedupe). None of these are released to `main` yet.
 
 ---
 

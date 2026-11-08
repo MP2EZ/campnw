@@ -239,6 +239,12 @@ async def lifespan(app: FastAPI):
     await _reserveamerica.__aenter__()
 
     _watch_db = WatchDB()
+    # Data fix: watches were saved as 'recgov' whatever the park (2026-11-07).
+    from pnw_campsites.monitor.watcher import heal_booking_systems
+
+    healed = heal_booking_systems(_watch_db, _registry)
+    if healed:
+        _poll_logger.info("Corrected booking_system on %d watch(es)", healed)
 
     # Fetch the Supabase JWK set now, off the request path — otherwise the
     # first authenticated request after boot (and after each hourly expiry)

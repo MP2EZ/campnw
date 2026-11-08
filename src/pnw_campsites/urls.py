@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from pnw_campsites.registry.models import BookingSystem
+
 RA_BASE_URL = "https://www.reserveamerica.com"
 
 
@@ -107,3 +109,18 @@ def or_state_campsite_booking_url(
         f"?arrivalDate={start_date.isoformat()}"
         f"&departureDate={end_date.isoformat()}"
     )
+
+
+def availability_url(
+    facility_id: str,
+    booking_system: BookingSystem | str,
+    start_date: date | None,
+    end_date: date | None = None,
+    slug: str = "",
+) -> str:
+    """Availability deep link on the campground's own booking site."""
+    if booking_system == BookingSystem.WA_STATE:
+        return wa_state_availability_url(facility_id, start_date, end_date)
+    if booking_system == BookingSystem.OR_STATE:
+        return or_state_availability_url(facility_id, slug, start_date, end_date)
+    return recgov_availability_url(facility_id, start_date)

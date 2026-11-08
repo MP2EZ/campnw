@@ -143,6 +143,37 @@ async def _check_registry_db() -> str:
     return await asyncio.to_thread(_query)
 
 
+async def _check_wa_site_metadata() -> str:
+    """WA parks with no seeded sites show raw resource ids and unknown site fit.
+
+    Prod can't reach GoingToCamp to seed them; the fix is a local re-seed and a
+    new fixture (scripts/seed_wa_state_metadata.py).
+    """
+    from pnw_campsites.registry.db import DEFAULT_DB_PATH
+
+    def _query() -> str:
+        conn = _readonly_conn(DEFAULT_DB_PATH)
+        try:
+            parks = conn.execute(
+                "SELECT c.name, EXISTS (SELECT 1 FROM wa_state_sites s"
+                "  WHERE s.park_facility_id = c.facility_id)"
+                " FROM campgrounds c WHERE c.booking_system='wa_state' AND c.enabled=1"
+                " ORDER BY c.name"
+            ).fetchall()
+            sites = _scalar(conn, "SELECT COUNT(*) FROM wa_state_sites")
+        finally:
+            conn.close()
+        unseeded = [name for name, seeded in parks if not seeded]
+        if unseeded:
+            raise RuntimeError(
+                f"{len(unseeded)}/{len(parks)} WA parks have no seeded sites: "
+                + ", ".join(unseeded)
+            )
+        return f"{len(parks)} WA parks seeded ({sites:,} sites)"
+
+    return await asyncio.to_thread(_query)
+
+
 async def _check_watch_db() -> str:
     from pnw_campsites.monitor.db import DEFAULT_DB_PATH as WATCH_DB_PATH
 
@@ -384,6 +415,8 @@ async def _check_anthropic() -> str:
 
 CHECKS: list[Check] = [
     Check("registry.db", "data", _check_registry_db, slow_ms=500,
+          modules=("pnw_campsites.registry.db",)),
+    Check("WA site metadata", "data", _check_wa_site_metadata, slow_ms=500,
           modules=("pnw_campsites.registry.db",)),
     Check("watch.db", "data", _check_watch_db, slow_ms=500,
           modules=("pnw_campsites.monitor.db",)),

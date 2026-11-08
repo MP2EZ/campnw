@@ -230,6 +230,57 @@ class TestBuildCampsites:
         )
 
 
+class TestNineMonthWindow:
+    """GoingToCamp reports nights past WA's 9-month window as Available.
+
+    Probed 2026-11-07 at Deception Pass, Aug 2027: Aug 16-31 came back 291
+    Available / 0 Reserved, and asking for Aug 12-31 instead of the whole
+    month returned the same per-night values, so the API's daily availability
+    ignores the arrival window. Those nights must read as not yet released.
+    """
+
+    TODAY = date(2026, 11, 7)  # arrivals open through Aug 7 2027
+
+    def _statuses(self, codes: list[int], start: date) -> list[AvailabilityStatus]:
+        end = date.fromordinal(start.toordinal() + len(codes) - 1)
+        site = GoingToCampClient()._build_campsites(
+            {"1": [{"availability": c} for c in codes]}, start, end, today=self.TODAY,
+        )["1"]
+        return [site.availabilities[k] for k in sorted(site.availabilities)]
+
+    def test_nights_past_the_window_are_not_yet_released(self) -> None:
+        # Aug 6, 7 bookable; Aug 8, 9 past the window.
+        assert self._statuses([0, 0, 0, 0], date(2027, 8, 6)) == [
+            AvailabilityStatus.AVAILABLE,
+            AvailabilityStatus.AVAILABLE,
+            AvailabilityStatus.NYR,
+            AvailabilityStatus.NYR,
+        ]
+
+    def test_continuation_bookings_past_the_window_read_as_not_released(self) -> None:
+        # Reserved past the edge is the tail of a stay that arrived in time;
+        # nobody else can arrive that night until it releases.
+        assert self._statuses([1, 1], date(2027, 8, 7)) == [
+            AvailabilityStatus.RESERVED,
+            AvailabilityStatus.NYR,
+        ]
+
+    def test_site_statuses_survive_past_the_window(self) -> None:
+        # Closed / not-reservable describe the site, not the window.
+        assert self._statuses([2, 3, 4, 5], date(2027, 9, 1)) == [
+            AvailabilityStatus.CLOSED,
+            AvailabilityStatus.NOT_RESERVABLE,
+            AvailabilityStatus.NOT_RESERVABLE_MGMT,
+            AvailabilityStatus.NYR,
+        ]
+
+    def test_defaults_to_the_real_date(self) -> None:
+        site = GoingToCampClient()._build_campsites(
+            {"1": [{"availability": 0}]}, date(2099, 6, 1), date(2099, 6, 1),
+        )["1"]
+        assert site.availabilities["2099-06-01T00:00:00.000Z"] == AvailabilityStatus.NYR
+
+
 class TestCollectResourcesDepthLimit:
     """Test _collect_resources depth limit (max depth 5)."""
 

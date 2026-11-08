@@ -700,10 +700,10 @@ class TestWaStateMetadataCache:
 
         index = registry.get_wa_site_index("-2147483624")
 
-        # 3rd tuple element is max_capacity (None when not provided)
-        assert index[-2147481621] == ("L03", "Lower Loop A", None)
-        assert index[-2147481622] == ("L04", "Lower Loop A", None)
-        assert index[-2147481700] == ("B01", "Lower Loop B", None)
+        # max_capacity is None when not provided; equipment defaults to []
+        assert index[-2147481621] == ("L03", "Lower Loop A", None, [], "Sites 79-145")
+        assert index[-2147481622] == ("L04", "Lower Loop A", None, [], "Sites 79-145")
+        assert index[-2147481700] == ("B01", "Lower Loop B", None, [], "")
 
     def test_orphan_site_has_null_loop(self, registry) -> None:
         """Sites with no loop_map_id surface as (name, None)."""
@@ -714,7 +714,7 @@ class TestWaStateMetadataCache:
 
         index = registry.get_wa_site_index("-2147483624")
 
-        assert index[-2147481999] == ("Orphan-1", None, None)
+        assert index[-2147481999] == ("Orphan-1", None, None, [], "")
 
     def test_site_pointing_to_unknown_loop_has_null_title(self, registry) -> None:
         """LEFT JOIN returns NULL title when loop_map_id has no row."""
@@ -725,7 +725,7 @@ class TestWaStateMetadataCache:
 
         index = registry.get_wa_site_index("-2147483624")
 
-        assert index[-2147481621] == ("L03", None, None)
+        assert index[-2147481621] == ("L03", None, None, [], "")
 
     def test_re_seed_replaces_park_data(self, registry) -> None:
         """A second bulk_upsert for the same park replaces existing rows."""

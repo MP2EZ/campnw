@@ -8,9 +8,22 @@ import sqlite3
 import unicodedata
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 from pnw_campsites.geo import haversine_miles
 from pnw_campsites.registry.models import BookingSystem, Campground
+from pnw_campsites.registry.tag_overrides import apply_tag_overrides
+from pnw_campsites.registry.wa_site_fixture import apply_wa_site_fixture
+
+
+class WaSiteInfo(NamedTuple):
+    """One wa_state_sites row joined to its loop."""
+
+    name: str
+    loop_title: str | None
+    max_capacity: int | None
+    allowed_equipment: list[dict]
+    loop_description: str
 
 
 def slugify(name: str) -> str:
@@ -105,6 +118,11 @@ CREATE TABLE IF NOT EXISTS wa_state_sites (
 );
 
 CREATE INDEX IF NOT EXISTS idx_wa_sites_park ON wa_state_sites(park_facility_id);
+
+CREATE TABLE IF NOT EXISTS registry_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
@@ -191,6 +209,13 @@ class CampgroundRegistry:
                         f"ALTER TABLE wa_state_sites ADD COLUMN {col} {sql_type}"
                     )
                     self._conn.commit()
+
+        # Curated tag fixes (boat-in, river parks wrongly tagged beach). Prod's
+        # registry.db is never re-seeded, so these ship as an idempotent migration.
+        apply_tag_overrides(self._conn)
+        # WA site names, capacity and equipment, seeded off-box (GoingToCamp
+        # blocks Fly) and shipped as a fixture.
+        apply_wa_site_fixture(self._conn)
 
     def close(self) -> None:
         self._conn.close()
@@ -397,6 +422,14 @@ class CampgroundRegistry:
             (facility_id, booking_system.value),
         ).fetchone()
         return self._row_to_campground(row) if row else None
+
+    def booking_systems_for(self, facility_id: str) -> list[BookingSystem]:
+        """Every booking system with a campground under this facility id."""
+        rows = self._conn.execute(
+            "SELECT booking_system FROM campgrounds WHERE facility_id=?",
+            (facility_id,),
+        ).fetchall()
+        return [BookingSystem(r[0]) for r in rows]
 
     def search(
         self,
@@ -938,18 +971,16 @@ class CampgroundRegistry:
         self._conn.commit()
         return len(sites)
 
-    def get_wa_site_index(
-        self, park_facility_id: str
-    ) -> dict[int, tuple[str, str | None, int | None]]:
-        """Return cached site/loop names + capacity for a WA park.
+    def get_wa_site_index(self, park_facility_id: str) -> dict[int, WaSiteInfo]:
+        """Return cached site metadata for a WA park, keyed by resource_id.
 
-        Maps resource_id → (site_name, loop_title or None, max_capacity or None).
         Used by the search engine to enrich CampsiteAvailability with
-        human-readable labels and real per-site capacity.
+        human-readable labels, real per-site capacity and site fit.
         """
         rows = self._conn.execute(
             """\
-            SELECT s.resource_id, s.name, l.title AS loop_title, s.max_capacity
+            SELECT s.resource_id, s.name, l.title AS loop_title, s.max_capacity,
+                   s.allowed_equipment, l.description AS loop_description
             FROM wa_state_sites AS s
             LEFT JOIN wa_state_loops AS l ON s.loop_map_id = l.map_id
             WHERE s.park_facility_id = ?
@@ -957,6 +988,12 @@ class CampgroundRegistry:
             (park_facility_id,),
         ).fetchall()
         return {
-            row["resource_id"]: (row["name"], row["loop_title"], row["max_capacity"])
+            row["resource_id"]: WaSiteInfo(
+                row["name"],
+                row["loop_title"],
+                row["max_capacity"],
+                json.loads(row["allowed_equipment"] or "[]"),
+                row["loop_description"] or "",
+            )
             for row in rows
         }

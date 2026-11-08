@@ -204,3 +204,11 @@ describe('SmartZeroState Component', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('SmartZeroState not-released fallback', () => {
+  test('says not released instead of no availability', () => {
+    render(<SmartZeroState onSearch={vi.fn()} notReleased={4} />)
+    expect(screen.getByText("These dates haven't been released for booking yet.")).toBeInTheDocument()
+    expect(screen.queryByText('No availability found for these dates.')).not.toBeInTheDocument()
+  })
+})

@@ -8,13 +8,21 @@ loop list from two undocumented metadata endpoints, caching them in the
 wa_state_sites and wa_state_loops tables. The search engine then resolves
 real names ("L03 · Lower Loop A") at availability-resolve time.
 
-One-time enrichment task. Re-run quarterly (sites get renamed/added rarely
-enough that this cadence is fine).
+Re-run quarterly (sites get renamed/added rarely enough that this cadence is
+fine), from a residential IP: GoingToCamp's WAF blocks Fly. A writing run also
+exports every seeded row to the JSON fixture that prod imports at startup
+(registry/wa_site_fixture.py), so commit the fixture afterwards.
+
+The May 2026 run seeded only the first 25 parks alphabetically (through Fort
+Townsend). The later parks most likely hit a GoingToCamp block mid-run, and the
+seeder printed each error, skipped the park and still exited 0. Failed parks now
+back off and retry, and any park still failing makes the run exit 1.
 
 Usage:
-    python scripts/seed_wa_state_metadata.py                # all WA parks
-    python scripts/seed_wa_state_metadata.py --dry-run      # preview, no writes
-    python scripts/seed_wa_state_metadata.py --limit 5      # iterate on a small subset
+    python scripts/seed_wa_state_metadata.py                 # all WA parks
+    python scripts/seed_wa_state_metadata.py --dry-run       # preview, no writes
+    python scripts/seed_wa_state_metadata.py --limit 5       # first N parks
+    python scripts/seed_wa_state_metadata.py --only-missing  # parks with no sites yet
 """
 
 from __future__ import annotations
@@ -27,9 +35,16 @@ import sys
 # Add src to path for direct script execution
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from pnw_campsites.providers.errors import RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import BookingSystem
+from pnw_campsites.registry.wa_site_fixture import FIXTURE_PATH, export_wa_site_fixture
+
+PARK_DELAY_S = 2.0
+# A WAF block or 429 usually lifts within a minute or two; anything else
+# (timeout, 5xx after the client's own retry) gets the same backoff.
+RETRY_DELAYS_S = (30.0, 90.0)
 
 
 def _extract_loops(maps: list[dict]) -> list[dict]:
@@ -82,13 +97,36 @@ def _extract_sites(resources: dict) -> list[dict]:
     return sites
 
 
-async def seed(dry_run: bool = False, limit: int | None = None) -> None:
+async def _fetch_park(client: GoingToCampClient, park_id: int) -> tuple[list, dict]:
+    for delay in (*RETRY_DELAYS_S, None):
+        try:
+            maps = await client.get_park_maps(park_id)
+            await asyncio.sleep(PARK_DELAY_S / 2)
+            return maps, await client.get_park_resources(park_id)
+        except (WAFBlockedError, RateLimitedError, OSError, ValueError) as e:
+            if delay is None:
+                raise
+            print(f"      {type(e).__name__}: {e}; retrying in {delay:.0f}s")
+            await asyncio.sleep(delay)
+
+
+async def seed(
+    dry_run: bool = False, limit: int | None = None, only_missing: bool = False,
+) -> int:
+    """Seed WA parks. Returns the number of parks that failed."""
     with CampgroundRegistry() as registry:
         wa_parks = [
             cg for cg in registry.list_all(enabled_only=False)
             if cg.booking_system == BookingSystem.WA_STATE
         ]
         wa_parks.sort(key=lambda cg: cg.name)
+        if only_missing:
+            seeded = {
+                row[0] for row in registry._conn.execute(
+                    "SELECT DISTINCT park_facility_id FROM wa_state_sites"
+                )
+            }
+            wa_parks = [cg for cg in wa_parks if cg.facility_id not in seeded]
         if limit:
             wa_parks = wa_parks[:limit]
 
@@ -96,39 +134,38 @@ async def seed(dry_run: bool = False, limit: int | None = None) -> None:
         print(f"Enriching {total} WA State Parks "
               f"({'DRY RUN' if dry_run else 'WRITING'})")
 
+        failed: list[str] = []
         async with GoingToCampClient() as client:
             for i, park in enumerate(wa_parks, start=1):
-                park_id = int(park.facility_id)
                 try:
-                    maps = await client.get_park_maps(park_id)
-                    resources = await client.get_park_resources(park_id)
+                    maps, resources = await _fetch_park(client, int(park.facility_id))
+                    loops = _extract_loops(maps)
+                    sites = _extract_sites(resources)
                 except Exception as e:
-                    print(f"  [{i}/{total}] {park.name}: ERROR {e}")
+                    print(f"  [{i}/{total}] {park.name}: ERROR {type(e).__name__}: {e}")
+                    failed.append(park.name)
                     continue
 
-                loops = _extract_loops(maps)
-                sites = _extract_sites(resources)
                 orphans = sum(1 for s in sites if s["loop_map_id"] is None)
-
                 print(f"  [{i}/{total}] {park.name}: "
                       f"{len(sites)} sites, {len(loops)} loops"
                       + (f", {orphans} orphans" if orphans else ""))
+                if not sites:
+                    failed.append(park.name)
 
-                if not dry_run:
+                if not dry_run and sites:
                     registry.bulk_upsert_wa_loops(park.facility_id, loops)
                     registry.bulk_upsert_wa_sites(park.facility_id, sites)
 
-                # Polite ~1s rate limit between parks
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(PARK_DELAY_S / 2)
 
         if not dry_run:
-            site_count = registry._conn.execute(
-                "SELECT COUNT(*) FROM wa_state_sites"
-            ).fetchone()[0]
-            loop_count = registry._conn.execute(
-                "SELECT COUNT(*) FROM wa_state_loops"
-            ).fetchone()[0]
-            print(f"\nDone. wa_state_sites={site_count}, wa_state_loops={loop_count}")
+            loop_count, site_count = export_wa_site_fixture(registry._conn)
+            print(f"\nDone. Exported {site_count} sites, {loop_count} loops "
+                  f"to {FIXTURE_PATH}")
+        if failed:
+            print(f"\n{len(failed)} park(s) failed or had no sites: {', '.join(failed)}")
+        return len(failed)
 
 
 def main() -> None:
@@ -146,8 +183,16 @@ def main() -> None:
         default=None,
         help="Only process the first N parks (for iteration)",
     )
+    parser.add_argument(
+        "--only-missing",
+        action="store_true",
+        help="Skip parks that already have sites (resume an interrupted run)",
+    )
     args = parser.parse_args()
-    asyncio.run(seed(dry_run=args.dry_run, limit=args.limit))
+    failed = asyncio.run(
+        seed(dry_run=args.dry_run, limit=args.limit, only_missing=args.only_missing)
+    )
+    sys.exit(1 if failed else 0)
 
 
 if __name__ == "__main__":

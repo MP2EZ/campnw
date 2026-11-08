@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from unittest.mock import AsyncMock
 
 import pytest
@@ -389,7 +390,7 @@ class TestPollAll:
         """poll_all with zero watches returns empty list."""
         client = AsyncMock(spec=RecGovClient)
 
-        results = await poll_all(client, None, watch_db)
+        results = await poll_all(client, None, watch_db, today=date(2026, 6, 1))
 
         assert results == []
         client.get_availability_range.assert_not_called()
@@ -427,7 +428,7 @@ class TestPollAll:
         )
         client.get_availability_range.return_value = availability
 
-        results = await poll_all(client, None, watch_db)
+        results = await poll_all(client, None, watch_db, today=date(2026, 6, 1))
 
         assert len(results) == 1
         assert results[0].watch.facility_id == "232465"
@@ -463,7 +464,7 @@ class TestPollAll:
         )
         client.get_availability_range.return_value = availability
 
-        results = await poll_all(client, None, watch_db)
+        results = await poll_all(client, None, watch_db, today=date(2026, 6, 1))
 
         assert len(results) == 2
         facility_ids = [r.watch.facility_id for r in results]
