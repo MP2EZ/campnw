@@ -5,7 +5,7 @@
 
 **Open problems:**
 - **WA State Parks dark in prod since ~2026-11-05.** GoingToCamp's Azure WAF blocks prod's outbound IPs: first the shared Datacamp address `79.127.185.38`, and since 2026-11-07 also prod's dedicated Fly egress IP `209.71.113.243`, which is in Fly's own range and was blocked immediately. Staging (shared CDN77 `79.127.255.236`) and GitHub's Azure runners (`52.159.243.197`, 2026-11-07) still get through, so the block targets particular IPs and ranges, not datacenters as a class. Prod survives the block (#165) and labels it `waf_blocked`. Tracked by open alert #167. Fix options are below ("Restoring WA State Parks"). **Decision 2026-11-07: documented, not started.**
-- **Searches that include Oregon parks stall for minutes (found 2026-11-07, deferred).** A Seattle "Any day" search on prod took over 3 minutes, with ~85 s of no outbound traffic and 502s from the PostHog proxy. Likely cause: prod has 1 CPU, so the default thread pool has 5 workers. ReserveAmerica (1 s sleep between pages, ~2 MB pages) and GoingToCamp hold them through `asyncio.to_thread`, and DNS lookups for Recreation.gov and PostHog queue behind them. Probably started when Oregon came back on the egress IP; before that Oregon failed fast. Fix: a dedicated executor for blocking provider calls, and Oregon's 1 req/s limit made app-wide instead of per thread. **Deferred because there are no users yet. Fix before inviting users or flipping v2, or sooner if the prod monitor's search starts timing out.**
+- **Searches that include Oregon parks stall for minutes (found 2026-11-07). Fixed on `dev` in #241/#242, not yet released.** There were three causes. (1) ReserveAmerica ignores `page`, so every page request returned the first 20 sites again (slow, and Oregon results only ever had 20 sites per park); paging now uses `pageNumber`/`recordsPerPage`. (2) Default-executor starvation on prod's 1 CPU (5 workers): DNS for rec.gov and PostHog queued behind Oregon threads (up to 45 s); providers now have their own 8-worker pool and an app-wide RA limiter. (3) Nothing bounded the stream, and Cloudflare cut it at 100 s idle; now there's a 60 s per-park timeout and a 90 s search deadline that still sends coverage. Local result: Oregon limit 6 went from 221 s to 69 s, and DNS waits from 45 s to 0.1 s. At the shipped 1 req/s, an Oregon-heavy limit-20 search ends at 90 s with about half its Oregon parks marked "took too long". **Owner decision:** 2 req/s (`RESERVEAMERICA_MIN_INTERVAL_S=0.5` plus Oregon concurrency 3) gets 18/20, but risks the dedicated egress IP. Follow-up: fetch a park's 14-day windows concurrently. After release, check the prod items in the hand-over (stream ends ≤90 s with coverage, ReserveAmerica `doctor` still ok a day later).
 - **#135** — a provider can go dark without the monitor failing. Largely addressed: #165 makes the monitor check prod's own WA view, and #168 runs the diagnostic sweep on failure and keeps one issue per outage. Oregon isn't covered by a prod-view check yet.
 - **Watch poller** sent WA watches (ids 7, 9) to the Recreation.gov URL and kept polling past-dated watches, so it got 400s every cycle (seen in prod logs 2026-11-06). **Fixed in #185, released in #183 (2026-11-07).** Not yet confirmed in prod logs: check that the 15-minute cycle no longer fails on watches 2–10. Cause: the create route never stored a watch's source, so every watch was saved as `recgov`, and the poller's self-heal looked the facility up in the registry filtered to rec.gov, so it never found a WA or OR park. Now the create route stores the source, a startup migration corrects existing rows (registry first; a negative GoingToCamp id means WA), and template watches keep each park's provider. Past-dated watches are skipped, not changed: they stay enabled, the API marks them `expired`, and the UI shows "Past". A partly past watch polls from today on (Pacific). A WAF block or rate limit stops that provider for the rest of the cycle and logs one warning. Notification links go to each park's own booking site.
 
@@ -2098,9 +2098,9 @@ The results page answers the question in one line ("22 campgrounds have a June w
 | P3a search bar | Released #217 |
 | P3b site-list panel | Released #235 |
 | P3c Watch sheet + per-weekend watches | Released #235 (#222–#227, plus #234) |
-| P3d release reminders | Next. Builds on P3c's watch filters (see the P3c hand-over: `remindStays`, `WatchSheet` shell, `openWatch`) |
+| P3d release reminders | On `dev` (#236–#240, #243, #244), not released. #236 also changes all watches to alert only on stays of `min_nights` consecutive nights (owner-approved) |
 | P4a mobile sheet, date chips, safe areas | Released #217. Device check passed on TestFlight build 4 (2026-11-09) |
-| P4b flip to v2 | Last. Needs the Oregon stall fixed first (Open problems) |
+| P4b flip to v2 | Last. The Oregon stall fix is on `dev` (#241/#242); release and verify it in prod first |
 
 `results_v2` is on only for the owner's account (distinct_id 2). Everyone else needs `?ui=v2`.
 
@@ -2151,6 +2151,9 @@ Also released: #174 (Recreation.gov stay-continuation nights were counted as FCF
 | Recreation.gov `STANDARD NONELECTRIC` sites read "Site types not listed yet" in the site panel, though rec.gov lists tent/trailer/RV and lengths per site | Backlog: improve the P1a rec.gov mapping (found in P3b) |
 | CLI `check --source or-state` prints Recreation.gov booking links for Oregon sites | Backlog (found in P3b) |
 | Site panel: no drag-to-dismiss on phones. An open panel may close if the layout remounts across 1024px (iPad rotation, untested) | Backlog (found in P3b) |
+| Native iOS users get no watch or reminder alerts: alerts are web push, which the Capacitor app can't subscribe to | Needs native push (v1.45 roadmap) before the app is useful for watching (found in P3d) |
+| Zero-results "Remind me on release mornings" is still a stub | Needs a design call (found in P3d) |
+| WA's release time of day is unverified, so WA reminders say "opens today" and push at 6:55 | Backlog (found in P3d) |
 
 ---
 
