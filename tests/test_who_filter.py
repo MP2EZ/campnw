@@ -11,7 +11,7 @@ import pytest
 
 from pnw_campsites.registry.models import BookingSystem, SiteFit
 from pnw_campsites.search.engine import SearchQuery, _process_availability
-from pnw_campsites.search.who import fits_equipment, fits_party
+from pnw_campsites.search.who import fits_equipment, fits_party, fits_site_types
 from tests.conftest import (
     make_campground,
     make_campground_availability,
@@ -218,3 +218,21 @@ def test_not_released_counts_only_fitting_sites_but_closed_ignores_who() -> None
     assert _not_released_nights(avail, q, BookingSystem.OR_STATE) == []
     any_nyr, closed = _night_statuses(avail, q, BookingSystem.OR_STATE)
     assert (any_nyr, closed) == ([], [])
+
+
+class TestFitsSiteTypes:
+    def test_no_site_types_passes_everything(self):
+        assert fits_site_types(SiteFit(hookups=False), None)
+        assert fits_site_types(SiteFit(hookups=False), [])
+
+    def test_hookups_wanted(self):
+        assert fits_site_types(SiteFit(hookups=True), ["hookups"])
+        assert not fits_site_types(SiteFit(hookups=False), ["hookups"])
+
+    def test_unknown_passes(self):
+        assert fits_site_types(SiteFit(), ["hookups"])
+
+    def test_any_listed_type_passes(self):
+        walk_in = SiteFit(hookups=False, walk_in=True)
+        assert fits_site_types(walk_in, ["hookups", "walk_in"])
+        assert not fits_site_types(SiteFit(hookups=False, walk_in=False), ["hookups", "walk_in"])
