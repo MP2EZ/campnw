@@ -538,6 +538,8 @@ export interface WatchData {
   equipment?: string | null;
   rig_length?: number | null;
   site_types?: string[] | null;
+  /** Release reminders (v1.48 P3d): the day the stay opens for booking. */
+  releases_on?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -683,8 +685,11 @@ export interface CreateWatchParams {
   min_nights?: number;
   days_of_week?: number[];
   notification_channel?: string;
-  watch_type?: "single" | "template";
+  /** "release": a reminder on release day that then becomes a watch (P3d). */
+  watch_type?: "single" | "template" | "release";
   search_params?: Record<string, unknown>;
+  /** Release reminders only: the day the stay's first night opens. */
+  releases_on?: string;
   /** Site filters (v1.48 P3c); unset = any site. Unknown fit never suppresses an alert. */
   min_people?: number;
   equipment?: "tent" | "van" | "trailer";
@@ -824,6 +829,19 @@ export class PlannerLimitError extends Error {
   }
 }
 
+/**
+ * A watch the API refused with a reason, e.g. a release reminder's
+ * "already_released", "releases_on_invalid" or "releases_on_required".
+ */
+export class WatchRejectedError extends Error {
+  code: string;
+  constructor(code: string) {
+    super(`Failed to create watch: 422 ${code}`);
+    this.name = "WatchRejectedError";
+    this.code = code;
+  }
+}
+
 export async function createWatch(
   params: CreateWatchParams
 ): Promise<WatchData> {
@@ -839,6 +857,11 @@ export async function createWatch(
     if (body?.detail?.error === "watch_limit_reached") {
       throw new WatchLimitError(body.detail);
     }
+  }
+  if (resp.status === 422) {
+    const body = await resp.json().catch(() => null) as { detail?: { error?: unknown } } | null;
+    const code = body?.detail?.error;
+    if (typeof code === "string") throw new WatchRejectedError(code);
   }
   if (!resp.ok) throw new Error(`Failed to create watch: ${resp.status}`);
   return resp.json();
