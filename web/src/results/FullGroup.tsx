@@ -4,6 +4,8 @@ import { formatDriveTime } from "../lib/dates";
 import { SOURCE_NAMES } from "../lib/sources";
 import { IconBell } from "../icons";
 import { fullGroupTitle, unavailability, unavailableText } from "./candidates";
+import { watchStays } from "./watch";
+import { useOpenWatch } from "./watchContext";
 
 const ROW_LIMIT = 6;
 export const FULL_GROUP_ID = "rv2-full";
@@ -15,8 +17,8 @@ const byDrive = (a: CampgroundResult, b: CampgroundResult) =>
 /**
  * "Full or not released yet" (D4): checked places with nothing to book on
  * the searched dates, closest first, each with what's in the way and the
- * alert that would help. The alerts are stubs until P3c (Watch) and P3d
- * (release reminders), so the buttons are disabled and the note says so.
+ * alert that would help. Watch opens the Watch sheet (P3c). Remind me is a
+ * stub until release reminders (P3d): disabled, and the note says so.
  */
 export function FullGroup({ places, params, title = fullGroupTitle(places, params) }: {
   places: CampgroundResult[];
@@ -24,6 +26,7 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
   title?: string;
 }) {
   const [all, setAll] = useState(false);
+  const openWatch = useOpenWatch();
   if (places.length === 0) return null;
   const sorted = [...places].sort(byDrive);
   const cut = sorted.length > ROW_LIMIT + 1 ? ROW_LIMIT : sorted.length;
@@ -39,7 +42,8 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
       </div>
       <p id={noteId} className="rv2-band-note">
         {title === "Nothing to book" ? "Nothing open on your dates. " : "Nothing to book on your dates. "}
-        Alerts for when a site frees up, or when booking opens, are coming soon.
+        {openWatch ? "Watch a place to hear when a site frees up. Alerts for when booking opens are coming soon."
+          : "Alerts for when a site frees up, or when booking opens, are coming soon."}
       </p>
       <ul className="rv2-full-list">
         {shown.map((r) => {
@@ -55,7 +59,12 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
                 <p className="rv2-full-meta">{[where, source].filter(Boolean).join(" · ")}</p>
               </div>
               <span className="rv2-full-status">{status}</span>
-              {action && (
+              {action === "Watch" && openWatch && watchStays(r, params).length > 0 ? (
+                <button type="button" className="rv2-full-action rv2-full-action--live"
+                  aria-label={`Watch: ${r.name}`} onClick={() => openWatch(r, undefined, "full_group")}>
+                  <IconBell className="rv2-icon" />Watch
+                </button>
+              ) : action && (
                 <button type="button" className="rv2-full-action" aria-disabled="true"
                   aria-label={`${action}: ${r.name}`} aria-describedby={noteId}>
                   <IconBell className="rv2-icon" />{action}

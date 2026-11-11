@@ -29,8 +29,8 @@ from pnw_campsites.search.release import (
     not_released_ranges,
     release_date,
 )
-from pnw_campsites.search.site_fit import fit_from_recgov_type, wa_site_fit
-from pnw_campsites.search.who import fits_equipment, fits_party
+from pnw_campsites.search.site_fit import site_fit_for, wa_site_fit
+from pnw_campsites.search.who import site_fits
 
 logger = logging.getLogger("pnw_campsites.search")
 
@@ -393,6 +393,42 @@ def _find_consecutive_windows(
     return windows
 
 
+def enrich_wa_availability(
+    registry: CampgroundRegistry, park_facility_id: str, availability: CampgroundAvailability,
+) -> None:
+    """Replace synthetic resource_id labels with cached human site/loop names,
+    overwrite the synthetic max-capacity default with the real value, and
+    set each site's fit (equipment, hookups, walk-in).
+
+    WA State's GoingToCamp availability API returns no human-readable site
+    identifiers, per-site capacity or site types — the provider hardcodes
+    max_num_people=8 and STANDARD for everyone. The real values live in the
+    wa_state_sites + wa_state_loops cache populated by the metadata seeder.
+    Mutates `availability.campsites[*]` in place. No-op if the cache is
+    empty for the park (graceful pre-seed fallback: fit stays unknown).
+    """
+    index = registry.get_wa_site_index(park_facility_id)
+    if not index:
+        return
+    for campsite_id, campsite in availability.campsites.items():
+        try:
+            res_id = int(campsite_id)
+        except ValueError:
+            continue
+        info = index.get(res_id)
+        if not info:
+            continue
+        campsite.site = info.name
+        campsite.loop = info.loop_title or ""
+        campsite.loop_map_id = info.loop_map_id
+        if info.max_capacity is not None:
+            campsite.max_num_people = info.max_capacity
+            campsite.max_people_known = True
+        campsite.fit = wa_site_fit(
+            info.name, info.allowed_equipment, info.loop_description,
+        )
+
+
 def _site_matches(
     site: CampsiteAvailability, query: SearchQuery, system: BookingSystem,
 ) -> bool:
@@ -407,22 +443,10 @@ def _site_in_scope(site: CampsiteAvailability, query: SearchQuery) -> bool:
 
 def _fits_who(site: CampsiteAvailability, query: SearchQuery, system: BookingSystem) -> bool:
     """Party size and rig (v1.48 D5). Unknown capacity or type never drops a site."""
-    capacity = site.max_num_people if site.max_people_known else None
-    return fits_party(capacity, query.max_people) and fits_equipment(
-        _site_fit(site, system), query.equipment, query.rig_length,
+    return site_fits(
+        site, system,
+        people=query.max_people, equipment=query.equipment, rig_length=query.rig_length,
     )
-
-
-def _site_fit(site: CampsiteAvailability, system: BookingSystem) -> SiteFit:
-    """The provider's or WA enrichment's fit; else Recreation.gov's type.
-
-    WA's campsite_type is a placeholder, so unenriched WA sites stay unknown.
-    """
-    if site.fit is not None:
-        return site.fit
-    if system == BookingSystem.RECGOV:
-        return fit_from_recgov_type(site.campsite_type)
-    return SiteFit()
 
 
 def _not_released_nights(
@@ -546,7 +570,7 @@ def _process_availability(
                     max_people_known=site.max_people_known,
                     loop_map_id=site.loop_map_id,
                     is_fcfs=True,
-                    fit=_site_fit(site, campground.booking_system),
+                    fit=site_fit_for(site, campground.booking_system),
                 )
             )
             seen_sites.add(site_id)
@@ -564,7 +588,7 @@ def _process_availability(
         )
 
         if windows:
-            fit = _site_fit(site, campground.booking_system)
+            fit = site_fit_for(site, campground.booking_system)
             for w in windows:
                 w.fit = fit
             result.available_windows.extend(windows)
@@ -1221,37 +1245,7 @@ class SearchEngine:
     def _enrich_wa_availability(
         self, park_facility_id: str, availability: CampgroundAvailability
     ) -> None:
-        """Replace synthetic resource_id labels with cached human site/loop names,
-        overwrite the synthetic max-capacity default with the real value, and
-        set each site's fit (equipment, hookups, walk-in).
-
-        WA State's GoingToCamp availability API returns no human-readable site
-        identifiers, per-site capacity or site types — the provider hardcodes
-        max_num_people=8 and STANDARD for everyone. The real values live in the
-        wa_state_sites + wa_state_loops cache populated by the metadata seeder.
-        Mutates `availability.campsites[*]` in place. No-op if the cache is
-        empty for the park (graceful pre-seed fallback: fit stays unknown).
-        """
-        index = self._registry.get_wa_site_index(park_facility_id)
-        if not index:
-            return
-        for campsite_id, campsite in availability.campsites.items():
-            try:
-                res_id = int(campsite_id)
-            except ValueError:
-                continue
-            info = index.get(res_id)
-            if not info:
-                continue
-            campsite.site = info.name
-            campsite.loop = info.loop_title or ""
-            campsite.loop_map_id = info.loop_map_id
-            if info.max_capacity is not None:
-                campsite.max_num_people = info.max_capacity
-                campsite.max_people_known = True
-            campsite.fit = wa_site_fit(
-                info.name, info.allowed_equipment, info.loop_description,
-            )
+        enrich_wa_availability(self._registry, park_facility_id, availability)
 
     async def _check_campground(
         self,
