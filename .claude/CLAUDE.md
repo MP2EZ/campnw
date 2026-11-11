@@ -174,7 +174,7 @@ This is a standalone CLI tool, not part of the server. It reads campground descr
 
 Full roadmap: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs/PRFAQ-v1.0.md` | Brand: `docs/BRAND.md`
 
-**Completed:** v0.1 through v1.25 — see `docs/ROADMAP.md` for full history.
+**Completed:** v0.1 through v1.47 — see `docs/ROADMAP.md` for full history. **In progress:** v1.48 "Answer-first Results" (`docs/PLAN-v1.48-answer-first-results.md`), behind the `results_v2` PostHog flag; `?ui=v2` / `?ui=v1` overrides it in the browser.
 
 **Deferred items** (carried forward):
 - Automated registry refresh (monthly RIDB, quarterly GoingToCamp)
@@ -265,4 +265,6 @@ CI runs both on `pull_request` events AND on direct pushes to `dev`/`main`, so t
 - GoingToCamp reports nights past WA's 9-month arrival window as Available (its daily availability ignores the window, whatever startDate you send). The provider rewrites Available/Reserved past `wa_release_date` (search/release.py) to NYR. Its own NYR code (5) marks loops on other schedules, not the window.
 - GoingToCamp's availability API returns only resource IDs. Names come from the seeded `wa_state_sites` cache; a park missing from it shows raw IDs and unknown site fit (`doctor` → `WA site metadata`).
 - GoingToCamp map hierarchy must be traversed park-by-park via the `resourceLocationId → childMapId` mapping from `/api/maps` links. Starting from region maps returns ALL parks' sites.
+- **iOS shell (Capacitor 8.5):** the app must use the UIScene lifecycle (`SceneDelegate.swift` + `UIApplicationSceneManifest`). iOS 27 won't launch a build made with the iOS 27 SDK without it (#219). The web bundle is baked into each build, so frontend changes need `npm run build && npx cap sync ios` and a new TestFlight build. Backend changes don't.
+- **PostHog in native:** the page runs at `capacitor://localhost`, so any relative URL (like `/ingest`) points at nothing. Native uses `https://campable.co/ingest` (#220). Before #220, no native analytics or flags ever loaded.
 - Registry has 1,370 campgrounds: 1,242 rec.gov (WA/OR/ID/MT/WY/NorCal) + 75 WA State Parks + 53 OR State Parks. Re-seed with `scripts/seed_registry.py`, `scripts/seed_wa_state.py`, and `scripts/seed_or_state.py`
