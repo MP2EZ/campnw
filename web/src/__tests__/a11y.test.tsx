@@ -256,6 +256,35 @@ describe("Accessibility: results v2", () => {
     }
   });
 
+  test("an open chip opens the site panel (P3b): a modal that passes axe, focus back to the chip on Escape", async () => {
+    renderV2();
+    const chip = screen.getAllByRole("button", { name: /see open sites$/ })[0];
+    expect(chip).toHaveAccessibleName(/^Fri 4 – Sun 6, 1 left/);
+    await userEvent.click(chip);
+    const dialog = screen.getByRole("dialog", { name: "Dash Point State Park" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveFocus();
+    expect(within(dialog).getByRole("radio", { name: /^Site A, Tent/ })).toBeChecked();
+    expect(within(dialog).getByRole("link", { name: /^Book on WA State Parks/ })).toBeInTheDocument();
+    expect(await axe(document.body)).toHaveNoViolations();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(chip).toHaveFocus();
+  });
+
+  test("the site panel's controls are 44px targets and keep their focus outline", () => {
+    const css = readFileSync(join(__dirname, "../results/sitePanel.css"), "utf-8");
+    for (const selector of [".rv2-site", ".rv2-panel-close", ".rv2-panel-book"]) {
+      expect(minTarget(css, selector), `${selector} height`).toBeGreaterThanOrEqual(44);
+    }
+    for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      expect(body, sel).not.toMatch(/outline:\s*(none|0)/);
+    }
+    // Leaflet's panes go up to z-index 1000; the desktop map must not cover the dialog.
+    const results = readFileSync(join(__dirname, "../results/results.css"), "utf-8");
+    expect(results.match(/\n\.rv2-map-aside\s*\{([^}]*)\}/)?.[1]).toMatch(/isolation:\s*isolate/);
+  });
+
   test("the sheet's and date chips' controls show focus: no outline is removed", () => {
     const css = ["results.css", "mapSheet.css"]
       .map((f) => readFileSync(join(__dirname, "../results", f), "utf-8")).join("\n");
@@ -276,7 +305,7 @@ describe("Accessibility: results v2", () => {
     expect(store.get()).toEqual({ id: "1", from: "list" });
     fireEvent.mouseLeave(card);
     expect(store.get().id).toBeNull();
-    fireEvent.focus(within(card).getAllByRole("link")[0]);
+    fireEvent.focus(within(card).getAllByRole("button", { name: /see open sites$/ })[0]);
     expect(store.get()).toEqual({ id: "1", from: "list" });
     expect(card).not.toHaveClass("is-selected");
     act(() => store.select("1", "map"));
@@ -339,7 +368,8 @@ function renderBar() {
 /** min-height (or height) in px from every rule whose selector list names `selector`. */
 function minTarget(css: string, selector: string): number {
   let best = 0;
-  for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+  // Comments would read as part of the next selector.
+  for (const [, sel, body] of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)) {
     if (!sel.split(",").some((s) => s.trim() === selector)) continue;
     for (const [, n, unit] of body.matchAll(/(?:^|[\s;])(?:min-)?height:\s*([\d.]+)(px|rem)/g)) {
       best = Math.max(best, Number(n) * (unit === "rem" ? 16 : 1));

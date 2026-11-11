@@ -269,7 +269,16 @@
   transition: box-shadow var(--transition-fast);
 }
 
-a.rv2-chip:hover {
+/* Open chips open the site panel (P3b). Full chips keep their dashed look (watchSheet.css). */
+button.rv2-chip:not(.rv2-chip-full) {
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+a.rv2-chip:hover,
+button.rv2-chip:not(.rv2-chip-full):hover {
   color: var(--chip-open-text);
   box-shadow: inset 0 0 0 1px currentColor;
 }
@@ -704,6 +713,8 @@ a.rv2-chip:hover {
   position: sticky;
   top: var(--aside-top);
   height: min(760px, calc(100dvh - var(--aside-top) - var(--space-4)));
+  /* Keeps Leaflet's z-indexes (up to 1000) under modals like the site panel. */
+  isolation: isolate;
 }
 
 .rv2-map-loading {
