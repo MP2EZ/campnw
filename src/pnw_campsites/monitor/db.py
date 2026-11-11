@@ -62,6 +62,16 @@ class Watch:
     trip_id: int | None = None
     watch_type: str = "single"  # "single" or "template"
     search_params: str = ""  # JSON search pattern for template watches
+    # Site filters (v1.48 P3c), the search's `who` rules (search/who.py).
+    # None = any site; a site the booking system says nothing about passes.
+    min_people: int | None = None
+    equipment: str | None = None  # tent | van | trailer
+    rig_length: int | None = None  # feet, trailers only
+    site_types: list[str] | None = None  # any of who.SITE_TYPES
+
+    @property
+    def has_site_filters(self) -> bool:
+        return bool(self.min_people or self.equipment or self.site_types)
 
 
 @dataclass
@@ -451,6 +461,13 @@ class WatchDB:
                 "ALTER TABLE watches ADD COLUMN"
                 " search_params TEXT DEFAULT ''"
             )
+        # v1.48: site filters. NULL on existing rows = unfiltered, as before.
+        for col, kind in (
+            ("min_people", "INTEGER"), ("equipment", "TEXT"),
+            ("rig_length", "INTEGER"), ("site_types", "TEXT"),
+        ):
+            if col not in watch_cols3:
+                self._conn.execute(f"ALTER TABLE watches ADD COLUMN {col} {kind}")
         # v1.4: billing — subscription state on users
         user_cols2 = [
             r[1] for r in self._conn.execute("PRAGMA table_info(users)")
@@ -1178,8 +1195,9 @@ class WatchDB:
                 (facility_id, name, start_date, end_date, min_nights,
                  days_of_week, notify_topic, notification_channel,
                  session_token, user_id, enabled, created_at,
-                 booking_system, watch_type, search_params)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 booking_system, watch_type, search_params,
+                 min_people, equipment, rig_length, site_types)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 watch.facility_id,
@@ -1197,6 +1215,10 @@ class WatchDB:
                 watch.booking_system,
                 watch.watch_type,
                 watch.search_params,
+                watch.min_people,
+                watch.equipment,
+                watch.rig_length,
+                json.dumps(watch.site_types) if watch.site_types else None,
             ),
         )
         self._conn.commit()
@@ -1233,6 +1255,7 @@ class WatchDB:
         d["days_of_week"] = (
             json.loads(d["days_of_week"]) if d["days_of_week"] else None
         )
+        d["site_types"] = json.loads(d["site_types"]) if d.get("site_types") else None
         return Watch(**d)
 
     def list_watches_by_session(self, session_token: str) -> list[Watch]:
