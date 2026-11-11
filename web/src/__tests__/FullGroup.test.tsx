@@ -61,19 +61,41 @@ describe("FullGroup", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  test("inside results, Watch opens the Watch sheet for the place; Remind me stays a stub", async () => {
+  test("inside results, Watch opens the Watch sheet and Remind me its reminder mode", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 11, 9));
     const openWatch = vi.fn();
     const full = place("Wallace Falls", 88, { not_released_ranges: [] });
+    const nyr = place("Kachess", 77);
     render(
       <WatchContext.Provider value={openWatch}>
-        <FullGroup params={juneWeekends} places={[full, place("Kachess", 77)]} />
+        <FullGroup params={juneWeekends} places={[full, nyr]} />
       </WatchContext.Provider>,
     );
     const watch = screen.getByRole("button", { name: "Watch: Wallace Falls" });
     expect(watch).not.toHaveAttribute("aria-disabled");
     await userEvent.click(watch);
     expect(openWatch).toHaveBeenCalledWith(full, undefined, "full_group");
-    expect(screen.getByRole("button", { name: "Remind me: Kachess" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText(/Alerts for when booking opens are coming soon/)).toBeInTheDocument();
+    const remind = screen.getByRole("button", { name: "Remind me: Kachess" });
+    expect(remind).not.toHaveAttribute("aria-disabled");
+    await userEvent.click(remind);
+    expect(openWatch).toHaveBeenLastCalledWith(nyr, undefined, "full_group", "remind");
+    expect(screen.getByText(/or get a reminder the morning booking opens/)).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  test("inside results, no Remind me without a release date still ahead", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2027, 0, 1, 9));
+    render(
+      <WatchContext.Provider value={vi.fn()}>
+        <FullGroup params={juneWeekends} places={[
+          place("Kachess", 77),
+          place("Turlo", 88, { not_released_ranges: [{ start: "2027-06-01", end: "2027-06-30", releases_on: null }] }),
+        ]} />
+      </WatchContext.Provider>,
+    );
+    expect(screen.queryByRole("button", { name: /Remind me/ })).not.toBeInTheDocument();
+    vi.useRealTimers();
   });
 });

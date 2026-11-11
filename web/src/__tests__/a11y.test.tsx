@@ -329,7 +329,21 @@ describe("Accessibility: Watch sheet", () => {
     expect(chip).toHaveFocus();
   });
 
-  test("a Full-group row's Watch opens it; Remind me stays a stub", async () => {
+  test("a not-released chip opens a release reminder that passes axe; Escape gives focus back", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 1, 9));
+    const { container } = renderV2();
+    const chip = screen.getByRole("button", { name: /Opens Sep 25 · Remind me/ });
+    await userEvent.click(chip);
+    const sheet = screen.getByRole("dialog", { name: "Remind me: Kanaskat-Palmer State Park" });
+    expect(within(sheet).getByRole("button", { name: "Sign in to get a reminder" })).toBeInTheDocument();
+    expect(await axe(container)).toHaveNoViolations();
+    await userEvent.keyboard("{Escape}");
+    expect(chip).toHaveFocus();
+    vi.useRealTimers();
+  });
+
+  test("a Full-group row's Watch opens it", async () => {
     renderV2();
     await userEvent.click(screen.getByRole("button", { name: "Watch: Wallace Falls State Park" }));
     const sheet = screen.getByRole("dialog", { name: "Watch Wallace Falls State Park" });
