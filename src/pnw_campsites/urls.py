@@ -67,6 +67,29 @@ def wa_state_availability_url(
     return url
 
 
+def wa_state_site_booking_url(
+    resource_location_id: str,
+    loop_map_id: int | None,
+    start_date: date,
+    checkout: date,
+) -> str:
+    """Deep link to a WA site's loop on GoingToCamp with the stay filled in.
+
+    GoingToCamp has no per-site link. `mapId` (the loop's map) opens the park
+    at that loop; without it the park isn't selected. `startDate`/`endDate`
+    are arrival and departure (checked 2027-01 stays, 2026-11-11); the older
+    `searchTime` param is ignored.
+    """
+    map_part = f"mapId={loop_map_id}&" if loop_map_id is not None else ""
+    return (
+        "https://washington.goingtocamp.com/create-booking/results"
+        f"?{map_part}resourceLocationId={resource_location_id}"
+        "&searchTabGroupId=0&bookingCategoryId=0"
+        f"&startDate={start_date.isoformat()}&endDate={checkout.isoformat()}"
+        f"&nights={(checkout - start_date).days}&isReserving=true"
+    )
+
+
 # ---------------------------------------------------------------------------
 # OR State Parks (ReserveAmerica)
 # ---------------------------------------------------------------------------

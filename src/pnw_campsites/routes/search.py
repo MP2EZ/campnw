@@ -7,7 +7,7 @@ import logging
 import os
 import zlib
 from collections.abc import AsyncIterator
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -33,6 +33,7 @@ from pnw_campsites.urls import (
     availability_url,
     or_state_campsite_booking_url,
     recgov_campsite_booking_url,
+    wa_state_site_booking_url,
 )
 
 router = APIRouter(prefix="/api", tags=["search"])
@@ -56,6 +57,9 @@ class WindowResponse(BaseModel):
     end_date: str
     nights: int
     max_people: int
+    # False when max_people is a provider placeholder (unseeded WA, RA without
+    # the attribute): show no capacity rather than a made-up 8.
+    max_people_known: bool = True
     is_fcfs: bool = False
     booking_url: str | None = None
     # Site fit; None = the booking system doesn't say. fits_rv with no
@@ -295,20 +299,20 @@ def _iso(d: date | None) -> str | None:
 
 def _build_booking_url(
     facility_id: str,
-    campsite_id: str,
+    w,
     booking_system: BookingSystem,
-    start_date: date,
-    end_date: date,
     slug: str = "",
 ) -> str | None:
+    """The window's own booking page. Its end_date is the last night, so the
+    booking sites get the checkout day after it."""
+    start = date.fromisoformat(w.start_date)
+    checkout = date.fromisoformat(w.end_date) + timedelta(days=1)
     if booking_system == BookingSystem.RECGOV:
-        return recgov_campsite_booking_url(
-            facility_id, campsite_id, start_date, end_date
-        )
+        return recgov_campsite_booking_url(facility_id, w.campsite_id, start, checkout)
     if booking_system == BookingSystem.OR_STATE and slug:
-        return or_state_campsite_booking_url(
-            facility_id, slug, campsite_id, start_date, end_date
-        )
+        return or_state_campsite_booking_url(facility_id, slug, w.campsite_id, start, checkout)
+    if booking_system == BookingSystem.WA_STATE:
+        return wa_state_site_booking_url(facility_id, w.loop_map_id, start, checkout)
     return None
 
 
@@ -330,12 +334,7 @@ def _format_result(
         booking_url = None
         if not w.is_fcfs:
             booking_url = _build_booking_url(
-                cg.facility_id,
-                w.campsite_id,
-                cg.booking_system,
-                date.fromisoformat(w.start_date),
-                date.fromisoformat(w.end_date),
-                slug=cg.booking_url_slug,
+                cg.facility_id, w, cg.booking_system, slug=cg.booking_url_slug,
             )
         windows.append(
             WindowResponse(
@@ -347,6 +346,7 @@ def _format_result(
                 end_date=w.end_date,
                 nights=w.nights,
                 max_people=w.max_people,
+                max_people_known=w.max_people_known,
                 is_fcfs=w.is_fcfs,
                 booking_url=booking_url,
                 **w.fit.model_dump(),
