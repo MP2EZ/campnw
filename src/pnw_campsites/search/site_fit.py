@@ -10,7 +10,7 @@ import re
 from collections import defaultdict
 from functools import lru_cache
 
-from pnw_campsites.registry.models import SiteFit
+from pnw_campsites.registry.models import BookingSystem, CampsiteAvailability, SiteFit
 
 # ---------------------------------------------------------------------------
 # WA State Parks (GoingToCamp)
@@ -188,6 +188,18 @@ def fit_from_recgov_type(campsite_type: str) -> SiteFit:
     if "STANDARD" in t:
         return SiteFit(hookups=hookups, walk_in=False)
     return SiteFit(hookups=hookups)
+
+
+def site_fit_for(site: CampsiteAvailability, system: BookingSystem) -> SiteFit:
+    """The provider's or WA enrichment's fit; else Recreation.gov's type.
+
+    WA's campsite_type is a placeholder, so unenriched WA sites stay unknown.
+    """
+    if site.fit is not None:
+        return site.fit
+    if system == BookingSystem.RECGOV:
+        return fit_from_recgov_type(site.campsite_type)
+    return SiteFit()
 
 
 # ---------------------------------------------------------------------------
