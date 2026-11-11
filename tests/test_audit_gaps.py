@@ -781,8 +781,8 @@ class TestFormatResult:
         assert formatted.availability_url is None
         assert len(formatted.windows) == 0
 
-    def test_wa_state_result_has_no_booking_url(self):
-        """WA State Park results don't have per-site booking URLs."""
+    def test_wa_state_window_links_to_the_park_with_dates(self):
+        """WA has no per-site link: windows open the park with the stay filled in."""
         from pnw_campsites.registry.models import BookingSystem
         from pnw_campsites.routes.search import _format_result
         from pnw_campsites.search.engine import AvailableWindow, CampgroundResult
@@ -804,7 +804,9 @@ class TestFormatResult:
         )
 
         formatted = _format_result(result, cg.booking_system)
-        assert formatted.windows[0].booking_url is None  # WA doesn't support per-site booking URLs
+        url = formatted.windows[0].booking_url
+        assert "resourceLocationId=-2147483624" in url
+        assert "startDate=2026-07-01&endDate=2026-07-04" in url
         assert formatted.availability_url is not None  # But does have availability URL
 
     def test_error_result_preserved(self):

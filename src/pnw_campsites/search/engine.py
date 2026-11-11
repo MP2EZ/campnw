@@ -79,6 +79,8 @@ class AvailableWindow:
     max_people: int
     is_fcfs: bool = False  # True for FCFS/not-reservable sites
     fit: SiteFit = field(default_factory=SiteFit)
+    max_people_known: bool = True  # False: max_people is a provider placeholder
+    loop_map_id: int | None = None  # WA: GoingToCamp loop map, for its booking link
 
 
 @dataclass(frozen=True)
@@ -363,6 +365,8 @@ def _find_consecutive_windows(
                         end_date=run_end[:10],
                         nights=run_length,
                         max_people=site.max_num_people,
+                        max_people_known=site.max_people_known,
+                        loop_map_id=site.loop_map_id,
                     )
                 )
             run_start = available_dates[i]
@@ -381,6 +385,8 @@ def _find_consecutive_windows(
                 end_date=run_end[:10],
                 nights=run_length,
                 max_people=site.max_num_people,
+                max_people_known=site.max_people_known,
+                loop_map_id=site.loop_map_id,
             )
         )
 
@@ -414,6 +420,7 @@ def enrich_wa_availability(
             continue
         campsite.site = info.name
         campsite.loop = info.loop_title or ""
+        campsite.loop_map_id = info.loop_map_id
         if info.max_capacity is not None:
             campsite.max_num_people = info.max_capacity
             campsite.max_people_known = True
@@ -560,6 +567,8 @@ def _process_availability(
                     end_date=(query.end_date or query.start_date or date.today()).isoformat(),
                     nights=0,  # unknown — FCFS
                     max_people=site.max_num_people,
+                    max_people_known=site.max_people_known,
+                    loop_map_id=site.loop_map_id,
                     is_fcfs=True,
                     fit=site_fit_for(site, campground.booking_system),
                 )

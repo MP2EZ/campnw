@@ -52,6 +52,8 @@ class CampsiteAvailability(BaseModel):
     # False when max_num_people is a provider placeholder (unseeded WA, RA
     # without the attribute): party-size filtering treats it as unknown.
     max_people_known: bool = True
+    # WA only: the GoingToCamp loop map the site sits in (its booking link).
+    loop_map_id: int | None = None
     availabilities: dict[str, AvailabilityStatus]  # ISO datetime str -> status
     fit: SiteFit | None = None  # set by WA enrichment and ReserveAmerica
 
