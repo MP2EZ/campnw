@@ -358,6 +358,9 @@ async def poll_all(
 
     today = today or pacific_today()
     watches = watch_db.list_watches_for_polling(tier=tier_filter)
+    # Release reminders wait for their release day (monitor/reminders.py);
+    # their nights aren't bookable yet, so there is nothing to poll.
+    watches = [w for w in watches if w.watch_type != "release"]
     if tranche is not None:
         watches = [w for w in watches if w.id % 2 == tranche]
     watches = [w for w in (_from_today(w, today) for w in watches) if w]

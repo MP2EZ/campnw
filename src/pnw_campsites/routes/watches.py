@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from starlette.responses import Response
 
 from pnw_campsites import billing
-from pnw_campsites.monitor import watcher
+from pnw_campsites.monitor import reminders, watcher
 from pnw_campsites.monitor.db import Watch
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import (
@@ -39,13 +39,15 @@ class WatchRequest(BaseModel):
     notification_channel: str = Field(
         default="", max_length=20, pattern=r"^(ntfy|pushover|web_push|)?$"
     )
-    watch_type: str = Field(default="single", pattern=r"^(single|template)$")
+    watch_type: str = Field(default="single", pattern=r"^(single|template|release)$")
     search_params: dict | None = None
     # Site filters (v1.48 P3c), the same bounds as the search's `who` params.
     min_people: int | None = Field(default=None, ge=1, le=50)
     equipment: Literal["tent", "van", "trailer"] | None = None
     rig_length: int | None = Field(default=None, ge=1, le=100)  # trailers only
     site_types: list[Literal["hookups", "walk_in"]] | None = Field(default=None, max_length=2)
+    # Release reminders (P3d): the day the stay's first night opens.
+    releases_on: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
 class WatchResponse(BaseModel):
@@ -67,6 +69,7 @@ class WatchResponse(BaseModel):
     equipment: str | None = None
     rig_length: int | None = None
     site_types: list[str] | None = None
+    releases_on: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +133,15 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
             status_code=422,
             detail="Single watches require facility_id",
         )
+    if body.watch_type == "release":
+        # The reminder is a push, and pushes go to a signed-in user's devices.
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in to set a reminder")
+        problem = reminders.release_problem(
+            body.releases_on, body.start_date, reminders.pacific_now(),
+        )
+        if problem:
+            raise HTTPException(status_code=422, detail={"error": problem})
 
     booking_system = watcher.resolve_booking_system(
         body.facility_id, BookingSystem.RECGOV.value, registry,
@@ -150,7 +162,11 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         min_nights=body.min_nights,
         days_of_week=body.days_of_week,
         notify_topic=body.notify_topic,
-        notification_channel=body.notification_channel,
+        # A reminder pushes, and so does the cancellation watch it becomes.
+        notification_channel=(
+            body.notification_channel
+            or ("web_push" if body.watch_type == "release" else "")
+        ),
         session_token=token,
         user_id=user_id,
         booking_system=booking_system,
@@ -160,8 +176,9 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         equipment=body.equipment,
         rig_length=body.rig_length if body.equipment == "trailer" else None,
         site_types=sorted(set(body.site_types)) if body.site_types else None,
+        releases_on=body.releases_on if body.watch_type == "release" else None,
     )
-    if body.watch_type == "single" and db.has_duplicate_watch(watch):
+    if body.watch_type != "template" and db.has_duplicate_watch(watch):
         raise HTTPException(
             status_code=409, detail="Watch already exists",
         )
@@ -190,6 +207,7 @@ def _watch_to_response(w: Watch) -> WatchResponse:
         equipment=w.equipment,
         rig_length=w.rig_length,
         site_types=w.site_types,
+        releases_on=w.releases_on,
     )
 
 
