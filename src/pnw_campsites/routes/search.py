@@ -155,6 +155,12 @@ WARNING_TEMPLATES: dict[str, tuple[str, str]] = {
         "Some {source} campgrounds couldn't be checked due to a service issue.",
         "Some campgrounds couldn't be checked due to a service issue.",
     ),
+    "timeout": (
+        "Some {source} campgrounds took too long to check. Try again, or"
+        " narrow the search.",
+        "Some campgrounds took too long to check. Try again, or narrow the"
+        " search.",
+    ),
 }
 
 _UNKNOWN_KIND_MESSAGE = "Some campgrounds couldn't be checked."
