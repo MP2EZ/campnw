@@ -80,4 +80,19 @@ describe("WindowChips", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.getByText("Fri 4 – Sun 6")).toBeInTheDocument();
   });
+
+  test("with a Watch sheet, a full weekend is a button that opens it; not-released stays text", async () => {
+    const onWatch = vi.fn();
+    const result = {
+      ...place(six.map((s) => win(s, "2027-06-04", "2027-06-06"))),
+      not_released_ranges: [{ start: "2027-06-25", end: "2027-06-27", releases_on: "2026-12-25" }],
+    } as CampgroundResult;
+    render(<WindowChips chips={buildWindowChips(result, juneWeekends)} name="Dash Point" params={juneWeekends}
+      source="WA State Parks" onBook={vi.fn()} onWatch={onWatch} />);
+    const watch = screen.getByRole("button", { name: "Fri 11 – Sun 13, Full · Watch" });
+    await userEvent.click(watch);
+    expect(onWatch).toHaveBeenCalledWith(expect.objectContaining({ start: "2027-06-11", status: "full" }));
+    expect(screen.queryByRole("button", { name: /Fri 25/ })).not.toBeInTheDocument();
+  });
 });
+
