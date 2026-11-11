@@ -126,13 +126,13 @@ class TestReminderPush:
             end_date="2027-05-22", booking_system="recgov",
         ))
         assert push["title"] == "Kachess opens for booking at 7:00 am"
-        assert push["body"].startswith("Fri May 21 – Sun May 23.")
+        assert push["body"].startswith("Fri May 21 – Sat May 22.")
         assert "recreation.gov" in push["url"]
 
     def test_other_systems_say_today(self):
         push = reminder_push(Watch(
             facility_id="-2147483624", name="Deception Pass", start_date="2027-08-06",
-            end_date="2027-08-06", booking_system="wa_state",
+            end_date="2027-08-07", booking_system="wa_state",
         ))
         assert push["title"] == "Deception Pass opens for booking today"
         assert push["body"].startswith("Fri Aug 6 – Sat Aug 7.")

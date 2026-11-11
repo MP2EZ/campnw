@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Literal
 from zoneinfo import ZoneInfo
 
@@ -83,8 +83,9 @@ def reminder_push(watch: Watch) -> dict:
     when = "at 7:00 am" if watch.booking_system == BookingSystem.RECGOV else "today"
     return {
         "title": f"{watch.name} opens for booking {when}",
+        # Nights, first to last, as the results' chips and the sheet label them.
         "body": (
-            f"{_day(first)} – {_day(last + timedelta(days=1))}. "
+            f"{_day(first)} – {_day(last)}. "
             "After that we'll watch it for cancellations."
         ),
         "url": availability_url(watch.facility_id, watch.booking_system, first, last),
