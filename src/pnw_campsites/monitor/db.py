@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -72,6 +72,9 @@ class Watch:
     @property
     def has_site_filters(self) -> bool:
         return bool(self.min_people or self.equipment or self.site_types)
+
+
+_WATCH_FIELDS = {f.name for f in fields(Watch)}
 
 
 @dataclass
@@ -1256,7 +1259,9 @@ class WatchDB:
             json.loads(d["days_of_week"]) if d["days_of_week"] else None
         )
         d["site_types"] = json.loads(d["site_types"]) if d.get("site_types") else None
-        return Watch(**d)
+        # Ignore columns this code doesn't know: a newer release (rolled back,
+        # or sharing the staging DB) may have added them.
+        return Watch(**{k: v for k, v in d.items() if k in _WATCH_FIELDS})
 
     def list_watches_by_session(self, session_token: str) -> list[Watch]:
         """List watches owned by a session token."""
