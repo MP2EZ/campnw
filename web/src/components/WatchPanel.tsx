@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { getWatches, deleteWatch, toggleWatch, createWatch, track, WatchLimitError } from "../api";
 import { IconPause, IconPlay, IconClose } from "../icons";
 import type { WatchData, CreateWatchParams } from "../api";
+import { parseIsoDate } from "../lib/dates";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { useAuth } from "../hooks/useAuth";
 import { useBilling } from "../hooks/useBilling";
@@ -10,6 +11,10 @@ import { ShareButton } from "./ShareButton";
 import { UpgradeModal } from "./UpgradeModal";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** "Fri, Dec 18". */
+const releaseDay = (iso: string) =>
+  parseIsoDate(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 export const WatchPanel = memo(function WatchPanel({
   open,
@@ -132,53 +137,62 @@ export const WatchPanel = memo(function WatchPanel({
         )}
 
         <div className="watch-list">
-          {watches.map((w) => (
-            <div
-              key={w.id}
-              className={`watch-item ${!w.enabled || w.expired ? "paused" : ""}`}
-            >
-              <div className="watch-item-info">
-                <h3>
-                  {w.name}
-                  {w.watch_type === "template" && (
-                    <span className="watch-template-badge">Search pattern</span>
-                  )}
-                </h3>
-                <p className="watch-dates">
-                  {w.start_date} → {w.end_date} · {w.min_nights}n min
-                </p>
-                {w.days_of_week && (
-                  <p className="watch-days">
-                    {w.days_of_week.map((d) => DAY_NAMES[d]).join(", ")}
+          {watches.map((w) => {
+            // A release reminder (v1.48 P3d) becomes a plain watch on release day.
+            const reminder = w.watch_type === "release" && !!w.releases_on;
+            const kind = reminder ? "reminder" : "watch";
+            return (
+              <div
+                key={w.id}
+                className={`watch-item ${!w.enabled || w.expired ? "paused" : ""}`}
+              >
+                <div className="watch-item-info">
+                  <h3>
+                    {w.name}
+                    {w.watch_type === "template" && (
+                      <span className="watch-template-badge">Search pattern</span>
+                    )}
+                    {reminder && <span className="watch-template-badge">Reminder</span>}
+                  </h3>
+                  <p className="watch-dates">
+                    {w.start_date} → {w.end_date} · {w.min_nights}n min
                   </p>
-                )}
-                {w.expired ? (
-                  <span className="watch-paused-badge">Past</span>
-                ) : !w.enabled && (
-                  <span className="watch-paused-badge">Paused</span>
-                )}
+                  {reminder && w.releases_on && (
+                    <p className="watch-days">Booking opens {releaseDay(w.releases_on)} · push at 6:55 am PT</p>
+                  )}
+                  {w.days_of_week && (
+                    <p className="watch-days">
+                      {w.days_of_week.map((d) => DAY_NAMES[d]).join(", ")}
+                    </p>
+                  )}
+                  {w.expired ? (
+                    <span className="watch-paused-badge">Past</span>
+                  ) : !w.enabled && (
+                    <span className="watch-paused-badge">Paused</span>
+                  )}
+                </div>
+                <div className="watch-item-actions">
+                  {user && <ShareButton watchId={w.id} />}
+                  <button
+                    className="watch-action-btn"
+                    onClick={() => handleToggle(w.id)}
+                    title={w.enabled ? "Pause" : "Resume"}
+                    aria-label={`${w.enabled ? "Pause" : "Resume"} ${kind} for ${w.name}`}
+                  >
+                    {w.enabled ? <IconPause className="icon-sm" /> : <IconPlay className="icon-sm" />}
+                  </button>
+                  <button
+                    className="watch-action-btn watch-delete"
+                    onClick={() => handleDelete(w.id)}
+                    title="Delete"
+                    aria-label={`Delete ${kind} for ${w.name}`}
+                  >
+                    <IconClose className="icon-sm" />
+                  </button>
+                </div>
               </div>
-              <div className="watch-item-actions">
-                {user && <ShareButton watchId={w.id} />}
-                <button
-                  className="watch-action-btn"
-                  onClick={() => handleToggle(w.id)}
-                  title={w.enabled ? "Pause" : "Resume"}
-                  aria-label={w.enabled ? `Pause watch for ${w.name}` : `Resume watch for ${w.name}`}
-                >
-                  {w.enabled ? <IconPause className="icon-sm" /> : <IconPlay className="icon-sm" />}
-                </button>
-                <button
-                  className="watch-action-btn watch-delete"
-                  onClick={() => handleDelete(w.id)}
-                  title="Delete"
-                  aria-label={`Delete watch for ${w.name}`}
-                >
-                  <IconClose className="icon-sm" />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {user && <PollDashboard open={open} />}
