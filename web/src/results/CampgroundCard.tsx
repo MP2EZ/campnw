@@ -1,12 +1,15 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { track, type CampgroundResult, type SearchParams } from "../api";
 import { formatDriveTime, parseIsoDate } from "../lib/dates";
 import { SOURCE_NAMES } from "../lib/sources";
 import { IconBoat, IconClock, IconSun, IconTent } from "../icons";
+import { nightsIn } from "./candidates";
 import { buildWindowChips, type WindowChip } from "./chips";
 import { fitLine, NOT_LISTED } from "./fit";
 import { PlaceThumb } from "./PlaceThumb";
 import { useCardSelection } from "./selection";
+import { SitePanel } from "./SitePanel";
+import type { PanelSite } from "./siteGroups";
 import { WindowChips } from "./WindowChips";
 
 interface Props {
@@ -38,15 +41,29 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
   const weather = weatherLabel(result, params);
   const tags = (result.tags ?? []).filter((t) => t !== "boat-in");
   const fit = fitLine(result.windows);
-  const onBook = (chip: WindowChip) => track("book_click", {
+  const [panel, setPanel] = useState<{ chip: WindowChip; el: HTMLElement } | null>(null);
+  const event = (chip: WindowChip) => ({
     facility_id: result.facility_id,
     result_rank: rank,
+    source: result.booking_system,
+    sites_in_chip: chip.open,
+    nights: nightsIn(chip.start, chip.end),
+    ui_version: "v2",
+  });
+  const onOpen = (chip: WindowChip, el: HTMLElement) => {
+    track("window_chip_opened", { ...event(chip), chip_start: chip.start });
+    setPanel({ chip, el });
+  };
+  const onBook = (chip: WindowChip, site: PanelSite) => track("book_click", {
+    ...event(chip),
+    from: "site_panel",
     drive_minutes: result.estimated_drive_minutes ?? -1,
     total_available_sites: result.total_available_sites,
     name: result.name,
-    source: result.booking_system,
-    type: "window_chip",
-    sites_in_chip: chip.open,
+    type: "site",
+    site_kind: site.kind,
+    part_stay: site.part ? 1 : 0,
+    per_site_link: site.perSite ? 1 : 0,
     has_photo: result.image_urls?.length ? 1 : 0,
   });
 
@@ -88,9 +105,12 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
           chips={buildWindowChips(result, params)}
           name={result.name}
           params={params}
-          source={source}
-          onBook={onBook}
+          onOpen={onOpen}
         />
+        {panel && (
+          <SitePanel result={result} chip={panel.chip} params={params} returnFocus={panel.el}
+            onClose={() => setPanel(null)} onBook={(site) => onBook(panel.chip, site)} />
+        )}
         {tags.length > 0 && <p className="rv2-card-tags">{tags.join(" · ")}</p>}
       </div>
     </article>

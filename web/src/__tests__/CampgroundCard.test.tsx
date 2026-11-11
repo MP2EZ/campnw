@@ -55,11 +55,18 @@ describe("CampgroundCard", () => {
     expect(screen.getByText(/Mid-June 67° \/ 50° · 40% rain/)).toBeInTheDocument();
   });
 
-  test("a chip click is a book_click from a window chip", async () => {
+  test("a chip opens its sites (window_chip_opened); booking there is a book_click from the site panel", async () => {
     render(<CampgroundCard result={dashPoint} params={juneWeekends} rank={3} />);
-    await userEvent.click(screen.getByRole("link"));
+    await userEvent.click(screen.getByRole("button", { name: /see open sites$/ }));
+    expect(track).toHaveBeenCalledWith("window_chip_opened", {
+      facility_id: "-2147483624", result_rank: 3, source: "wa_state", sites_in_chip: 6, nights: 3,
+      chip_start: "2027-06-04", ui_version: "v2",
+    });
+    const dialog = screen.getByRole("dialog", { name: "Dash Point State Park" });
+    await userEvent.click(within(dialog).getByRole("link", { name: /^Book on WA State Parks/ }));
     expect(track).toHaveBeenCalledWith("book_click", expect.objectContaining({
-      facility_id: "-2147483624", result_rank: 3, type: "window_chip", sites_in_chip: 6, source: "wa_state",
+      facility_id: "-2147483624", result_rank: 3, from: "site_panel", type: "site", site_kind: "rv",
+      sites_in_chip: 6, source: "wa_state", ui_version: "v2",
     }));
   });
 

@@ -6,9 +6,8 @@ interface Props {
   chips: Chips;
   name: string;
   params: SearchParams | null;
-  /** "WA State Parks": where the chip hands off to. */
-  source: string;
-  onBook: (chip: WindowChip) => void;
+  /** An open chip was pressed: show its sites (P3b). `el` gets focus back. */
+  onOpen: (chip: WindowChip, el: HTMLElement) => void;
 }
 
 function groupLabel(params: SearchParams | null): string {
@@ -19,11 +18,11 @@ function groupLabel(params: SearchParams | null): string {
 }
 
 /**
- * The stays a card offers. Each chip hands off to the booking site until the
- * site panel (P3b) opens instead. "Few" is said in words ("3 left") and marked
+ * The stays a card offers. An open chip opens the site panel (P3b), which
+ * hands off to the booking site. "Few" is said in words ("3 left") and marked
  * with a dot, never by colour alone.
  */
-export function WindowChips({ chips, name, params, source, onBook }: Props) {
+export function WindowChips({ chips, name, params, onOpen }: Props) {
   const [all, setAll] = useState(false);
   const list = all ? [...chips.shown, ...chips.more] : chips.shown;
 
@@ -46,13 +45,12 @@ export function WindowChips({ chips, name, params, source, onBook }: Props) {
           // Watch / Remind me arrive with P3c / P3d; until then this only says what's there.
           return <span key={key} className="rv2-chip rv2-chip-full">{body}</span>;
         }
-        return c.href ? (
-          <a key={key} className="rv2-chip" href={c.href} target="_blank" rel="noopener" onClick={() => onBook(c)}>
+        return (
+          <button key={key} type="button" className="rv2-chip" aria-haspopup="dialog"
+            onClick={(e) => onOpen(c, e.currentTarget)}>
             {body}
-            <span className="sr-only">, book on {source} (opens in a new tab)</span>
-          </a>
-        ) : (
-          <span key={key} className="rv2-chip">{body}</span>
+            <span className="sr-only">, see open sites</span>
+          </button>
         );
       })}
       {chips.more.length > 0 && (
