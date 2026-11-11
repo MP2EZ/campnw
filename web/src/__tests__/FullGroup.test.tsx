@@ -1,8 +1,9 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { CampgroundResult, SearchParams } from "../api";
 import { FullGroup } from "../results/FullGroup";
+import { WatchContext } from "../results/watchContext";
 
 const juneWeekends: SearchParams = {
   start_date: "2027-06-01", end_date: "2027-06-30", mode: "find", nights: 2, days_of_week: "4,5,6",
@@ -58,5 +59,21 @@ describe("FullGroup", () => {
   test("renders nothing with nothing to list", () => {
     const { container } = render(<FullGroup params={juneWeekends} places={[]} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  test("inside results, Watch opens the Watch sheet for the place; Remind me stays a stub", async () => {
+    const openWatch = vi.fn();
+    const full = place("Wallace Falls", 88, { not_released_ranges: [] });
+    render(
+      <WatchContext.Provider value={openWatch}>
+        <FullGroup params={juneWeekends} places={[full, place("Kachess", 77)]} />
+      </WatchContext.Provider>,
+    );
+    const watch = screen.getByRole("button", { name: "Watch: Wallace Falls" });
+    expect(watch).not.toHaveAttribute("aria-disabled");
+    await userEvent.click(watch);
+    expect(openWatch).toHaveBeenCalledWith(full, undefined, "full_group");
+    expect(screen.getByRole("button", { name: "Remind me: Kachess" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText(/Alerts for when booking opens are coming soon/)).toBeInTheDocument();
   });
 });
