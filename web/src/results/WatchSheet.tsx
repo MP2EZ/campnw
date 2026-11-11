@@ -1,21 +1,29 @@
 import "./watchSheet.css";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { createWatch, track, WatchLimitError, type CampgroundResult, type SearchParams } from "../api";
+import {
+  createWatch, track, WatchLimitError, WatchRejectedError, type CampgroundResult, type SearchParams,
+} from "../api";
 import { useAuth } from "../hooks/useAuth";
 import { useBilling } from "../hooks/useBilling";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { IconClose } from "../icons";
+import { parseIsoDate } from "../lib/dates";
 import { UpgradeModal } from "../components/UpgradeModal";
 import type { Equipment } from "./searchState";
-import { hasFilters, watchRequest, whoFromParams, whoText, type WatchStay, type WatchWho } from "./watch";
+import {
+  hasFilters, remindRequest, watchRequest, whoFromParams, whoText,
+  type RemindStay, type WatchStay, type WatchWho,
+} from "./watch";
 
 export type WatchFrom = "chip" | "full_group";
 
 interface Props {
   place: CampgroundResult;
   params: SearchParams | null;
-  /** What can be watched here (watchStays); at least one. */
-  stays: WatchStay[];
+  /** "remind": a release reminder (P3d, D9) for not-released stays. */
+  mode?: "watch" | "remind";
+  /** What can be watched here (watchStays), or reminded (remindStays); at least one. */
+  stays: WatchStay[] | RemindStay[];
   /** The stay to start on (its first night). */
   initial?: string;
   from: WatchFrom;
@@ -26,18 +34,34 @@ interface Props {
 
 const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), select, [tabindex]:not([tabindex="-1"])';
 
-function errorText(e: unknown, name: string): string {
+function errorText(e: unknown, name: string, remind: boolean): string {
   const msg = e instanceof Error ? e.message : "";
-  if (msg.endsWith(": 409")) return `You're already watching ${name} for these dates.`;
-  return "Couldn't start the watch. Check your connection and try again.";
+  if (msg.endsWith(": 409")) {
+    return remind ? `You already have a reminder or watch for ${name} on these dates.`
+      : `You're already watching ${name} for these dates.`;
+  }
+  if (e instanceof WatchRejectedError && e.code === "already_released") {
+    return "Booking for these dates has already opened. Search again to see what's open.";
+  }
+  return remind ? "Couldn't set the reminder. Check your connection and try again."
+    : "Couldn't start the watch. Check your connection and try again.";
 }
+
+const isRemind = (s: WatchStay): s is RemindStay => "releasesOn" in s;
+
+/** "Fri, Dec 18". */
+const releaseDay = (iso: string) =>
+  parseIsoDate(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 /**
  * The Watch sheet (v1.48 P3c, D8): one watch for one full stay, with the
  * search's party and rig as site filters. A centred dialog on desktop, a
- * bottom sheet on phones (watchSheet.css).
+ * bottom sheet on phones (watchSheet.css). In "remind" mode (P3d, D9) it
+ * sets a release reminder instead: a push at 6:55 am PT on release day, after
+ * which the server turns it into a watch with the same filters.
  */
-export function WatchSheet({ place, params, stays, initial, from, onClose, onSignIn }: Props) {
+export function WatchSheet({ place, params, mode = "watch", stays, initial, from, onClose, onSignIn }: Props) {
+  const remind = mode === "remind";
   const id = useId();
   const { user } = useAuth();
   const { isPro } = useBilling();
@@ -51,7 +75,8 @@ export function WatchSheet({ place, params, stays, initial, from, onClose, onSig
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [limit, setLimit] = useState<{ limit: number; current: number } | null>(null);
-  const stay = stays.find((s) => s.start === stayStart) ?? stays[0];
+  const stay: WatchStay | RemindStay | undefined = stays.find((s) => s.start === stayStart) ?? stays[0];
+  const opens = stay && isRemind(stay) ? releaseDay(stay.releasesOn) : null;
 
   // Focus the title on open and on success; trap Tab; Escape closes; give
   // focus back to whatever opened the sheet.
@@ -90,12 +115,14 @@ export function WatchSheet({ place, params, stays, initial, from, onClose, onSig
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    const req = watchRequest(place, stay, params, { who, hookups });
+    const req = isRemind(stay)
+      ? remindRequest(place, stay, params, { who, hookups })
+      : watchRequest(place, stay, params, { who, hookups });
     setSaving(true);
     setError(null);
     try {
       await createWatch(req);
-      track("watch_created", {
+      track(req.releases_on ? "release_reminder_created" : "watch_created", {
         from,
         has_filters: hasFilters(req) ? 1 : 0,
         ui_version: "v2",
@@ -106,11 +133,12 @@ export function WatchSheet({ place, params, stays, initial, from, onClose, onSig
         min_nights: req.min_nights ?? 1,
         notification_channel: "web_push",
         push_already_granted: push.subscribed ? 1 : 0,
+        ...(req.releases_on ? { releases_on: req.releases_on } : {}),
       });
       setDone(true);
     } catch (err) {
       if (err instanceof WatchLimitError) setLimit({ limit: err.limit, current: err.current });
-      else setError(errorText(err, place.name));
+      else setError(errorText(err, place.name, remind));
     } finally {
       setSaving(false);
     }
@@ -147,10 +175,13 @@ export function WatchSheet({ place, params, stays, initial, from, onClose, onSig
           <div className="rv2-watch-head">
             <div className="rv2-watch-heading">
               <h2 id={`${id}-title`} className="rv2-watch-title" tabIndex={-1} data-autofocus={done ? undefined : ""}>
-                Watch {place.name}
+                {remind ? `Remind me: ${place.name}` : `Watch ${place.name}`}
               </h2>
               <p className="rv2-watch-muted">
-                We check every {isPro ? 5 : 15} minutes and alert you when a site that fits you opens.
+                {!remind ? `We check every ${isPro ? 5 : 15} minutes and alert you when a site that fits you opens.`
+                  : place.booking_system === "recgov"
+                    ? "Recreation.gov opens these dates at 7:00 am Pacific. We'll send a push at 6:55 am that day, then watch for cancellations."
+                    : "We'll send a push at 6:55 am Pacific on the day booking opens, then watch for cancellations."}
               </p>
             </div>
             <button type="button" className="rv2-watch-close" aria-label="Close" onClick={onClose}>
@@ -161,7 +192,8 @@ export function WatchSheet({ place, params, stays, initial, from, onClose, onSig
           {done ? (
             <div className="rv2-watch-body">
               <p className="rv2-watch-done" tabIndex={-1} data-autofocus="">
-                Watching {stay.label}. We'll alert you when a site opens.
+                {opens ? `We'll remind you at 6:55 am on ${opens}, then watch ${stay.label} for cancellations.`
+                  : `Watching ${stay.label}. We'll alert you when a site opens.`}
               </p>
               {pushNote}
               <div className="rv2-watch-foot">
@@ -173,12 +205,13 @@ export function WatchSheet({ place, params, stays, initial, from, onClose, onSig
               <fieldset className="rv2-watch-set">
                 <legend className="rv2-watch-legend">Which dates?</legend>
                 {stays.length === 1 ? (
-                  <p className="rv2-watch-row">{stay.label} · Full now</p>
-                ) : stays.map((s) => (
+                  <p className="rv2-watch-row">{stay.label} · {opens ? `Opens ${opens}` : "Full now"}</p>
+                ) : stays.map((s: WatchStay | RemindStay) => (
                   <label key={s.start} className="rv2-watch-option">
                     <input type="radio" name={`${id}-stay`} checked={s.start === stay.start}
                       onChange={() => setStayStart(s.start)} />
-                    {s.label} <span className="rv2-watch-muted">· Full now</span>
+                    {s.label}{" "}
+                    <span className="rv2-watch-muted">· {isRemind(s) ? `Opens ${releaseDay(s.releasesOn)}` : "Full now"}</span>
                   </label>
                 ))}
               </fieldset>
@@ -225,11 +258,14 @@ export function WatchSheet({ place, params, stays, initial, from, onClose, onSig
                   <input type="radio" name={`${id}-sites`} checked={hookups} onChange={() => setHookups(true)} />
                   Only sites with hookups
                 </label>
-                <p className="rv2-watch-muted">Sites that don't list their size or type still count, so you don't miss one.</p>
+                <p className="rv2-watch-muted">
+                  {remind && "After booking opens, we alert you when one of these frees up. "}
+                  Sites that don't list their size or type still count, so you don't miss one.
+                </p>
               </fieldset>
 
               <fieldset className="rv2-watch-set">
-                <legend className="rv2-watch-legend">Alert me by</legend>
+                <legend className="rv2-watch-legend">{remind ? "Remind me by" : "Alert me by"}</legend>
                 <p className="rv2-watch-row">Push notification</p>
                 {user && pushNote}
               </fieldset>
@@ -239,12 +275,17 @@ export function WatchSheet({ place, params, stays, initial, from, onClose, onSig
               <div className="rv2-watch-foot">
                 {user ? (
                   <button type="submit" className="rv2-watch-primary" disabled={saving}>
-                    {saving ? "Starting…" : `Start watching ${stay.label}`}
+                    {saving ? (remind ? "Saving…" : "Starting…")
+                      : opens ? `Remind me on ${opens}` : `Start watching ${stay.label}`}
                   </button>
                 ) : (
                   <>
-                    <button type="button" className="rv2-watch-primary" onClick={signIn}>Sign in to watch</button>
-                    <p className="rv2-watch-muted">Alerts need an account, so we know where to send them.</p>
+                    <button type="button" className="rv2-watch-primary" onClick={signIn}>
+                      {remind ? "Sign in to get a reminder" : "Sign in to watch"}
+                    </button>
+                    <p className="rv2-watch-muted">
+                      {remind ? "Reminders" : "Alerts"} need an account, so we know where to send them.
+                    </p>
                   </>
                 )}
               </div>

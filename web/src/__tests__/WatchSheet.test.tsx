@@ -118,3 +118,76 @@ describe("WatchSheet", () => {
     expect(dialog).toHaveTextContent("Fri Jun 4 – Sun 6 · Full now");
   });
 });
+
+describe("WatchSheet in release mode", () => {
+  const remind = [
+    { start: "2027-06-18", end: "2027-06-20", label: "Fri Jun 18 – Sun 20", releasesOn: "2026-12-18" },
+    { start: "2027-06-25", end: "2027-06-27", label: "Fri Jun 25 – Sun 27", releasesOn: "2026-12-25" },
+  ];
+  const renderRemind = (extra: Partial<Parameters<typeof WatchSheet>[0]> = {}) => {
+    const onClose = vi.fn();
+    const onSignIn = vi.fn();
+    render(<WatchSheet mode="remind" place={place} params={params} stays={remind} from="chip"
+      onClose={onClose} onSignIn={onSignIn} {...extra} />);
+    return { onClose, onSignIn, dialog: screen.getByRole("dialog", { name: "Remind me: Kachess" }) };
+  };
+
+  test("says what happens, when, and how", () => {
+    const { dialog } = renderRemind();
+    expect(dialog).toHaveTextContent("Recreation.gov opens these dates at 7:00 am Pacific");
+    expect(dialog).toHaveTextContent("push at 6:55 am");
+    expect(dialog).toHaveTextContent("then watch for cancellations");
+    expect(within(dialog).getByRole("radio", { name: /Fri Jun 18 – Sun 20 · Opens Fri, Dec 18/ })).toBeChecked();
+    expect(dialog).toHaveTextContent("Push notification");
+  });
+
+  test("other booking sites don't promise a time", () => {
+    const { dialog } = renderRemind({ place: { ...place, booking_system: "wa_state" } as CampgroundResult });
+    expect(dialog).not.toHaveTextContent("7:00 am");
+    expect(dialog).toHaveTextContent("push at 6:55 am Pacific on the day booking opens");
+  });
+
+  test("creates a release reminder for the chosen stay, with the filters", async () => {
+    renderRemind({ from: "full_group" });
+    await userEvent.click(screen.getByRole("radio", { name: /Fri Jun 25 – Sun 27/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Remind me on Fri, Dec 25" }));
+    expect(api.createWatch).toHaveBeenCalledWith({
+      facility_id: "232465", name: "Kachess", start_date: "2027-06-25", end_date: "2027-06-27",
+      min_nights: 2, notification_channel: "web_push", watch_type: "release", releases_on: "2026-12-25",
+      min_people: 4, equipment: "trailer", rig_length: 30,
+    });
+    expect(api.track).toHaveBeenCalledWith("release_reminder_created", expect.objectContaining({
+      from: "full_group", releases_on: "2026-12-25", ui_version: "v2", has_filters: 1,
+    }));
+    expect(api.track).not.toHaveBeenCalledWith("watch_created", expect.anything());
+    expect(await screen.findByText(/We'll remind you at 6:55 am on Fri, Dec 25/)).toHaveFocus();
+  });
+
+  test("an already-released stay and a duplicate are explained", async () => {
+    const { WatchRejectedError } = await import("../api");
+    api.createWatch.mockRejectedValueOnce(new WatchRejectedError("already_released"));
+    renderRemind();
+    await userEvent.click(screen.getByRole("button", { name: /Remind me on/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Booking for these dates has already opened");
+
+    api.createWatch.mockRejectedValueOnce(new Error("Failed to create watch: 409"));
+    await userEvent.click(screen.getByRole("button", { name: /Remind me on/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("already have a reminder or watch for Kachess");
+  });
+
+  test("signed out, it hands over to sign-in", async () => {
+    auth.user = null;
+    const { onClose, onSignIn } = renderRemind();
+    await userEvent.click(screen.getByRole("button", { name: "Sign in to get a reminder" }));
+    expect(onClose).toHaveBeenCalled();
+    expect(onSignIn).toHaveBeenCalled();
+  });
+
+  test("the free-tier limit opens the upgrade modal", async () => {
+    const { WatchLimitError } = await import("../api");
+    api.createWatch.mockRejectedValueOnce(new WatchLimitError({ limit: 3, current: 3, upgrade_url: "/pricing" }));
+    renderRemind();
+    await userEvent.click(screen.getByRole("button", { name: /Remind me on/ }));
+    expect(await screen.findByRole("dialog", { name: "Upgrade for unlimited watches" })).toBeInTheDocument();
+  });
+});
