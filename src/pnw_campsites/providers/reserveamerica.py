@@ -5,19 +5,22 @@ The site is a React SSR app with Redux state embedded in a <script> tag.
 Each request returns a 14-day availability window for 20 campsites.
 
 For date ranges > 14 days, multiple requests are made in 14-day windows.
+Requests run on the provider thread pool, one at a time, and the client spaces
+them app-wide with a shared limiter: no thread is held between requests.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
+import os
 import re
 import time
 from datetime import date, timedelta
 
 from curl_cffi import requests as curl_requests
 
+from pnw_campsites.providers.blocking import MinIntervalLimiter, run_blocking
 from pnw_campsites.providers.errors import (
     FacilityNotFoundError,
     RateLimitedError,
@@ -46,8 +49,26 @@ _STATUS_MAP: dict[str, AvailabilityStatus] = {
 
 # Max days per SSR page load
 _WINDOW_DAYS = 14
-# Records per page (RA default)
-_PAGE_SIZE = 20
+# Records per page: RA's maximum for `recordsPerPage` (its default is 20).
+# Pages are 0-based `pageNumber`; RA ignores a `page` param.
+_PAGE_SIZE = 50
+# Minimum spacing between request starts, across every search and the poller.
+# 1.0 = 1 req/s. Prod reaches ReserveAmerica only through its dedicated Fly
+# egress IP, and a block there takes out every Oregon park, so raise this only
+# deliberately (2 req/s roughly halves Oregon search time; see PR #241).
+_MIN_INTERVAL_ENV = "RESERVEAMERICA_MIN_INTERVAL_S"
+_DEFAULT_MIN_INTERVAL_S = 1.0
+
+
+def _min_interval() -> float:
+    raw = os.getenv(_MIN_INTERVAL_ENV)
+    if raw is None:
+        return _DEFAULT_MIN_INTERVAL_S
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        logger.warning("Ignoring %s=%r: not a number", _MIN_INTERVAL_ENV, raw)
+        return _DEFAULT_MIN_INTERVAL_S
 
 # Regex to extract the Redux state JSON blob from the HTML
 _REDUX_RE = re.compile(r'(\{"application"\s*:\s*\{.+\})\s*</script>')
@@ -66,6 +87,7 @@ class ReserveAmericaClient:
 
     def __init__(self) -> None:
         self._session: curl_requests.Session | None = None
+        self._limiter = MinIntervalLimiter(_min_interval())
 
     async def __aenter__(self) -> ReserveAmericaClient:
         self._session = curl_requests.Session(impersonate="chrome131")
@@ -75,6 +97,20 @@ class ReserveAmericaClient:
         if self._session:
             self._session.close()
             self._session = None
+
+    async def _fetch(
+        self,
+        park_id: str,
+        slug: str,
+        state: str,
+        start_date: date,
+        end_date: date,
+        page: int = 0,
+    ) -> tuple[list[dict], int]:
+        await self._limiter.wait()
+        return await run_blocking(
+            self._fetch_window, park_id, slug, state, start_date, end_date, page,
+        )
 
     async def get_availability(
         self,
@@ -86,11 +122,38 @@ class ReserveAmericaClient:
     ) -> CampgroundAvailability:
         """Fetch per-site availability for an Oregon State Park.
 
-        Makes one request per 14-day window in the date range.
+        Makes one request per page of each 14-day window in the date range.
         """
-        return await asyncio.to_thread(
-            self._get_availability_sync,
-            park_id, slug, state, start_date, end_date,
+        all_campsites: dict[str, CampsiteAvailability] = {}
+
+        window_start = start_date
+        while window_start <= end_date:
+            window_end = min(window_start + timedelta(days=_WINDOW_DAYS - 1), end_date)
+
+            page = 0
+            while True:
+                records, total = await self._fetch(
+                    park_id, slug, state, window_start, window_end, page,
+                )
+
+                for rec in records:
+                    site_id = str(rec["id"])
+                    avail_dict = _parse_availability_grid(rec.get("availabilityGrid", []))
+
+                    if site_id in all_campsites:
+                        all_campsites[site_id].availabilities.update(avail_dict)
+                    else:
+                        all_campsites[site_id] = _record_to_campsite(rec, avail_dict)
+
+                page += 1
+                if not records or page * _PAGE_SIZE >= total:
+                    break
+
+            window_start = window_end + timedelta(days=1)
+
+        return CampgroundAvailability(
+            facility_id=park_id,
+            campsites=all_campsites,
         )
 
     async def ping(self, park_id: str, slug: str, state: str) -> int:
@@ -103,60 +166,12 @@ class ReserveAmericaClient:
         Returns the total record count reported by the search payload.
         """
         today = date.today()
-        records, total = await asyncio.to_thread(
-            self._fetch_window, park_id, slug, state, today, today + timedelta(days=1)
+        records, total = await self._fetch(
+            park_id, slug, state, today, today + timedelta(days=1),
         )
         if not records and total == 0:
             raise ValueError(f"ReserveAmerica returned no records for park {park_id}")
         return total
-
-    def _get_availability_sync(
-        self,
-        park_id: str,
-        slug: str,
-        state: str,
-        start_date: date,
-        end_date: date,
-    ) -> CampgroundAvailability:
-        all_campsites: dict[str, CampsiteAvailability] = {}
-
-        # Break date range into 14-day windows
-        window_start = start_date
-        while window_start <= end_date:
-            window_end = min(window_start + timedelta(days=_WINDOW_DAYS - 1), end_date)
-
-            # Paginate within each window (20 records per page)
-            page = 1
-            while True:
-                records, total = self._fetch_window(
-                    park_id, slug, state, window_start, window_end, page=page,
-                )
-
-                for rec in records:
-                    site_id = str(rec["id"])
-                    avail_dict = _parse_availability_grid(rec.get("availabilityGrid", []))
-
-                    if site_id in all_campsites:
-                        all_campsites[site_id].availabilities.update(avail_dict)
-                    else:
-                        all_campsites[site_id] = _record_to_campsite(rec, avail_dict)
-
-                fetched_so_far = _PAGE_SIZE * page
-                if not records or fetched_so_far >= total:
-                    break
-                page += 1
-                time.sleep(1.0)  # rate limit between pages
-
-            window_start = window_end + timedelta(days=1)
-
-            # Rate limit between windows
-            if window_start <= end_date:
-                time.sleep(1.0)
-
-        return CampgroundAvailability(
-            facility_id=park_id,
-            campsites=all_campsites,
-        )
 
     def _fetch_window(
         self,
@@ -165,9 +180,11 @@ class ReserveAmericaClient:
         state: str,
         start_date: date,
         end_date: date,
-        page: int = 1,
+        page: int = 0,
     ) -> tuple[list[dict], int]:
-        """Fetch one page of a 14-day window. Returns (records, totalRecords)."""
+        """Fetch one page (0-based) of a 14-day window. Blocking.
+
+        Returns (records, totalRecords)."""
         assert self._session is not None
 
         url = (
@@ -177,9 +194,10 @@ class ReserveAmericaClient:
         params: dict[str, str | int] = {
             "arrivalDate": start_date.isoformat(),
             "departureDate": end_date.isoformat(),
+            "recordsPerPage": _PAGE_SIZE,
         }
-        if page > 1:
-            params["page"] = page
+        if page:
+            params["pageNumber"] = page
 
         for attempt in range(2):
             try:
