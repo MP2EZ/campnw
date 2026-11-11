@@ -36,6 +36,31 @@ export function watchStays(r: CampgroundResult, p: SearchParams | null): WatchSt
   return stays.map(({ start, end }) => ({ start, end, label: chipLabel(start, end, true) }));
 }
 
+/** A not-released stay and the day its first unreleased night opens. */
+export interface RemindStay extends WatchStay {
+  releasesOn: string;
+}
+
+/** Flexible searches have a stay per arrival day; offer the earliest few. */
+export const REMIND_LIMIT = 6;
+
+/**
+ * The not-released stays a release reminder can cover (v1.48 D9): each
+ * not-released weekend (or block, or the exact dates), or for a flexible
+ * range the earliest stays. Only stays with a known release date that hasn't
+ * passed (`today`, YYYY-MM-DD); the server refuses one already released.
+ */
+export function remindStays(r: CampgroundResult, p: SearchParams | null, today: string): RemindStay[] {
+  const out: RemindStay[] = [];
+  for (const c of candidateWindows(p)) {
+    const s = candidateStatus(r, c);
+    if (s.status !== "not_released" || !s.releasesOn || s.releasesOn < today) continue;
+    out.push({ start: c.start, end: c.end, label: chipLabel(c.start, c.end, true), releasesOn: s.releasesOn });
+    if (out.length === REMIND_LIMIT) break;
+  }
+  return out;
+}
+
 export function whoFromParams(p: SearchParams | null): WatchWho {
   const equipment = p?.equipment && EQUIPMENT.has(p.equipment) ? p.equipment as Equipment : null;
   return {
@@ -65,6 +90,16 @@ export function watchRequest(
   if (who.equipment === "trailer" && who.rigLength) req.rig_length = who.rigLength;
   if (hookups) req.site_types = ["hookups"];
   return req;
+}
+
+/** One release reminder: the watch it becomes on release day, plus the date. */
+export function remindRequest(
+  r: CampgroundResult,
+  stay: RemindStay,
+  p: SearchParams | null,
+  filters: { who: WatchWho; hookups: boolean },
+): CreateWatchParams {
+  return { ...watchRequest(r, stay, p, filters), watch_type: "release", releases_on: stay.releasesOn };
 }
 
 export const hasFilters = (req: CreateWatchParams) =>
