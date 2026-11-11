@@ -422,3 +422,15 @@ class TestAppWideRateLimit:
         gaps = [b - a for a, b in zip(starts, starts[1:], strict=False)]
         assert len(starts) == 3
         assert min(gaps) >= 0.19, f"requests started {gaps} apart"
+
+
+class TestRateSetting:
+    @pytest.mark.parametrize("env,expected", [
+        (None, 1.0), ("0.5", 0.5), ("fast", 1.0), ("-2", 0.0),
+    ])
+    def test_interval_comes_from_env(self, monkeypatch, env, expected) -> None:
+        if env is None:
+            monkeypatch.delenv("RESERVEAMERICA_MIN_INTERVAL_S", raising=False)
+        else:
+            monkeypatch.setenv("RESERVEAMERICA_MIN_INTERVAL_S", env)
+        assert ReserveAmericaClient()._limiter.interval == expected

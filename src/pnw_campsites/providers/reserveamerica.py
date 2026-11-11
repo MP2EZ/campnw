@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 from datetime import date, timedelta
@@ -52,7 +53,22 @@ _WINDOW_DAYS = 14
 # Pages are 0-based `pageNumber`; RA ignores a `page` param.
 _PAGE_SIZE = 50
 # Minimum spacing between request starts, across every search and the poller.
-_MIN_INTERVAL_S = 1.0
+# 1.0 = 1 req/s. Prod reaches ReserveAmerica only through its dedicated Fly
+# egress IP, and a block there takes out every Oregon park, so raise this only
+# deliberately (2 req/s roughly halves Oregon search time; see PR #241).
+_MIN_INTERVAL_ENV = "RESERVEAMERICA_MIN_INTERVAL_S"
+_DEFAULT_MIN_INTERVAL_S = 1.0
+
+
+def _min_interval() -> float:
+    raw = os.getenv(_MIN_INTERVAL_ENV)
+    if raw is None:
+        return _DEFAULT_MIN_INTERVAL_S
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        logger.warning("Ignoring %s=%r: not a number", _MIN_INTERVAL_ENV, raw)
+        return _DEFAULT_MIN_INTERVAL_S
 
 # Regex to extract the Redux state JSON blob from the HTML
 _REDUX_RE = re.compile(r'(\{"application"\s*:\s*\{.+\})\s*</script>')
@@ -71,7 +87,7 @@ class ReserveAmericaClient:
 
     def __init__(self) -> None:
         self._session: curl_requests.Session | None = None
-        self._limiter = MinIntervalLimiter(_MIN_INTERVAL_S)
+        self._limiter = MinIntervalLimiter(_min_interval())
 
     async def __aenter__(self) -> ReserveAmericaClient:
         self._session = curl_requests.Session(impersonate="chrome131")
