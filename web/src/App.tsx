@@ -1124,7 +1124,8 @@ export default function App() {
       {results && uiVersion === "v2" ? (
         <Suspense fallback={null}>
           <ResultsPage maxResults={maxResults} onCheckRest={checkRest} completedAt={completedAt}
-            onSearch={handleSearch} searchId={searchId} failed={!!error} />
+            onSearch={handleSearch} searchId={searchId} failed={!!error}
+            onSignIn={() => { setAuthEntryPoint("watch_sheet"); setAuthModalOpen(true); }} />
         </Suspense>
       ) : results && (() => {
         const withAvailability = availableCards.length;

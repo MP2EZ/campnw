@@ -8,6 +8,7 @@ import { fitLine, NOT_LISTED } from "./fit";
 import { PlaceThumb } from "./PlaceThumb";
 import { useCardSelection } from "./selection";
 import { WindowChips } from "./WindowChips";
+import { useOpenWatch } from "./watchContext";
 
 interface Props {
   result: CampgroundResult;
@@ -51,6 +52,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
   });
 
   const { selected, ...selection } = useCardSelection(result.facility_id);
+  const openWatch = useOpenWatch();
 
   return (
     <article className={selected ? "rv2-card is-selected" : "rv2-card"} aria-labelledby={id} {...selection}>
@@ -90,6 +92,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
           params={params}
           source={source}
           onBook={onBook}
+          onWatch={openWatch ? (c) => openWatch(result, c.start, "chip") : undefined}
         />
         {tags.length > 0 && <p className="rv2-card-tags">{tags.join(" · ")}</p>}
       </div>
