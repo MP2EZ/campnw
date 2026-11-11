@@ -160,6 +160,8 @@ export interface Window {
   end_date: string;
   nights: number;
   max_people: number;
+  /** False when max_people is a provider placeholder: show no capacity. */
+  max_people_known?: boolean;
   is_fcfs: boolean;
   booking_url: string | null;
   // Site fit; null = the booking system doesn't say (never "doesn't fit").
