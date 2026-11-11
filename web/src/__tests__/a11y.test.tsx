@@ -29,6 +29,11 @@ vi.mock("../hooks/useAuth", () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+vi.mock("../hooks/useBilling", () => ({
+  useBilling: () => ({ isPro: false, watchLimit: 3, status: null, startCheckout: vi.fn() }),
+  BillingProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // The split layout's map, without Leaflet (ResultsMap.test covers the real one).
 vi.mock("../results/ResultsMap", () => ({ default: () => <div data-testid="results-map" /> }));
 
@@ -305,6 +310,43 @@ describe("Accessibility: results v2", () => {
     expect(card).not.toHaveClass("is-selected");
     act(() => store.select("1", "map"));
     expect(card).toHaveClass("is-selected");
+  });
+});
+
+// ── Watch sheet (v1.48 P3c) ──────────────────────────────────────────
+
+describe("Accessibility: Watch sheet", () => {
+  test("a full chip opens it as a labelled dialog that passes axe; Escape gives focus back", async () => {
+    const { container } = renderV2();
+    const chip = screen.getAllByRole("button", { name: /Full · Watch/ })[0];
+    await userEvent.click(chip);
+    const sheet = screen.getByRole("dialog", { name: "Watch Kanaskat-Palmer State Park" });
+    expect(sheet).toHaveAttribute("aria-modal", "true");
+    expect(within(sheet).getByRole("heading", { name: /^Watch/ })).toHaveFocus();
+    expect(await axe(container)).toHaveNoViolations();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(chip).toHaveFocus();
+  });
+
+  test("a Full-group row's Watch opens it; Remind me stays a stub", async () => {
+    renderV2();
+    await userEvent.click(screen.getByRole("button", { name: "Watch: Wallace Falls State Park" }));
+    const sheet = screen.getByRole("dialog", { name: "Watch Wallace Falls State Park" });
+    // Signed out: the sheet hands over to sign-in rather than failing later.
+    expect(within(sheet).getByRole("button", { name: "Sign in to watch" })).toBeInTheDocument();
+  });
+
+  test("its controls are 44px, its edges clear the safe areas, and focus stays visible", () => {
+    const css = readFileSync(join(__dirname, "../results/watchSheet.css"), "utf-8");
+    for (const selector of [".rv2-watch-close", ".rv2-watch-option", ".rv2-watch-row", ".rv2-watch-link",
+      ".rv2-watch-secondary", ".rv2-watch-primary", ".rv2-watch-field input", ".rv2-watch-field select"]) {
+      expect(minTarget(css, selector), `${selector} height`).toBeGreaterThanOrEqual(44);
+    }
+    for (const edge of ["top", "bottom", "left", "right"]) expect(css).toContain(`env(safe-area-inset-${edge})`);
+    for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      if (/outline:\s*(none|0)/.test(body)) expect(sel, sel).toMatch(/:not\(:focus-visible\)/);
+    }
   });
 });
 

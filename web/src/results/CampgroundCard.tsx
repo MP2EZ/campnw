@@ -11,6 +11,7 @@ import { useCardSelection } from "./selection";
 import { SitePanel } from "./SitePanel";
 import type { PanelSite } from "./siteGroups";
 import { WindowChips } from "./WindowChips";
+import { useOpenWatch } from "./watchContext";
 
 interface Props {
   result: CampgroundResult;
@@ -68,6 +69,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
   });
 
   const { selected, ...selection } = useCardSelection(result.facility_id);
+  const openWatch = useOpenWatch();
 
   return (
     <article className={selected ? "rv2-card is-selected" : "rv2-card"} aria-labelledby={id} {...selection}>
@@ -106,6 +108,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
           name={result.name}
           params={params}
           onOpen={onOpen}
+          onWatch={openWatch ? (c) => openWatch(result, c.start, "chip") : undefined}
         />
         {panel && (
           <SitePanel result={result} chip={panel.chip} params={params} returnFocus={panel.el}

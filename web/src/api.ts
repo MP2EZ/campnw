@@ -534,6 +534,10 @@ export interface WatchData {
   search_params?: Record<string, unknown> | null;
   /** Last night has passed (Pacific); the poller no longer checks it. */
   expired?: boolean;
+  min_people?: number | null;
+  equipment?: string | null;
+  rig_length?: number | null;
+  site_types?: string[] | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -681,6 +685,12 @@ export interface CreateWatchParams {
   notification_channel?: string;
   watch_type?: "single" | "template";
   search_params?: Record<string, unknown>;
+  /** Site filters (v1.48 P3c); unset = any site. Unknown fit never suppresses an alert. */
+  min_people?: number;
+  equipment?: "tent" | "van" | "trailer";
+  /** Feet; trailers only. */
+  rig_length?: number;
+  site_types?: ("hookups" | "walk_in")[];
 }
 
 

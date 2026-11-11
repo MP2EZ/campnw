@@ -269,7 +269,8 @@
   transition: box-shadow var(--transition-fast);
 }
 
-button.rv2-chip {
+/* Open chips open the site panel (P3b). Full chips keep their dashed look (watchSheet.css). */
+button.rv2-chip:not(.rv2-chip-full) {
   border: 0;
   font: inherit;
   text-align: left;
@@ -277,7 +278,7 @@ button.rv2-chip {
 }
 
 a.rv2-chip:hover,
-button.rv2-chip:hover {
+button.rv2-chip:not(.rv2-chip-full):hover {
   color: var(--chip-open-text);
   box-shadow: inset 0 0 0 1px currentColor;
 }
