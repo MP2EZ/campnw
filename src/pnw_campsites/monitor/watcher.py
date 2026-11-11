@@ -21,6 +21,8 @@ from pnw_campsites.registry.models import (
     BookingSystem,
     CampgroundAvailability,
 )
+from pnw_campsites.search.engine import enrich_wa_availability
+from pnw_campsites.search.who import site_fits
 from pnw_campsites.urls import availability_url
 
 _logger = logging.getLogger(__name__)
@@ -205,6 +207,9 @@ async def poll_watch(
             booking_system, recgov, goingtocamp, watch_db,
             reserveamerica=reserveamerica,
         )
+        if booking_system == BookingSystem.WA_STATE and registry:
+            # Site names and fit from the seeded cache, as search does.
+            enrich_wa_availability(registry, watch.facility_id, availability)
 
         # Build current snapshot: site_id -> [available dates]
         current: dict[str, list[str]] = {}
@@ -216,13 +221,20 @@ async def poll_watch(
 
         for site_id, site in availability.campsites.items():
             available_dates = []
+            # A site that doesn't fit the watch's filters never alerts, so it
+            # stays out of the snapshot. Unknown fit passes (search/who.py).
+            fits = not watch.has_site_filters or site_fits(
+                site, booking_system,
+                people=watch.min_people, equipment=watch.equipment,
+                rig_length=watch.rig_length, site_types=watch.site_types,
+            )
             for dt, status in site.availabilities.items():
                 d = date.fromisoformat(dt[:10])
                 # Record all statuses for history
                 history_records.append(
                     (site_id, dt[:10], status.value)
                 )
-                if status != AvailabilityStatus.AVAILABLE:
+                if not fits or status != AvailabilityStatus.AVAILABLE:
                     continue
                 if d < start or d > end:
                     continue
@@ -363,6 +375,10 @@ async def poll_all(
                     enabled=True,
                     booking_system=cg.booking_system.value,
                     watch_type="single",  # poll as single
+                    min_people=watch.min_people,
+                    equipment=watch.equipment,
+                    rig_length=watch.rig_length,
+                    site_types=watch.site_types,
                 )
                 expanded.append(virtual)
         else:

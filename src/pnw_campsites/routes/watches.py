@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.responses import Response
@@ -39,6 +41,11 @@ class WatchRequest(BaseModel):
     )
     watch_type: str = Field(default="single", pattern=r"^(single|template)$")
     search_params: dict | None = None
+    # Site filters (v1.48 P3c), the same bounds as the search's `who` params.
+    min_people: int | None = Field(default=None, ge=1, le=50)
+    equipment: Literal["tent", "van", "trailer"] | None = None
+    rig_length: int | None = Field(default=None, ge=1, le=100)  # trailers only
+    site_types: list[Literal["hookups", "walk_in"]] | None = Field(default=None, max_length=2)
 
 
 class WatchResponse(BaseModel):
@@ -56,6 +63,10 @@ class WatchResponse(BaseModel):
     watch_type: str = "single"
     search_params: dict | None = None
     expired: bool = False  # last night has passed; no longer polled
+    min_people: int | None = None
+    equipment: str | None = None
+    rig_length: int | None = None
+    site_types: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +156,10 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         booking_system=booking_system,
         watch_type=body.watch_type,
         search_params=_json.dumps(body.search_params) if body.search_params else "",
+        min_people=body.min_people,
+        equipment=body.equipment,
+        rig_length=body.rig_length if body.equipment == "trailer" else None,
+        site_types=sorted(set(body.site_types)) if body.site_types else None,
     )
     if body.watch_type == "single" and db.has_duplicate_watch(watch):
         raise HTTPException(
@@ -171,6 +186,10 @@ def _watch_to_response(w: Watch) -> WatchResponse:
         watch_type=w.watch_type,
         search_params=_json.loads(w.search_params) if w.search_params else None,
         expired=w.end_date < watcher.pacific_today().isoformat(),
+        min_people=w.min_people,
+        equipment=w.equipment,
+        rig_length=w.rig_length,
+        site_types=w.site_types,
     )
 
 
