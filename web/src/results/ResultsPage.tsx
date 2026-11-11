@@ -1,6 +1,6 @@
 import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "./results.css";
-import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
@@ -17,6 +17,10 @@ import { groupByDriveBand } from "./bands";
 import { MapSheet } from "./MapSheet";
 import { useMediaQuery } from "./media";
 import { createSelectionStore, SelectionContext } from "./selection";
+import { WatchSheet, type WatchFrom } from "./WatchSheet";
+import { WatchContext, type OpenWatch } from "./watchContext";
+import { watchStays } from "./watch";
+import type { CampgroundResult } from "../api";
 
 // Leaflet comes with this chunk: beside the list when it's wide enough, else
 // in MapSheet once it's opened.
@@ -32,6 +36,8 @@ interface Props {
   searchId?: string;
   /** The search ended in an error before it finished. */
   failed?: boolean;
+  /** Open sign-in (the Watch sheet's signed-out path). */
+  onSignIn?: () => void;
 }
 
 // A clock that ticks every 30s, so the "searched … ago" label stays current.
@@ -46,7 +52,7 @@ const readClock = () => Math.floor(Date.now() / TICK) * TICK;
  * Results v2 (v1.48): the answer, then the notices that qualify it, then
  * places. Mounted from App's one switch point when `useUiVersion()` is "v2".
  */
-export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId, failed }: Props) {
+export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId, failed, onSignIn }: Props) {
   const { results, loading, searchParams, filteredResults } = useSearchContext();
   const now = useSyncExternalStore(subscribeClock, readClock);
   const split = useMediaQuery(SPLIT_QUERY);
@@ -58,6 +64,8 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
   ], [results, filteredResults]);
   // A quick pick: open its band, then move to its card (n re-runs a repeat pick).
   const [pick, setPick] = useState<{ id: string; n: number } | null>(null);
+  const [watching, setWatching] = useState<{ place: CampgroundResult; initial?: string; from: WatchFrom } | null>(null);
+  const openWatch = useCallback<OpenWatch>((place, initial, from) => setWatching({ place, initial, from }), []);
   useEffect(() => {
     if (!pick) return;
     const name = document.getElementById(`rv2-card-${pick.id}`);
@@ -118,19 +126,25 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
 
   return (
     <SelectionContext.Provider value={selection}>
-      <div className={split ? "rv2-split rv2-split--map" : "rv2-split"}>
-        {page}
-        {!split && <MapSheet places={mapPlaces} searchKey={searchParams} selection={selection} onSelect={onPin} />}
-        {split && (
-          <aside className="rv2-map-aside" aria-labelledby="rv2-map-h">
-            <h2 id="rv2-map-h" className="sr-only">Map of results</h2>
-            <p className="sr-only">The list has the same places.</p>
-            <Suspense fallback={<div className="rv2-map-loading" />}>
-              <ResultsMap places={mapPlaces} searchKey={searchParams} selection={selection} onSelect={onPin} />
-            </Suspense>
-          </aside>
+      <WatchContext.Provider value={openWatch}>
+        <div className={split ? "rv2-split rv2-split--map" : "rv2-split"}>
+          {page}
+          {!split && <MapSheet places={mapPlaces} searchKey={searchParams} selection={selection} onSelect={onPin} />}
+          {split && (
+            <aside className="rv2-map-aside" aria-labelledby="rv2-map-h">
+              <h2 id="rv2-map-h" className="sr-only">Map of results</h2>
+              <p className="sr-only">The list has the same places.</p>
+              <Suspense fallback={<div className="rv2-map-loading" />}>
+                <ResultsMap places={mapPlaces} searchKey={searchParams} selection={selection} onSelect={onPin} />
+              </Suspense>
+            </aside>
+          )}
+        </div>
+        {watching && (
+          <WatchSheet place={watching.place} params={searchParams} stays={watchStays(watching.place, searchParams)}
+            initial={watching.initial} from={watching.from} onClose={() => setWatching(null)} onSignIn={onSignIn} />
         )}
-      </div>
+      </WatchContext.Provider>
     </SelectionContext.Provider>
   );
 }
