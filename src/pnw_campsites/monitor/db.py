@@ -1276,6 +1276,27 @@ class WatchDB:
         ).fetchall()
         return [self._row_to_watch(r) for r in rows]
 
+    def list_release_watches(self) -> list[Watch]:
+        """Enabled release reminders still waiting for their release day."""
+        rows = self._conn.execute(
+            "SELECT * FROM watches WHERE enabled = 1 AND watch_type = 'release'"
+        ).fetchall()
+        return [self._row_to_watch(r) for r in rows]
+
+    def convert_release_watch(self, watch_id: int) -> bool:
+        """Turn a release reminder into a cancellation watch for the same stay.
+
+        Returns False if it was already converted, so a caller that converts
+        before pushing pushes at most once.
+        """
+        cursor = self._conn.execute(
+            "UPDATE watches SET watch_type = 'single'"
+            " WHERE id = ? AND watch_type = 'release'",
+            (watch_id,),
+        )
+        self._conn.commit()
+        return cursor.rowcount == 1
+
     def update_watch_booking_system(
         self, watch_id: int, booking_system: str,
     ) -> None:
