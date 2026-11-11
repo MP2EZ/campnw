@@ -87,5 +87,20 @@ describe("WindowChips", () => {
     expect(onWatch).toHaveBeenCalledWith(expect.objectContaining({ start: "2027-06-11", status: "full" }));
     expect(screen.queryByRole("button", { name: /Fri 25/ })).not.toBeInTheDocument();
   });
+
+  test("with reminders, a not-released weekend with a release date is a button that opens one", async () => {
+    const onRemind = vi.fn();
+    const result = {
+      ...place(six.map((s) => win(s, "2027-06-04", "2027-06-06"))),
+      not_released_ranges: [{ start: "2027-06-18", end: "2027-06-27", releases_on: "2026-12-18" }],
+    } as CampgroundResult;
+    render(<WindowChips chips={buildWindowChips(result, juneWeekends)} name="Dash Point" params={juneWeekends}
+      source="WA State Parks" onBook={vi.fn()} onRemind={onRemind} remindStarts={new Set(["2027-06-25"])} />);
+    await userEvent.click(screen.getByRole("button", { name: "Fri 25 – Sun 27, Opens Dec 25 · Remind me" }));
+    expect(onRemind).toHaveBeenCalledWith(expect.objectContaining({ start: "2027-06-25", status: "not_released" }));
+    // Not in remindStarts (e.g. its release date has passed): text only.
+    expect(screen.queryByRole("button", { name: /Fri 18/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Fri 18 – Sun 20")).toBeInTheDocument();
+  });
 });
 
