@@ -420,8 +420,12 @@ async def cmd_watch_poll(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     watch_db = WatchDB()
+    registry = CampgroundRegistry()  # template watches and booking-system healing
     async with RecGovClient(ridb_api_key=api_key) as client:
-        results = await poll_all(client, watch_db)
+        # Recreation.gov only: WA and Oregon watches report that their client
+        # isn't available here (the server polls those).
+        results = await poll_all(client, None, watch_db, registry)
+    registry.close()
 
     changes_found = 0
     for result in results:
