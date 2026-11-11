@@ -60,7 +60,7 @@ class Watch:
     created_at: str = ""
     booking_system: str = "recgov"
     trip_id: int | None = None
-    watch_type: str = "single"  # "single" or "template"
+    watch_type: str = "single"  # "single", "template" or "release"
     search_params: str = ""  # JSON search pattern for template watches
     # Site filters (v1.48 P3c), the search's `who` rules (search/who.py).
     # None = any site; a site the booking system says nothing about passes.
@@ -68,6 +68,8 @@ class Watch:
     equipment: str | None = None  # tent | van | trailer
     rig_length: int | None = None  # feet, trailers only
     site_types: list[str] | None = None  # any of who.SITE_TYPES
+    # Release reminders (v1.48 P3d): the day the stay's first night opens.
+    releases_on: str | None = None  # YYYY-MM-DD, release watches only
 
     @property
     def has_site_filters(self) -> bool:
@@ -468,6 +470,7 @@ class WatchDB:
         for col, kind in (
             ("min_people", "INTEGER"), ("equipment", "TEXT"),
             ("rig_length", "INTEGER"), ("site_types", "TEXT"),
+            ("releases_on", "TEXT"),  # P3d release reminders
         ):
             if col not in watch_cols3:
                 self._conn.execute(f"ALTER TABLE watches ADD COLUMN {col} {kind}")
@@ -1199,8 +1202,9 @@ class WatchDB:
                  days_of_week, notify_topic, notification_channel,
                  session_token, user_id, enabled, created_at,
                  booking_system, watch_type, search_params,
-                 min_people, equipment, rig_length, site_types)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 min_people, equipment, rig_length, site_types,
+                 releases_on)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 watch.facility_id,
@@ -1222,6 +1226,7 @@ class WatchDB:
                 watch.equipment,
                 watch.rig_length,
                 json.dumps(watch.site_types) if watch.site_types else None,
+                watch.releases_on,
             ),
         )
         self._conn.commit()
