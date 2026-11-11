@@ -11,6 +11,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from pnw_campsites.monitor.db import Snapshot, Watch, WatchDB
+from pnw_campsites.monitor.stays import new_stay_nights, stay_starts
 from pnw_campsites.providers.errors import RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
@@ -251,7 +252,12 @@ async def poll_watch(
                     "max_people": site.max_num_people,
                 }
 
-        result.current_available = len(current)
+        # A site counts, and alerts, only for runs of min_nights consecutive
+        # nights. The snapshot still keeps every open night (its format is
+        # unchanged), so a later night that completes a stay diffs against it.
+        result.current_available = sum(
+            1 for dates in current.values() if stay_starts(dates, watch.min_nights)
+        )
 
         # Record availability history (silent, for predictions)
         if history_records:
@@ -267,8 +273,9 @@ async def poll_watch(
         )
 
         for site_id, dates in current.items():
-            prev_dates = set(prev.get(site_id, []))
-            new_dates = [d for d in dates if d not in prev_dates]
+            new_dates = new_stay_nights(
+                dates, prev.get(site_id, []), watch.min_nights,
+            )
             if new_dates:
                 meta = site_meta.get(site_id, {})
                 result.changes.append(
@@ -280,7 +287,7 @@ async def poll_watch(
                         campsite_type=meta.get(
                             "campsite_type", "",
                         ),
-                        new_dates=sorted(new_dates),
+                        new_dates=new_dates,
                         max_people=meta.get("max_people", 0),
                     )
                 )
