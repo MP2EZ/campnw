@@ -1,6 +1,6 @@
 # v1.48 "Answer-first Results": implementation plan
 
-**Status:** planning (2026-11-07). **Design:** https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private canvas, 5 artboards). **Roadmap:** `docs/ROADMAP.md` → v1.48.
+**Status (2026-11-11):** Phases 1, 2, P3a and P4a are done and released behind `results_v2` (#183, #217). P3b and P3c are in progress; P3d and P4b come next. **Design:** https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private canvas, 5 artboards). **Roadmap:** `docs/ROADMAP.md` → v1.48.
 
 ## Goal
 
@@ -47,19 +47,21 @@ Every PR goes to `dev`, stays under 400 changed lines, and keeps tests green. Ph
   - Store GoingToCamp's `/api/equipment` map (tent / van / RV ≤20′–>40′).
   - Derive `fits_tent`, `fits_van`, `max_rv_ft` from `wa_state_sites.allowed_equipment`, and `hookups` from parsed loop descriptions.
   - Put them on `WindowResponse` for all providers (Recreation.gov from `campsite_type`; OR from its site type).
+  - **Done** (#181, #182).
 - **P1b: seed all 75 WA parks.**
   - Prod can't reach GoingToCamp, so run the seeder locally, export to a JSON fixture in the repo, and import it with an idempotent startup migration (same pattern as #170).
   - Add a `doctor` line for parks with zero seeded sites.
-- **P1c: `who` filter.** `people`, `equipment`, `rig_length` on `/api/search` and the stream; windows are filtered server-side. Consider a per-window summary to shrink the payload (R2). **First** fix the Oregon RV-length decode: prod shows "RV ≤96′" and "RV ≤81′" (found 2026-11-07).
+  - **Done** (#184).
+- **P1c: `who` filter.** `people`, `equipment`, `rig_length` on `/api/search` and the stream; windows are filtered server-side. Consider a per-window summary to shrink the payload (R2). **First** fix the Oregon RV-length decode: prod shows "RV ≤96′" and "RV ≤81′" (found 2026-11-07). **Done** (#209 OR length, #210 filter, #211 UI wiring, #212 gzipped stream). Unknown fit never drops a window. R2 was solved by gzip: a broad WA search went from 3.6 MB to ~112 KB, and results still stream in as they are found in prod.
 
 ### Phase 2: results v2 (behind the flag)
-- **P2a: scaffolding.** Flag plumbing (D1), `web/src/results/` module, new tokens plus the self-hosted font (D11/D12), `AnswerHeader` (answer line plus coverage "Checked N of M"), and notices (not-released, provider warnings).
-- **P2b: cards.** `CampgroundCard`, `WindowChips` (D3, TDD), drive-band grouping, the "Boat-in only" group, fit line, weather.
-- **P2c: missing states.** "Full or not released yet" group (D4) with Watch / Remind-me stubs, `QuickPicks` (D6), and the zero-results page (release timeline, "camp sooner" options). Also from prod testing (2026-11-07): stay chips for flexible "Any day" searches (today's chips show runs of open dates and overlap), and the answer header must leave "Checking…" when the stream ends.
-- **P2d: layout.** Desktop split layout with a sticky map, map restyle and pin shapes (D13), and list↔map selection.
+- **P2a: scaffolding.** Flag plumbing (D1), `web/src/results/` module, new tokens plus the self-hosted font (D11/D12), `AnswerHeader` (answer line plus coverage "Checked N of M"), and notices (not-released, provider warnings). **Done** (#178–#180).
+- **P2b: cards.** `CampgroundCard`, `WindowChips` (D3, TDD), drive-band grouping, the "Boat-in only" group, fit line, weather. **Done** (#186–#190).
+- **P2c: missing states.** "Full or not released yet" group (D4) with Watch / Remind-me stubs, `QuickPicks` (D6), and the zero-results page (release timeline, "camp sooner" options). Also from prod testing (2026-11-07): stay chips for flexible "Any day" searches (today's chips show runs of open dates and overlap), and the answer header must leave "Checking…" when the stream ends. **Done** (#191–#199).
+- **P2d: layout.** Desktop split layout with a sticky map, map restyle and pin shapes (D13), and list↔map selection. **Done** (#204–#208). Mapbox tiles wait on the `VITE_PUBLIC_MAPBOX_TOKEN` secret; until it is set, prod uses toned OSM.
 
 ### Phase 3: search and decisions
-- **P3a: search bar.** Where / When / Who / Drive segments, popovers, and campground-name typeahead (from `/api/campgrounds`). Name matches ignore the drive cap.
+- **P3a: search bar.** Where / When / Who / Drive segments, popovers, and campground-name typeahead (from `/api/campgrounds`). Name matches ignore the drive cap. **Done** (#200–#203).
 - **P3b: site-list panel (dialog).**
   - Content: open sites by type, length, hookups, capacity.
   - Hand-off: "Book on <provider> ↗" with plain hand-off copy.

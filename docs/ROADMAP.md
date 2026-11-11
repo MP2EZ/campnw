@@ -2072,7 +2072,7 @@ Notes:
 
 ---
 
-## v1.48 "Answer-first Results" [IN PROGRESS — P1a, P1b, P2a, P2b released behind `results_v2` on 2026-11-07]
+## v1.48 "Answer-first Results" [IN PROGRESS — Phases 1–2, P3a, P4a released behind `results_v2` (#183 2026-11-07, #217 2026-11-08)]
 
 ### Theme
 The results page answers the question in one line ("22 campgrounds have a June weekend open within 3 hours of Seattle"), then groups places by drive time with the bookable weekends on each card. Design canvas: https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private; 5 artboards, built on real June 2027 data).
@@ -2087,6 +2087,22 @@ The results page answers the question in one line ("22 campgrounds have a June w
 - **Accessibility:** visible focus, 44px targets, contrast fixes.
 
 **Implementation plan:** `docs/PLAN-v1.48-answer-first-results.md` (decisions D1–D13, PRs P1a–P4b, risks).
+
+### Progress (2026-11-11)
+| Phase | Status |
+|---|---|
+| P1a site fit, P1b WA seed | Released #183 |
+| P1c `who` filter, OR RV length, gzipped stream | Released #217 |
+| P2a scaffold, P2b cards | Released #183 |
+| P2c missing states, P2d split layout + map | Released #217 |
+| P3a search bar | Released #217 |
+| P3b site-list panel | In progress |
+| P3c Watch sheet + per-weekend watches | In progress |
+| P3d release reminders | Next. Shares the watch backend with P3c, so it starts after P3c |
+| P4a mobile sheet, date chips, safe areas | Released #217. Device check passed on TestFlight build 4 (2026-11-09) |
+| P4b flip to v2 | Last. Needs the Oregon stall fixed first (Open problems) |
+
+`results_v2` is on only for the owner's account (distinct_id 2). Everyone else needs `?ui=v2`.
 
 ### Persona review (2026-11-06)
 Five task-based personas (weekend planner, last-minute mobile, RV owner, cancellation hunter, first-timer) plus an accessibility audit. They agreed on:
@@ -2120,7 +2136,13 @@ Also released: #174 (Recreation.gov stay-continuation nights were counted as FCF
 | Recreation.gov registry names are uppercase in the v2 typeahead and answer sentence ("OHANAPECOSH CAMPGROUND") | Backlog: title-case on display (found in P3a) |
 | Exact-date searches: window chips label the checkout day as a night ("Sat 21 – Mon 23" for a checkout on the 23rd) | Backlog: candidates treat `end_date` as a night in exact mode (found in P3a) |
 | v1: "Checked 1 campgrounds" plural; `SmartZeroState` "Expand to N min" doesn't apply the new limit | Backlog, or drop at the v2 flip (found in P2c) |
-| v2 map uses toned OpenStreetMap tiles until a public, URL-restricted Mapbox token is added as GitHub secret `VITE_PUBLIC_MAPBOX_TOKEN` (the backend `MAPBOX_ACCESS_TOKEN` funds drive-time calls, so don't expose it) | User action (P2d) |
+| v2 map uses toned OpenStreetMap tiles until a public, URL-restricted Mapbox token is added as GitHub secret `VITE_PUBLIC_MAPBOX_TOKEN` (the backend `MAPBOX_ACCESS_TOKEN` funds drive-time calls, so don't expose it) | User action (P2d). Not set as of 2026-11-11. The iOS app is built locally and stays on OSM |
+| A park where every known site misfits the party or rig falls into "Full / Nothing to book" | Backlog: a "No sites fit your rig" state (found in P1c) |
+| NL search doesn't extract who (party, rig), and the search log line omits who params | Backlog (found in P1c) |
+| ReserveAmerica driveway lengths ≤45 ft are compared directly against trailer length, which errs lenient for back-ins | Backlog (found in P1c) |
+| Muted (full / not-released) pins don't link to their Full-group row. No home-base marker. The map refits on every streamed frame until the user moves it | Backlog (found in P2d) |
+| Mobile: the map legend covers part of the map at half height on small phones. After "Pick dates", Escape returns focus to the search button, not the chip | Backlog (found in P4a) |
+| Native: the page opens scrolled with the header under the Dynamic Island until a status-bar tap (v1.46 Theme A scroll bleed, also v1) | Backlog, v1.46 Theme A |
 
 ---
 
