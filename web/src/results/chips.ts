@@ -56,7 +56,7 @@ const part = (d: Date, unit: "weekday" | "month") => d.toLocaleDateString("en-US
 const day = (d: Date, month: boolean) =>
   [part(d, "weekday"), month && part(d, "month"), d.getDate()].filter(Boolean).join(" ");
 
-function chipLabel(start: string, end: string, withMonth: boolean): string {
+export function chipLabel(start: string, end: string, withMonth: boolean): string {
   const s = parseIsoDate(start);
   const e = parseIsoDate(end);
   const newMonth = s.getMonth() !== e.getMonth();
