@@ -132,6 +132,18 @@ async def notify_web_push(
     result: PollResult,
 ) -> None:
     """Send a web push notification."""
+    await send_web_push(subscription, {
+        "title": f"Campsite Alert: {result.watch.name}",
+        "body": f"{len(result.changes)} new site(s) available",
+        "url": "/",
+    })
+
+
+async def send_web_push(
+    subscription: dict,  # {endpoint, keys: {p256dh, auth}}
+    payload: dict,  # {title, body, url}, read by web/public/sw.js
+) -> None:
+    """Send one web push. A no-op when VAPID isn't configured."""
     from pywebpush import WebPushException, webpush
 
     vapid_private_key = os.getenv("VAPID_PRIVATE_KEY", "")
@@ -139,16 +151,10 @@ async def notify_web_push(
     if not vapid_private_key:
         return
 
-    payload = json.dumps({
-        "title": f"Campsite Alert: {result.watch.name}",
-        "body": f"{len(result.changes)} new site(s) available",
-        "url": "/",
-    })
-
     try:
         webpush(
             subscription_info=subscription,
-            data=payload,
+            data=json.dumps(payload),
             vapid_private_key=vapid_private_key,
             vapid_claims={"sub": f"mailto:{vapid_claims_email}"},
         )

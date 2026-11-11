@@ -68,7 +68,7 @@ Every PR goes to `dev`, stays under 400 changed lines, and keeps tests green. Ph
   - Analytics: `window_chip_opened`, `book_click{from:"site_panel"}`.
   - **Done** (#228–#233). Sites are radios with one "Book on <site> ↗" button, grouped by type. WA links now open the loop with both dates; ReserveAmerica fills in arrival only; Recreation.gov ignores dates (the copy says so).
 - **P3c: Watch sheet and per-weekend watches.** Backend: optional watch filters (`site_types`, `min_people`, `equipment`) honoured by the poller. **Done** (#222–#227): one stay per watch; unknown fit never suppresses an alert. Open question: the poller ignores `min_nights` (see the roadmap backlog).
-- **P3d: release reminders** (D9): backend watch type, scheduler, push, and UI.
+- **P3d: release reminders** (D9): backend watch type, scheduler, push, and UI. **Done** (#236–#240, #243, #244). The push goes at 6:55 am PT on release day, then the reminder converts to a cancellation watch; a missed day converts without a push. #236 makes all watches alert only on stays of `min_nights` nights.
 
 ### Phase 4: mobile and flip
 - **P4a: mobile.** Bottom sheet (D10), date quick-chips (This weekend / Next weekend / month), safe areas. **Done** (#213–#216). **Decided 2026-11-08:** phones get a sticky "Map" button that opens the map in a modal sheet, not the Mobile artboard's map-always-on-top layout. Leaflet loads only when asked, and the list (the answer) stays first. A static map thumbnail is the fallback if a glance at locations is missed.

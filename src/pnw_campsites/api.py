@@ -300,6 +300,23 @@ async def lifespan(app: FastAPI):
             coalesce=True,
             next_run_time=datetime.now() + timedelta(minutes=1),
         )
+        # Release reminders (v1.48 D9): push at 6:55 am PT on release day, then
+        # convert to a cancellation watch. Also at startup, so a restart across
+        # 6:55 still sends that day's pushes. Idempotent.
+        from pnw_campsites.monitor.reminders import run_release_reminders
+
+        scheduler.add_job(
+            partial(run_release_reminders, _watch_db),
+            "cron",
+            hour=6,
+            minute=55,
+            timezone="America/Los_Angeles",
+            id="release_reminders",
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=3600,
+            next_run_time=datetime.now(),
+        )
         # Weekly analytics digest — Monday 8am Pacific
         async def _weekly_digest():
             import logging

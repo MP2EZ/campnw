@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { track, type CampgroundResult, type SearchParams } from "../api";
 import { formatDriveTime, parseIsoDate } from "../lib/dates";
 import { SOURCE_NAMES } from "../lib/sources";
@@ -11,6 +11,7 @@ import { useCardSelection } from "./selection";
 import { SitePanel } from "./SitePanel";
 import type { PanelSite } from "./siteGroups";
 import { WindowChips } from "./WindowChips";
+import { remindStays, todayIso } from "./watch";
 import { useOpenWatch } from "./watchContext";
 
 interface Props {
@@ -70,6 +71,10 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
 
   const { selected, ...selection } = useCardSelection(result.facility_id);
   const openWatch = useOpenWatch();
+  const remindStarts = useMemo(
+    () => new Set(openWatch ? remindStays(result, params, todayIso()).map((s) => s.start) : []),
+    [openWatch, result, params],
+  );
 
   return (
     <article className={selected ? "rv2-card is-selected" : "rv2-card"} aria-labelledby={id} {...selection}>
@@ -109,6 +114,8 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
           params={params}
           onOpen={onOpen}
           onWatch={openWatch ? (c) => openWatch(result, c.start, "chip") : undefined}
+          onRemind={openWatch ? (c) => openWatch(result, c.start, "chip", "remind") : undefined}
+          remindStarts={remindStarts}
         />
         {panel && (
           <SitePanel result={result} chip={panel.chip} params={params} returnFocus={panel.el}

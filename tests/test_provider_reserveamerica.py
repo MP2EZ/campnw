@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from datetime import date
 from unittest.mock import MagicMock, patch
 
@@ -319,48 +321,41 @@ class TestClientErrors:
 
 
 class TestDateWindowing:
-    """Test that _get_availability_sync breaks date ranges into 14-day windows."""
+    """get_availability breaks date ranges into 14-day windows."""
 
-    @patch("pnw_campsites.providers.reserveamerica.time.sleep")
-    def test_single_window_no_split(self, mock_sleep: MagicMock) -> None:
+    async def test_single_window_no_split(self) -> None:
         """Date range <= 14 days makes one request."""
         client = ReserveAmericaClient()
-        records = [_make_record()]
-        html = _make_redux_html(records)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.text = html
-
+        client._limiter.interval = 0
+        mock_resp = MagicMock(status_code=200, text=_make_redux_html([_make_record()], 1))
         client._session = MagicMock()
         client._session.get.return_value = mock_resp
 
-        result = client._get_availability_sync(
+        result = await client.get_availability(
             "402178", "test-park", "OR", date(2026, 7, 1), date(2026, 7, 14),
         )
 
         assert client._session.get.call_count == 1
         assert len(result.campsites) == 1
-        mock_sleep.assert_not_called()
 
-    @patch("pnw_campsites.providers.reserveamerica.time.sleep")
-    def test_two_windows_for_20_days(self, mock_sleep: MagicMock) -> None:
+    async def test_two_windows_for_20_days(self) -> None:
         """20-day range needs 2 requests (14 + 6 days)."""
         client = ReserveAmericaClient()
+        client._limiter.interval = 0
 
         grid1 = [{"date": f"2026-07-{d:02d}", "status": "AVAILABLE"} for d in range(1, 15)]
         grid2 = [{"date": f"2026-07-{d:02d}", "status": "AVAILABLE"} for d in range(15, 21)]
 
-        html1 = _make_redux_html([_make_record(grid=grid1)])
-        html2 = _make_redux_html([_make_record(grid=grid2)])
-
-        mock_resp1 = MagicMock(status_code=200, text=html1)
-        mock_resp2 = MagicMock(status_code=200, text=html2)
+        html1 = _make_redux_html([_make_record(grid=grid1)], 1)
+        html2 = _make_redux_html([_make_record(grid=grid2)], 1)
 
         client._session = MagicMock()
-        client._session.get.side_effect = [mock_resp1, mock_resp2]
+        client._session.get.side_effect = [
+            MagicMock(status_code=200, text=html1),
+            MagicMock(status_code=200, text=html2),
+        ]
 
-        result = client._get_availability_sync(
+        result = await client.get_availability(
             "402178", "test-park", "OR", date(2026, 7, 1), date(2026, 7, 20),
         )
 
@@ -368,4 +363,74 @@ class TestDateWindowing:
         # Should have merged availability from both windows
         campsite = list(result.campsites.values())[0]
         assert len(campsite.availabilities) == 20
-        mock_sleep.assert_called_once_with(1.0)
+
+
+class TestPagination:
+    """ReserveAmerica ignores `page`; it pages with a 0-based `pageNumber`
+    and takes up to 50 `recordsPerPage` (checked live 2026-11-11). With `page`
+    every request returned the first 20 sites again, so a 279-site park cost
+    14 identical requests per window and showed only 20 of its sites."""
+
+    async def test_pages_with_page_number_and_50_records(self) -> None:
+        client = ReserveAmericaClient()
+        client._limiter.interval = 0
+        pages = [
+            [_make_record(site_id=1000 * p + i, name=f"S{p}{i}") for i in range(n)]
+            for p, n in enumerate([50, 50, 20])
+        ]
+        client._session = MagicMock()
+        client._session.get.side_effect = [
+            MagicMock(status_code=200, text=_make_redux_html(recs, 120))
+            for recs in pages
+        ]
+
+        result = await client.get_availability(
+            "402126", "beverly-beach", "OR", date(2026, 7, 1), date(2026, 7, 14),
+        )
+
+        sent = [c.kwargs["params"] for c in client._session.get.call_args_list]
+        assert [p.get("pageNumber", 0) for p in sent] == [0, 1, 2]
+        assert all(p["recordsPerPage"] == 50 for p in sent)
+        assert "page" not in sent[1]
+        assert len(result.campsites) == 120
+
+
+class TestAppWideRateLimit:
+    """The 1 req/s limit holds across concurrent parks, not per thread.
+
+    It used to be a time.sleep inside each park's thread, so five parks in
+    parallel made five requests at once, and every sleep held a thread."""
+
+    async def test_concurrent_parks_share_the_limit(self) -> None:
+        client = ReserveAmericaClient()
+        client._limiter.interval = 0.2
+        starts: list[float] = []
+
+        def fetch(*_args, **_kwargs):
+            starts.append(time.monotonic())
+            return [], 0
+
+        with patch.object(client, "_fetch_window", side_effect=fetch):
+            await asyncio.gather(*[
+                client.get_availability(
+                    str(402000 + i), "park", "OR", date(2026, 7, 1), date(2026, 7, 2),
+                )
+                for i in range(3)
+            ])
+
+        starts.sort()
+        gaps = [b - a for a, b in zip(starts, starts[1:], strict=False)]
+        assert len(starts) == 3
+        assert min(gaps) >= 0.19, f"requests started {gaps} apart"
+
+
+class TestRateSetting:
+    @pytest.mark.parametrize("env,expected", [
+        (None, 1.0), ("0.5", 0.5), ("fast", 1.0), ("-2", 0.0),
+    ])
+    def test_interval_comes_from_env(self, monkeypatch, env, expected) -> None:
+        if env is None:
+            monkeypatch.delenv("RESERVEAMERICA_MIN_INTERVAL_S", raising=False)
+        else:
+            monkeypatch.setenv("RESERVEAMERICA_MIN_INTERVAL_S", env)
+        assert ReserveAmericaClient()._limiter.interval == expected

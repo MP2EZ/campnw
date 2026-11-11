@@ -7,7 +7,6 @@ availability data lives at the leaf level with individual campsite resources.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import threading
 import time
@@ -15,6 +14,7 @@ from datetime import date, timedelta
 
 from curl_cffi import requests as curl_requests
 
+from pnw_campsites.providers.blocking import run_blocking
 from pnw_campsites.providers.errors import RateLimitedError, WAFBlockedError
 from pnw_campsites.registry.models import (
     AvailabilityStatus,
@@ -71,7 +71,7 @@ class GoingToCampClient:
         # The server enters this client during app startup. A blocked or failed
         # index load must not fail startup; availability calls retry it.
         try:
-            await asyncio.to_thread(self._ensure_park_index_sync)
+            await run_blocking(self._ensure_park_index_sync)
         except Exception as exc:
             logger.warning(
                 "GoingToCamp park index unavailable at startup: %s: %s",
@@ -124,8 +124,8 @@ class GoingToCampClient:
             self._park_map_ids = index
 
     async def _get(self, path: str, params: dict | None = None) -> dict | list:
-        """GET with WAF bypass, run in thread to avoid blocking the event loop."""
-        return await asyncio.to_thread(self._get_sync, path, params)
+        """GET with WAF bypass, on the provider pool to keep the loop free."""
+        return await run_blocking(self._get_sync, path, params)
 
     def _get_sync(self, path: str, params: dict | None = None) -> dict | list:
         assert self._session is not None
@@ -203,7 +203,7 @@ class GoingToCampClient:
         Looks up the park's dedicated map from the pre-built index, then
         traverses child maps to collect all campsite availability.
         """
-        return await asyncio.to_thread(
+        return await run_blocking(
             self._get_availability_sync,
             resource_location_id,
             start_date,

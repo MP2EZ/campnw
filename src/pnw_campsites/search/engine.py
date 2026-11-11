@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -33,6 +34,18 @@ from pnw_campsites.search.site_fit import site_fit_for, wa_site_fit
 from pnw_campsites.search.who import site_fits
 
 logger = logging.getLogger("pnw_campsites.search")
+
+# One park's provider fetch may take this long before it is reported as
+# "timeout". Cloudflare drops a stream after 100 s without a byte, so it must
+# stay well under that.
+PARK_TIMEOUT_S = 60.0
+# A streamed search reports parks still unchecked after this as "timeout" and
+# finishes, instead of leaving the UI on "Checking campgrounds…".
+SEARCH_DEADLINE_S = 90.0
+# Parks checked at once per source, on top of the search-wide fan-out.
+# ReserveAmerica requests share one app-wide rate limit: eight Oregon parks in
+# parallel would each get an eighth of it and all finish last.
+SOURCE_CONCURRENCY: dict[BookingSystem, int] = {BookingSystem.OR_STATE: 2}
 
 
 @dataclass
@@ -794,8 +807,10 @@ class SearchEngine:
         all_results: list[CampgroundResult] = []
         search_start = time.monotonic()
 
+        source_sems = _source_semaphores()
+
         async def _check_with_sem(cg: Campground) -> CampgroundResult:
-            async with sem:
+            async with _source_slot(source_sems, cg), sem:
                 return await self._check_campground(
                     cg, start_month, end_month, query,
                 )
@@ -1174,43 +1189,74 @@ class SearchEngine:
         total = len(campgrounds)
         ramped = False
 
+        source_sems = _source_semaphores()
+
         async def _check_with_sem(cg: Campground) -> CampgroundResult:
-            async with sem:
+            async with _source_slot(source_sems, cg), sem:
                 return await self._check_campground(
                     cg, prep.start_month, prep.end_month, query,
                 )
 
-        pending = [
-            asyncio.ensure_future(_check_with_sem(cg))
-            for cg in campgrounds
-        ]
-        for coro in asyncio.as_completed(pending):
-            r = await coro
-            checked_count += 1
-
-            # Ramp up concurrency after first results arrive
-            if not ramped and checked_count >= initial_concurrency:
-                ramped = True
-                for _ in range(full_concurrency - initial_concurrency):
-                    sem.release()
-
-            if drive_times:
-                fid = r.campground.facility_id
-                if fid in drive_times and not r.boat_in:
-                    r.estimated_drive_minutes = drive_times[fid]
-            if r.error:
-                errored.append(r)
-            if r.not_released_nights:
-                unreleased.append(r)
-            if r.total_available_sites > 0 or r.fcfs_sites > 0:
-                available_count += 1
-                yield r
-            else:
-                if not r.error:
-                    all_unavailable += 1
-                yield StreamProgressEvent(
-                    checked=checked_count, total=total, result=r,
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + SEARCH_DEADLINE_S
+        pending = {
+            asyncio.ensure_future(_check_with_sem(cg)): cg for cg in campgrounds
+        }
+        try:
+            while pending:
+                done, _ = await asyncio.wait(
+                    pending, timeout=max(0.0, deadline - loop.time()),
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
+                if done:
+                    finished = [t.result() for t in done]
+                    for t in done:
+                        del pending[t]
+                else:
+                    # Deadline: report what's left instead of waiting on it.
+                    logger.warning(
+                        "Search deadline (%.0fs): %d of %d campgrounds unchecked",
+                        SEARCH_DEADLINE_S, len(pending), total,
+                    )
+                    for t in pending:
+                        t.cancel()
+                    finished = [
+                        CampgroundResult(campground=cg, error="timeout")
+                        for cg in pending.values()
+                    ]
+                    pending.clear()
+
+                for r in finished:
+                    checked_count += 1
+
+                    # Ramp up concurrency after first results arrive
+                    if not ramped and checked_count >= initial_concurrency:
+                        ramped = True
+                        for _ in range(full_concurrency - initial_concurrency):
+                            sem.release()
+
+                    if drive_times:
+                        fid = r.campground.facility_id
+                        if fid in drive_times and not r.boat_in:
+                            r.estimated_drive_minutes = drive_times[fid]
+                    if r.error:
+                        errored.append(r)
+                    if r.not_released_nights:
+                        unreleased.append(r)
+                    if r.total_available_sites > 0 or r.fcfs_sites > 0:
+                        available_count += 1
+                        yield r
+                    else:
+                        if not r.error:
+                            all_unavailable += 1
+                        yield StreamProgressEvent(
+                            checked=checked_count, total=total, result=r,
+                        )
+        finally:
+            # Also runs when the client disconnects: stop paying for parks
+            # nobody will see.
+            for t in pending:
+                t.cancel()
 
         # Report provider degradation. The non-streaming endpoint has always
         # done this; the stream did not, so an outage reached the UI as simply
@@ -1260,38 +1306,21 @@ class SearchEngine:
             if cached is not None:
                 return _process_availability(campground, cached, query)
 
-            if campground.booking_system == BookingSystem.WA_STATE:
-                if not self._goingtocamp:
-                    return CampgroundResult(
-                        campground=campground,
-                        error="GoingToCamp client not configured",
-                    )
-                availability = await self._goingtocamp.get_availability(
-                    int(campground.facility_id), start_month, end_month
+            missing = self._missing_client(campground)
+            if missing:
+                return CampgroundResult(campground=campground, error=missing)
+            try:
+                availability = await asyncio.wait_for(
+                    self._fetch_availability(campground, start_month, end_month),
+                    timeout=PARK_TIMEOUT_S,
                 )
-                self._enrich_wa_availability(campground.facility_id, availability)
-            elif campground.booking_system == BookingSystem.OR_STATE:
-                if not self._reserveamerica:
-                    return CampgroundResult(
-                        campground=campground,
-                        error="ReserveAmerica client not configured",
-                    )
-                availability = await self._reserveamerica.get_availability(
-                    campground.facility_id,
-                    campground.booking_url_slug,
-                    campground.state,
-                    start_month,
-                    end_month,
+            except TimeoutError:
+                logger.warning(
+                    "%s availability check for %s timed out after %.0fs",
+                    campground.booking_system.value, campground.facility_id,
+                    PARK_TIMEOUT_S,
                 )
-            else:
-                if not self._recgov:
-                    return CampgroundResult(
-                        campground=campground,
-                        error="RecGov client not configured",
-                    )
-                availability = await self._recgov.get_availability_range(
-                    campground.facility_id, start_month, end_month
-                )
+                return CampgroundResult(campground=campground, error="timeout")
             self._cache_set(campground, start_month, end_month, availability)
             return _process_availability(campground, availability, query)
         except FacilityNotFoundError:
@@ -1308,6 +1337,35 @@ class SearchEngine:
                 type(exc).__name__, exc,
             )
             return CampgroundResult(campground=campground, error="unavailable")
+
+    def _missing_client(self, campground: Campground) -> str | None:
+        system = campground.booking_system
+        if system == BookingSystem.WA_STATE:
+            return None if self._goingtocamp else "GoingToCamp client not configured"
+        if system == BookingSystem.OR_STATE:
+            return None if self._reserveamerica else "ReserveAmerica client not configured"
+        return None if self._recgov else "RecGov client not configured"
+
+    async def _fetch_availability(
+        self, campground: Campground, start_month: date, end_month: date,
+    ) -> CampgroundAvailability:
+        if campground.booking_system == BookingSystem.WA_STATE:
+            availability = await self._goingtocamp.get_availability(
+                int(campground.facility_id), start_month, end_month
+            )
+            self._enrich_wa_availability(campground.facility_id, availability)
+            return availability
+        if campground.booking_system == BookingSystem.OR_STATE:
+            return await self._reserveamerica.get_availability(
+                campground.facility_id,
+                campground.booking_url_slug,
+                campground.state,
+                start_month,
+                end_month,
+            )
+        return await self._recgov.get_availability_range(
+            campground.facility_id, start_month, end_month
+        )
 
     def _cache_get(
         self, campground: Campground, start: date, end: date,
@@ -1387,6 +1445,18 @@ class SearchEngine:
 # ---------------------------------------------------------------------------
 # Date helpers for natural-language-style queries
 # ---------------------------------------------------------------------------
+
+
+def _source_semaphores() -> dict[BookingSystem, asyncio.Semaphore]:
+    return {src: asyncio.Semaphore(n) for src, n in SOURCE_CONCURRENCY.items()}
+
+
+def _source_slot(
+    sems: dict[BookingSystem, asyncio.Semaphore], cg: Campground,
+) -> contextlib.AbstractAsyncContextManager:
+    """The park's per-source slot. Taken before the search-wide slot, so a park
+    waiting on its source never holds a slot another source could use."""
+    return sems.get(cg.booking_system) or contextlib.nullcontext()
 
 
 def this_weekend() -> tuple[date, date]:

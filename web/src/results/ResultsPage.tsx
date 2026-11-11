@@ -18,8 +18,8 @@ import { MapSheet } from "./MapSheet";
 import { useMediaQuery } from "./media";
 import { createSelectionStore, SelectionContext } from "./selection";
 import { WatchSheet, type WatchFrom } from "./WatchSheet";
-import { WatchContext, type OpenWatch } from "./watchContext";
-import { watchStays } from "./watch";
+import { WatchContext, type OpenWatch, type SheetMode } from "./watchContext";
+import { remindStays, todayIso, watchStays } from "./watch";
 import type { CampgroundResult } from "../api";
 
 // Leaflet comes with this chunk: beside the list when it's wide enough, else
@@ -64,8 +64,12 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
   ], [results, filteredResults]);
   // A quick pick: open its band, then move to its card (n re-runs a repeat pick).
   const [pick, setPick] = useState<{ id: string; n: number } | null>(null);
-  const [watching, setWatching] = useState<{ place: CampgroundResult; initial?: string; from: WatchFrom } | null>(null);
-  const openWatch = useCallback<OpenWatch>((place, initial, from) => setWatching({ place, initial, from }), []);
+  const [watching, setWatching] = useState<
+    { place: CampgroundResult; initial?: string; from: WatchFrom; mode: SheetMode } | null
+  >(null);
+  const openWatch = useCallback<OpenWatch>(
+    (place, initial, from, mode = "watch") => setWatching({ place, initial, from, mode }), [],
+  );
   useEffect(() => {
     if (!pick) return;
     const name = document.getElementById(`rv2-card-${pick.id}`);
@@ -141,7 +145,9 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
           )}
         </div>
         {watching && (
-          <WatchSheet place={watching.place} params={searchParams} stays={watchStays(watching.place, searchParams)}
+          <WatchSheet place={watching.place} params={searchParams} mode={watching.mode}
+            stays={watching.mode === "remind" ? remindStays(watching.place, searchParams, todayIso())
+              : watchStays(watching.place, searchParams)}
             initial={watching.initial} from={watching.from} onClose={() => setWatching(null)} onSignIn={onSignIn} />
         )}
       </WatchContext.Provider>

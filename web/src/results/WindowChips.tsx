@@ -10,6 +10,9 @@ interface Props {
   onOpen: (chip: WindowChip, el: HTMLElement) => void;
   /** A full chip opens the Watch sheet (P3c); without this it only says "Full". */
   onWatch?: (chip: WindowChip) => void;
+  /** A not-released chip whose start is in `remindStarts` opens a release reminder (P3d). */
+  onRemind?: (chip: WindowChip) => void;
+  remindStarts?: ReadonlySet<string>;
 }
 
 function groupLabel(params: SearchParams | null): string {
@@ -24,7 +27,7 @@ function groupLabel(params: SearchParams | null): string {
  * hands off to the booking site. "Few" is said in words ("3 left") and marked
  * with a dot, never by colour alone.
  */
-export function WindowChips({ chips, name, params, onOpen, onWatch }: Props) {
+export function WindowChips({ chips, name, params, onOpen, onWatch, onRemind, remindStarts }: Props) {
   const [all, setAll] = useState(false);
   const list = all ? [...chips.shown, ...chips.more] : chips.shown;
 
@@ -32,6 +35,7 @@ export function WindowChips({ chips, name, params, onOpen, onWatch }: Props) {
     <div role="group" aria-label={`${groupLabel(params)} at ${name}`} className="rv2-chips">
       {list.map((c) => {
         const watch = c.status === "full" && !!onWatch;
+        const remind = c.status === "not_released" && !!onRemind && !!remindStarts?.has(c.start);
         const body = (
           <>
             <span className="rv2-chip-dates">{c.label}</span>
@@ -39,7 +43,7 @@ export function WindowChips({ chips, name, params, onOpen, onWatch }: Props) {
             <span className="sr-only">,</span>{" "}
             <span className="rv2-chip-count">
               {c.few && <span className="rv2-chip-dot" aria-hidden="true" />}
-              {chipCountText(c)}{watch && " · Watch"}
+              {chipCountText(c)}{watch && " · Watch"}{remind && " · Remind me"}
             </span>
           </>
         );
@@ -51,8 +55,15 @@ export function WindowChips({ chips, name, params, onOpen, onWatch }: Props) {
             </button>
           );
         }
+        if (remind) {
+          return (
+            <button key={key} type="button" className="rv2-chip rv2-chip-full rv2-chip-watch" onClick={() => onRemind(c)}>
+              {body}
+            </button>
+          );
+        }
         if (c.status !== "open") {
-          // Remind me (not released) arrives with P3d; until then this only says what's there.
+          // Not reservable, or no release date to remind on: this only says what's there.
           return <span key={key} className="rv2-chip rv2-chip-full">{body}</span>;
         }
         return (
