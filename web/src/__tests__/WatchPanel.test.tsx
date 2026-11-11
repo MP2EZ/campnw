@@ -138,6 +138,18 @@ describe("WatchPanel", () => {
     });
   });
 
+  test("shows a release reminder with the day booking opens", async () => {
+    vi.mocked(getWatches).mockResolvedValue([{
+      ...MOCK_WATCH, id: 3, name: "Kachess", watch_type: "release", releases_on: "2026-12-18",
+    }]);
+    render(<WatchPanel open={true} onClose={vi.fn()} />);
+
+    expect(await screen.findByText("Reminder")).toBeInTheDocument();
+    expect(screen.getByText("Booking opens Fri, Dec 18 · push at 6:55 am PT")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause reminder for Kachess" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete reminder for Kachess" })).toBeInTheDocument();
+  });
+
   test("delete button removes watch", async () => {
     vi.mocked(getWatches).mockResolvedValue([MOCK_WATCH]);
     render(<WatchPanel open={true} onClose={vi.fn()} />);
