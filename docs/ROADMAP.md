@@ -2096,9 +2096,9 @@ The results page answers the question in one line ("22 campgrounds have a June w
 | P2a scaffold, P2b cards | Released #183 |
 | P2c missing states, P2d split layout + map | Released #217 |
 | P3a search bar | Released #217 |
-| P3b site-list panel | In progress |
-| P3c Watch sheet + per-weekend watches | In progress |
-| P3d release reminders | Next. Shares the watch backend with P3c, so it starts after P3c |
+| P3b site-list panel | On `dev` (#228–#233), not released |
+| P3c Watch sheet + per-weekend watches | On `dev` (#222–#227, plus #234 forward-compatible watch rows), not released |
+| P3d release reminders | Next. Builds on P3c's watch filters (see the P3c hand-over: `remindStays`, `WatchSheet` shell, `openWatch`) |
 | P4a mobile sheet, date chips, safe areas | Released #217. Device check passed on TestFlight build 4 (2026-11-09) |
 | P4b flip to v2 | Last. Needs the Oregon stall fixed first (Open problems) |
 
@@ -2143,6 +2143,14 @@ Also released: #174 (Recreation.gov stay-continuation nights were counted as FCF
 | Muted (full / not-released) pins don't link to their Full-group row. No home-base marker. The map refits on every streamed frame until the user moves it | Backlog (found in P2d) |
 | Mobile: the map legend covers part of the map at half height on small phones. After "Pick dates", Escape returns focus to the search button, not the chip | Backlog (found in P4a) |
 | Native: the page opens scrolled with the header under the Dynamic Island until a status-bar tap (v1.46 Theme A scroll bleed, also v1) | Backlog, v1.46 Theme A |
+| **Decide:** the watch poller ignores `min_nights`, so a 2-night per-weekend watch alerts on a 1-night leftover (seen at Denny Creek). Fix: alert only on runs of ≥ `min_nights` consecutive open nights per site. Changes existing watches too | Owner decision (found in P3c) |
+| After signing in from the Watch sheet, the sheet doesn't reopen. Watch filters aren't shown in the watch list and can't be edited. The duplicate check (409) ignores filters | Backlog (found in P3c) |
+| A park where every known site misfits shows as Full, so its Watch may never fire | Backlog: same as the "No sites fit your rig" item above |
+| `User(**d)` in `monitor/db.py` has the same unknown-column crash risk that #234 fixed for watches | Backlog (found 2026-11-11) |
+| WA campground-level `availability_url` still uses `searchTime` without `mapId` (opens "All Parks", today). Used by v1 chips and the panel fallback | Backlog (found in P3b) |
+| Recreation.gov `STANDARD NONELECTRIC` sites read "Site types not listed yet" in the site panel, though rec.gov lists tent/trailer/RV and lengths per site | Backlog: improve the P1a rec.gov mapping (found in P3b) |
+| CLI `check --source or-state` prints Recreation.gov booking links for Oregon sites | Backlog (found in P3b) |
+| Site panel: no drag-to-dismiss on phones. An open panel may close if the layout remounts across 1024px (iPad rotation, untested) | Backlog (found in P3b) |
 
 ---
 

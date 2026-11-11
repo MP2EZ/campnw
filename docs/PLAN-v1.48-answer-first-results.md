@@ -1,6 +1,6 @@
 # v1.48 "Answer-first Results": implementation plan
 
-**Status (2026-11-11):** Phases 1, 2, P3a and P4a are done and released behind `results_v2` (#183, #217). P3b and P3c are in progress; P3d and P4b come next. **Design:** https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private canvas, 5 artboards). **Roadmap:** `docs/ROADMAP.md` → v1.48.
+**Status (2026-11-11):** Phases 1, 2, P3a and P4a are released behind `results_v2` (#183, #217). P3b and P3c are merged to `dev`, not released. P3d and P4b come next. **Design:** https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private canvas, 5 artboards). **Roadmap:** `docs/ROADMAP.md` → v1.48.
 
 ## Goal
 
@@ -66,7 +66,8 @@ Every PR goes to `dev`, stays under 400 changed lines, and keeps tests green. Ph
   - Content: open sites by type, length, hookups, capacity.
   - Hand-off: "Book on <provider> ↗" with plain hand-off copy.
   - Analytics: `window_chip_opened`, `book_click{from:"site_panel"}`.
-- **P3c: Watch sheet and per-weekend watches.** Backend: optional watch filters (`site_types`, `min_people`, `equipment`) honoured by the poller.
+  - **Done** (#228–#233). Sites are radios with one "Book on <site> ↗" button, grouped by type. WA links now open the loop with both dates; ReserveAmerica fills in arrival only; Recreation.gov ignores dates (the copy says so).
+- **P3c: Watch sheet and per-weekend watches.** Backend: optional watch filters (`site_types`, `min_people`, `equipment`) honoured by the poller. **Done** (#222–#227): one stay per watch; unknown fit never suppresses an alert. Open question: the poller ignores `min_nights` (see the roadmap backlog).
 - **P3d: release reminders** (D9): backend watch type, scheduler, push, and UI.
 
 ### Phase 4: mobile and flip
