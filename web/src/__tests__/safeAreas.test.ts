@@ -25,6 +25,8 @@ const EDGES: Array<[file: string, selector: string, inset: string, prop: RegExp]
   ["searchBar.css", ".sb-sheet", "left", /padding:[^;]*/],
   ["searchBar.css", ".sb-sheet-foot", "bottom", /padding-bottom:[^;]*/],
   ["results.css", ".rv2-map-aside", "top", /--aside-top:[^;]*/],
+  ["sitePanel.css", ".rv2-panel", "top", /padding-top:[^;]*/],
+  ["sitePanel.css", ".rv2-panel-foot", "bottom", /padding:[^;]*/],
   ["results.css", ".rv2-card", "top", /scroll-margin-top:[^;]*/],
 ];
 
