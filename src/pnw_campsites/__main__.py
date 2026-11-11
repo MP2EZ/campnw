@@ -26,6 +26,7 @@ from pnw_campsites.search.engine import (
     next_weekend,
     this_weekend,
 )
+from pnw_campsites.search.who import EQUIPMENT, SITE_TYPES
 from pnw_campsites.urls import (
     recgov_availability_url,
     recgov_campsite_booking_url,
@@ -362,6 +363,10 @@ async def cmd_watch_add(args: argparse.Namespace) -> None:
         days_of_week=days_of_week,
         notify_topic=args.ntfy_topic or "",
         booking_system=booking_system,
+        min_people=args.people,
+        equipment=args.equipment,
+        rig_length=args.rig_length if args.equipment == "trailer" else None,
+        site_types=args.site_types,
     )
 
     with WatchDB() as db:
@@ -371,10 +376,29 @@ async def cmd_watch_add(args: argparse.Namespace) -> None:
     if days_of_week:
         print(f"  Days: {args.days}")
     print(f"  Min nights: {saved.min_nights}")
+    if saved.has_site_filters:
+        print(f"  Sites: {_site_filter_text(saved)}")
     if saved.notify_topic:
         print(f"  Notify: ntfy topic '{saved.notify_topic}'")
     else:
         print("  Notify: console only (use --ntfy-topic to enable push)")
+
+
+def _site_types_arg(value: str) -> list[str]:
+    types = [t.strip() for t in value.split(",") if t.strip()]
+    bad = [t for t in types if t not in SITE_TYPES]
+    if bad:
+        raise argparse.ArgumentTypeError(f"unknown site type(s): {', '.join(bad)}")
+    return types
+
+
+def _site_filter_text(w: Watch) -> str:
+    """"4 people · trailer 30 ft · hookups"."""
+    rig = w.equipment or ""
+    if rig and w.rig_length:
+        rig += f" {w.rig_length} ft"
+    people = f"{w.min_people} people" if w.min_people else ""
+    return " · ".join(p for p in (people, rig, *(w.site_types or [])) if p)
 
 
 def cmd_watch_remove(args: argparse.Namespace) -> None:
@@ -420,8 +444,12 @@ async def cmd_watch_poll(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     watch_db = WatchDB()
+    registry = CampgroundRegistry()  # template watches and booking-system healing
     async with RecGovClient(ridb_api_key=api_key) as client:
-        results = await poll_all(client, watch_db)
+        # Recreation.gov only: WA and Oregon watches report that their client
+        # isn't available here (the server polls those).
+        results = await poll_all(client, None, watch_db, registry)
+    registry.close()
 
     changes_found = 0
     for result in results:
@@ -625,6 +653,14 @@ def main() -> None:
     p_wa.add_argument("--name", help="Override campground name")
     p_wa.add_argument("--ntfy-topic",
                        help="ntfy topic for push notifications")
+    p_wa.add_argument("--people", type=int,
+                       help="Only alert on sites that hold this many people")
+    p_wa.add_argument("--equipment", choices=EQUIPMENT,
+                       help="Only alert on sites that take this rig")
+    p_wa.add_argument("--rig-length", type=int,
+                       help="Trailer/RV length in feet (with --equipment trailer)")
+    p_wa.add_argument("--site-types", type=_site_types_arg,
+                       help=f"Only sites with any of: {','.join(SITE_TYPES)}")
 
     p_wr = watch_sub.add_parser("remove", help="Remove a watch")
     p_wr.add_argument("watch_id", type=int, help="Watch ID to remove")

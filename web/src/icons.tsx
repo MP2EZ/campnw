@@ -27,6 +27,15 @@ export function IconClose({ className }: IconProps) {
   );
 }
 
+/** An arrow out to the top right: the link opens another site. */
+export function IconExternal({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 17 17 7"/><path d="M9 7h8v8"/>
+    </svg>
+  );
+}
+
 export function IconChevronDown({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">

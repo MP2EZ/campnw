@@ -24,6 +24,7 @@ class WaSiteInfo(NamedTuple):
     max_capacity: int | None
     allowed_equipment: list[dict]
     loop_description: str
+    loop_map_id: int | None = None
 
 
 def slugify(name: str) -> str:
@@ -980,7 +981,8 @@ class CampgroundRegistry:
         rows = self._conn.execute(
             """\
             SELECT s.resource_id, s.name, l.title AS loop_title, s.max_capacity,
-                   s.allowed_equipment, l.description AS loop_description
+                   s.allowed_equipment, l.description AS loop_description,
+                   s.loop_map_id
             FROM wa_state_sites AS s
             LEFT JOIN wa_state_loops AS l ON s.loop_map_id = l.map_id
             WHERE s.park_facility_id = ?
@@ -994,6 +996,7 @@ class CampgroundRegistry:
                 row["max_capacity"],
                 json.loads(row["allowed_equipment"] or "[]"),
                 row["loop_description"] or "",
+                row["loop_map_id"],
             )
             for row in rows
         }

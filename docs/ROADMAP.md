@@ -1,7 +1,7 @@
 # Campable Roadmap: v0.2.1 to v2.0
 
 **Last updated:** 2026-11-07
-**Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`; no version bump since August). Last release: PR #183 (`dev → main`, 2026-11-07): 21 PRs, including the watch poller fix, all 75 WA parks seeded, and v1.48 P1a/P1b/P2a/P2b behind the `results_v2` flag (off by default; `?ui=v2` to see it). v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; App Store/Play still pending. Current milestone: **v1.48 "Answer-first Results"** (in progress).
+**Current version:** v1.47.1 in production (campable.co, `/healthz` reports `1.47.1`; no version bump since August). Last release: PR #217 (`dev → main`, 2026-11-08): 26 PRs. It includes v1.48 P2c/P2d/P3a/P1c/P4a behind the `results_v2` flag, plus the `who` filter and a gzipped search stream for everyone. Prod checks after the deploy: Cloudflare passes `content-encoding: gzip` through, and events still arrive one by one (an Oregon search streamed over 40 s). The `results_v2` PostHog flag (Campable project, id 351562) exists since 2026-11-08 and is on only for the owner's account (distinct_id 2), for TestFlight testing; everyone else gets v1 unless they use `?ui=v2`. Previous release: PR #183 (2026-11-07). v1.45 first milestone (internal iOS TestFlight) shipped 2026-06-14; TestFlight build 4 (2026-11-09) passed a device check with results v2 on. Getting there fixed an iOS 27 launch crash (#219, UIScene lifecycle) and native PostHog, which had never loaded (#220). Native analytics start from build 4; App Store/Play still pending. Current milestone: **v1.48 "Answer-first Results"** (in progress).
 
 **Open problems:**
 - **WA State Parks dark in prod since ~2026-11-05.** GoingToCamp's Azure WAF blocks prod's outbound IPs: first the shared Datacamp address `79.127.185.38`, and since 2026-11-07 also prod's dedicated Fly egress IP `209.71.113.243`, which is in Fly's own range and was blocked immediately. Staging (shared CDN77 `79.127.255.236`) and GitHub's Azure runners (`52.159.243.197`, 2026-11-07) still get through, so the block targets particular IPs and ranges, not datacenters as a class. Prod survives the block (#165) and labels it `waf_blocked`. Tracked by open alert #167. Fix options are below ("Restoring WA State Parks"). **Decision 2026-11-07: documented, not started.**
@@ -2072,7 +2072,7 @@ Notes:
 
 ---
 
-## v1.48 "Answer-first Results" [IN PROGRESS — P1a, P1b, P2a, P2b released behind `results_v2` on 2026-11-07]
+## v1.48 "Answer-first Results" [IN PROGRESS — Phases 1–2, P3a, P4a released behind `results_v2` (#183 2026-11-07, #217 2026-11-08)]
 
 ### Theme
 The results page answers the question in one line ("22 campgrounds have a June weekend open within 3 hours of Seattle"), then groups places by drive time with the bookable weekends on each card. Design canvas: https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private; 5 artboards, built on real June 2027 data).
@@ -2087,6 +2087,22 @@ The results page answers the question in one line ("22 campgrounds have a June w
 - **Accessibility:** visible focus, 44px targets, contrast fixes.
 
 **Implementation plan:** `docs/PLAN-v1.48-answer-first-results.md` (decisions D1–D13, PRs P1a–P4b, risks).
+
+### Progress (2026-11-11)
+| Phase | Status |
+|---|---|
+| P1a site fit, P1b WA seed | Released #183 |
+| P1c `who` filter, OR RV length, gzipped stream | Released #217 |
+| P2a scaffold, P2b cards | Released #183 |
+| P2c missing states, P2d split layout + map | Released #217 |
+| P3a search bar | Released #217 |
+| P3b site-list panel | On `dev` (#228–#233), not released |
+| P3c Watch sheet + per-weekend watches | On `dev` (#222–#227, plus #234 forward-compatible watch rows), not released |
+| P3d release reminders | Next. Builds on P3c's watch filters (see the P3c hand-over: `remindStays`, `WatchSheet` shell, `openWatch`) |
+| P4a mobile sheet, date chips, safe areas | Released #217. Device check passed on TestFlight build 4 (2026-11-09) |
+| P4b flip to v2 | Last. Needs the Oregon stall fixed first (Open problems) |
+
+`results_v2` is on only for the owner's account (distinct_id 2). Everyone else needs `?ui=v2`.
 
 ### Persona review (2026-11-06)
 Five task-based personas (weekend planner, last-minute mobile, RV owner, cancellation hunter, first-timer) plus an accessibility audit. They agreed on:
@@ -2115,12 +2131,26 @@ Also released: #174 (Recreation.gov stay-continuation nights were counted as FCF
 |---|---|
 | In "Any day" searches, chips show runs of open dates, not stays ("Sun Nov 22 – Sat Dec 19 · 1 left"), and overlap ("Nov 22–24", "Nov 22–25", "Nov 22–30") | P2c. Chips only work cleanly for weekend searches; flexible searches need stay chips, e.g. the earliest 2-night arrivals |
 | The answer header still said "Checking campgrounds…" 3 minutes in. Either the search was still running (see the Oregon stall in Open problems) or the header misses the end of the stream | P2c. Check after the stall fix |
-| Oregon fit lines claim "RV ≤96′" (Stub Stewart) and "RV ≤81′" (Champoeg). P1a's ReserveAmerica length decode reads the wrong field or units | Fix at the start of P1c, before the `who` filter trusts `max_rv_ft` |
+| Oregon fit lines claim "RV ≤96′" (Stub Stewart) and "RV ≤81′" (Champoeg). P1a's ReserveAmerica length decode reads the wrong field or units | **Fixed in #209** (attr 109 is driveway length; >45 ft → no stated limit) |
 | Cottonwood Canyon's AI pitch says "Remote Utah canyon" (it's in Oregon) | Backlog: pitch/tag quality pass |
 | Recreation.gov registry names are uppercase in the v2 typeahead and answer sentence ("OHANAPECOSH CAMPGROUND") | Backlog: title-case on display (found in P3a) |
 | Exact-date searches: window chips label the checkout day as a night ("Sat 21 – Mon 23" for a checkout on the 23rd) | Backlog: candidates treat `end_date` as a night in exact mode (found in P3a) |
 | v1: "Checked 1 campgrounds" plural; `SmartZeroState` "Expand to N min" doesn't apply the new limit | Backlog, or drop at the v2 flip (found in P2c) |
-| v2 map uses toned OpenStreetMap tiles until a public, URL-restricted Mapbox token is added as GitHub secret `VITE_PUBLIC_MAPBOX_TOKEN` (the backend `MAPBOX_ACCESS_TOKEN` funds drive-time calls, so don't expose it) | User action (P2d) |
+| v2 map uses toned OpenStreetMap tiles until a public, URL-restricted Mapbox token is added as GitHub secret `VITE_PUBLIC_MAPBOX_TOKEN` (the backend `MAPBOX_ACCESS_TOKEN` funds drive-time calls, so don't expose it) | User action (P2d). Not set as of 2026-11-11. The iOS app is built locally and stays on OSM |
+| A park where every known site misfits the party or rig falls into "Full / Nothing to book" | Backlog: a "No sites fit your rig" state (found in P1c) |
+| NL search doesn't extract who (party, rig), and the search log line omits who params | Backlog (found in P1c) |
+| ReserveAmerica driveway lengths ≤45 ft are compared directly against trailer length, which errs lenient for back-ins | Backlog (found in P1c) |
+| Muted (full / not-released) pins don't link to their Full-group row. No home-base marker. The map refits on every streamed frame until the user moves it | Backlog (found in P2d) |
+| Mobile: the map legend covers part of the map at half height on small phones. After "Pick dates", Escape returns focus to the search button, not the chip | Backlog (found in P4a) |
+| Native: the page opens scrolled with the header under the Dynamic Island until a status-bar tap (v1.46 Theme A scroll bleed, also v1) | Backlog, v1.46 Theme A |
+| **Decide:** the watch poller ignores `min_nights`, so a 2-night per-weekend watch alerts on a 1-night leftover (seen at Denny Creek). Fix: alert only on runs of ≥ `min_nights` consecutive open nights per site. Changes existing watches too | Owner decision (found in P3c) |
+| After signing in from the Watch sheet, the sheet doesn't reopen. Watch filters aren't shown in the watch list and can't be edited. The duplicate check (409) ignores filters | Backlog (found in P3c) |
+| A park where every known site misfits shows as Full, so its Watch may never fire | Backlog: same as the "No sites fit your rig" item above |
+| `User(**d)` in `monitor/db.py` has the same unknown-column crash risk that #234 fixed for watches | Backlog (found 2026-11-11) |
+| WA campground-level `availability_url` still uses `searchTime` without `mapId` (opens "All Parks", today). Used by v1 chips and the panel fallback | Backlog (found in P3b) |
+| Recreation.gov `STANDARD NONELECTRIC` sites read "Site types not listed yet" in the site panel, though rec.gov lists tent/trailer/RV and lengths per site | Backlog: improve the P1a rec.gov mapping (found in P3b) |
+| CLI `check --source or-state` prints Recreation.gov booking links for Oregon sites | Backlog (found in P3b) |
+| Site panel: no drag-to-dismiss on phones. An open panel may close if the layout remounts across 1024px (iPad rotation, untested) | Backlog (found in P3b) |
 
 ---
 

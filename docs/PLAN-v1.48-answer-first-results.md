@@ -1,6 +1,6 @@
 # v1.48 "Answer-first Results": implementation plan
 
-**Status:** planning (2026-11-07). **Design:** https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private canvas, 5 artboards). **Roadmap:** `docs/ROADMAP.md` → v1.48.
+**Status (2026-11-11):** Phases 1, 2, P3a and P4a are released behind `results_v2` (#183, #217). P3b and P3c are merged to `dev`, not released. P3d and P4b come next. **Design:** https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private canvas, 5 artboards). **Roadmap:** `docs/ROADMAP.md` → v1.48.
 
 ## Goal
 
@@ -47,24 +47,27 @@ Every PR goes to `dev`, stays under 400 changed lines, and keeps tests green. Ph
   - Store GoingToCamp's `/api/equipment` map (tent / van / RV ≤20′–>40′).
   - Derive `fits_tent`, `fits_van`, `max_rv_ft` from `wa_state_sites.allowed_equipment`, and `hookups` from parsed loop descriptions.
   - Put them on `WindowResponse` for all providers (Recreation.gov from `campsite_type`; OR from its site type).
+  - **Done** (#181, #182).
 - **P1b: seed all 75 WA parks.**
   - Prod can't reach GoingToCamp, so run the seeder locally, export to a JSON fixture in the repo, and import it with an idempotent startup migration (same pattern as #170).
   - Add a `doctor` line for parks with zero seeded sites.
-- **P1c: `who` filter.** `people`, `equipment`, `rig_length` on `/api/search` and the stream; windows are filtered server-side. Consider a per-window summary to shrink the payload (R2). **First** fix the Oregon RV-length decode: prod shows "RV ≤96′" and "RV ≤81′" (found 2026-11-07).
+  - **Done** (#184).
+- **P1c: `who` filter.** `people`, `equipment`, `rig_length` on `/api/search` and the stream; windows are filtered server-side. Consider a per-window summary to shrink the payload (R2). **First** fix the Oregon RV-length decode: prod shows "RV ≤96′" and "RV ≤81′" (found 2026-11-07). **Done** (#209 OR length, #210 filter, #211 UI wiring, #212 gzipped stream). Unknown fit never drops a window. R2 was solved by gzip: a broad WA search went from 3.6 MB to ~112 KB, and results still stream in as they are found in prod.
 
 ### Phase 2: results v2 (behind the flag)
-- **P2a: scaffolding.** Flag plumbing (D1), `web/src/results/` module, new tokens plus the self-hosted font (D11/D12), `AnswerHeader` (answer line plus coverage "Checked N of M"), and notices (not-released, provider warnings).
-- **P2b: cards.** `CampgroundCard`, `WindowChips` (D3, TDD), drive-band grouping, the "Boat-in only" group, fit line, weather.
-- **P2c: missing states.** "Full or not released yet" group (D4) with Watch / Remind-me stubs, `QuickPicks` (D6), and the zero-results page (release timeline, "camp sooner" options). Also from prod testing (2026-11-07): stay chips for flexible "Any day" searches (today's chips show runs of open dates and overlap), and the answer header must leave "Checking…" when the stream ends.
-- **P2d: layout.** Desktop split layout with a sticky map, map restyle and pin shapes (D13), and list↔map selection.
+- **P2a: scaffolding.** Flag plumbing (D1), `web/src/results/` module, new tokens plus the self-hosted font (D11/D12), `AnswerHeader` (answer line plus coverage "Checked N of M"), and notices (not-released, provider warnings). **Done** (#178–#180).
+- **P2b: cards.** `CampgroundCard`, `WindowChips` (D3, TDD), drive-band grouping, the "Boat-in only" group, fit line, weather. **Done** (#186–#190).
+- **P2c: missing states.** "Full or not released yet" group (D4) with Watch / Remind-me stubs, `QuickPicks` (D6), and the zero-results page (release timeline, "camp sooner" options). Also from prod testing (2026-11-07): stay chips for flexible "Any day" searches (today's chips show runs of open dates and overlap), and the answer header must leave "Checking…" when the stream ends. **Done** (#191–#199).
+- **P2d: layout.** Desktop split layout with a sticky map, map restyle and pin shapes (D13), and list↔map selection. **Done** (#204–#208). Mapbox tiles wait on the `VITE_PUBLIC_MAPBOX_TOKEN` secret; until it is set, prod uses toned OSM.
 
 ### Phase 3: search and decisions
-- **P3a: search bar.** Where / When / Who / Drive segments, popovers, and campground-name typeahead (from `/api/campgrounds`). Name matches ignore the drive cap.
+- **P3a: search bar.** Where / When / Who / Drive segments, popovers, and campground-name typeahead (from `/api/campgrounds`). Name matches ignore the drive cap. **Done** (#200–#203).
 - **P3b: site-list panel (dialog).**
   - Content: open sites by type, length, hookups, capacity.
   - Hand-off: "Book on <provider> ↗" with plain hand-off copy.
   - Analytics: `window_chip_opened`, `book_click{from:"site_panel"}`.
-- **P3c: Watch sheet and per-weekend watches.** Backend: optional watch filters (`site_types`, `min_people`, `equipment`) honoured by the poller.
+  - **Done** (#228–#233). Sites are radios with one "Book on <site> ↗" button, grouped by type. WA links now open the loop with both dates; ReserveAmerica fills in arrival only; Recreation.gov ignores dates (the copy says so).
+- **P3c: Watch sheet and per-weekend watches.** Backend: optional watch filters (`site_types`, `min_people`, `equipment`) honoured by the poller. **Done** (#222–#227): one stay per watch; unknown fit never suppresses an alert. Open question: the poller ignores `min_nights` (see the roadmap backlog).
 - **P3d: release reminders** (D9): backend watch type, scheduler, push, and UI.
 
 ### Phase 4: mobile and flip
@@ -84,4 +87,4 @@ Every PR goes to `dev`, stays under 400 changed lines, and keeps tests green. Ph
 - **R2 — Payload size.** Per-window arrays get large (Dash Point: 437 windows for one June search). With chips plus the panel rendering from this data, measure first. A server-side summary (chip counts, plus per-chip site lists fetched on open) may be needed in P1c.
 - **R3 — Entanglement in `App.tsx`.** v2 must not grow `App.tsx`. Mount `ResultsPage` from one switch point.
 - **R4 — Low traffic** (~65 pageviews/month): A/B results won't be statistically meaningful. Use the flag for safety and rollback, not for proof.
-- **R5 — The native app** shares the web UI. The bottom sheet and safe areas need a TestFlight pass before the flip.
+- **R5 — The native app** shares the web UI. The bottom sheet and safe areas need a TestFlight pass before the flip. **Passed 2026-11-09:** TestFlight build 4 on an iPhone 16e (iOS 27.2), with v2 turned on through the `results_v2` flag, was checked by the owner. Two native bugs were fixed along the way: #219 (adopt the UIScene lifecycle; builds 2–3 made with the iOS 27 SDK crashed at launch) and #220 (PostHog never loaded in the app, so there were no native analytics and flags always read as off). Re-test after P4b if the sheet or the search bar changes.
