@@ -1,4 +1,3 @@
-import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "./results.css";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { SearchParams } from "../api";
@@ -50,7 +49,7 @@ const readClock = () => Math.floor(Date.now() / TICK) * TICK;
 
 /**
  * Results v2 (v1.48): the answer, then the notices that qualify it, then
- * places. Mounted from App's one switch point when `useUiVersion()` is "v2".
+ * places. App mounts it once a search has results.
  */
 export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId, failed, onSignIn }: Props) {
   const { results, loading, searchParams, filteredResults } = useSearchContext();

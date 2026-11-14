@@ -4,9 +4,7 @@
  * Extracted from App.tsx to reduce the god-file problem. Contains:
  * - Search results, loading, error state
  * - SSE stream orchestration (handleSearch)
- * - Source filter toggling
- * - Form collapse state
- * - Focused card + live announcement state
+ * - Live announcement state
  * - Derived computations (filteredResults, resultSources)
  */
 
@@ -90,62 +88,46 @@ function leadTimeDays(params: SearchParams): number {
 }
 
 export type SearchMode = "find" | "exact";
-export type ResultsView = "dates" | "sites";
 
 export interface UseSearchReturn {
   results: SearchResponse | null;
-  searchSummary: string | null;
-  setSearchSummary: React.Dispatch<React.SetStateAction<string | null>>;
   loading: boolean;
   error: string | null;
-  resultsView: ResultsView;
-  setResultsView: (v: ResultsView) => void;
   searchDates: { start: string; end: string } | null;
   sourceFilter: Set<string>;
   resultSources: Set<string>;
   filteredResults: CampgroundResult[];
   activeSearchParams: SearchParams | null;
   searchId: string;
-  formCollapsed: boolean;
-  setFormCollapsed: (v: boolean) => void;
-  focusedCardIndex: number;
-  setFocusedCardIndex: React.Dispatch<React.SetStateAction<number>>;
   liveAnnouncement: string;
   setLiveAnnouncement: (s: string) => void;
-  cardRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
   maxResults: number;
   /** When the last search finished streaming (ms epoch); null before one has. */
   completedAt: number | null;
   handleSearch: (params: SearchParams, mode: SearchMode) => Promise<void>;
   /** Re-run the current search with a higher `limit` to check more campgrounds. */
   checkRest: (limit: number) => void;
-  toggleSource: (src: string) => void;
   resetSearch: () => void;
 }
 
 export function useSearch(user: UserData | null): UseSearchReturn {
   const [results, setResults] = useState<SearchResponse | null>(null);
-  const [searchSummary, setSearchSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [completedAt, setCompletedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [resultsView, setResultsView] = useState<ResultsView>("dates");
   const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
-  // Seeded from the URL so SearchForm's initialValues (which are read once,
-  // during useState initialization) already reflect a shared link.
+  // Seeded from the URL so the search bar's first render already reflects a
+  // shared link.
   const [activeSearchParams, setActiveSearchParams] = useState<SearchParams | null>(
     () => parseSearchParamsFromUrl(),
   );
-  const [formCollapsed, setFormCollapsed] = useState(false);
-  const [focusedCardIndex, setFocusedCardIndex] = useState(-1);
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
-  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const lastSearchParams = useRef<SearchParams | null>(null);
   const lastSearchMode = useRef<SearchMode>("find");
   const searchAbortRef = useRef<AbortController | null>(null);
   // Correlates search_executed with the book_click / zero-state events it
-  // produces. Exposed so ResultCard can stamp outbound clicks with it.
+  // produces. Exposed so result cards can stamp outbound clicks with it.
   const searchIdRef = useRef<string>("");
   // Cleared on unmount: a pending scroll that fires after teardown throws
   // "document is not defined" under vitest and flaked CI.
@@ -181,36 +163,6 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       .slice(0, maxResults);
   }, [results, sourceFilter, maxResults]);
 
-  useEffect(() => {
-    setFocusedCardIndex(-1);
-  }, [filteredResults]);
-
-  const toggleSource = useCallback((src: string) => {
-    setSourceFilter((prev) => {
-      const allActive = prev.size === resultSources.size;
-      if (allActive) {
-        track("source_filter_changed", { source: src, action: "isolate", active_count: 1 });
-        return new Set([src]);
-      }
-      const next = new Set(prev);
-      if (next.has(src)) {
-        next.delete(src);
-      } else {
-        next.add(src);
-      }
-      if (next.size === 0 || next.size === resultSources.size) {
-        track("source_filter_changed", { source: src, action: "reset", active_count: resultSources.size });
-        return new Set(resultSources);
-      }
-      track("source_filter_changed", {
-        source: src,
-        action: prev.has(src) ? "remove" : "add",
-        active_count: next.size,
-      });
-      return next;
-    });
-  }, [resultSources]);
-
   const handleSearch = useCallback(async (params: SearchParams, mode: SearchMode) => {
     const searchParams = { ...params };
     lastSearchParams.current = params;
@@ -225,7 +177,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     const searchId = searchIdRef.current;
     const startedAt = performance.now();
     // Super property rather than a prop: book_click fires from four nested
-    // components inside ResultCard, and threading search_id to each of them
+    // components inside a result card, and threading search_id to each of them
     // would be more invasive than the correlation is worth.
     getPosthog()?.register({ search_id: searchId });
 
@@ -236,16 +188,13 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     setLoading(true);
     setCompletedAt(null);
     setError(null);
-    setSearchSummary(null);
-    setResultsView(mode === "find" ? "dates" : "sites");
     if (params.start_date && params.end_date) {
       setSearchDates({ start: params.start_date, end: params.end_date });
     }
-    setFormCollapsed(true);
 
     clearTimeout(scrollTimerRef.current);
     scrollTimerRef.current = setTimeout(() => {
-      document.querySelector(".results-skeleton, .results")?.scrollIntoView({
+      document.querySelector(".results-skeleton, .results")?.scrollIntoView?.({
         behavior: "smooth", block: "start",
       });
     }, 100);
@@ -380,7 +329,8 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           days_of_week: parsed.days_of_week || undefined,
         });
       },
-      (text) => setSearchSummary(text),
+      // v2 doesn't show the AI summary (v1.48 flip).
+      () => {},
       (checked) => {
         checkedCount = checked;
         if (!rafId) {
@@ -452,29 +402,19 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   return {
     searchId: searchIdRef.current,
     results,
-    searchSummary,
-    setSearchSummary,
     loading,
     error,
-    resultsView,
-    setResultsView,
     searchDates,
     sourceFilter,
     resultSources,
     filteredResults,
     activeSearchParams,
-    formCollapsed,
-    setFormCollapsed,
-    focusedCardIndex,
-    setFocusedCardIndex,
     liveAnnouncement,
     setLiveAnnouncement,
-    cardRefs,
     maxResults,
     completedAt,
     handleSearch,
     checkRest,
-    toggleSource,
     resetSearch: useCallback(() => {
       // Stop the running search too, or it keeps "Checking…" and refills
       // the results it was asked to clear.
@@ -483,8 +423,6 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       searchIdRef.current = "";
       setLoading(false);
       setResults(null);
-      setFormCollapsed(false);
-      setSearchSummary("");
     }, []),
   };
 }

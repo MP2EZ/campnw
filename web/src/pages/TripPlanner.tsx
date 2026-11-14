@@ -235,6 +235,7 @@ export default function TripPlanner() {
         <title>Trip Planner — Campable</title>
         <meta name="description" content="AI-powered camping trip planner. Get personalized campground recommendations and itineraries." />
       </Helmet>
+      <h1 className="sr-only">Trip planner</h1>
       {!isEmpty && (
         <button
           className="chat-new-btn"

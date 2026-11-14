@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import App from '../App'
 
@@ -35,14 +35,14 @@ beforeEach(() => {
 })
 
 describe('App Component', () => {
-  test('renders the app shell', () => {
+  test('renders the app shell', async () => {
     // `expect(container).toBeTruthy()` cannot fail: render() always returns a
     // container, even if App rendered nothing at all. Assert something App is
     // actually responsible for.
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
     const { container } = renderApp()
     expect(container.querySelector('main#main-content')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^Search$/ })).toBeInTheDocument()
+    expect((await screen.findAllByRole('button', { name: /^Search$/ })).length).toBeGreaterThan(0)
   })
 
   test('renders the campable heading', () => {
@@ -59,27 +59,55 @@ describe('App Component', () => {
     ).toBeInTheDocument()
   })
 
-  test('renders search form with date inputs', () => {
+  // v1.48 flip: the search bar is the only search UI, with no ?ui= switch.
+  test('renders the search bar for everyone, even with ?ui=v1', async () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    renderApp()
-
-    const dateInputs = screen.getAllByRole('textbox', { hidden: true })
-    expect(dateInputs.length).toBeGreaterThan(0)
+    render(
+      <MemoryRouter initialEntries={['/?ui=v1']}>
+        <App />
+      </MemoryRouter>
+    )
+    const bar = await screen.findByRole('search', { name: 'Campsite search' })
+    for (const name of ['Where', 'When', 'Who', 'Drive']) {
+      expect(within(bar).getAllByRole('button', { name: new RegExp(`^${name}`) }).length).toBeGreaterThan(0)
+    }
+    expect(screen.getByRole('search', { name: 'Ask in plain language' })).toBeInTheDocument()
+    expect(screen.queryByText('Find a date')).not.toBeInTheDocument()
   })
 
-  test('renders "Find a date" and "Exact dates" mode buttons', () => {
+  // P4b: the bar sits in the sticky header; the wordmark is a link, not the h1.
+  test('puts the search bar in the header and gives the page one h1', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
     renderApp()
+    const banner = screen.getByRole('banner')
+    expect(within(banner).getByRole('search', { name: 'Campsite search' })).toBeInTheDocument()
+    expect(within(banner).getByRole('link', { name: 'Campable home' })).toBeInTheDocument()
+    expect(within(banner).queryByRole('heading')).toBeNull()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  })
 
-    expect(screen.getByText('Find a date')).toBeInTheDocument()
-    expect(screen.getByText('Exact dates')).toBeInTheDocument()
+  test('other pages keep the header without the bar', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
+    render(
+      <MemoryRouter initialEntries={['/privacy']}>
+        <App />
+      </MemoryRouter>
+    )
+    expect(within(screen.getByRole('banner')).queryByRole('search')).toBeNull()
+  })
+
+  test('forgets the old per-browser ui override', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
+    localStorage.setItem('campable-ui', 'v1')
+    renderApp()
+    expect(localStorage.getItem('campable-ui')).toBeNull()
   })
 
   test('renders search button and is enabled initially', async () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
     renderApp()
 
-    const searchButton = screen.getByRole('button', { name: /^Search$/ })
+    const [searchButton] = await screen.findAllByRole('button', { name: /^Search$/ })
     expect(searchButton).toBeInTheDocument()
     expect(searchButton).not.toBeDisabled()
   })
@@ -117,65 +145,5 @@ describe('App Component', () => {
 
     const main = container.querySelector('main')
     expect(main).toBeInTheDocument()
-  })
-
-  test('renders day picker buttons in Find a date mode', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    renderApp()
-
-    // By default "Find a date" is active, so day presets should be visible
-    expect(screen.getByText('Any')).toBeInTheDocument()
-    expect(screen.getByText('Weekend')).toBeInTheDocument()
-    expect(screen.getByText('Long weekend')).toBeInTheDocument()
-    expect(screen.getByText('Weekdays')).toBeInTheDocument()
-    expect(screen.getByText('Custom')).toBeInTheDocument()
-  })
-
-  test('renders tag picker with correct tags', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    renderApp()
-
-    const tagsToFind = [
-      'lakeside',
-      'riverside',
-      'beach',
-      'old-growth',
-      'pet-friendly',
-      'rv-friendly',
-      'tent-only',
-      'trails',
-      'swimming',
-      'shade',
-    ]
-
-    tagsToFind.forEach((tag) => {
-      expect(screen.getByText(tag)).toBeInTheDocument()
-    })
-  })
-
-  test('renders More filters button with advanced options hidden initially', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    renderApp()
-
-    const advancedToggle = screen.getByRole('button', {
-      name: /More filters/,
-    })
-    expect(advancedToggle).toBeInTheDocument()
-  })
-
-  test('renders Drive from select dropdown', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    renderApp()
-
-    const driveSelectorElements = screen.getAllByText('Drive from')
-    expect(driveSelectorElements.length).toBeGreaterThan(0)
-  })
-
-  test('renders campground name filter with aria-label', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    renderApp()
-
-    const nameFilter = screen.getByLabelText('Campground name filter')
-    expect(nameFilter).toBeInTheDocument()
   })
 })

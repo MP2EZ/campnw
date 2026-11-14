@@ -43,14 +43,14 @@ Brand colors are defined in `web/src/tokens.css` as `--brand-green`, `--brand-bl
 
 | Role | Font | Weights | Usage |
 |------|------|---------|-------|
-| Headings | Bricolage Grotesque (variable, self-hosted) | 500, 600, 700 | Answer line, section and card headings. Results v2 only until the v1.48 flip; v1 headings use the system stack |
+| Headings | Bricolage Grotesque (variable, self-hosted) | 500, 600, 700 | Every h1–h3: the answer line, page titles, section and card headings |
 | Body | System stack | 400, 500, 600, 700 | All body text, form controls, data |
 
 **System stack:** `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
 
-**CSS tokens:** `--font-heading`, `--font-body` in `tokens.css`. Results v2 sets `--font-heading` to Bricolage inside `.results-v2`.
+**CSS tokens:** `--font-display` (Bricolage plus the system fallback), `--font-heading` (= `--font-display`) and `--font-body` in `tokens.css`.
 
-**Decision (v1.48, D11, 2026-11-07):** Bricolage Grotesque for headings, replacing the never-loaded Plus Jakarta Sans. Self-hosted from `@fontsource-variable/bricolage-grotesque` (wght + opsz axes, `font-display: swap`) rather than Google Fonts: no third-party request, and it works offline in the native app. Only the lazy results-v2 chunk loads it (latin subset ≈77 KB).
+**Decision (v1.48, D11, 2026-11-07):** Bricolage Grotesque for headings, replacing the never-loaded Plus Jakarta Sans. Self-hosted from `@fontsource-variable/bricolage-grotesque` (wght + opsz axes, `font-display: swap`) rather than Google Fonts: no third-party request, and it works offline in the native app. Imported once in `App.tsx` since the v1.48 flip (P4b), so the latin subset (≈77 KB) loads on the first visit with the pre-search h1.
 
 **Rules:**
 - Never use more than 2 font families

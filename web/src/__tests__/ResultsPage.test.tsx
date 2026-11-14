@@ -56,7 +56,7 @@ describe("ResultsPage", () => {
 
   test("a failed search leaves “Checking…” and says it didn't finish", () => {
     renderPage({ results: { ...results, results: [] }, filteredResults: [] }, true);
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "The search stopped after checking 20 campgrounds",
     );
     expect(screen.queryByText(/searched/)).not.toBeInTheDocument();
@@ -64,7 +64,7 @@ describe("ResultsPage", () => {
 
   test("answers first, then coverage, notices and the open places", () => {
     renderPage();
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "2 campgrounds have a June weekend open within 3 hours of Seattle.",
     );
     expect(screen.getByText(/Checked 20 of 46 nearby campgrounds/)).toHaveTextContent(/searched just now/);
@@ -83,7 +83,7 @@ describe("ResultsPage", () => {
 
   test("while streaming it shows no timestamp and no zero state", () => {
     renderPage({ loading: true, filteredResults: [] });
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(/^Checking campgrounds for a June weekend/);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^Checking campgrounds for a June weekend/);
     expect(screen.queryByText(/searched/)).not.toBeInTheDocument();
     expect(screen.queryByText("zero state")).not.toBeInTheDocument();
   });

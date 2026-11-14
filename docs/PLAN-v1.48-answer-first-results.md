@@ -1,6 +1,6 @@
 # v1.48 "Answer-first Results": implementation plan
 
-**Status (2026-11-11):** Phases 1, 2, P3a and P4a are released behind `results_v2` (#183, #217). P3b and P3c are merged to `dev`, not released. P3d and P4b come next. **Design:** https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private canvas, 5 artboards). **Roadmap:** `docs/ROADMAP.md` → v1.48.
+**Status (2026-11-14):** Done. All phases released; v1.48.0 (P4b) made v2 the only results page. **Design:** https://claude.ai/artifact/1nu7q5px7YSbTBeocHVPRv (private canvas, 5 artboards). **Roadmap:** `docs/ROADMAP.md` → v1.48.
 
 ## Goal
 
@@ -76,6 +76,7 @@ Every PR goes to `dev`, stays under 400 changed lines, and keeps tests green. Ph
   - Make v2 the default and delete the v1 results path from `App.tsx`.
   - Update `e2e/tests/prod-smoke.spec.ts` selectors **in the same PR**, because the prod monitor runs them daily.
   - Carry the new look over to Trips / Pricing / About.
+  - **Done** (#247–#251, released as v1.48.0 on 2026-11-14). No flag or override remains; rollback means reverting #247. The search bar moved into the sticky header and the answer line is the page h1. Needs a TestFlight build to re-check R5.
 
 ## Testing
 - **Pure functions** (chips, candidate windows, bands, quick picks, release dates) are TDD.
