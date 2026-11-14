@@ -1,7 +1,6 @@
 /* Results v2 (v1.48). Bricolage is headings-only (docs/BRAND.md); body text
    keeps the system stack. */
 .results-v2 {
-  --font-heading: var(--font-display);
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
