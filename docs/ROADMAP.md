@@ -2102,7 +2102,7 @@ The results page answers the question in one line ("22 campgrounds have a June w
 | P4a mobile sheet, date chips, safe areas | Released #217. Device check passed on TestFlight build 4 (2026-11-09) |
 | P4b flip to v2 | Released v1.48.0 (#247 flip, #248 v1 CSS removed, #249 search bar in the sticky header, #250 Trips/Pricing/About look, #251 version 1.48.0), with #246 Stripe E2E fix |
 
-The `results_v2` flag and `?ui=` override are gone from the code. The PostHog flag (id 351562) can be deleted once prod looks right. Open from P4b: a new TestFlight build is needed (bundle baked in); `/api/search` still makes the Haiku summary call only if `SEARCH_SUMMARY_ENABLED` is set (it isn't in prod); `saveSearchHistory` writes recent searches nothing reads.
+The `results_v2` flag and `?ui=` override are gone from the code. The PostHog flag (id 351562) was deleted on 2026-11-14 after the release. Open from P4b: a new TestFlight build is needed (bundle baked in); `/api/search` still makes the Haiku summary call only if `SEARCH_SUMMARY_ENABLED` is set (it isn't in prod); `saveSearchHistory` writes recent searches nothing reads.
 
 ### Persona review (2026-11-06)
 Five task-based personas (weekend planner, last-minute mobile, RV owner, cancellation hunter, first-timer) plus an accessibility audit. They agreed on:
