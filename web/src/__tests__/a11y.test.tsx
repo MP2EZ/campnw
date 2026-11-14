@@ -7,8 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import App from "../App";
 import ResultsPage from "../results/ResultsPage";
-import SearchBar from "../results/SearchBar";
-import { UI_STORAGE_KEY } from "../results/uiVersion";
+import SearchBar, { AskForm } from "../results/SearchBar";
 import { SearchContext, type SearchContextValue } from "../contexts/SearchContext";
 import type { CampgroundResult, Window } from "../api";
 import { CampgroundCard } from "../results/CampgroundCard";
@@ -53,24 +52,6 @@ function renderRoute(path: string) {
   );
 }
 
-const mockSearchResults = [
-  {
-    facility_id: "232465",
-    name: "Ohanapecosh",
-    booking_system: "recgov",
-    state: "WA",
-    total_available_sites: 5,
-    latitude: 46.73,
-    longitude: -121.57,
-    estimated_drive_minutes: 120,
-    availability_url: "https://recreation.gov/camping/campgrounds/232465",
-    windows: [
-      { site_id: "1", site_name: "A1", start_date: "2026-06-01", end_date: "2026-06-03", nights: 2, booking_url: "#", is_fcfs: false },
-    ],
-    tags: ["riverside"],
-  },
-];
-
 describe("Accessibility (axe-core)", () => {
   test("home page has no a11y violations", async () => {
     const { container } = renderRoute("/");
@@ -79,31 +60,20 @@ describe("Accessibility (axe-core)", () => {
   });
 
   test("home page with search results has no a11y violations", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => [],
-      headers: new Headers(),
-      body: {
-        getReader: () => ({
-          read: vi.fn()
-            .mockResolvedValueOnce({
-              done: false,
-              value: new TextEncoder().encode(`data: ${JSON.stringify({ type: "result", data: mockSearchResults[0] })}\n\n`),
-            })
-            .mockResolvedValueOnce({
-              done: false,
-              value: new TextEncoder().encode(`data: ${JSON.stringify({ type: "done", data: { total: 1 } })}\n\n`),
-            })
-            .mockResolvedValueOnce({ done: true }),
-          cancel: vi.fn(),
-        }),
-      },
-    });
-    const { container } = renderRoute("/");
-    // Wait for any async rendering
-    await new Promise((r) => setTimeout(r, 100));
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
+    const stream = [v2Place("1", "Dash Point State Park", 48), "[DONE]"]
+      .map((d) => `data: ${typeof d === "string" ? d : JSON.stringify(d)}\n\n`).join("");
+    mockFetch.mockImplementation(async (url: string) => String(url).includes("/api/search")
+      ? new Response(stream, { status: 200, headers: { "Content-Type": "text/event-stream" } })
+      : { ok: true, json: async () => [] });
+    // useSearch restores a search from window.location, not the router.
+    window.history.pushState({}, "", "/?start_date=2027-06-01&end_date=2027-06-30&nights=1&days_of_week=4,5,6");
+    try {
+      const { container } = renderRoute("/");
+      await waitFor(() => expect(container.querySelector("#rv2-answer")).not.toBeNull(), { timeout: 3000 });
+      expect(await axe(container)).toHaveNoViolations();
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
   });
 
   test("map page has no a11y violations", async () => {
@@ -374,7 +344,8 @@ function renderBar() {
   };
   return render(
     <SearchContext.Provider value={ctx}>
-      <SearchBar onSearch={() => {}} onAsk={() => {}} />
+      <SearchBar onSearch={() => {}} />
+      <AskForm onAsk={() => {}} />
     </SearchContext.Provider>,
   );
 }
@@ -429,24 +400,12 @@ describe("Accessibility: v2 search bar", () => {
   });
 });
 
-describe("v2 search bar switch", () => {
-  test("v2 replaces the v1 form, NL bar and first-visit state", async () => {
-    localStorage.setItem(UI_STORAGE_KEY, "v2");
-    try {
-      renderRoute("/");
-      expect(await screen.findByRole("search", { name: "Campsite search" })).toBeInTheDocument();
-      expect(screen.queryByRole("textbox", { name: "Search in plain language" })).toBeNull();
-      expect(screen.queryByText("Find your next campsite")).toBeNull();
-      expect(screen.getByRole("textbox", { name: "Or ask" })).toBeInTheDocument();
-    } finally {
-      localStorage.removeItem(UI_STORAGE_KEY);
-    }
-  });
-
-  test("v1 is unchanged", () => {
-    renderRoute("/");
-    expect(screen.getByRole("textbox", { name: "Search in plain language" })).toBeInTheDocument();
-    expect(screen.getByText("Find your next campsite")).toBeInTheDocument();
-    expect(screen.queryByRole("search", { name: "Campsite search" })).toBeNull();
+describe("search bar (v1.48 flip)", () => {
+  test("the bar is the only search UI, with no v1 form, NL bar or first-visit state", async () => {
+    renderRoute("/?ui=v1");
+    expect(await screen.findByRole("search", { name: "Campsite search" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Search in plain language" })).toBeNull();
+    expect(screen.queryByText("Find your next campsite")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Or ask" })).toBeInTheDocument();
   });
 });

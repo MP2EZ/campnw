@@ -206,7 +206,7 @@ export default function MapView() {
   if (!filteredResults.length && !loading) {
     return (
       <div className="map-empty">
-        <h2>No search results yet</h2>
+        <h1>No search results yet</h1>
         <p>Run a search to see campgrounds on the map.</p>
         <Link to="/" className="header-btn active">Go to Search</Link>
       </div>
@@ -219,6 +219,7 @@ export default function MapView() {
         <title>Map — Campable</title>
         <meta name="description" content="Interactive map of campsite availability across the western US." />
       </Helmet>
+      <h1 className="sr-only">Map of search results</h1>
       <div aria-live="polite" className="sr-only">
         {loading ? "Loading map results" : `Map showing ${withAvailability.length} campgrounds with availability`}
       </div>
