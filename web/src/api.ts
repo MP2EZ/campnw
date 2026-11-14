@@ -569,44 +569,6 @@ export interface TripData {
 }
 
 // ---------------------------------------------------------------------------
-// Comparison
-// ---------------------------------------------------------------------------
-
-export interface CompareCampground {
-  facility_id: string;
-  name: string;
-  state: string;
-  booking_system: string;
-  tags: string[];
-  vibe: string;
-  elevator_pitch: string;
-  drive_minutes: number | null;
-  total_sites: number | null;
-}
-
-export interface CompareResponse {
-  campgrounds: CompareCampground[];
-  narrative: string | null;
-}
-
-export async function compareCampgrounds(
-  facilityIds: string[],
-  startDate?: string,
-  endDate?: string,
-): Promise<CompareResponse> {
-  const resp = await authFetch(`${API_BASE}/api/compare`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      facility_ids: facilityIds,
-      start_date: startDate || "",
-      end_date: endDate || "",
-    }),
-  });
-  return resp.json();
-}
-
-// ---------------------------------------------------------------------------
 // Sharing
 // ---------------------------------------------------------------------------
 
@@ -726,12 +688,6 @@ export interface Recommendation {
   reason: string;
 }
 
-export interface SearchHistoryEntry {
-  params: SearchParams;
-  result_count: number;
-  searched_at: string;
-}
-
 export async function getMe(): Promise<UserData | null> {
   const resp = await authFetch(`${API_BASE}/api/auth/me`);
   if (resp.status === 401) return null;
@@ -759,13 +715,6 @@ export async function deleteAccount(): Promise<void> {
 
 export async function exportData(): Promise<object> {
   return fetchJson<object>(`${API_BASE}/api/auth/export`);
-}
-
-export async function getSearchHistory(): Promise<SearchHistoryEntry[]> {
-  const resp = await authFetch(`${API_BASE}/api/search-history`);
-  if (resp.status === 401) return [];
-  if (!resp.ok) return [];
-  return resp.json();
 }
 
 export async function saveSearchHistory(

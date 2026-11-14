@@ -4,7 +4,8 @@ import { join } from "node:path";
 
 /** The declarations of the first rule whose selector is exactly `selector`. */
 function rule(file: string, selector: string): string {
-  const css = readFileSync(join(__dirname, "../results", file), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const css = readFileSync(join(__dirname, "../results", file), "utf-8")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
   for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
     if (sel.trim() === selector) return body;
   }
@@ -24,10 +25,10 @@ const EDGES: Array<[file: string, selector: string, inset: string, prop: RegExp]
   ["searchBar.css", ".sb-sheet", "top", /max-height:[^;]*/],
   ["searchBar.css", ".sb-sheet", "left", /padding:[^;]*/],
   ["searchBar.css", ".sb-sheet-foot", "bottom", /padding-bottom:[^;]*/],
-  ["results.css", ".rv2-map-aside", "top", /--aside-top:[^;]*/],
   ["sitePanel.css", ".rv2-panel", "top", /padding-top:[^;]*/],
   ["sitePanel.css", ".rv2-panel-foot", "bottom", /padding:[^;]*/],
-  ["results.css", ".rv2-card", "top", /scroll-margin-top:[^;]*/],
+  ["../App.css", ".app-header", "top", /padding-top:[^;]*/],
+  ["../App.css", ".app", "bottom", /padding:[^;]*/],
 ];
 
 describe("safe areas (v1.48 P4a)", () => {
@@ -36,6 +37,15 @@ describe("safe areas (v1.48 P4a)", () => {
     expect(decl, `${selector}: ${prop}`).toContain(`env(safe-area-inset-${inset})`);
     // Offsets from an edge the shell may inset natively use max(), not +.
     if (!decl.startsWith("padding")) expect(decl).toMatch(/max\(/);
+  });
+
+  // The sticky header (P4b) clears the status bar, so things that stop
+  // below it offset by its measured height instead of the inset.
+  test.each([
+    ["results.css", ".rv2-map-aside", /--aside-top:[^;]*/],
+    ["../App.css", "html", /scroll-padding-top:[^;]*/],
+  ])("%s %s stops below the sticky header", (file, selector, prop) => {
+    expect(rule(file, selector).match(prop)?.[0]).toContain("var(--header-h");
   });
 
   test("the search sheet's Search button isn't padded twice for the home indicator", () => {
