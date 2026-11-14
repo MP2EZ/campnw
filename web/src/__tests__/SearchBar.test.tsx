@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import SearchBar from "../results/SearchBar";
+import SearchBar, { AskForm } from "../results/SearchBar";
 import { SearchContext, type SearchContextValue } from "../contexts/SearchContext";
 import type { SearchParams } from "../api";
 
@@ -26,7 +26,8 @@ function setup(params: SearchParams | null = JUNE) {
   const onAsk = vi.fn();
   const ui = (p: SearchParams | null) => (
     <SearchContext.Provider value={ctx(p)}>
-      <SearchBar onSearch={onSearch} onAsk={onAsk} />
+      <SearchBar onSearch={onSearch} />
+      <AskForm onAsk={onAsk} />
     </SearchContext.Provider>
   );
   const view = render(ui(params));

@@ -41,9 +41,9 @@ describe("CSS custom properties", () => {
 
     const undefinedTokens = [...referenced.keys()]
       .filter((t) => !declared.has(t))
-      // Set at runtime from TSX via inline style (CSS custom property
-      // passthrough), so they are legitimately absent from the stylesheets.
-      .filter((t) => !t.startsWith("--pc-") && t !== "--week-count");
+      // App sets --header-h at runtime (the sticky header's measured height),
+      // so it is legitimately absent from the stylesheets.
+      .filter((t) => t !== "--header-h");
 
     expect(undefinedTokens).toEqual([]);
   });
