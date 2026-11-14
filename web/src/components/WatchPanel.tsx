@@ -1,14 +1,12 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { getWatches, deleteWatch, toggleWatch, createWatch, track, WatchLimitError } from "../api";
+import { getWatches, deleteWatch, toggleWatch, track } from "../api";
 import { IconPause, IconPlay, IconClose } from "../icons";
-import type { WatchData, CreateWatchParams } from "../api";
+import type { WatchData } from "../api";
 import { parseIsoDate } from "../lib/dates";
-import { usePushNotifications } from "../hooks/usePushNotifications";
 import { useAuth } from "../hooks/useAuth";
 import { useBilling } from "../hooks/useBilling";
 import { PollDashboard } from "./PollDashboard";
 import { ShareButton } from "./ShareButton";
-import { UpgradeModal } from "./UpgradeModal";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -201,130 +199,6 @@ export const WatchPanel = memo(function WatchPanel({
   );
 });
 
-export function WatchButton({
-  facilityId,
-  name,
-  startDate,
-  endDate,
-  minNights,
-  daysOfWeek,
-  onCreated,
-}: {
-  facilityId: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  minNights?: number;
-  daysOfWeek?: number[];
-  onCreated?: () => void;
-}) {
-  const [creating, setCreating] = useState(false);
-  const [created, setCreated] = useState(false);
-  const [showPushPrompt, setShowPushPrompt] = useState(false);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [limitInfo, setLimitInfo] = useState<{ limit: number; current: number } | null>(null);
-  const { subscribed, subscribe } = usePushNotifications();
-
-  const handleWatch = async () => {
-    setCreating(true);
-    try {
-      const params: CreateWatchParams = {
-        facility_id: facilityId,
-        name,
-        start_date: startDate,
-        end_date: endDate,
-        min_nights: minNights || 1,
-        days_of_week: daysOfWeek,
-        notification_channel: "web_push",
-      };
-      await createWatch(params);
-      track("watch_created", {
-        facility_id: facilityId,
-        name: name || "",
-        start_date: startDate,
-        end_date: endDate,
-        date_range_days: Math.max(
-          0,
-          Math.round(
-            (Date.parse(endDate + "T12:00:00") -
-              Date.parse(startDate + "T12:00:00")) / 86_400_000,
-          ),
-        ),
-        lead_time_days: Math.max(
-          0,
-          Math.round(
-            (Date.parse(startDate + "T12:00:00") - Date.now()) / 86_400_000,
-          ),
-        ),
-        min_nights: minNights || 1,
-        notification_channel: "web_push",
-        push_already_granted: subscribed ? 1 : 0,
-      });
-      setCreated(true);
-      onCreated?.();
-      if (!subscribed) {
-        track("push_prompt_shown", { trigger: "after_watch_create" });
-        setShowPushPrompt(true);
-      }
-      setTimeout(() => {
-        setCreated(false);
-        setShowPushPrompt(false);
-      }, 8000);
-    } catch (e) {
-      if (e instanceof WatchLimitError) {
-        setLimitInfo({ limit: e.limit, current: e.current });
-        setUpgradeOpen(true);
-      }
-      // Other errors swallowed (existing behavior preserved)
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleEnablePush = async () => {
-    await subscribe();
-    setShowPushPrompt(false);
-  };
-
-  if (created) {
-    return (
-      <span className="watch-created-group">
-        <span className="watch-created">Watching</span>
-        {showPushPrompt && (
-          <button
-            className="push-opt-in-btn"
-            onClick={handleEnablePush}
-            type="button"
-          >
-            Enable notifications
-          </button>
-        )}
-      </span>
-    );
-  }
-
-  return (
-    <>
-      <button
-        className="watch-cta-btn"
-        onClick={handleWatch}
-        disabled={creating}
-      >
-        {creating ? "..." : "Watch"}
-      </button>
-      <UpgradeModal
-        open={upgradeOpen}
-        onClose={() => setUpgradeOpen(false)}
-        reason="watch_limit"
-        contextInfo={
-          limitInfo
-            ? { limit: limitInfo.limit, current: limitInfo.current }
-            : undefined
-        }
-      />
-    </>
-  );
-}
 
 /**
  * "2/3 watches" indicator next to the Watchlist title for free users.

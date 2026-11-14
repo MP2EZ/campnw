@@ -1,10 +1,7 @@
 import { useEffect, useRef } from "react";
 
 const SHORTCUTS = [
-  { key: "j", description: "Next result" },
-  { key: "k", description: "Previous result" },
   { key: "w", description: "Open watchlist" },
-  { key: "m", description: "Toggle map / list view" },
   { key: "?", description: "Show this help" },
   { key: "Esc", description: "Close overlay" },
 ];

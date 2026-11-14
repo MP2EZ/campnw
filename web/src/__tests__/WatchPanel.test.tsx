@@ -20,10 +20,6 @@ vi.mock("../hooks/useBilling", () => ({
   }),
 }));
 
-vi.mock("../hooks/usePushNotifications", () => ({
-  usePushNotifications: () => ({ subscribed: true, subscribe: vi.fn() }),
-}));
-
 vi.mock("../components/PollDashboard", () => ({
   PollDashboard: () => <div data-testid="poll-dashboard" />,
 }));
@@ -41,7 +37,6 @@ vi.mock("../api", () => ({
   getWatches: vi.fn().mockResolvedValue([]),
   deleteWatch: vi.fn().mockResolvedValue(undefined),
   toggleWatch: vi.fn().mockResolvedValue({ enabled: false }),
-  createWatch: vi.fn().mockResolvedValue({ id: 1 }),
   track: vi.fn(),
   WatchLimitError: class WatchLimitError extends Error {
     limit: number;
@@ -57,8 +52,8 @@ vi.mock("../api", () => ({
   },
 }));
 
-import { WatchPanel, WatchButton } from "../components/WatchPanel";
-import { getWatches, deleteWatch, toggleWatch, createWatch } from "../api";
+import { WatchPanel } from "../components/WatchPanel";
+import { getWatches, deleteWatch, toggleWatch } from "../api";
 import type { WatchData } from "../api";
 
 const MOCK_WATCH: WatchData = {
@@ -211,71 +206,6 @@ describe("WatchPanel", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("poll-dashboard")).toBeInTheDocument();
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// WatchButton
-// ---------------------------------------------------------------------------
-
-describe("WatchButton", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  test("renders Watch button", () => {
-    render(
-      <WatchButton
-        facilityId="232465"
-        name="Ohanapecosh"
-        startDate="2026-06-01"
-        endDate="2026-06-30"
-      />,
-    );
-    expect(screen.getByText("Watch")).toBeInTheDocument();
-  });
-
-  test("creates watch on click and shows Watching", async () => {
-    vi.mocked(createWatch).mockResolvedValue({ id: 1 } as any);
-    render(
-      <WatchButton
-        facilityId="232465"
-        name="Ohanapecosh"
-        startDate="2026-06-01"
-        endDate="2026-06-30"
-      />,
-    );
-
-    fireEvent.click(screen.getByText("Watch"));
-
-    await waitFor(() => {
-      expect(vi.mocked(createWatch)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          facility_id: "232465",
-          start_date: "2026-06-01",
-          end_date: "2026-06-30",
-        }),
-      );
-      expect(screen.getByText("Watching")).toBeInTheDocument();
-    });
-  });
-
-  test("calls onCreated callback after watch creation", async () => {
-    vi.mocked(createWatch).mockResolvedValue({ id: 1 } as any);
-    const onCreated = vi.fn();
-    render(
-      <WatchButton
-        facilityId="232465"
-        name="Ohanapecosh"
-        startDate="2026-06-01"
-        endDate="2026-06-30"
-        onCreated={onCreated}
-      />,
-    );
-
-    fireEvent.click(screen.getByText("Watch"));
-
-    await waitFor(() => {
-      expect(onCreated).toHaveBeenCalledOnce();
     });
   });
 });

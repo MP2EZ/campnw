@@ -2207,19 +2207,10 @@ header p {
 /* ─── Focus styles ─────────────────────────────────────────────────── */
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  /* v1.48 D12 ring; --focus-ring has its own dark value. */
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
   transition: outline-color var(--transition-fast);
-}
-
-[data-theme="dark"] :focus-visible {
-  outline-color: var(--accent-text);
-}
-
-/* Results v2 ring, page-wide while v2 is on (useUiVersion sets data-ui).
-   Becomes the only rule at the v1.48 flip. */
-[data-ui="v2"] :focus-visible {
-  outline: 3px solid var(--focus-ring);
 }
 
 /* ─── Mobile: 44px touch targets, tighter layout ───────────────────── */

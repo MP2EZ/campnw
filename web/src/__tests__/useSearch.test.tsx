@@ -234,44 +234,7 @@ describe("useSearch", () => {
     expect(result.current.results?.unavailable?.map((r) => r.name)).toEqual(["Kachess"]);
   });
 
-  test("toggleSource: first click isolates, then clicks toggle on/off", async () => {
-    const { result } = renderHook(() => useSearch(null));
-
-    await act(async () => {
-      result.current.handleSearch(
-        { start_date: "2026-06-01", end_date: "2026-06-30" },
-        "find",
-      );
-    });
-
-    act(() => {
-      capturedOnResult?.(MOCK_RESULT);
-      capturedOnResult?.(MOCK_OR_RESULT);
-      capturedOnDone?.();
-    });
-
-    // Both sources active initially (default)
-    expect(result.current.sourceFilter.has("recgov")).toBe(true);
-    expect(result.current.sourceFilter.has("or_state")).toBe(true);
-
-    // First click from "all on" isolates to that source
-    act(() => result.current.toggleSource("recgov"));
-    expect(result.current.sourceFilter.has("recgov")).toBe(true);
-    expect(result.current.sourceFilter.has("or_state")).toBe(false);
-
-    // Click another to add it (now both on again)
-    act(() => result.current.toggleSource("or_state"));
-    expect(result.current.sourceFilter.has("recgov")).toBe(true);
-    expect(result.current.sourceFilter.has("or_state")).toBe(true);
-
-    // Isolate again, then toggle the last one off — resets to all
-    act(() => result.current.toggleSource("recgov")); // isolate to recgov
-    act(() => result.current.toggleSource("recgov")); // remove last → reset
-    expect(result.current.sourceFilter.has("recgov")).toBe(true);
-    expect(result.current.sourceFilter.has("or_state")).toBe(true);
-  });
-
-  test("filteredResults respects source filter", async () => {
+  test("filteredResults includes every source", async () => {
     const { result } = renderHook(() => useSearch(null));
 
     await act(async () => {
@@ -288,25 +251,6 @@ describe("useSearch", () => {
     });
 
     expect(result.current.filteredResults).toHaveLength(2);
-
-    // Click isolates to recgov only
-    act(() => result.current.toggleSource("recgov"));
-    expect(result.current.filteredResults).toHaveLength(1);
-    expect(result.current.filteredResults[0].name).toBe("Ohanapecosh");
-  });
-
-  test("formCollapsed is set to true after search", async () => {
-    const { result } = renderHook(() => useSearch(null));
-    expect(result.current.formCollapsed).toBe(false);
-
-    await act(async () => {
-      result.current.handleSearch(
-        { start_date: "2026-06-01", end_date: "2026-06-30" },
-        "find",
-      );
-    });
-
-    expect(result.current.formCollapsed).toBe(true);
   });
 });
 

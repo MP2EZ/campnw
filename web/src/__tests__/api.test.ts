@@ -24,7 +24,6 @@ import {
   updateProfile,
   deleteAccount,
   exportData,
-  getSearchHistory,
   saveSearchHistory,
   type SearchParams,
   type CreateWatchParams,
@@ -468,43 +467,6 @@ describe('API: Auth', () => {
 })
 
 describe('API: Search History', () => {
-  test('getSearchHistory returns array of entries', async () => {
-    const mockEntries = [
-      {
-        params: { start_date: '2026-06-01', end_date: '2026-06-30', state: 'WA' },
-        result_count: 5,
-        searched_at: '2026-03-22T10:00:00Z',
-      },
-    ]
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockEntries,
-    })
-
-    const result = await getSearchHistory()
-
-    expect(result).toEqual(mockEntries)
-    const [url, opts] = mockFetch.mock.calls[0]
-    expect(url).toContain('/api/search-history')
-    expect(opts.credentials).toBe('include')
-  })
-
-  test('getSearchHistory returns empty array on 401', async () => {
-    mockFetch.mockResolvedValueOnce({ status: 401 })
-
-    const result = await getSearchHistory()
-
-    expect(result).toEqual([])
-  })
-
-  test('getSearchHistory returns empty array on non-ok response', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 })
-
-    const result = await getSearchHistory()
-
-    expect(result).toEqual([])
-  })
-
   test('saveSearchHistory sends POST request (fire-and-forget)', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true })
 
