@@ -129,6 +129,11 @@
   padding: 0;
 }
 
+html {
+  /* Anchors and scrollIntoView stop below the sticky header. App measures it. */
+  scroll-padding-top: var(--header-h, 0px);
+}
+
 body {
   font-family: var(--font-body);
   background: var(--bg);
@@ -199,33 +204,75 @@ h1, h2, h3 {
 .app {
   max-width: var(--max-w-app);
   margin: 0 auto;
-  /* Add the device safe-area insets to the base padding. env() is 0 in normal
-     browsers (web layout unchanged) and non-zero in the native WebView / notched
-     PWAs — keeps content clear of the status bar, Dynamic Island, and home
-     indicator. Requires viewport-fit=cover in index.html. */
+  /* Clear the device safe areas: env() is 0 in normal browsers and non-zero
+     in the native WebView / notched PWAs (needs viewport-fit=cover). The
+     sticky header clears the top. max(), not +: the shell may inset an edge
+     itself (ios.contentInset). */
   padding:
-    calc(var(--space-5) + env(safe-area-inset-top))
-    calc(var(--space-4) + env(safe-area-inset-right))
-    calc(var(--space-5) + env(safe-area-inset-bottom))
-    calc(var(--space-4) + env(safe-area-inset-left));
+    var(--space-5)
+    max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-5), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
 }
 
-header {
-  margin-bottom: var(--space-4);
-  position: relative;
+/* Sticky header (v1.48 P4b): wordmark, the search bar on "/", account nav.
+   Outside .app so its background spans the window. No backdrop-filter or
+   transform here: either would make it the containing block of the search
+   sheet's fixed scrim. */
+.app-header {
+  position: sticky;
+  top: 0;
   z-index: var(--z-overlay);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-light);
+  padding-top: max(var(--space-3), env(safe-area-inset-top));
+  padding-bottom: var(--space-3);
 }
 
 .header-row {
+  max-width: var(--max-w-app);
+  margin: 0 auto;
+  padding-inline: max(var(--space-4), env(safe-area-inset-left)) max(var(--space-4), env(safe-area-inset-right));
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-6);
+}
+
+/* The search page's frame: as wide as the results' list + map split
+   (results.css .rv2-split--map), with the header lined up to it. */
+@media (min-width: 1024px) {
+  .home-frame--wide {
+    --frame-w: min(1360px, calc(100vw - 2 * var(--space-7)));
+    width: var(--frame-w);
+    margin-inline: calc((100% - var(--frame-w)) / 2);
+  }
+
+  .app-header.has-search .header-row {
+    max-width: calc(min(1360px, 100vw - 2 * var(--space-7)) + 2 * var(--space-4));
+  }
+}
+
+.header-search {
+  flex: 1 1 520px;
+  min-width: 0;
+  max-width: 880px;
 }
 
 .header-actions {
   display: flex;
   gap: var(--space-2);
   align-items: center;
+  margin-left: auto;
+}
+
+/* Not enough room for one row: the bar takes the second. */
+@media (max-width: 1100px) {
+  .header-search {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+  }
 }
 
 .header-secondary {
@@ -292,33 +339,29 @@ header {
   padding: var(--space-1) var(--space-2);
 }
 
-header h1 {
-  font-size: var(--text-xl);
-  font-weight: var(--weight-bold);
-  color: var(--accent);
-}
-
 .wordmark-link {
   text-decoration: none;
   color: inherit;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  min-height: 44px;
 }
 
 .wordmark-link:hover {
   opacity: 0.85;
 }
 
-/* Wordmark sits where h1 was — same vertical rhythm */
-header .wordmark {
-  display: block;
-  margin-bottom: 0.1rem;
-}
-
-header p {
-  color: var(--text-muted);
-  font-size: var(--text-base);
+/* Before a search: the page's h1, under the Ask box. */
+.home-intro h1 {
+  max-width: 20ch;
+  margin: var(--space-6) 0 var(--space-5);
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  font-weight: var(--weight-semi);
+  line-height: var(--leading-display);
+  letter-spacing: -0.025em;
+  color: var(--text);
 }
 
 /* ─── Primary submit button (auth modal) ───────────────────────────── */
@@ -608,20 +651,44 @@ header p {
 
 @media (max-width: 640px) {
   .app {
-    padding: var(--space-4) var(--space-3);
+    padding:
+      var(--space-4)
+      max(var(--space-3), env(safe-area-inset-right))
+      max(var(--space-5), env(safe-area-inset-bottom))
+      max(var(--space-3), env(safe-area-inset-left));
   }
 
-  header h1 {
-    font-size: 1.25rem;
+  /* One row, as in the Mobile artboard: mark, the compact bar, the menu. */
+  .app-header {
+    padding-top: max(var(--space-2), env(safe-area-inset-top));
+    padding-bottom: var(--space-2);
   }
 
-  .header-subtitle {
+  .header-row {
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+    padding-inline: max(var(--space-3), env(safe-area-inset-left)) max(var(--space-3), env(safe-area-inset-right));
+  }
+
+  .header-search {
+    order: 0;
+    flex: 1 1 auto;
+  }
+
+  /* Next to the bar, the mark alone (the link keeps its aria-label). */
+  .app-header.has-search .wordmark-link [data-tone] > span:last-child {
     display: none;
   }
 
-  /* Scale wordmark and logo down on mobile */
-  header .wordmark {
-    font-size: 20px;
+  .header-actions {
+    margin-left: 0;
+  }
+
+  .home-intro h1 {
+    max-width: none;
+    margin-top: var(--space-4);
+    font-size: var(--text-xl);
+    letter-spacing: -0.02em;
   }
 
   /* Mobile: hamburger menu — hide secondary actions, show menu button */
@@ -807,17 +874,6 @@ header p {
  */
 
 [data-theme="dark"] {
-  /* ── Accent-colored text and borders ─── */
-  /* header h1 color, book-link, advanced-toggle, show-more-btn text,
-     site-chip / window-chip text, .watch-created */
-  header h1 {
-    color: var(--accent-text);
-  }
-
-  /* active tag/day buttons: keep white text, swap border to match accent */
-
-  /* mode toggle active pill: accent text */
-
   /* ── Input and select backgrounds ─── */
   /* Browser-native inputs ignore CSS variables unless explicitly set */
 
@@ -1709,9 +1765,8 @@ a.header-btn {
 
 .mode-tabs {
   display: flex;
-  max-width: var(--max-w-app);
-  margin: 0 auto var(--space-3);
-  padding: 0 var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: 0;
   gap: 0;
   border-bottom: 2px solid var(--border);
 }
@@ -1748,7 +1803,7 @@ a.header-btn {
   padding: var(--space-5) var(--space-3);
 }
 
-.trips-page h2 {
+.trips-page h1 {
   font-size: var(--text-lg);
   font-weight: var(--weight-semi);
   margin: 0 0 var(--space-3);

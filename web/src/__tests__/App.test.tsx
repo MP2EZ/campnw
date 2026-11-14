@@ -75,6 +75,27 @@ describe('App Component', () => {
     expect(screen.queryByText('Find a date')).not.toBeInTheDocument()
   })
 
+  // P4b: the bar sits in the sticky header; the wordmark is a link, not the h1.
+  test('puts the search bar in the header and gives the page one h1', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
+    renderApp()
+    const banner = screen.getByRole('banner')
+    expect(within(banner).getByRole('search', { name: 'Campsite search' })).toBeInTheDocument()
+    expect(within(banner).getByRole('link', { name: 'Campable home' })).toBeInTheDocument()
+    expect(within(banner).queryByRole('heading')).toBeNull()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  })
+
+  test('other pages keep the header without the bar', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
+    render(
+      <MemoryRouter initialEntries={['/privacy']}>
+        <App />
+      </MemoryRouter>
+    )
+    expect(within(screen.getByRole('banner')).queryByRole('search')).toBeNull()
+  })
+
   test('forgets the old per-browser ui override', () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
     localStorage.setItem('campable-ui', 'v1')

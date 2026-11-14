@@ -1,4 +1,3 @@
-import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "./results.css";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { SearchParams } from "../api";
