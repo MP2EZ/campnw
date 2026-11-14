@@ -2100,7 +2100,7 @@ The results page answers the question in one line ("22 campgrounds have a June w
 | P3c Watch sheet + per-weekend watches | Released #235 (#222–#227, plus #234) |
 | P3d release reminders | Released #245 (#236–#240, #243, #244). #236 also changes all watches to alert only on stays of `min_nights` consecutive nights (owner-approved) |
 | P4a mobile sheet, date chips, safe areas | Released #217. Device check passed on TestFlight build 4 (2026-11-09) |
-| P4b flip to v2 | Next. The Oregon stall fix is live (#245). Still check ReserveAmerica `doctor` a day after release |
+| P4b flip to v2 | Next. The Oregon stall fix is live (#245). Releases together with #246 (Stripe Checkout E2E fix for the new iframe variant). The nightly E2E (#221) stays red until then, because it runs from `main` |
 
 `results_v2` is on only for the owner's account (distinct_id 2). Everyone else needs `?ui=v2`.
 
