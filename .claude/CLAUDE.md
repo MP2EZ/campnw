@@ -229,11 +229,11 @@ All frontend styling uses design tokens defined in `web/src/tokens.css`. **Never
 - **Z-index:** `--z-sticky` (5), `--z-overlay` (100), `--z-modal` (101).
 - **Layout:** `--max-w-app` (960px), `--max-w-modal` (400px).
 - **Source colors:** `--src-{recgov,wa,or,id}-badge-bg`, `--src-{...}-badge-text`, `--src-{...}-border`. Dark mode variants defined in tokens.css.
-- **Theme colors:** Defined in `App.css` `:root` — `--bg`, `--text`, `--accent`, `--border`, `--chip-*`, `--warning-*`, `--error-*`, `--heatmap-*`.
+- **Theme colors:** Defined in `App.css` `:root` — `--bg`, `--text`, `--accent`, `--border`, `--chip-*`, `--warning-*`, `--error-*`.
 
 **Intentional exclusions** (stay hardcoded):
 - Spacing: 0.3rem, 0.35rem (tight interactive elements), sub-0.25rem (micro)
-- Font size: 0.5rem/0.55rem (heatmap), 0.95rem (edge cases)
+- Font size: 0.95rem (edge cases)
 - Radius: 50% (circles), 20px (decorative)
 - Line-height: 1.4, 1.45 (between named tokens)
 - Breakpoint: 640px (CSS vars don't work in @media)
