@@ -29,8 +29,12 @@ test("homepage renders core discovery UI", async ({ page }) => {
     page.getByRole("tablist", { name: "Discovery mode" })
   ).toBeVisible();
 
-  // The structured search form — the app's primary surface.
-  await expect(page.locator(".search-form")).toBeVisible();
+  // The search bar (v1.48), the app's primary surface. Role queries skip
+  // the hidden phone layout, so this finds the desktop Search button.
+  const bar = page.getByRole("search", { name: "Campsite search" });
+  await expect(bar).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Search", exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Or ask" })).toBeVisible();
 
   // Anonymous header CTA confirms auth wiring rendered.
   await expect(
