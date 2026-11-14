@@ -13,8 +13,6 @@ import { WherePanel } from "./WherePanel";
 
 interface Props {
   onSearch: (params: SearchParams, mode: SearchMode) => void;
-  /** A plain-language search, through the existing NL path. */
-  onAsk: (query: string) => void;
   /** The signed-in user's drive-from and nights, before there's a search. */
   userDefaults?: { from?: string; nights?: number };
 }
@@ -141,7 +139,8 @@ function CompactBar({ bar, panelProps, open, onOpen, close }: {
   );
 }
 
-function AskForm({ onAsk }: { onAsk: (q: string) => void }) {
+/** The plain-language box. It sits under the header, apart from the bar (P4b). */
+export function AskForm({ onAsk }: { onAsk: (q: string) => void }) {
   const [value, setValue] = useState("");
   const id = useId();
   return (
@@ -167,7 +166,7 @@ function AskForm({ onAsk }: { onAsk: (q: string) => void }) {
  * mobile. It shows the current search, and follows it when a new one runs
  * (Back, a shared link, or what a plain-language question was parsed into).
  */
-export default function SearchBar({ onSearch, onAsk, userDefaults }: Props) {
+export default function SearchBar({ onSearch, userDefaults }: Props) {
   const { searchParams } = useSearchContext();
   const today = localToday();
   const fromSearch = useCallback(
@@ -203,28 +202,25 @@ export default function SearchBar({ onSearch, onAsk, userDefaults }: Props) {
   const panelProps: PanelProps = { bar, onChange: setBar, today };
 
   return (
-    <div className="sb-wrap">
-      <form className="sb" role="search" aria-label="Campsite search"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setOpen(null);
-          const params = barToParams(bar, today, searchParams);
-          track("search_bar_submitted", { when: bar.when.kind, where: bar.name ? "name" : "drive" });
-          onSearch(params, params.mode === "exact" ? "exact" : "find");
-        }}>
-        <div className="sb-segments">
-          {SEGMENTS.map((seg, i) => (
-            <div key={seg.key} className="sb-seg-slot">
-              {i > 0 && <span className="sb-divider" aria-hidden="true" />}
-              <Segment seg={seg} bar={bar} open={open === seg.key}
-                onToggle={() => setOpen(open === seg.key ? null : seg.key)} onClose={close} panelProps={panelProps} />
-            </div>
-          ))}
-          <button type="submit" className="sb-submit" aria-label="Search"><IconSearch className="icon" /></button>
-        </div>
-        <CompactBar bar={bar} panelProps={panelProps} open={open === "sheet"} onOpen={() => setOpen("sheet")} close={close} />
-      </form>
-      <AskForm onAsk={onAsk} />
-    </div>
+    <form className="sb" role="search" aria-label="Campsite search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setOpen(null);
+        const params = barToParams(bar, today, searchParams);
+        track("search_bar_submitted", { when: bar.when.kind, where: bar.name ? "name" : "drive" });
+        onSearch(params, params.mode === "exact" ? "exact" : "find");
+      }}>
+      <div className="sb-segments">
+        {SEGMENTS.map((seg, i) => (
+          <div key={seg.key} className="sb-seg-slot">
+            {i > 0 && <span className="sb-divider" aria-hidden="true" />}
+            <Segment seg={seg} bar={bar} open={open === seg.key}
+              onToggle={() => setOpen(open === seg.key ? null : seg.key)} onClose={close} panelProps={panelProps} />
+          </div>
+        ))}
+        <button type="submit" className="sb-submit" aria-label="Search"><IconSearch className="icon" /></button>
+      </div>
+      <CompactBar bar={bar} panelProps={panelProps} open={open === "sheet"} onOpen={() => setOpen("sheet")} close={close} />
+    </form>
   );
 }

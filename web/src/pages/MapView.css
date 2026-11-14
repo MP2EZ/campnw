@@ -144,7 +144,7 @@
   color: var(--text);
 }
 
-.map-empty h2 {
+.map-empty h1 {
   font-size: var(--text-lg);
   font-weight: var(--weight-semi);
 }

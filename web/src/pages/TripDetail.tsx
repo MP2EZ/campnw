@@ -113,7 +113,7 @@ export default function TripDetail() {
           </div>
         ) : (
           <>
-            <h2 className="trip-detail-title">{trip.name}</h2>
+            <h1 className="trip-detail-title">{trip.name}</h1>
             <button
               className="trip-edit-btn"
               onClick={() => { setEditName(trip.name); setEditing(true); }}

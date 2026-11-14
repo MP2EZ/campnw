@@ -1,8 +1,7 @@
-/* Results v2 (v1.48). Everything is scoped to .results-v2 so v1 is untouched
-   until the flip. Bricolage is headings-only (docs/BRAND.md); body text keeps
-   the system stack. */
+/* Results v2 (v1.48). Bricolage is headings-only (docs/BRAND.md); body text
+   keeps the system stack. */
 .results-v2 {
-  --font-heading: "Bricolage Grotesque Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-heading: var(--font-display);
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -87,8 +86,9 @@
 }
 
 .rv2-card {
-  /* A quick pick or pin scrolls here: stop clear of the status bar. */
-  scroll-margin-top: max(var(--space-4), calc(env(safe-area-inset-top) + var(--space-2)));
+  /* A quick pick or pin scrolls here: stop clear of the sticky header, which
+     also covers the status bar (html scroll-padding-top adds its height). */
+  scroll-margin-top: var(--space-4);
   display: grid;
   grid-template-columns: 7rem minmax(0, 1fr);
   grid-template-rows: auto 1fr;
@@ -708,8 +708,8 @@ button.rv2-chip:not(.rv2-chip-full):hover {
 }
 
 .rv2-map-aside {
-  /* An iPad in the native shell scrolls under the status bar: clear it. */
-  --aside-top: max(var(--space-4), calc(env(safe-area-inset-top) + var(--space-2)));
+  /* Below the sticky header, which also clears the status bar in the shell. */
+  --aside-top: calc(var(--header-h, 0px) + var(--space-4));
   position: sticky;
   top: var(--aside-top);
   height: min(760px, calc(100dvh - var(--aside-top) - var(--space-4)));

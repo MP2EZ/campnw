@@ -1,11 +1,6 @@
-/* v2 search bar (v1.48 P3a). Desktop: a pill of four segments, each with a
-   popover. Under 640px: one compact button that opens a sheet. */
-.sb-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-bottom: var(--space-5);
-}
+/* v2 search bar (v1.48 P3a), in the sticky header since P4b. Desktop: a
+   pill of four segments, each with a popover. Under 640px: one compact
+   button that opens a sheet. */
 
 .sb {
   position: relative;
@@ -274,6 +269,7 @@
 /* ── Ask ─────────────────────────────────────────────────────────── */
 .sb-ask {
   max-width: 880px;
+  margin-bottom: var(--space-4);
   display: flex;
   align-items: center;
   gap: var(--space-2);

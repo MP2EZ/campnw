@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
+import "@fontsource-variable/bricolage-grotesque/opsz.css";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
-import { Routes, Route, Link, useNavigate } from "react-router-dom";
+import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { getPosthog, getRecommendations, track } from "./api";
 import type { Recommendation, SearchParams } from "./api";
 import { WatchPanel } from "./components/WatchPanel";
@@ -17,6 +18,8 @@ import { useSearch } from "./hooks/useSearch";
 import type { SearchMode } from "./hooks/useSearch";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { SearchContext } from "./contexts/SearchContext";
+// The bar is the page's main control, in the header on "/": loaded with the shell.
+import SearchBar, { AskForm } from "./results/SearchBar";
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const MapView = lazy(() => import("./pages/MapView"));
 const TripsPage = lazy(() => import("./pages/TripsPage"));
@@ -25,7 +28,6 @@ const SharedView = lazy(() => import("./pages/SharedView"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));
 const ResultsPage = lazy(() => import("./results/ResultsPage"));
-const SearchBar = lazy(() => import("./results/SearchBar"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 import { Footer } from "./components/Footer";
@@ -128,6 +130,7 @@ function ResultsSkeleton() {
 export default function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     results, loading, error, searchDates, sourceFilter, filteredResults,
     activeSearchParams, liveAnnouncement,
@@ -147,6 +150,21 @@ export default function App() {
   });
 
   const [mainMode, setMainMode] = useState<"search" | "plan">("search");
+  // The search bar lives in the sticky header on the search page (P4b).
+  const showBar = location.pathname === "/" && mainMode === "search";
+  const headerRef = useRef<HTMLElement>(null);
+  // Sticky things below the header (the desktop map, a card scrolled to)
+  // offset by its height, which changes with the bar and the viewport.
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty("--header-h", `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const handleNlSearch = useCallback((query: string) => {
     track("nl_search_submitted", { query_length: query.length });
     handleSearch(
@@ -209,7 +227,6 @@ export default function App() {
 
   return (
     <SearchContext.Provider value={searchContextValue}>
-    <div className="app">
       <Helmet>
         <title>Campable — Find Available Campsites</title>
         <meta name="description" content="Search and monitor campsite availability across Washington, Oregon, Idaho, Montana, Wyoming, and Northern California." />
@@ -220,12 +237,20 @@ export default function App() {
       </Helmet>
       <a href="#main-content" className="skip-link">Skip to main content</a>
       <div aria-live="polite" className="sr-only">{liveAnnouncement}</div>
-      <header>
+      {/* Outside .app so it spans the window. Each page owns its h1 (the
+          answer, on the search page), so the wordmark is a plain link. */}
+      <header ref={headerRef} className={`app-header${showBar ? " has-search" : ""}`}>
         <div className="header-row">
-          <div>
-            <h1><a href="/" className="wordmark-link" onClick={(e) => { e.preventDefault(); resetSearch(); navigate("/"); }}><Lockup size={32} tone={darkMode ? "on-dark" : "on-cream"} /></a></h1>
-            <p className="header-subtitle">Find available campsites across the western US</p>
-          </div>
+          <a href="/" className="wordmark-link" aria-label="Campable home"
+            onClick={(e) => { e.preventDefault(); resetSearch(); navigate("/"); }}>
+            <Lockup size={32} tone={darkMode ? "on-dark" : "on-cream"} />
+          </a>
+          {showBar && (
+            <div className="header-search">
+              <SearchBar onSearch={handleSearch}
+                userDefaults={user ? { from: resolveHomeBase(user.home_base) || user.default_from, nights: user.default_nights } : undefined} />
+            </div>
+          )}
           <div className="header-actions">
             <nav className="header-secondary" aria-label="Main navigation">
               {user && (
@@ -316,6 +341,7 @@ export default function App() {
         </div>
       </header>
 
+      <div className="app">
       <WatchPanel
         open={watchPanelOpen}
         onClose={() => setWatchPanelOpen(false)}
@@ -364,7 +390,7 @@ export default function App() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/" element={
-          <>
+          <div className={showBar ? "home-frame home-frame--wide" : "home-frame"}>
           <div className="mode-tabs" role="tablist" aria-label="Discovery mode">
             <button
               role="tab"
@@ -390,10 +416,13 @@ export default function App() {
             </Suspense>
           ) : (
           <>
-          <Suspense fallback={null}>
-            <SearchBar onSearch={handleSearch} onAsk={handleNlSearch}
-              userDefaults={user ? { from: resolveHomeBase(user.home_base) || user.default_from, nights: user.default_nights } : undefined} />
-          </Suspense>
+          <AskForm onAsk={handleNlSearch} />
+
+      {!results && !loading && (
+        <div className="home-intro">
+          <h1>Find available campsites across the western US</h1>
+        </div>
+      )}
 
       {user?.recommendations_enabled && <RecommendationRow onSearch={handleSearch} />}
 
@@ -410,7 +439,7 @@ export default function App() {
       )}
       </>
       )}
-          </>
+          </div>
         } />
       </Routes>
       </main>

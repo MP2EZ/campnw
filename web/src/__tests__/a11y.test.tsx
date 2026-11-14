@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import App from "../App";
 import ResultsPage from "../results/ResultsPage";
-import SearchBar from "../results/SearchBar";
+import SearchBar, { AskForm } from "../results/SearchBar";
 import { SearchContext, type SearchContextValue } from "../contexts/SearchContext";
 import type { CampgroundResult, Window } from "../api";
 import { CampgroundCard } from "../results/CampgroundCard";
@@ -344,7 +344,8 @@ function renderBar() {
   };
   return render(
     <SearchContext.Provider value={ctx}>
-      <SearchBar onSearch={() => {}} onAsk={() => {}} />
+      <SearchBar onSearch={() => {}} />
+      <AskForm onAsk={() => {}} />
     </SearchContext.Provider>,
   );
 }

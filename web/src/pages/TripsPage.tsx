@@ -58,7 +58,7 @@ export default function TripsPage() {
   if (!user) {
     return (
       <div className="trips-page">
-        <h2>My Trips</h2>
+        <h1>My Trips</h1>
         <p className="trips-empty">Sign in to save and manage trips.</p>
       </div>
     );
@@ -70,7 +70,7 @@ export default function TripsPage() {
         <title>My Trips — Campable</title>
         <meta name="description" content="Manage your camping trips and itineraries." />
       </Helmet>
-      <h2>My Trips</h2>
+      <h1>My Trips</h1>
       {deleteError && (
         <div className="error-banner" role="alert">{deleteError}</div>
       )}

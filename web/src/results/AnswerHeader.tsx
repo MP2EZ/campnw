@@ -13,10 +13,7 @@ interface Props {
   fullTitle?: string;
 }
 
-/**
- * The answer first, then how much was checked. An h2 until the v2 header
- * replaces the wordmark's h1 (P3a); then this becomes the page's h1.
- */
+/** The answer first, then how much was checked. The answer is the page's h1. */
 export function AnswerHeader({ sentence, coverage, searched, full = 0, fullTitle = "Full or not released yet" }: Props) {
   const linkText = fullTitle === "Nothing to book" ? `${full} with nothing to book` : `${full} full or not released yet`;
   const after = (
@@ -27,7 +24,7 @@ export function AnswerHeader({ sentence, coverage, searched, full = 0, fullTitle
   );
   return (
     <div className="rv2-answer">
-      <h2 id="rv2-answer" className="rv2-answer-line">{sentence}</h2>
+      <h1 id="rv2-answer" className="rv2-answer-line">{sentence}</h1>
       <SearchCoverage {...coverage} after={after} />
     </div>
   );
