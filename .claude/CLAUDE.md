@@ -174,7 +174,7 @@ This is a standalone CLI tool, not part of the server. It reads campground descr
 
 Full roadmap: `docs/ROADMAP.md` | PRD: `docs/PRD-v1.0.md` | PRFAQ: `docs/PRFAQ-v1.0.md` | Brand: `docs/BRAND.md`
 
-**Completed:** v0.1 through v1.47 — see `docs/ROADMAP.md` for full history. **In progress:** v1.48 "Answer-first Results" (`docs/PLAN-v1.48-answer-first-results.md`), behind the `results_v2` PostHog flag; `?ui=v2` / `?ui=v1` overrides it in the browser.
+**Completed:** v0.1 through v1.48 — see `docs/ROADMAP.md` for full history. v1.48 "Answer-first Results" (`docs/PLAN-v1.48-answer-first-results.md`) made the results v2 page the only one; the `results_v2` flag and `?ui=` override are gone.
 
 **Deferred items** (carried forward):
 - Automated registry refresh (monthly RIDB, quarterly GoingToCamp)
