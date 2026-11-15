@@ -41,7 +41,7 @@
   overscroll-behavior: contain;
   scroll-snap-type: y mandatory;
   scrollbar-width: none;
-  background: rgba(26, 26, 26, 0.4);
+  background: var(--scrim);
 }
 .rv2-sheet::-webkit-scrollbar { display: none; }
 

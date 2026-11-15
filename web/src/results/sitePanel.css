@@ -6,7 +6,7 @@
   z-index: var(--z-modal);
   display: flex;
   justify-content: flex-end;
-  background: rgba(26, 26, 26, 0.4);
+  background: var(--scrim);
   animation: rv2-panel-fade var(--transition-base) ease-out;
 }
 

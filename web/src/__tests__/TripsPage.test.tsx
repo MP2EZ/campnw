@@ -22,10 +22,12 @@ vi.mock("../api", () => ({
 
 // Stable identity: the fetch effect keys on `user`, so returning a fresh
 // object literal each render would refetch (and reset state) continuously.
-const AUTH = { user: { id: 1, email: "a@b.c" }, loading: false };
+const SIGNED_IN = { id: 1, email: "a@b.c" };
+const AUTH: { user: typeof SIGNED_IN | null; loading: boolean } = { user: SIGNED_IN, loading: false };
 vi.mock("../hooks/useAuth", () => ({ useAuth: () => AUTH }));
 
 import TripsPage from "../pages/TripsPage";
+import { SIGN_IN_EVENT } from "../lib/signIn";
 
 const TRIP = {
   id: 7,
@@ -107,5 +109,22 @@ describe("TripsPage destructive delete", () => {
     // The row must still be there — previously it was removed optimistically
     // with no catch, so the user was told a delete succeeded that had not.
     expect(screen.getByText("Rainier Weekend")).toBeInTheDocument();
+  });
+});
+
+describe("TripsPage signed out", () => {
+  test("offers a Sign in button that asks App for the sign-in modal", () => {
+    AUTH.user = null;
+    try {
+      const heard = vi.fn();
+      window.addEventListener(SIGN_IN_EVENT, heard);
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+      window.removeEventListener(SIGN_IN_EVENT, heard);
+      expect(heard).toHaveBeenCalledTimes(1);
+      expect((heard.mock.calls[0][0] as CustomEvent).detail).toBe("trips_page");
+    } finally {
+      AUTH.user = SIGNED_IN;
+    }
   });
 });

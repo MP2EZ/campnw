@@ -30,7 +30,7 @@ export default function About() {
             Campable aggregates real-time campsite availability across
             Recreation.gov, Washington State Parks, and Oregon State Parks so
             you can answer &ldquo;what&rsquo;s actually open this weekend
-            within driving distance?&rdquo; without bouncing between five
+            within driving distance?&rdquo; without bouncing between
             booking sites.
           </p>
         </header>
@@ -71,8 +71,8 @@ export default function About() {
           <p>
             Free for search, three watches, and shareable links.{" "}
             <Link to="/pricing">Pro</Link> ($5/month) unlocks unlimited
-            watches, 5-minute polling instead of 15-minute, more trip
-            planner sessions, and anomaly-based deal alerts. Pro
+            watches, 5-minute polling instead of 15-minute, and more trip
+            planner sessions. Pro
             subscriptions cover the polling infrastructure and let the free
             tier stay genuinely free for the next person who just needs to
             find a tent site.
@@ -118,8 +118,7 @@ export default function About() {
         <section className="about-section" aria-labelledby="next-heading">
           <h2 id="next-heading">What&rsquo;s coming</h2>
           <p>
-            Native iOS and Android apps via Capacitor (later this year, after
-            monetization is validated on the web). Predictive availability
+            Predictive availability
             (&ldquo;typically frees up X days before&rdquo;) once polling
             history is deep enough to make confidence bands meaningful
             (around Q1 2027). Continued registry expansion as state park APIs

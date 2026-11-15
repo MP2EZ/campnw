@@ -7,7 +7,7 @@
   display: grid;
   place-items: center;
   padding: var(--space-4);
-  background: rgba(26, 26, 26, 0.4);
+  background: var(--scrim);
 }
 
 .rv2-watch {

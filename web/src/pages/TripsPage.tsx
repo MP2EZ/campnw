@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { getTrips, createTrip, deleteTrip, track } from "../api";
 import type { TripData } from "../api";
 import { useAuth } from "../hooks/useAuth";
+import { requestSignIn } from "../lib/signIn";
 
 function formatDate(iso: string): string {
   if (!iso) return "";
@@ -58,8 +59,16 @@ export default function TripsPage() {
   if (!user) {
     return (
       <div className="trips-page">
+        <Helmet>
+          <title>My Trips · Campable</title>
+        </Helmet>
         <h1>My Trips</h1>
-        <p className="trips-empty">Sign in to save and manage trips.</p>
+        <div className="trips-signed-out">
+          <p>Sign in to save and manage trips.</p>
+          <button type="button" className="btn-primary" onClick={() => requestSignIn("trips_page")}>
+            Sign in
+          </button>
+        </div>
       </div>
     );
   }
@@ -67,7 +76,7 @@ export default function TripsPage() {
   return (
     <div className="trips-page">
       <Helmet>
-        <title>My Trips — Campable</title>
+        <title>My Trips · Campable</title>
         <meta name="description" content="Manage your camping trips and itineraries." />
       </Helmet>
       <h1>My Trips</h1>
