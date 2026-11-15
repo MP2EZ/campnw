@@ -91,11 +91,15 @@ describe("results v2 token contrast", () => {
   };
 
   // [foreground, background, minimum]. 4.5:1 for text, 3:1 for non-text.
-  // --chip-full-border is left out on purpose: the dashed edge is decorative
-  // and the chip's "Full" label carries the state.
   const PAIRS: [string, string, number][] = [
     ["--chip-open-text", "--chip-open-bg", 4.5],
     ["--chip-full-text", "--chip-full-bg", 4.5],
+    // Watch / Remind chips (UX #2): their solid edge is the affordance, so it
+    // must read against the card as well as the chip.
+    ["--chip-full-text", "--chip-action-bg", 4.5],
+    ["--chip-action-text", "--chip-action-bg", 4.5],
+    ["--chip-action-border", "--chip-action-bg", 3],
+    ["--chip-action-border", "--surface-card", 3],
     ["--notice-info-text", "--notice-info-bg", 4.5],
     ["--chip-few-dot", "--chip-open-bg", 3],
     ["--focus-ring", "--surface-card", 3],

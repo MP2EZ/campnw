@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SearchParams } from "../api";
-import { chipCountText, type WindowChip, type WindowChips as Chips } from "./chips";
+import { IconBell } from "../icons";
+import { chipCountText, summaryGapText, type WindowChip, type WindowChips as Chips } from "./chips";
 
 interface Props {
   chips: Chips;
@@ -25,14 +26,31 @@ function groupLabel(params: SearchParams | null): string {
 /**
  * The stays a card offers. An open chip opens the site panel (P3b), which
  * hands off to the booking site. "Few" is said in words ("3 left") and marked
- * with a dot, never by colour alone.
+ * with a dot, never by colour alone. Chips that open a sheet (Watch, Remind
+ * me) have a solid edge and a bell; chips with nothing to do are flat.
  */
 export function WindowChips({ chips, name, params, onOpen, onWatch, onRemind, remindStarts }: Props) {
   const [all, setAll] = useState(false);
   const list = all ? [...chips.shown, ...chips.more] : chips.shown;
+  const label = `${groupLabel(params)} at ${name}`;
+  const { summary } = chips;
+
+  if (summary && !all) {
+    const gaps = summaryGapText(summary.gaps);
+    return (
+      <div role="group" aria-label={label} className="rv2-chips">
+        <button type="button" className="rv2-chip rv2-chip-summary" aria-expanded={false} onClick={() => setAll(true)}>
+          <span className="rv2-chip-dates">{summary.label}</span>
+          <span className="sr-only">,</span>{" "}
+          <span className="rv2-chip-count">{summary.open}{gaps && ` · ${gaps}`}</span>
+          <span className="sr-only">, pick a date</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div role="group" aria-label={`${groupLabel(params)} at ${name}`} className="rv2-chips">
+    <div role="group" aria-label={label} className="rv2-chips">
       {list.map((c) => {
         const watch = c.status === "full" && !!onWatch;
         const remind = c.status === "not_released" && !!onRemind && !!remindStarts?.has(c.start);
@@ -43,28 +61,29 @@ export function WindowChips({ chips, name, params, onOpen, onWatch, onRemind, re
             <span className="sr-only">,</span>{" "}
             <span className="rv2-chip-count">
               {c.few && <span className="rv2-chip-dot" aria-hidden="true" />}
-              {chipCountText(c)}{watch && " · Watch"}{remind && " · Remind me"}
+              {chipCountText(c)}
+              {(watch || remind) && (
+                <>
+                  {/* The bell stands in for the dot on screen; screen readers keep it. */}
+                  {" "}<span className="sr-only">·</span>{" "}
+                  <span className="rv2-chip-cta"><IconBell className="rv2-icon" />{watch ? "Watch" : "Remind me"}</span>
+                </>
+              )}
             </span>
           </>
         );
         const key = `${c.start}→${c.end}`;
-        if (watch) {
+        if (watch || remind) {
           return (
-            <button key={key} type="button" className="rv2-chip rv2-chip-full rv2-chip-watch" onClick={() => onWatch(c)}>
-              {body}
-            </button>
-          );
-        }
-        if (remind) {
-          return (
-            <button key={key} type="button" className="rv2-chip rv2-chip-full rv2-chip-watch" onClick={() => onRemind(c)}>
+            <button key={key} type="button" className="rv2-chip rv2-chip-full rv2-chip-watch"
+              onClick={() => (watch ? onWatch(c) : onRemind!(c))}>
               {body}
             </button>
           );
         }
         if (c.status !== "open") {
           // Not reservable, or no release date to remind on: this only says what's there.
-          return <span key={key} className="rv2-chip rv2-chip-full">{body}</span>;
+          return <span key={key} className="rv2-chip rv2-chip-full rv2-chip-inert">{body}</span>;
         }
         return (
           <button key={key} type="button" className="rv2-chip" aria-haspopup="dialog"
@@ -74,7 +93,7 @@ export function WindowChips({ chips, name, params, onOpen, onWatch, onRemind, re
           </button>
         );
       })}
-      {chips.more.length > 0 && (
+      {(chips.more.length > 0 || summary) && (
         <button type="button" className="rv2-chip-more" aria-expanded={all} onClick={() => setAll(!all)}>
           {all ? "Show fewer" : `+${chips.more.length} more`}
         </button>
