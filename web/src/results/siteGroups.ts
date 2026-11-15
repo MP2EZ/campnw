@@ -1,5 +1,6 @@
 import type { CampgroundResult, SearchParams, Window } from "../api";
-import { addDays, nightsIn, searchedDays } from "./candidates";
+import { parseIsoDate } from "../lib/dates";
+import { addDays, nightRuns, nightsIn, searchedDays, type Stay } from "./candidates";
 import type { WindowChip } from "./chips";
 import { NOT_LISTED } from "./fit";
 import { stayUrl, type HandoffSite } from "./handoff";
@@ -20,8 +21,8 @@ export interface PanelSite extends HandoffSite {
   people: number | null;
   hookups: boolean;
   walkIn: boolean;
-  /** The nights it has when they're only part of the chip; null when it has all of them. */
-  part: { start: string; end: string } | null;
+  /** Its stay when it isn't the chip's (other nights, or fewer); null when it is. */
+  part: Stay | null;
   href: string | null;
 }
 
@@ -68,19 +69,29 @@ export function siteFit(w: Window): string {
   return parts.length === 1 && others.every((f) => f === false) ? `${text} only` : text;
 }
 
-/** Longest run of consecutive nights the spans cover (earliest on a tie). */
-function longestSpan(spans: [string, string][]): [string, string] {
-  let best: [string, string] = spans[0];
-  let run: [string, string] | null = null;
-  for (const [s, e] of [...spans].sort((a, b) => a[0].localeCompare(b[0]))) {
-    if (run && s <= addDays(run[1], 1)) {
-      if (e > run[1]) run[1] = e;
-    } else {
-      run = [s, e];
-    }
-    if (nightsIn(run[0], run[1]) > nightsIn(best[0], best[1])) best = [run[0], run[1]];
+/**
+ * The stay a site books in a chip: the chip's own when it has those nights,
+ * else its first stay of the same length, else its longest run (earliest on
+ * a tie). Never longer than the chip's stay, so a 2-night search books 2.
+ */
+function siteStay(spans: [string, string][], stay: Stay): [string, string] {
+  const runs = nightRuns(spans);
+  if (runs.some(([s, e]) => s <= stay.start && e >= stay.end)) return [stay.start, stay.end];
+  const nights = nightsIn(stay.start, stay.end);
+  const long = runs.find(([s, e]) => nightsIn(s, e) >= nights);
+  if (long) return [long[0], addDays(long[0], nights - 1)];
+  return runs.reduce((a, b) => (nightsIn(b[0], b[1]) > nightsIn(a[0], a[1]) ? b : a));
+}
+
+const weekday = (iso: string) => parseIsoDate(iso).toLocaleDateString("en-US", { weekday: "short" });
+
+/** "Sat → Mon instead" for another stay of the same length; "Sat night only" for fewer nights. */
+export function partLabel(part: Stay, stay: Stay): string {
+  if (nightsIn(part.start, part.end) >= nightsIn(stay.start, stay.end)) {
+    return `${weekday(part.start)} → ${weekday(addDays(part.end, 1))} instead`;
   }
-  return best;
+  return part.start === part.end ? `${weekday(part.start)} night only`
+    : `${weekday(part.start)}–${weekday(part.end)} nights only`;
 }
 
 /** "Loop F" for a bare letter; empty when the loop is just the campground's name. */
@@ -97,7 +108,7 @@ const byName = (a: PanelSite, b: PanelSite) =>
 
 export function panelGroups(
   result: CampgroundResult,
-  chip: Pick<WindowChip, "start" | "end">,
+  chip: Pick<WindowChip, "start" | "end" | "stay">,
   params: SearchParams | null,
 ): PanelGroup[] {
   // Same rule as buildWindowChips: blocks (weekends, exact dates) count any
@@ -117,7 +128,7 @@ export function panelGroups(
 
   const groups = new Map<SiteKind, PanelSite[]>();
   for (const [id, { windows, spans }] of sites) {
-    const [start, end] = longestSpan(spans);
+    const [start, end] = siteStay(spans, chip.stay);
     const w = windows.find((x) => x.start_date <= start && x.end_date >= start) ?? windows[0];
     const own = stayUrl(w.booking_url, start, end);
     const kind = kindOf(w);
@@ -126,7 +137,7 @@ export function panelGroups(
       id, name: w.site_name, loop: loopLabel(w.loop, result.name), kind, fit: siteFit(w),
       people: w.max_people_known === false ? null : w.max_people,
       hookups: !!w.hookups, walkIn: !!w.walk_in, start, end,
-      part: start === chip.start && end === chip.end ? null : { start, end },
+      part: start === chip.stay.start && end === chip.stay.end ? null : { start, end },
       href: own ?? stayUrl(result.availability_url, start, end),
       perSite: !!own,
     });

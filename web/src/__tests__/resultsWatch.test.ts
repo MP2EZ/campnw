@@ -22,22 +22,22 @@ describe("watchStays", () => {
       not_released_ranges: [{ start: "2027-06-25", end: "2027-06-27", releases_on: "2026-12-25" }],
     });
     expect(watchStays(r, juneWeekends)).toEqual([
-      { start: "2027-06-04", end: "2027-06-06", label: "Fri Jun 4 – Sun 6" },
-      { start: "2027-06-18", end: "2027-06-20", label: "Fri Jun 18 – Sun 20" },
+      { start: "2027-06-04", end: "2027-06-06", label: "Fri Jun 4 → Sun 6" },
+      { start: "2027-06-18", end: "2027-06-20", label: "Fri Jun 18 → Sun 20" },
     ]);
   });
 
   test("exact dates are the one stay", () => {
-    const exact = { start_date: "2027-07-02", end_date: "2027-07-03", mode: "exact" };
+    const exact = { start_date: "2027-07-02", end_date: "2027-07-03", mode: "exact", nights: 1 };
     expect(watchStays(place(), exact)).toEqual([
-      { start: "2027-07-02", end: "2027-07-03", label: "Fri Jul 2 – Sat 3" },
+      { start: "2027-07-02", end: "2027-07-03", label: "Fri Jul 2 → Sat 3" },
     ]);
   });
 
   test("flexible ranges watch the whole range", () => {
     const flexible = { start_date: "2027-07-01", end_date: "2027-07-14", mode: "find", nights: 3 };
     expect(watchStays(place(), flexible)).toEqual([
-      { start: "2027-07-01", end: "2027-07-14", label: "Thu Jul 1 – Wed 14" },
+      { start: "2027-07-01", end: "2027-07-14", label: "Jul 1 – 14" },
     ]);
   });
 
@@ -62,7 +62,7 @@ describe("whoFromParams", () => {
 });
 
 describe("watchRequest", () => {
-  const stay = { start: "2027-06-18", end: "2027-06-20", label: "Fri Jun 18 – Sun 20" };
+  const stay = { start: "2027-06-18", end: "2027-06-20", label: "Fri Jun 18 → Sun 20" };
 
   test("one watch for the stay's nights, with the party, rig and site type", () => {
     const req = watchRequest(place(), stay, juneWeekends, {

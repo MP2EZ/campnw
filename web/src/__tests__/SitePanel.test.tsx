@@ -4,6 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { CampgroundResult, SearchParams, Window } from "../api";
 import { SitePanel } from "../results/SitePanel";
+import { buildWindowChips } from "../results/chips";
 
 const weekends: SearchParams = {
   start_date: "2027-06-01", end_date: "2027-06-30", mode: "find", nights: 2, days_of_week: "4,5",
@@ -25,7 +26,7 @@ const fortEbey = {
     win("40", { max_people_known: false, start_date: "2027-06-19" }),
   ],
 } as CampgroundResult;
-const chip = { start: "2027-06-18", end: "2027-06-19" };
+const chip = { start: "2027-06-18", end: "2027-06-19", stay: { start: "2027-06-18", end: "2027-06-19" } };
 
 /** A chip button that opens the panel, like a card does. */
 function Harness({ onBook = vi.fn() }: { onBook?: (...a: unknown[]) => void }) {
@@ -118,5 +119,20 @@ describe("SitePanel", () => {
     expect(within(dialog).getByRole("button", { name: "Close" })).toHaveFocus();
     await userEvent.tab({ shift: true });
     expect(within(dialog).getByRole("link", { name: /^Book on/ })).toHaveFocus();
+  });
+
+  test("a weekend chip on a 2-night search opens 2-night stays, not the 3-night weekend (#4)", () => {
+    // Prod (2026-11-14): chip "Fri 5 – Sun 7", panel "Fri Feb 5 → Mon Feb 8 · 3 nights".
+    const p: SearchParams = { ...weekends, days_of_week: "4,5,6" };
+    const place = { ...fortEbey, booking_system: "or_state", windows: [
+      win("7", { end_date: "2027-06-20", nights: 3,
+        booking_url: "https://www.reserveamerica.com/x?arrivalDate=2027-06-18&lengthOfStay=3" }),
+    ] } as CampgroundResult;
+    const chip = buildWindowChips(place, p).shown.find((c) => c.status === "open")!;
+    expect(chip.label).toBe("Fri 18 → Sun 20");
+    render(<SitePanel result={place} chip={chip} params={p} returnFocus={null} onClose={vi.fn()} onBook={vi.fn()} />);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("Fri Jun 18 → Sun Jun 20 · 2 nights");
+    expect(dialog).toHaveTextContent("Pick Sun Jun 20 as departure");
   });
 });

@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 import type { CampgroundResult, SearchParams, Window } from "../api";
 import { buildWindowChips } from "../results/chips";
-import { panelGroups, siteFit } from "../results/siteGroups";
+import { panelGroups, partLabel, siteFit } from "../results/siteGroups";
 
 // June 2027: Fridays are the 4th, 11th, 18th and 25th.
 const juneWeekends: SearchParams = {
@@ -24,7 +24,7 @@ const place = (windows: Window[], extra: Partial<CampgroundResult> = {}) =>
     availability_url: "https://www.recreation.gov/camping/campgrounds/1/availability?startDate=2027-06-04",
     windows, ...extra }) as CampgroundResult;
 
-const fri18 = { start: "2027-06-18", end: "2027-06-19" };
+const fri18 = { start: "2027-06-18", end: "2027-06-19", stay: { start: "2027-06-18", end: "2027-06-19" } };
 const names = (groups: ReturnType<typeof panelGroups>) => groups.map((g) => [g.title, g.sites.map((s) => s.name)]);
 
 describe("panelGroups: which sites a chip has", () => {
@@ -69,7 +69,7 @@ describe("panelGroups: which sites a chip has", () => {
   test("a flexible stay counts only sites that cover the whole stay", () => {
     const groups = panelGroups(place([
       win("A", "2027-06-08", "2027-06-12"), win("B", "2027-06-09", "2027-06-09"),
-    ]), { start: "2027-06-09", end: "2027-06-10" }, flexible);
+    ]), { start: "2027-06-09", end: "2027-06-10", stay: { start: "2027-06-09", end: "2027-06-10" } }, flexible);
     const [site] = groups.flatMap((g) => g.sites);
     expect(groups.flatMap((g) => g.sites)).toHaveLength(1);
     expect(site.part).toBeNull();
@@ -120,6 +120,36 @@ describe("panelGroups: which sites a chip has", () => {
       fri18, juneWeekends)[0].sites;
     expect(site.perSite).toBe(false);
     expect(site.href).toBe("https://www.recreation.gov/camping/campgrounds/1/availability?startDate=2027-06-18");
+  });
+});
+
+describe("panelGroups: each site books the chip's stay, not a longer one (#4)", () => {
+  const weekend: SearchParams = { ...juneWeekends, days_of_week: "4,5,6" };
+  const chipFor = (windows: Window[]) =>
+    buildWindowChips(place(windows), weekend).shown.find((c) => c.status === "open")!;
+
+  test("a site open all three nights books the 2 searched nights", () => {
+    const windows = [win("A", "2027-06-18", "2027-06-20", { nights: 3 })];
+    const [site] = panelGroups(place(windows), chipFor(windows), weekend)[0].sites;
+    expect(site).toMatchObject({ start: "2027-06-18", end: "2027-06-19", part: null });
+    expect(site.href).toContain("startDate=2027-06-18&endDate=2027-06-20");
+  });
+
+  test("a site with a different 2-night stay in the weekend says which and books it", () => {
+    const windows = [win("A", "2027-06-18", "2027-06-19"), win("B", "2027-06-18", "2027-06-19"),
+      win("C", "2027-06-19", "2027-06-20")];
+    const sites = panelGroups(place(windows), chipFor(windows), weekend)[0].sites;
+    const c = sites.find((s) => s.name === "C")!;
+    expect(c.part).toEqual({ start: "2027-06-19", end: "2027-06-20" });
+    expect(partLabel(c.part!, chipFor(windows).stay)).toBe("Sat → Mon instead");
+    expect(c.href).toContain("startDate=2027-06-19&endDate=2027-06-21");
+  });
+
+  test("a site with fewer nights than the stay says which nights", () => {
+    const stay = { start: "2027-06-18", end: "2027-06-19" };
+    expect(partLabel({ start: "2027-06-19", end: "2027-06-19" }, stay)).toBe("Sat night only");
+    expect(partLabel({ start: "2027-06-18", end: "2027-06-19" }, { start: "2027-06-18", end: "2027-06-20" }))
+      .toBe("Fri–Sat nights only");
   });
 });
 

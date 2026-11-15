@@ -34,22 +34,22 @@ describe("WindowChips", () => {
     const group = screen.getByRole("group", { name: "Weekends at Dash Point" });
     const chips = within(group).getAllByRole("button", { name: /see open sites$/ });
     expect(chips.map((c) => c.textContent)).toEqual([
-      "Fri 4 – Sun 6, 6 open, see open sites",
-      "Fri 11 – Sun 13, 6 open, see open sites",
+      "Fri 4 → Sun 6, 6 open, see open sites",
+      "Fri 11 → Sun 13, 6 open, see open sites",
     ]);
-    expect(chips[0]).toHaveAccessibleName("Fri 4 – Sun 6, 6 open, see open sites");
+    expect(chips[0]).toHaveAccessibleName("Fri 4 → Sun 6, 6 open, see open sites");
     expect(chips[0]).toHaveAttribute("aria-haspopup", "dialog");
   });
 
   test("few left is said in words and marked with a hidden dot, not colour alone", () => {
     renderChips([win("A", "2027-06-04", "2027-06-05"), win("B", "2027-06-04", "2027-06-05")]);
-    const chip = screen.getByRole("button", { name: /^Fri 4 – Sun 6, 2 left/ });
+    const chip = screen.getByRole("button", { name: /^Fri 4 → Sun 6, 2 left/ });
     expect(chip.querySelector(".rv2-chip-dot")).toHaveAttribute("aria-hidden", "true");
   });
 
   test("a click opens the chip's sites, handing over the chip to return focus to", async () => {
     const onOpen = renderChips(six.map((s) => win(s, "2027-06-04", "2027-06-05")));
-    const chip = screen.getByRole("button", { name: /^Fri 4 – Sun 6/ });
+    const chip = screen.getByRole("button", { name: /^Fri 4 → Sun 6/ });
     await userEvent.click(chip);
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ start: "2027-06-04", open: 6 }), chip);
   });
@@ -82,7 +82,7 @@ describe("WindowChips", () => {
     } as CampgroundResult;
     render(<WindowChips chips={buildWindowChips(result, juneWeekends)} name="Dash Point" params={juneWeekends}
       source="WA State Parks" onBook={vi.fn()} onWatch={onWatch} />);
-    const watch = screen.getByRole("button", { name: "Fri 11 – Sun 13, Full · Watch" });
+    const watch = screen.getByRole("button", { name: "Fri 11 → Sun 13, Full · Watch" });
     await userEvent.click(watch);
     expect(onWatch).toHaveBeenCalledWith(expect.objectContaining({ start: "2027-06-11", status: "full" }));
     expect(screen.queryByRole("button", { name: /Fri 25/ })).not.toBeInTheDocument();
@@ -96,11 +96,11 @@ describe("WindowChips", () => {
     } as CampgroundResult;
     render(<WindowChips chips={buildWindowChips(result, juneWeekends)} name="Dash Point" params={juneWeekends}
       source="WA State Parks" onBook={vi.fn()} onRemind={onRemind} remindStarts={new Set(["2027-06-25"])} />);
-    await userEvent.click(screen.getByRole("button", { name: "Fri 25 – Sun 27, Opens Dec 25 · Remind me" }));
+    await userEvent.click(screen.getByRole("button", { name: "Fri 25 → Sun 27, Opens Dec 25 · Remind me" }));
     expect(onRemind).toHaveBeenCalledWith(expect.objectContaining({ start: "2027-06-25", status: "not_released" }));
     // Not in remindStarts (e.g. its release date has passed): text only.
     expect(screen.queryByRole("button", { name: /Fri 18/ })).not.toBeInTheDocument();
-    expect(screen.getByText("Fri 18 – Sun 20")).toBeInTheDocument();
+    expect(screen.getByText("Fri 18 → Sun 20")).toBeInTheDocument();
   });
 
   test("a watchable chip leads with a bell and an outline; a chip with nothing to do is flat (UX #2)", () => {
@@ -110,7 +110,7 @@ describe("WindowChips", () => {
     } as CampgroundResult;
     render(<WindowChips chips={buildWindowChips(result, juneWeekends)} name="Dash Point" params={juneWeekends}
       onOpen={vi.fn()} onWatch={vi.fn()} />);
-    const watch = screen.getByRole("button", { name: "Fri 11 – Sun 13, Full · Watch" });
+    const watch = screen.getByRole("button", { name: "Fri 11 → Sun 13, Full · Watch" });
     expect(watch).toHaveClass("rv2-chip-watch");
     expect(watch.querySelector(".rv2-chip-cta svg")).toHaveAttribute("aria-hidden", "true");
     const inert = screen.getByText("Jun 18 – 27").closest(".rv2-chip");
