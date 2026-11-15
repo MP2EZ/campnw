@@ -48,6 +48,22 @@ describe("FullGroup", () => {
     expect(screen.queryByRole("button", { name: /Tinkham/ })).not.toBeInTheDocument();
   });
 
+  test("the note offers only the alerts its rows have", () => {
+    const tinkham = place("Tinkham", 54, {
+      not_released_ranges: [], closed_ranges: [{ start: "2027-06-01", end: "2027-06-30" }],
+    });
+    const { unmount } = render(<WatchContext.Provider value={vi.fn()}>
+      <FullGroup params={juneWeekends} places={[tinkham]} />
+    </WatchContext.Provider>);
+    expect(screen.getByText(/^Nothing open on your dates\.$/)).toBeInTheDocument();
+    unmount();
+    render(<WatchContext.Provider value={vi.fn()}>
+      <FullGroup params={juneWeekends} places={[tinkham, place("Wallace Falls", 88, { not_released_ranges: [] })]} />
+    </WatchContext.Provider>);
+    expect(screen.getByText(/Watch a place to hear when a site frees up\.$/)).toBeInTheDocument();
+    expect(screen.queryByText(/reminder/)).not.toBeInTheDocument();
+  });
+
   test("past six places the rest wait behind a button", async () => {
     render(<FullGroup params={juneWeekends}
       places={Array.from({ length: 9 }, (_, i) => place(`P${i}`, 60 + i))} />);

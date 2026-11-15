@@ -28,11 +28,29 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
   const [all, setAll] = useState(false);
   const openWatch = useOpenWatch();
   if (places.length === 0) return null;
-  const sorted = [...places].sort(byDrive);
-  const cut = sorted.length > ROW_LIMIT + 1 ? ROW_LIMIT : sorted.length;
-  const shown = all ? sorted : sorted.slice(0, cut);
-  const noteId = `${FULL_GROUP_ID}-note`;
   const today = todayIso();
+  // Each row's alert: live Watch or Remind me inside results, a disabled stub
+  // outside them, or none (not reservable, or no release date left).
+  const rows = [...places].sort(byDrive).map((r) => {
+    const { status, action } = unavailableText(unavailability(r, params), params);
+    const live = !openWatch ? null
+      : action === "Watch" ? (watchStays(r, params).length > 0 ? "watch" : null)
+      : action === "Remind me" ? (remindStays(r, params, today).length > 0 ? "remind" : "none")
+      : null;
+    return { r, status, action, live };
+  });
+  const cut = rows.length > ROW_LIMIT + 1 ? ROW_LIMIT : rows.length;
+  const shown = all ? rows : rows.slice(0, cut);
+  const noteId = `${FULL_GROUP_ID}-note`;
+  const watch = rows.some((x) => x.live === "watch");
+  const remind = rows.some((x) => x.live === "remind");
+  // Offer only the alerts the rows actually have.
+  const offer = !openWatch
+    ? rows.some((x) => x.action) && "Alerts for when a site frees up, or when booking opens, are coming soon."
+    : watch && remind ? "Watch a place to hear when a site frees up, or get a reminder the morning booking opens."
+    : watch ? "Watch a place to hear when a site frees up."
+    : remind ? "Get a reminder the morning booking opens."
+    : null;
 
   return (
     <section id={FULL_GROUP_ID} className="rv2-band" aria-labelledby={`${FULL_GROUP_ID}-h`}>
@@ -42,13 +60,11 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
         <span className="rv2-band-rule" aria-hidden="true" />
       </div>
       <p id={noteId} className="rv2-band-note">
-        {title === "Nothing to book" ? "Nothing open on your dates. " : "Nothing to book on your dates. "}
-        {openWatch ? "Watch a place to hear when a site frees up, or get a reminder the morning booking opens."
-          : "Alerts for when a site frees up, or when booking opens, are coming soon."}
+        {title === "Nothing to book" ? "Nothing open on your dates." : "Nothing to book on your dates."}
+        {offer && ` ${offer}`}
       </p>
       <ul className="rv2-full-list">
-        {shown.map((r) => {
-          const { status, action } = unavailableText(unavailability(r, params), params);
+        {shown.map(({ r, status, action, live }) => {
           const source = SOURCE_NAMES[r.booking_system] ?? r.booking_system;
           const where = r.boat_in
             ? "Boat-in only"
@@ -60,20 +76,17 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
                 <p className="rv2-full-meta">{[where, source].filter(Boolean).join(" · ")}</p>
               </div>
               <span className="rv2-full-status">{status}</span>
-              {action === "Watch" && openWatch && watchStays(r, params).length > 0 ? (
+              {live === "watch" ? (
                 <button type="button" className="rv2-full-action rv2-full-action--live"
-                  aria-label={`Watch: ${r.name}`} onClick={() => openWatch(r, undefined, "full_group")}>
+                  aria-label={`Watch: ${r.name}`} onClick={() => openWatch?.(r, undefined, "full_group")}>
                   <IconBell className="rv2-icon" />Watch
                 </button>
-              ) : action === "Remind me" && openWatch ? (
-                // No button when there's no release date left to remind on.
-                remindStays(r, params, today).length > 0 && (
-                  <button type="button" className="rv2-full-action rv2-full-action--live"
-                    aria-label={`Remind me: ${r.name}`} onClick={() => openWatch(r, undefined, "full_group", "remind")}>
-                    <IconBell className="rv2-icon" />Remind me
-                  </button>
-                )
-              ) : action && (
+              ) : live === "remind" ? (
+                <button type="button" className="rv2-full-action rv2-full-action--live"
+                  aria-label={`Remind me: ${r.name}`} onClick={() => openWatch?.(r, undefined, "full_group", "remind")}>
+                  <IconBell className="rv2-icon" />Remind me
+                </button>
+              ) : live === null && action && (
                 <button type="button" className="rv2-full-action" aria-disabled="true"
                   aria-label={`${action}: ${r.name}`} aria-describedby={noteId}>
                   <IconBell className="rv2-icon" />{action}
@@ -83,9 +96,9 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
           );
         })}
       </ul>
-      {sorted.length > cut && (
+      {rows.length > cut && (
         <button type="button" className="rv2-band-more" aria-expanded={all} onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show ${sorted.length - cut} more`}
+          {all ? "Show fewer" : `Show ${rows.length - cut} more`}
         </button>
       )}
     </section>

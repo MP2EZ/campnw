@@ -172,7 +172,6 @@ export function unavailableText(u: Unavailability, p: SearchParams | null): {
     return { status: month ? `${month} opens ${opens}` : `Opens ${opens}`, action: "Remind me" };
   }
   const action = u.notReleased ? "Remind me" : "Watch";
-  const nyr = opens ? `open ${opens}` : "not released yet";
   if (!weekends) {
     const first = u.full ? "full" : "not reservable";
     return { status: u.notReleased ? `Partly ${first} · rest ${opens ? `opens ${opens}` : "not released yet"}`
@@ -181,7 +180,11 @@ export function unavailableText(u: Unavailability, p: SearchParams | null): {
   const parts: [number, string][] = [];
   if (u.full) parts.push([u.full, "full"]);
   if (u.closed) parts.push([u.closed, "not reservable"]);
-  if (u.notReleased) parts.push([u.notReleased, nyr]);
+  // "1 releases Nov 28", not "1 open Nov 28" (which reads as one open site).
+  // Short enough to keep the row's action on the same line at desktop width.
+  if (u.notReleased) {
+    parts.push([u.notReleased, opens ? `${u.notReleased === 1 ? "releases" : "release"} ${opens}` : "not released yet"]);
+  }
   const [[n, what], ...rest] = parts;
   return {
     status: [`${n} weekend${n === 1 ? "" : "s"} ${what}`, ...rest.map(([k, w]) => `${k} ${w}`)].join(" · "),

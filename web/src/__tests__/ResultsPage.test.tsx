@@ -67,7 +67,7 @@ describe("ResultsPage", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "2 campgrounds have a June weekend open within 3 hours of Seattle.",
     );
-    expect(screen.getByText(/Checked 20 of 46 nearby campgrounds/)).toHaveTextContent(/searched just now/);
+    expect(screen.getByText(/Checked the 20 closest of 46 nearby campgrounds/)).toHaveTextContent(/searched just now/);
     expect(screen.getByRole("note")).toHaveTextContent(
       "18 campgrounds haven't released these dates yet. Booking typically opens Dec 4 – 25.",
     );
