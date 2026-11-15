@@ -39,7 +39,6 @@ class TestGenerateDescription:
             result = await generate_description(
                 name="Test Lake Camp",
                 tags=["lakeside", "kid-friendly"],
-                vibe="Perfect for families",
                 total_sites=30,
                 state="WA",
                 notes="Lakeside campground near Rainier",
@@ -73,7 +72,7 @@ class TestGenerateDescription:
             mock_client.messages.create.return_value = mock_response
 
             result = await generate_description(
-                name="Test", tags=[], vibe="", total_sites=10,
+                name="Test", tags=[], total_sites=10,
                 state="WA", notes="", api_key="test-key",
             )
 
@@ -95,7 +94,7 @@ class TestGenerateDescription:
             mock_client.messages.create.return_value = mock_response
 
             result = await generate_description(
-                name="Test", tags=[], vibe="", total_sites=10,
+                name="Test", tags=[], total_sites=10,
                 state="WA", notes="", api_key="test-key",
             )
 
@@ -110,7 +109,7 @@ class TestGenerateDescription:
             mock_client.messages.create.side_effect = Exception("API error")
 
             result = await generate_description(
-                name="Test", tags=[], vibe="", total_sites=10,
+                name="Test", tags=[], total_sites=10,
                 state="WA", notes="", api_key="test-key",
             )
 
@@ -128,7 +127,7 @@ class TestGenerateDescription:
             mock_client.messages.create.return_value = mock_response
 
             result = await generate_description(
-                name="Test", tags=[], vibe="", total_sites=10,
+                name="Test", tags=[], total_sites=10,
                 state="WA", notes="", api_key="test-key",
             )
 
@@ -148,7 +147,7 @@ class TestGenerateDescription:
             mock_client.messages.create.return_value = mock_response
 
             result = await generate_description(
-                name="Test", tags=[], vibe="", total_sites=10,
+                name="Test", tags=[], total_sites=10,
                 state="WA", notes="", api_key="test-key",
             )
 
@@ -170,7 +169,7 @@ class TestGenerateDescription:
             mock_client.messages.create.return_value = mock_response
 
             await generate_description(
-                name="Test", tags=[], vibe="", total_sites=10,
+                name="Test", tags=[], total_sites=10,
                 state="WA", notes="", api_key="test-key",
             )
 
@@ -276,3 +275,97 @@ class TestRegistryDescriptionColumns:
         assert cg.elevator_pitch == ""
         assert cg.description_rewrite == ""
         assert cg.best_for == ""
+
+
+# ---------------------------------------------------------------------------
+# regenerate_descriptions (enrich --only-pitch)
+# ---------------------------------------------------------------------------
+
+
+class TestRegenerateDescriptions:
+    """--only-pitch overwrites existing copy and exports the pitch fixture."""
+
+    @staticmethod
+    def _seed(registry: CampgroundRegistry) -> None:
+        for fid, pitch in (("1", "Peaceful haven for solitude seekers."), ("2", "")):
+            registry.upsert(Campground(
+                facility_id=fid, name=f"Camp {fid}", booking_system=BookingSystem.RECGOV,
+                state="WA", tags=["lakeside"], enabled=True,
+            ))
+            cg = registry.get_by_facility_id(fid, BookingSystem.RECGOV)
+            registry.update_vibe(cg.id, "Serene escape")
+            if pitch:
+                registry.update_description(cg.id, pitch, "Old desc.", "Solitude seekers")
+
+    @staticmethod
+    def _fake(by_name: dict[str, dict]):
+        async def fake(name, *args, usage=None, **kwargs):
+            if usage is not None:
+                usage["input_tokens"] += 100
+                usage["output_tokens"] += 20
+            return by_name.get(name, {})
+        return fake
+
+    @pytest.mark.asyncio
+    async def test_overwrites_and_exports(self, registry, tmp_path):
+        from pnw_campsites.enrichment.llm_tags import regenerate_descriptions
+        from pnw_campsites.registry.pitch_fixture import FIXTURE_PATH
+
+        self._seed(registry)
+        new = {
+            f"Camp {i}": {
+                "elevator_pitch": f"Lakeside camp {i}.",
+                "description_rewrite": f"Desc {i}.", "best_for": "anglers",
+            }
+            for i in ("1", "2")
+        }
+        out = tmp_path / "pitches.json"
+        before = FIXTURE_PATH.read_bytes() if FIXTURE_PATH.exists() else None
+        with patch("pnw_campsites.enrichment.llm_tags.generate_description", self._fake(new)):
+            rewritten, failed, usage = await regenerate_descriptions(
+                registry_path=str(registry._db_path), api_key="k", export_path=out,
+            )
+
+        assert (rewritten, failed) == (2, 0)
+        assert usage == {"input_tokens": 200, "output_tokens": 40}
+        cg = registry.get_by_facility_id("1", BookingSystem.RECGOV)
+        assert (cg.elevator_pitch, cg.description_rewrite, cg.best_for) == (
+            "Lakeside camp 1.", "Desc 1.", "anglers",
+        )
+        assert cg.tags == ["lakeside"] and cg.vibe == "Serene escape"
+        rows = json.loads(out.read_text())["pitches"]
+        assert [r["elevator_pitch"] for r in rows] == ["Lakeside camp 1.", "Lakeside camp 2."]
+        # The checked-in fixture is only written when asked for.
+        assert (FIXTURE_PATH.read_bytes() if FIXTURE_PATH.exists() else None) == before
+
+    @pytest.mark.asyncio
+    async def test_failure_keeps_old_copy(self, registry):
+        from pnw_campsites.enrichment.llm_tags import regenerate_descriptions
+
+        self._seed(registry)
+        with patch("pnw_campsites.enrichment.llm_tags.generate_description", self._fake({})):
+            rewritten, failed, _ = await regenerate_descriptions(
+                registry_path=str(registry._db_path), api_key="k",
+            )
+
+        assert (rewritten, failed) == (0, 2)
+        cg = registry.get_by_facility_id("1", BookingSystem.RECGOV)
+        assert cg.elevator_pitch == "Peaceful haven for solitude seekers."
+
+    @pytest.mark.asyncio
+    async def test_dry_run_writes_nothing(self, registry, tmp_path):
+        from pnw_campsites.enrichment.llm_tags import regenerate_descriptions
+
+        self._seed(registry)
+        new = {"Camp 1": {"elevator_pitch": "New.", "description_rewrite": "", "best_for": ""}}
+        out = tmp_path / "pitches.json"
+        with patch("pnw_campsites.enrichment.llm_tags.generate_description", self._fake(new)):
+            rewritten, _, _ = await regenerate_descriptions(
+                registry_path=str(registry._db_path), api_key="k", dry_run=True,
+                export_path=out, limit=1,
+            )
+
+        assert rewritten == 1
+        assert not out.exists()
+        cg = registry.get_by_facility_id("1", BookingSystem.RECGOV)
+        assert cg.elevator_pitch == "Peaceful haven for solitude seekers."
