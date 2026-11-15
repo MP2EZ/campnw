@@ -273,7 +273,8 @@ export function whoLabel(bar: BarState): string {
   return r ? `${people} · ${r}` : people;
 }
 
-function hours(minutes: number): string {
+/** "45 min", "2 h", "2 h 30": the Drive control's format. */
+export function hours(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;

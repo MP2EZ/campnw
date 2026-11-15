@@ -1,7 +1,10 @@
 import type { CampgroundResult, SearchParams, SearchResponse } from "../api";
 import { formatDateRange, parseIsoDate } from "../lib/dates";
 import { SOURCE_NAMES } from "../lib/sources";
-import { addDays, candidateStatus, candidateWindows, nightsIn, searchedDays, unavailability } from "./candidates";
+import {
+  addDays, candidateStatus, candidateWindows, fullGroupTitle, nightsIn, searchedDays, unavailability,
+} from "./candidates";
+import { hours } from "./searchState";
 
 /** The zero-results page (design: Zero.dc.html), from the checked places with nothing to book. */
 
@@ -94,9 +97,12 @@ export function soonerOptions(
   for (const chip of results.action_chips ?? []) {
     const cp = chip.params as Record<string, unknown>;
     if (chip.action === "expand_radius") {
-      const minutes = cp.max_drive_minutes;
-      out.push({ title: chip.label, detail: "A longer drive",
-        params: { ...p, max_drive: typeof minutes === "number" ? minutes : undefined } });
+      // The backend labels these in minutes ("Expand to 120 min"); the Drive control uses hours.
+      const minutes = typeof cp.max_drive_minutes === "number" ? cp.max_drive_minutes : undefined;
+      out.push(minutes
+        ? { title: `Drive up to ${hours(minutes)}`, detail: p.max_drive ? `Instead of ${hours(p.max_drive)}` : "A longer drive",
+          params: { ...p, max_drive: minutes } }
+        : { title: chip.label, detail: "Any distance", params: { ...p, max_drive: undefined } });
     } else if (chip.action === "drop_days") {
       out.push({ title: chip.label, detail: "Any night of the week", params: { ...p, days_of_week: undefined } });
     } else if (chip.action === "drop_tags") {
@@ -107,6 +113,15 @@ export function soonerOptions(
     }
   }
   return out;
+}
+
+/**
+ * The zero page's group name. "Not released yet" only when every place is
+ * waiting on a release; closed or full places keep the group's usual name.
+ */
+export function zeroGroupTitle(places: CampgroundResult[], p: SearchParams | null): string {
+  return places.length > 0 && places.every((r) => unavailability(r, p).kind === "not_released")
+    ? "Not released yet" : fullGroupTitle(places, p);
 }
 
 /**
@@ -122,18 +137,22 @@ export function zeroLede(results: SearchResponse, places: CampgroundResult[], p:
   const closed = kinds.filter((k) => k === "closed").length;
   const full = n - nyr - closed;
   const are = (k: number, one: string, many: string) => (k === 1 ? one : many);
+  // The answer counts every campground checked, including ones whose check
+  // failed, so a smaller count here says "of the N" rather than contradict it.
+  const checked = results.campgrounds_checked;
+  const counted = (noun: string) => (n < checked ? `${n} of the ${checked} ${noun}s` : `The ${n} ${noun}${n === 1 ? "" : "s"}`);
   if (n > 0 && nyr === n) {
     const systems = new Set(places.map((r) => r.booking_system));
     const source = systems.size === 1 ? `${SOURCE_NAMES[[...systems][0]] ?? ""} ` : "";
     const month = p?.start_date && p.end_date && p.start_date.slice(0, 7) === p.end_date.slice(0, 7)
       ? `${parseIsoDate(p.start_date).toLocaleDateString("en-US", { month: "long" })} ` : "";
     const what = searchedDays(p) && p?.mode !== "exact" ? `${month}weekends` : "dates";
-    parts.push(`The ${n} ${source}campground${n === 1 ? "" : "s"} checked ${are(n, "isn’t", "aren’t")} full.`
+    parts.push(`${counted(`${source}campground`)} checked ${are(n, "isn’t", "aren’t")} full.`
       + ` ${are(n, "Its", "Their")} ${what} just haven’t opened for booking.`);
   } else if (n > 0 && full === n) {
-    parts.push(`The ${plural(n, "campground")} checked ${are(n, "is", "are")} full on your dates.`);
+    parts.push(`${counted("campground")} checked ${are(n, "is", "are")} full on your dates.`);
   } else if (n > 0 && closed === n) {
-    parts.push(`The ${plural(n, "campground")} checked ${are(n, "isn’t", "aren’t")} taking reservations online`
+    parts.push(`${counted("campground")} checked ${are(n, "isn’t", "aren’t")} taking reservations online`
       + ` for these dates: ${are(n, "it’s", "they’re")} closed, or first-come, first-served only.`);
   } else if (n > 0 && closed === 0) {
     parts.push(`${nyr} of the ${n} campgrounds with nothing to book ${are(nyr, "hasn’t", "haven’t")} released these dates yet.`

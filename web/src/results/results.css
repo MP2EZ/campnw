@@ -467,8 +467,10 @@ button.rv2-chip:not(.rv2-chip-full):hover {
 
 .rv2-full-action {
   min-height: 2.75rem;
+  min-width: 8rem; /* Watch and Remind me line up in one column */
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   padding: 0 var(--space-3);
   border: 1px solid var(--border);

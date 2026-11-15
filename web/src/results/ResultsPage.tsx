@@ -120,6 +120,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
           limit: maxResults,
           withAvailability: cards.length,
           nearby: !!searchParams?.from_location,
+          driveLimit: !!searchParams?.max_drive,
           loading,
           onCheckRest,
         }}
