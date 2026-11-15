@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { quickPicks } from "../results/picks";
+import { MIN_PLACES, quickPicks } from "../results/picks";
 import type { CampgroundResult, SearchParams, Window } from "../api";
 
 // June 2027: Fridays are the 4th, 11th, 18th and 25th.
@@ -22,16 +22,22 @@ const place = (name: string, drive: number | null, fridays: number[], extra: Par
     ...extra,
   }) as CampgroundResult;
 
+/** Far, barely open places that never win a pick: picks need MIN_PLACES to choose between. */
+const fill = (list: CampgroundResult[], drive: number | null = 400) => [
+  ...list,
+  ...Array.from({ length: Math.max(0, MIN_PLACES - list.length) }, (_, i) => place(`Filler ${i}`, drive, [25])),
+];
+
 const summary = (picks: ReturnType<typeof quickPicks>) => picks.map((p) => [p.kicker, p.result.name, p.detail]);
 
 describe("quickPicks", () => {
   test("closest, most open weekends, and a setting worth naming: three different places", () => {
-    const picks = quickPicks([
+    const picks = quickPicks(fill([
       place("Dash Point", 48, [4, 11, 18, 25]),
       place("Lake Easton", 79, [4, 11], { tags: ["lakeside", "swimming"] }),
       place("Fort Casey", 116, [18]),
       place("Kanaskat", 72, [4, 11, 18]),
-    ], juneWeekends);
+    ]), juneWeekends);
     expect(summary(picks)).toEqual([
       ["Closest", "Dash Point", "~48m · open every June weekend"],
       ["Most open weekends", "Kanaskat", "~1h 12m · open 3 of 4 weekends"],
@@ -40,30 +46,30 @@ describe("quickPicks", () => {
   });
 
   test("ties on open weekends go to the closer place", () => {
-    const picks = quickPicks([
+    const picks = quickPicks(fill([
       place("A", 30, [4]),
       place("Far", 150, [4, 11]),
       place("Near", 90, [4, 11]),
-    ], juneWeekends);
+    ]), juneWeekends);
     expect(picks[1].result.name).toBe("Near");
   });
 
   test("a setting pick prefers the closest place with the tag", () => {
-    const picks = quickPicks([
+    const picks = quickPicks(fill([
       place("A", 30, [4, 11]),
       place("B", 40, [4, 11, 18]),
       place("River far", 150, [4], { tags: ["riverside"] }),
       place("River near", 60, [4], { tags: ["riverside"] }),
-    ], juneWeekends);
+    ]), juneWeekends);
     expect(summary(picks)[2]).toEqual(["On a river", "River near", "~1h · open Jun 4 – 6"]);
   });
 
   test("flexible searches: most open sites, and when stays start", () => {
-    const picks = quickPicks([
+    const picks = quickPicks(fill([
       place("A", 30, [8], { total_available_sites: 3 }),
       place("B", 50, [4, 11], { total_available_sites: 40 }),
       place("C", 70, [20], { total_available_sites: 9 }),
-    ], anyDay);
+    ]), anyDay);
     expect(summary(picks)).toEqual([
       ["Closest", "A", "~30m · stays from Tue Jun 8"],
       ["Most open sites", "B", "~50m · 40 sites open"],
@@ -71,22 +77,26 @@ describe("quickPicks", () => {
   });
 
   test("boat-in places and unknown drives can't be closest", () => {
-    const picks = quickPicks([
+    const picks = quickPicks(fill([
       place("Island", 10, [4], { boat_in: true }),
       place("Unknown", null, [4]),
       place("Road", 80, [4]),
       place("Other", 90, [4, 11]),
-    ], juneWeekends);
+    ]), juneWeekends);
     expect(picks[0]).toMatchObject({ kicker: "Closest", result: expect.objectContaining({ name: "Road" }) });
   });
 
   test("with no drive times there's no closest pick", () => {
-    const picks = quickPicks([place("A", null, [4]), place("B", null, [4, 11]), place("C", null, [4])],
+    const picks = quickPicks(fill([place("A", null, [4]), place("B", null, [4, 11]), place("C", null, [4])], null),
       juneWeekends);
     expect(picks.map((p) => p.kicker)).toEqual(["Most open weekends"]);
   });
 
-  test("too few places to choose between gives no picks", () => {
-    expect(quickPicks([place("A", 30, [4]), place("B", 50, [4, 11])], juneWeekends)).toEqual([]);
+  test("picks only show when they save scrolling: fewer than 6 places, the list is short enough (UX #13)", () => {
+    // Prod, Feb search: 4 results, 3 of them repeated as tiles above the list.
+    const four = [place("A", 30, [4]), place("B", 50, [4, 11]), place("C", 70, [18]), place("D", 90, [25])];
+    expect(MIN_PLACES).toBe(6);
+    expect(quickPicks([...four, place("E", 95, [4])], juneWeekends)).toEqual([]);
+    expect(quickPicks(fill(four), juneWeekends)).not.toEqual([]);
   });
 });

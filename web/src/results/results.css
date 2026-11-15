@@ -534,7 +534,8 @@ button.rv2-chip-watch:hover {
 
 .rv2-picks-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Two picks fill the row rather than leaving a third column empty (UX #13). */
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
@@ -580,9 +581,34 @@ button.rv2-chip-watch:hover {
   color: var(--text-muted);
 }
 
+/* Phones: one row that scrolls sideways, so the first card is nearer the fold (UX #11). */
 @media (max-width: 640px) {
   .rv2-picks-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 72%;
+    gap: var(--space-2);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin-inline: calc(-1 * var(--space-3));
+    padding-inline: var(--space-3);
+    scroll-padding-inline: var(--space-3);
+    scrollbar-width: none;
+  }
+  .rv2-picks-grid::-webkit-scrollbar { display: none; }
+  .rv2-picks-grid > li { scroll-snap-align: start; }
+
+  .rv2-pick {
+    padding: var(--space-3);
+  }
+
+  .rv2-pick-name {
+    font-size: var(--text-md);
+  }
+
+  .rv2-notice-info {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
   }
 }
 
@@ -764,8 +790,10 @@ button.rv2-chip-watch:hover {
     overflow-x: auto;
     /* Scroll edge to edge: bleed through .app's phone padding. */
     margin-inline: calc(-1 * var(--space-3));
-    padding: 0.3rem var(--space-3);
+    padding: 0.3rem var(--space-7) 0.3rem var(--space-3);
     scrollbar-width: none;
+    /* The right edge fades so a cut-off chip reads as "scrolls", not as clipped (UX #30). */
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--space-7)), transparent);
   }
   .rv2-dates::-webkit-scrollbar { display: none; }
 }
