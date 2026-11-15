@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import sys
 from datetime import date
@@ -481,6 +482,27 @@ async def cmd_enrich(args: argparse.Namespace) -> None:
         print("ERROR: ANTHROPIC_API_KEY not set in .env")
         sys.exit(1)
 
+    if getattr(args, "only_pitch", False):
+        from pnw_campsites.enrichment.llm_tags import regenerate_descriptions
+        from pnw_campsites.registry.pitch_fixture import FIXTURE_PATH
+
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        rewritten, cleared, failed, usage = await regenerate_descriptions(
+            api_key=api_key,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            export_path=FIXTURE_PATH,
+        )
+        print(
+            f"Rewrote copy for {rewritten} campground(s), cleared {cleared} "
+            f"with no facts, {failed} failed. "
+            f"Tokens: {usage['input_tokens']} in, {usage['output_tokens']} out."
+        )
+        if not args.dry_run:
+            print(f"Exported to {FIXTURE_PATH}; commit it to ship the copy.")
+        return
+
     if getattr(args, "batch", False) or getattr(args, "batch_id", None):
         from pnw_campsites.enrichment.batch import enrich_registry_batch
 
@@ -707,6 +729,14 @@ def main() -> None:
         type=float,
         default=0.5,
         help="Confidence threshold for truncation detection (0.0-1.0, default: 0.5)",
+    )
+    p_enrich.add_argument(
+        "--only-pitch",
+        action="store_true",
+        help="Rewrite pitch, description and best-for for every campground, "
+        "overwriting existing copy (tags and vibe untouched; campgrounds with "
+        "no tags, notes or site count are cleared), and export the "
+        "pitch fixture that ships the copy to prod",
     )
 
     # --- doctor ---

@@ -12,6 +12,7 @@ from typing import NamedTuple
 
 from pnw_campsites.geo import haversine_miles
 from pnw_campsites.registry.models import BookingSystem, Campground
+from pnw_campsites.registry.pitch_fixture import apply_pitch_fixture
 from pnw_campsites.registry.tag_overrides import apply_tag_overrides
 from pnw_campsites.registry.wa_site_fixture import apply_wa_site_fixture
 
@@ -217,6 +218,9 @@ class CampgroundRegistry:
         # WA site names, capacity and equipment, seeded off-box (GoingToCamp
         # blocks Fly) and shipped as a fixture.
         apply_wa_site_fixture(self._conn)
+        # LLM pitch/description/best-for copy, regenerated off-box and shipped
+        # as a fixture for the same reason.
+        apply_pitch_fixture(self._conn)
 
     def close(self) -> None:
         self._conn.close()

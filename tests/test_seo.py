@@ -217,6 +217,23 @@ class TestCampgroundProfile:
         assert "Cache-Control" in resp.headers
         assert "max-age=3600" in resp.headers["Cache-Control"]
 
+    def test_empty_pitch_leaves_out_pitch_and_vibe(self, seo_client):
+        # The regen clears copy for campgrounds with no facts. The page must not
+        # print an empty pitch line or fall back to the old LLM vibe for SEO.
+        from pnw_campsites import api as api_module
+
+        reg = api_module._registry
+        cg = reg.get_by_facility_id("300", BookingSystem.RECGOV)
+        reg.update_description(cg.id, "", "", "")
+        reg.update_vibe(cg.id, "Serene old-growth haven for solitude seekers")
+
+        resp = seo_client.get("/campgrounds/wa/ohanapecosh")
+
+        assert resp.status_code == 200
+        assert "profile__pitch" not in resp.text
+        assert '<meta name="description" content="Ohanapecosh campground in' in resp.text
+        assert '"description": "Ohanapecosh campground in Washington."' in resp.text
+
     def test_404_invalid_state(self, seo_client):
         resp = seo_client.get("/campgrounds/xx/anything")
         assert resp.status_code == 404

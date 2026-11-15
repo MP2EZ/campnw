@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ cg.name }} — Camping in {{ state_name }}{% endblock %}
-{% block description %}{{ cg.elevator_pitch or cg.vibe or (cg.name ~ ' campground in ' ~ state_name ~ '. ' ~ cg.region ~ '.') }}{% endblock %}
+{% block description %}{{ cg.elevator_pitch or (cg.name ~ ' campground in ' ~ state_name ~ '. ' ~ cg.region ~ '.') }}{% endblock %}
 
 {% block jsonld %}
 <script type="application/ld+json">
@@ -9,7 +9,7 @@
   "@context": "https://schema.org",
   "@type": "Campground",
   "name": {{ cg.name | tojson }},
-  "description": {{ (cg.description_rewrite or cg.elevator_pitch or cg.vibe or '') | tojson }},
+  "description": {{ (cg.description_rewrite or cg.elevator_pitch or (cg.name ~ ' campground in ' ~ state_name ~ '.')) | tojson }},
   "url": {{ canonical_url | tojson }},
   {% if cg.latitude and cg.longitude %}
   "geo": {
