@@ -107,7 +107,7 @@ const v2Place = (id: string, name: string, drive: number | null, extra: Partial<
   ...extra,
 }) as CampgroundResult;
 
-function renderV2() {
+function renderV2(more: CampgroundResult[] = []) {
   const results = [
     v2Place("1", "Dash Point State Park", 48),
     v2Place("2", "Kanaskat-Palmer State Park", 72, {
@@ -115,6 +115,7 @@ function renderV2() {
       not_released_ranges: [{ start: "2027-06-25", end: "2027-06-30", releases_on: "2026-09-25" }],
     }),
     v2Place("3", "Blake Island State Park", null, { boat_in: true, tags: ["boat-in", "beach"] }),
+    ...more,
   ];
   const ctx: SearchContextValue = {
     results: { campgrounds_checked: 4, campgrounds_with_availability: 3, results, warnings: [],
@@ -140,7 +141,8 @@ describe("Accessibility: results v2", () => {
   });
 
   test("quick picks render and pass axe", async () => {
-    const { container } = renderV2();
+    // Picks need 6 places (UX #13).
+    const { container } = renderV2(["5", "6", "7"].map((id) => v2Place(id, `Park ${id}`, 150 + Number(id))));
     expect(screen.getByRole("heading", { name: "Quick picks" })).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
   });

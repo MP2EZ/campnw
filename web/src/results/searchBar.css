@@ -176,7 +176,13 @@
 }
 .sb-go:hover,
 .sb-ask-go:hover:not(:disabled) { background: var(--accent-hover); }
-.sb-ask-go:disabled { opacity: 0.5; cursor: default; }
+/* Empty: an outline, not a half-faded green block that reads as a stray shape (UX #12). */
+.sb-ask-go:disabled {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: default;
+}
 
 .sb-link {
   align-self: flex-start;

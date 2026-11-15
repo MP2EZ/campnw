@@ -13,7 +13,8 @@ describe("QuickPicks", () => {
   test("each pick is a link to its card that reports the pick", async () => {
     const onPick = vi.fn();
     render(<QuickPicks params={anyDay} onPick={onPick}
-      results={[place("1", 30, 2), place("2", 60, 40), place("3", 90, 5)]} />);
+      results={[place("1", 30, 2), place("2", 60, 40), place("3", 90, 5),
+        place("4", 300, 1), place("5", 310, 1), place("6", 320, 1)]} />);
     expect(screen.getByRole("heading", { name: "Quick picks" })).toBeInTheDocument();
     const closest = screen.getByRole("link", { name: /Closest Place 1/ });
     expect(closest).toHaveAttribute("href", "#rv2-card-1");

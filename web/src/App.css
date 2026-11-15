@@ -680,8 +680,27 @@ h1, h2, h3 {
     display: none;
   }
 
+  /* Pushes the menu to the right edge on pages without the search bar (UX #5). */
   .header-actions {
-    margin-left: 0;
+    margin-left: auto;
+  }
+
+  .mobile-menu-btn {
+    min-width: 44px;
+  }
+
+  .mode-tab {
+    min-height: 44px;
+  }
+
+  /* After a search the tabs only cost height: Plan a Trip is in the menu (UX #11). */
+  .home-frame:has(.results-v2) > .mode-tabs {
+    display: none;
+  }
+
+  .site-footer-nav a {
+    display: inline-block;
+    padding-block: var(--space-3);
   }
 
   .home-intro h1 {
