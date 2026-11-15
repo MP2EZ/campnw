@@ -1,5 +1,6 @@
 import type { CampgroundResult, SearchParams, Window } from "../api";
 import { parseIsoDate } from "../lib/dates";
+import { displayName } from "../lib/displayName";
 import { addDays, nightRuns, nightsIn, searchedDays, type Stay } from "./candidates";
 import type { WindowChip } from "./chips";
 import { NOT_LISTED } from "./fit";
@@ -40,6 +41,12 @@ const TITLES: Record<SiteKind, string> = {
   cabin: "Cabins and yurts",
   unlisted: NOT_LISTED,
 };
+/** "Tent and van sites" only when both are there (UX #18). */
+function title(kind: SiteKind, takes: { tent: boolean; van: boolean }): string {
+  if (kind !== "tent" || (takes.tent && takes.van)) return TITLES[kind];
+  return takes.tent ? "Tent sites" : "Van sites";
+}
+
 const ORDER: SiteKind[] = ["tent", "rv", "walk_in", "group", "cabin", "unlisted"];
 
 function kindOf(w: Window): SiteKind {
@@ -96,7 +103,7 @@ export function partLabel(part: Stay, stay: Stay): string {
 
 /** "Loop F" for a bare letter; empty when the loop is just the campground's name. */
 function loopLabel(loop: string, campground: string): string {
-  const l = loop.trim();
+  const l = displayName(loop.trim());
   if (!l || l.toLowerCase() === campground.toLowerCase()) return "";
   return /loop/i.test(l) ? l : `Loop ${l}`;
 }
@@ -127,14 +134,17 @@ export function panelGroups(
   }
 
   const groups = new Map<SiteKind, PanelSite[]>();
+  const takes = new Map<SiteKind, { tent: boolean; van: boolean }>();
   for (const [id, { windows, spans }] of sites) {
     const [start, end] = siteStay(spans, chip.stay);
     const w = windows.find((x) => x.start_date <= start && x.end_date >= start) ?? windows[0];
     const own = stayUrl(w.booking_url, start, end);
     const kind = kindOf(w);
+    const t = takes.get(kind) ?? { tent: false, van: false };
+    takes.set(kind, { tent: t.tent || !!w.fits_tent, van: t.van || !!w.fits_van });
     if (!groups.has(kind)) groups.set(kind, []);
     groups.get(kind)!.push({
-      id, name: w.site_name, loop: loopLabel(w.loop, result.name), kind, fit: siteFit(w),
+      id, name: displayName(w.site_name), loop: loopLabel(w.loop, result.name), kind, fit: siteFit(w),
       people: w.max_people_known === false ? null : w.max_people,
       hookups: !!w.hookups, walkIn: !!w.walk_in, start, end,
       part: start === chip.stay.start && end === chip.stay.end ? null : { start, end },
@@ -145,5 +155,5 @@ export function panelGroups(
 
   const order = params?.equipment === "trailer" ? ["rv", ...ORDER.filter((k) => k !== "rv")] as SiteKind[] : ORDER;
   return order.filter((k) => groups.has(k))
-    .map((kind) => ({ kind, title: TITLES[kind], sites: groups.get(kind)!.sort(byName) }));
+    .map((kind) => ({ kind, title: title(kind, takes.get(kind)!), sites: groups.get(kind)!.sort(byName) }));
 }

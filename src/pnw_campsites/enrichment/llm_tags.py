@@ -215,8 +215,8 @@ async def generate_description(
     prompt = (
         "Generate three descriptions for this campground. Return ONLY a JSON "
         "object with these keys:\n"
-        '- "elevator_pitch": One sentence (max 120 chars) for a search result '
-        "card. Capture what makes this place distinctive.\n"
+        '- "elevator_pitch": One plain sentence (max 120 chars) for a search '
+        "result card: the setting and what is there, stated as fact.\n"
         '- "description_rewrite": 2-3 sentences (max 350 chars) for an expanded '
         "view. Setting, key activities, what sets it apart.\n"
         '- "best_for": A short label (max 50 chars) for who this campground is '
@@ -229,7 +229,10 @@ async def generate_description(
         f"{vibe_str}\n"
         f"Original description: {source_desc}\n\n"
         "Constraints: Only reference features explicitly stated above. Do not "
-        "invent amenities. Be specific, not generic. Return ONLY the JSON."
+        "invent amenities. Be specific, not generic. Write plain, factual "
+        "copy, not marketing: no words like peaceful, perfect, cozy, stunning, "
+        "pristine or haven, and no 'perfect for' or 'seekers'. "
+        "Return ONLY the JSON."
     )
 
     try:

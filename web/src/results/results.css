@@ -197,12 +197,6 @@
   min-width: 0;
 }
 
-.rv2-card-pitch {
-  margin: 0;
-  font-size: var(--text-md);
-  color: var(--text);
-}
-
 .rv2-card-muted,
 .rv2-fit.rv2-card-muted {
   color: var(--text-muted);
@@ -236,13 +230,6 @@
 
   .rv2-card-name {
     font-size: var(--text-lg);
-  }
-
-  .rv2-card-pitch {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
 }
 

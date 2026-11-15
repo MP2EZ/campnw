@@ -87,7 +87,8 @@ def _build_prompt(cg: Campground) -> str:
         f'- "tags": array of tags from this list: {json.dumps(VALID_TAGS)}\n'
         '  Only include tags clearly supported by the description.\n'
         '- "vibe": One sentence (max 100 chars) capturing the feel or character.\n'
-        '- "elevator_pitch": One sentence (max 120 chars) for a search result card.\n'
+        '- "elevator_pitch": One plain sentence (max 120 chars) for a search result '
+        "card: the setting and what is there, stated as fact.\n"
         '- "description_rewrite": 2-3 sentences (max 350 chars) for an expanded view.\n'
         '- "best_for": Short label (max 50 chars) for who this campground suits.\n\n'
         f"Campground: {cg.name}\n"
@@ -96,7 +97,9 @@ def _build_prompt(cg: Campground) -> str:
         f"{size_hint}\n"
         f"Description: {description[:2000]}\n\n"
         "Only reference features explicitly stated. No invented amenities. "
-        "Return ONLY the JSON object."
+        "Write plain, factual copy, not marketing: no words like peaceful, "
+        "perfect, cozy, stunning, pristine or haven, and no 'perfect for' or "
+        "'seekers'. Return ONLY the JSON object."
     )
 
 

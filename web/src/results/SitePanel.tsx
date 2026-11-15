@@ -3,6 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CampgroundResult, SearchParams } from "../api";
 import { formatDriveTime } from "../lib/dates";
+import { displayName } from "../lib/displayName";
 import { IconClose, IconExternal } from "../icons";
 import { FEW_LEFT, type WindowChip } from "./chips";
 import { BOOKING_SITES, handoffCopy, stayLabel } from "./handoff";
@@ -82,7 +83,7 @@ export function SitePanel({ result, chip, params, returnFocus, onClose, onBook }
       <div ref={panel} className="rv2-panel" role="dialog" aria-modal="true" aria-labelledby={`${id}-h`} tabIndex={-1}>
         <div className="rv2-panel-head">
           <div className="rv2-panel-titles">
-            <h2 id={`${id}-h`} className="rv2-panel-title">{result.name}</h2>
+            <h2 id={`${id}-h`} className="rv2-panel-title">{displayName(result.name)}</h2>
             <p className="rv2-panel-stay">{stayLabel(chip.stay.start, chip.stay.end)}</p>
             {meta && <p className="rv2-panel-meta">{meta}</p>}
           </div>
