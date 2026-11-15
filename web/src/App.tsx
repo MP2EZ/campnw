@@ -111,19 +111,6 @@ function RecommendationRow({
   );
 }
 
-function ResultsSkeleton() {
-  return (
-    <div className="results-skeleton" aria-busy="true" aria-label="Loading results">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="skeleton-card">
-          <div className="skeleton-line skeleton-title" />
-          <div className="skeleton-line skeleton-summary" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 
 // ─── App ─────────────────────────────────────────────────────────────
 
@@ -427,8 +414,6 @@ export default function App() {
       {user?.recommendations_enabled && <RecommendationRow onSearch={handleSearch} />}
 
       {error && <div className="error-banner" role="alert">{error}</div>}
-
-      {loading && (!results || results.results.length === 0) && <ResultsSkeleton />}
 
       {results && (
         <Suspense fallback={null}>

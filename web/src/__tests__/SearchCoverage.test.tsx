@@ -60,6 +60,21 @@ describe("SearchCoverage", () => {
     expect(screen.getByText(/Showing the 20 closest/)).toBeInTheDocument();
   });
 
+  test("while running, counts against the planned total once it is known", () => {
+    render(<SearchCoverage {...base} matched={undefined} checked={44} planned={60} loading />);
+    expect(screen.getByText(/^Checked 44 of 60 campgrounds — 5 with availability/)).toBeInTheDocument();
+  });
+
+  test("while running with no planned total yet, says the count is so far", () => {
+    render(<SearchCoverage {...base} matched={undefined} checked={3} loading />);
+    expect(screen.getByText(/^Checked 3 campgrounds so far — 5 with availability/)).toBeInTheDocument();
+  });
+
+  test("once finished, the planned total no longer shows", () => {
+    render(<SearchCoverage {...base} matched={undefined} checked={60} planned={60} />);
+    expect(screen.getByText(/^Checked 60 campgrounds — 5 with availability/)).toBeInTheDocument();
+  });
+
   test("no button while the search is still running", () => {
     render(<SearchCoverage {...base} loading />);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();

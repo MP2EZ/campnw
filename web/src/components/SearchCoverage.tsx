@@ -7,6 +7,8 @@ interface Props {
   checked: number;
   /** Undefined until the stream reports it; reads as "not capped". */
   matched?: number;
+  /** How many the running search will check, once the stream has said. */
+  planned?: number;
   /** The `limit` the search ran with. */
   limit: number;
   withAvailability: number;
@@ -24,15 +26,19 @@ interface Props {
  * than letting a capped search read as a complete one.
  */
 export function SearchCoverage({
-  checked, matched, limit, withAvailability, nearby, loading, onCheckRest, after,
+  checked, matched, planned, limit, withAvailability, nearby, loading, onCheckRest, after,
 }: Props) {
   const capped = matched !== undefined && matched > checked;
   const availability = `${withAvailability} with availability`;
 
   if (!capped) {
+    // While running, a bare count reads as unbounded (it can sit still for 20s
+    // on a slow provider), so give it the total it's heading for.
+    const count = !loading ? `${checked} campgrounds`
+      : planned ? `${checked} of ${planned} campgrounds` : `${checked} campgrounds so far`;
     return (
       <p className="results-summary">
-        Checked {checked} campgrounds — {availability}{after}
+        Checked {count} — {availability}{after}
       </p>
     );
   }

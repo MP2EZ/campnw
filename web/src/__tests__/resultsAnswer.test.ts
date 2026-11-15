@@ -89,16 +89,25 @@ describe("answerSentence", () => {
       .toBe("3 campgrounds have a June weekend open within 3 hours of Seattle, from a search that didn’t finish.");
   });
 
-  test("while loading it describes the search, not a count", () => {
-    expect(answerSentence({ ...done, params: juneWeekends, open: 3, loading: true })).toBe(
-      "Checking campgrounds for a June weekend open within 3 hours of Seattle…",
-    );
+  test.each<[string, Partial<SearchParams>, string]>([
+    ["weekends", {}, "Looking for an open June weekend within 3 hours of Seattle…"],
+    ["weekend nights", { nights: 1 }, "Looking for an open June weekend night within 3 hours of Seattle…"],
+    ["a partial month names the range", { start_date: "2027-06-05", end_date: "2027-06-20" },
+      "Looking for an open weekend Jun 5 – 20 within 3 hours of Seattle…"],
+    ["no day filter names the stay length", { days_of_week: undefined },
+      "Looking for an open 2-night stay in June within 3 hours of Seattle…"],
+    ["exact dates", { mode: "exact", start_date: "2027-06-04", end_date: "2027-06-06" },
+      "Looking for sites open Jun 4 – 6 within 3 hours of Seattle…"],
+    ["no drive limit", { max_drive: undefined }, "Looking for an open June weekend…"],
+  ])("while loading it describes the search, not a count: %s", (_, override, expected) => {
+    expect(answerSentence({ ...done, params: { ...juneWeekends, ...override }, open: 3, loading: true }))
+      .toBe(expected);
   });
 
   test("an NL query before its dates are parsed claims no dates", () => {
     const nl: SearchParams = { start_date: "", end_date: "", q: "lake camping soon" };
     expect(answerSentence({ ...done, params: nl, open: 0, checked: 0, loading: true })).toBe(
-      "Checking campgrounds…",
+      "Looking for open sites…",
     );
     expect(answerSentence({ ...done, params: nl, open: 5 })).toBe("5 campgrounds have sites open.");
   });
