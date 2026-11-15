@@ -14,6 +14,8 @@
   --border-input: #ccc;
   --accent: #2d5016;
   --accent-hover: #3a6b1e;
+  /* Green text on the page (dark mode lightens it; --accent is for fills). */
+  --accent-text: #2d5016;
   --chip-bg: #f0f7e8;
   --chip-border: #c5dbb0;
   --chip-hover: #e0efd0;
@@ -240,16 +242,20 @@ h1, h2, h3 {
 }
 
 /* The search page's frame: as wide as the results' list + map split
-   (results.css .rv2-split--map), with the header lined up to it. */
+   (results.css .rv2-split--map). The header and footer use it on every
+   page, so the wordmark and footer don't move between pages (UX #14). */
 @media (min-width: 1024px) {
-  .home-frame--wide {
+  :root {
     --frame-w: min(1360px, calc(100vw - 2 * var(--space-7)));
+  }
+
+  .home-frame--wide {
     width: var(--frame-w);
     margin-inline: calc((100% - var(--frame-w)) / 2);
   }
 
-  .app-header.has-search .header-row {
-    max-width: calc(min(1360px, 100vw - 2 * var(--space-7)) + 2 * var(--space-4));
+  .header-row {
+    max-width: calc(var(--frame-w) + 2 * var(--space-4));
   }
 }
 
@@ -266,12 +272,15 @@ h1, h2, h3 {
   margin-left: auto;
 }
 
-/* Not enough room for one row: the bar takes the second. */
-@media (max-width: 1100px) {
+/* Too narrow for the segmented bar's values: the compact bar (searchBar.css)
+   keeps the header to one row, beside the mark alone (UX #21). */
+@media (max-width: 1279px) {
   .header-search {
-    order: 3;
-    flex-basis: 100%;
-    max-width: none;
+    flex: 1 1 10rem;
+  }
+
+  .app-header.has-search .wordmark-link [data-tone] > span:last-child {
+    display: none;
   }
 }
 
@@ -675,11 +684,6 @@ h1, h2, h3 {
     flex: 1 1 auto;
   }
 
-  /* Next to the bar, the mark alone (the link keeps its aria-label). */
-  .app-header.has-search .wordmark-link [data-tone] > span:last-child {
-    display: none;
-  }
-
   /* Pushes the menu to the right edge on pages without the search bar (UX #5). */
   .header-actions {
     margin-left: auto;
@@ -687,6 +691,11 @@ h1, h2, h3 {
 
   .mobile-menu-btn {
     min-width: 44px;
+  }
+
+  .trips-signed-out .btn-primary,
+  .pricing-card .btn-primary {
+    min-height: 44px;
   }
 
   .mode-tab {
@@ -1807,9 +1816,10 @@ a.header-btn {
   color: var(--text);
 }
 
+/* --accent-text: dark mode's --accent is 2.8:1 on the page (UX #15). */
 .mode-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--accent-text);
+  border-bottom-color: var(--accent-text);
   font-weight: var(--weight-semi);
 }
 
@@ -1937,6 +1947,18 @@ a.header-btn {
 
 .trip-delete-btn:hover {
   color: var(--error-text);
+}
+
+.trips-signed-out {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+}
+
+.trips-signed-out p {
+  margin: 0;
 }
 
 .trips-empty,
@@ -2581,6 +2603,19 @@ a.header-btn {
   font-size: var(--text-sm);
   color: var(--text);
   opacity: 0.6;
+}
+
+/* The footer spans the same frame as the header (see .home-frame--wide). */
+@media (min-width: 1024px) {
+  .site-footer {
+    width: var(--frame-w);
+    margin-inline: calc((100% - var(--frame-w)) / 2);
+    padding-inline: 0;
+  }
+
+  .site-footer-inner {
+    max-width: none;
+  }
 }
 
 .pricing-header {

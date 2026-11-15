@@ -141,7 +141,6 @@ export function UpgradeModal({
             <li>Unlimited watches (vs 3 free)</li>
             <li>5-minute polling (vs 15 free)</li>
             <li>20 trip planner sessions/month (vs 3 free)</li>
-            <li>Anomaly-based deal alerts</li>
             <li>Cancel anytime via portal</li>
           </ul>
 

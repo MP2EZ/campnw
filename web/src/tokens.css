@@ -134,6 +134,8 @@
   --text-title: 1.375rem;        /* card and drive-band titles */
   --leading-display: 1.1;
   --radius-2xl: 16px;
+  --radius-card: 20px;           /* results cards and panels (16px is for sheets) */
+  --scrim: rgba(26, 26, 26, 0.4); /* behind sheets and the site panel */
   /* Map pins (D13): shape carries the meaning, colour only reinforces it. */
   --pin-open: #2d5016;
   --pin-boat: #1d4a5a;

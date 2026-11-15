@@ -65,7 +65,7 @@ Brand colors are defined in `web/src/tokens.css` as `--brand-green`, `--brand-bl
 - `favicon.svg` — 16px optimized pin drop
 - `logo-option-a-pin.svg` — full 512px mark
 
-**Wordmark:** "camp" (weight 500) + "able" (weight 700) in Plus Jakarta Sans. Single baseline, no gap. See `web/src/Wordmark.tsx`.
+**Wordmark:** "campable", lowercase, one word at weight 600 in the system monospace stack (`ui-monospace`, SF Mono, JetBrains Mono, Menlo…), to the right of the mark. Beside the compact search bar (up to 1279px wide) only the mark shows. See `web/src/components/brand/Lockup.tsx`.
 
 **Rules:**
 - Minimum size: 16px (favicon)

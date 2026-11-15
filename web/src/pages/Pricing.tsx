@@ -14,6 +14,7 @@ import { Helmet } from "react-helmet-async";
 import { useAuth } from "../hooks/useAuth";
 import { useBilling } from "../hooks/useBilling";
 import { track } from "../api";
+import { requestSignIn } from "../lib/signIn";
 
 interface Row {
   feature: string;
@@ -23,12 +24,11 @@ interface Row {
 
 const COMPARISON: Row[] = [
   { feature: "Search (all providers, all filters)", free: "Unlimited", pro: "Unlimited" },
-  { feature: "Calendar heat map, smart search, vibes", free: "Yes", pro: "Yes" },
+  { feature: "Plain-language search", free: "Yes", pro: "Yes" },
   { feature: "Booking links + shareable searches", free: "Yes", pro: "Yes" },
   { feature: "Simultaneous active watches", free: "3", pro: "Unlimited" },
   { feature: "Watch polling interval", free: "15 min", pro: "5 min" },
   { feature: "Trip planner sessions per month", free: "3", pro: "20" },
-  { feature: "Anomaly-based deal alerts", free: "—", pro: "Yes" },
   { feature: "Data export + account deletion", free: "Yes", pro: "Yes" },
 ];
 
@@ -75,7 +75,7 @@ export default function Pricing() {
         <title>Pricing · Campable</title>
         <meta
           name="description"
-          content="Campable is free for search and 3 watches. Pro is $5/month for unlimited watches, faster polling, and deal alerts."
+          content="Campable is free for search and 3 watches. Pro is $5/month for unlimited watches, faster polling, and more trip planner sessions."
         />
       </Helmet>
 
@@ -101,7 +101,7 @@ export default function Pricing() {
               <li>All search + discovery features</li>
               <li>3 watches with 15-min polling</li>
               <li>3 trip planner sessions/month</li>
-              <li>Web push + email notifications</li>
+              <li>Web push notifications</li>
             </ul>
           </article>
 
@@ -115,7 +115,6 @@ export default function Pricing() {
               <li>Unlimited watches</li>
               <li>5-min polling for time-sensitive openings</li>
               <li>20 trip planner sessions/month</li>
-              <li>Anomaly-based deal alerts</li>
               <li>Cancel anytime via Stripe portal</li>
             </ul>
 
@@ -128,7 +127,9 @@ export default function Pricing() {
                 Loading…
               </button>
             ) : !user ? (
-              <p className="pricing-cta-note">Sign in to upgrade.</p>
+              <button type="button" className="btn-primary" onClick={() => requestSignIn("pricing_page")}>
+                Sign in to upgrade
+              </button>
             ) : isPro ? (
               <button
                 type="button"
@@ -181,7 +182,7 @@ export default function Pricing() {
           <h2 id="faq-heading">A few honest answers</h2>
           <dl>
             <dt>Will the free tier always be free?</dt>
-            <dd>Yes. Search and basic monitoring stay free indefinitely.</dd>
+            <dd>Yes. Search and three watches stay free indefinitely.</dd>
 
             <dt>How do I cancel?</dt>
             <dd>
@@ -191,8 +192,9 @@ export default function Pricing() {
 
             <dt>What happens to my watches if I downgrade?</dt>
             <dd>
-              They&rsquo;re paused, never deleted. Re-enable them by upgrading
-              again — no data loss.
+              They keep running, every 15 minutes instead of 5, and nothing
+              is deleted. You can&rsquo;t add a new watch while you have 3 or
+              more.
             </dd>
 
             <dt>Where do payments go?</dt>

@@ -16,14 +16,14 @@
   align-items: center;
 }
 
+/* Sized by content, so a long When or Who takes the room a short Where or
+   Drive doesn't need (UX #21). */
 .sb-seg-slot {
   display: flex;
   align-items: center;
   min-width: 0;
-  flex: 1.15 1 0;
+  flex: 1 1 auto;
 }
-.sb-seg-slot:nth-child(2) { flex-grow: 1.3; }
-.sb-seg-slot:nth-child(4) { flex-grow: 0.9; }
 
 .sb-divider {
   flex: none;
@@ -303,7 +303,8 @@
 /* ── Mobile ──────────────────────────────────────────────────────── */
 .sb-compact { display: none; }
 
-@media (max-width: 640px) {
+/* Up to 1279px (App.css .header-search), the compact bar and its sheet. */
+@media (max-width: 1279px) {
   .sb { padding: 0.35rem 0.35rem 0.35rem var(--space-3); }
   .sb-segments { display: none; }
   .sb-compact {
@@ -312,7 +313,15 @@
     gap: 0.35rem;
   }
   .sb-compact .sb-submit { flex-basis: 44px; width: 44px; height: 44px; }
+}
+
+@media (max-width: 640px) {
   .sb-ask { padding-left: 0; }
+}
+
+/* Laptop widths: tighter segments, so the values fit beside the wordmark. */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .sb-seg-btn { padding-inline: var(--space-3); }
 }
 
 .sb-compact-btn {
@@ -345,7 +354,7 @@
   z-index: var(--z-modal);
   display: flex;
   align-items: flex-end;
-  background: rgba(26, 26, 26, 0.4);
+  background: var(--scrim);
 }
 
 .sb-sheet {
