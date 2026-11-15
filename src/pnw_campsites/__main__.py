@@ -488,14 +488,15 @@ async def cmd_enrich(args: argparse.Namespace) -> None:
 
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         logging.getLogger("httpx").setLevel(logging.WARNING)
-        rewritten, failed, usage = await regenerate_descriptions(
+        rewritten, cleared, failed, usage = await regenerate_descriptions(
             api_key=api_key,
             limit=args.limit,
             dry_run=args.dry_run,
             export_path=FIXTURE_PATH,
         )
         print(
-            f"Rewrote copy for {rewritten} campground(s), {failed} failed. "
+            f"Rewrote copy for {rewritten} campground(s), cleared {cleared} "
+            f"with no facts, {failed} failed. "
             f"Tokens: {usage['input_tokens']} in, {usage['output_tokens']} out."
         )
         if not args.dry_run:
@@ -733,7 +734,8 @@ def main() -> None:
         "--only-pitch",
         action="store_true",
         help="Rewrite pitch, description and best-for for every campground, "
-        "overwriting existing copy (tags and vibe untouched), and export the "
+        "overwriting existing copy (tags and vibe untouched; campgrounds with "
+        "no tags, notes or site count are cleared), and export the "
         "pitch fixture that ships the copy to prod",
     )
 

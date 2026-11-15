@@ -132,17 +132,23 @@ class TestExport:
     def test_round_trip(self, registry, tmp_path):
         _add(registry, "200", pitch="Riverside camp with 12 sites.")
         _add(registry, "-5", BookingSystem.WA_STATE, pitch="Saltwater park with 80 sites.")
-        _add(registry, "300")  # no pitch: left out
+        _add(registry, "300")  # copy cleared by the regen
         path = tmp_path / "p.json"
 
-        assert export_pitch_fixture(registry._conn, path) == 2
+        assert export_pitch_fixture(registry._conn, path) == 3
 
         other = CampgroundRegistry(tmp_path / "other.db")
         _add(other, "200")
         _add(other, "-5", BookingSystem.WA_STATE)
-        assert apply_pitch_fixture(other._conn, path) == 2
+        _add(other, "300", pitch="Secluded haven for adventure seekers.")
+        assert apply_pitch_fixture(other._conn, path) == 3
         assert _pitch(other, "200") == "Riverside camp with 12 sites."
         assert _pitch(other, "-5", BookingSystem.WA_STATE) == "Saltwater park with 80 sites."
+        # Empty copy in the fixture clears the old marketing copy.
+        cleared = other.get_by_facility_id("300", BookingSystem.RECGOV)
+        assert (cleared.elevator_pitch, cleared.description_rewrite, cleared.best_for) == (
+            "", "", "",
+        )
         other.close()
 
     def test_one_row_per_line_sorted(self, registry, tmp_path):
@@ -163,6 +169,6 @@ def test_checked_in_fixture_is_valid():
     rows = json.loads(FIXTURE_PATH.read_text())["pitches"]
     keys = {(r["booking_system"], r["facility_id"]) for r in rows}
     assert len(keys) == len(rows)
+    assert sum(bool(r["elevator_pitch"]) for r in rows) > len(rows) // 3
     for r in rows:
-        assert r["elevator_pitch"], r
         assert len(r["elevator_pitch"]) <= 120, r

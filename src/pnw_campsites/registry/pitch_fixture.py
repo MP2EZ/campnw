@@ -8,7 +8,7 @@ exports ``elevator_pitch``, ``description_rewrite`` and ``best_for`` to
 
 Rules:
 - Keyed by ``(booking_system, facility_id)``. Rows the registry lacks are skipped;
-  campgrounds the fixture lacks are left alone.
+  campgrounds the fixture lacks are left alone. An empty field clears the copy.
 - The fixture's sha256 is recorded in ``registry_meta``; an unchanged fixture
   costs one hash and one lookup per registry open, and local edits made after
   an import survive until the fixture changes.
@@ -33,11 +33,12 @@ _COLS = ("booking_system", "facility_id", "elevator_pitch", "description_rewrite
 
 
 def export_pitch_fixture(conn: sqlite3.Connection, path: Path | None = None) -> int:
-    """Write every campground with a pitch to the fixture. Returns rows written."""
+    """Write every campground's copy to the fixture, empty copy included, so
+    an import clears copy the regen dropped. Returns rows written."""
     rows = [
         dict(zip(_COLS, row, strict=True))
         for row in conn.execute(
-            f"SELECT {', '.join(_COLS)} FROM campgrounds WHERE elevator_pitch != '' "
+            f"SELECT {', '.join(_COLS)} FROM campgrounds "
             "ORDER BY booking_system, facility_id"
         )
     ]

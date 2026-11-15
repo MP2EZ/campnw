@@ -388,6 +388,11 @@ async def enrich_registry(
     return enriched
 
 
+def has_copy_facts(cg) -> bool:
+    """Whether the registry holds anything to write copy from beyond name and state."""
+    return bool(cg.tags or cg.notes or cg.total_sites)
+
+
 async def regenerate_descriptions(
     registry_path: str | None = None,
     api_key: str | None = None,
@@ -395,15 +400,17 @@ async def regenerate_descriptions(
     dry_run: bool = False,
     export_path: Path | None = None,
     concurrency: int = 8,
-) -> tuple[int, int, dict[str, int]]:
+) -> tuple[int, int, int, dict[str, int]]:
     """Rewrite pitch, description and best-for for every enabled campground.
 
     Unlike ``enrich_registry``, existing copy is overwritten, and tags and vibe
-    are left alone. A failed generation keeps the old copy. When ``export_path``
-    is set (and not a dry run), the result is exported to the pitch fixture,
-    which is how new copy reaches prod.
+    are left alone. A campground with no facts (no tags, notes or site count)
+    gets its copy cleared without a model call: anything written from the name
+    alone is invented. A failed generation keeps the old copy. When
+    ``export_path`` is set (and not a dry run), the result is exported to the
+    pitch fixture, which is how new copy reaches prod.
 
-    Returns (rewritten, failed, token usage).
+    Returns (rewritten, cleared, failed, token usage).
     """
     import asyncio
     import os
@@ -415,13 +422,26 @@ async def regenerate_descriptions(
     usage = {"input_tokens": 0, "output_tokens": 0}
     if not api_key:
         _logger.error("ANTHROPIC_API_KEY not set")
-        return 0, 0, usage
+        return 0, 0, 0, usage
 
     registry = (
         CampgroundRegistry(registry_path) if registry_path else CampgroundRegistry()
     )
     candidates = registry.search(enabled_only=True)[:limit]
-    _logger.info("Rewriting copy for %d campgrounds", len(candidates))
+    with_facts = [cg for cg in candidates if has_copy_facts(cg)]
+    without = [cg for cg in candidates if not has_copy_facts(cg)]
+    _logger.info(
+        "Rewriting copy for %d campgrounds, clearing %d with no facts",
+        len(with_facts), len(without),
+    )
+    for cg in without:
+        if dry_run:
+            _logger.info(
+                "DRY RUN %s\n  before: %s\n  after:  (cleared)", cg.name, cg.elevator_pitch,
+            )
+        else:
+            registry.update_description(cg.id, "", "", "")
+
     sem = asyncio.Semaphore(concurrency)
 
     async def one(cg):
@@ -432,7 +452,7 @@ async def regenerate_descriptions(
             )
 
     rewritten = failed = 0
-    for fut in asyncio.as_completed([one(cg) for cg in candidates]):
+    for fut in asyncio.as_completed([one(cg) for cg in with_facts]):
         cg, desc = await fut
         if not desc.get("elevator_pitch"):
             failed += 1
@@ -454,4 +474,4 @@ async def regenerate_descriptions(
         rows = export_pitch_fixture(registry._conn, export_path)
         _logger.info("Exported %d rows to %s", rows, export_path)
     registry.close()
-    return rewritten, failed, usage
+    return rewritten, len(without), failed, usage

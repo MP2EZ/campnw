@@ -296,6 +296,13 @@ class TestRegenerateDescriptions:
             registry.update_vibe(cg.id, "Serene escape")
             if pitch:
                 registry.update_description(cg.id, pitch, "Old desc.", "Solitude seekers")
+        # Nothing but a name and a state: copy written from that is invented.
+        registry.upsert(Campground(
+            facility_id="3", name="Camp 3", booking_system=BookingSystem.RECGOV,
+            state="CA", enabled=True,
+        ))
+        cg = registry.get_by_facility_id("3", BookingSystem.RECGOV)
+        registry.update_description(cg.id, "Rustic charm for nature lovers.", "Old.", "Lovers")
 
     @staticmethod
     def _fake(by_name: dict[str, dict]):
@@ -322,19 +329,21 @@ class TestRegenerateDescriptions:
         out = tmp_path / "pitches.json"
         before = FIXTURE_PATH.read_bytes() if FIXTURE_PATH.exists() else None
         with patch("pnw_campsites.enrichment.llm_tags.generate_description", self._fake(new)):
-            rewritten, failed, usage = await regenerate_descriptions(
+            rewritten, cleared, failed, usage = await regenerate_descriptions(
                 registry_path=str(registry._db_path), api_key="k", export_path=out,
             )
 
-        assert (rewritten, failed) == (2, 0)
-        assert usage == {"input_tokens": 200, "output_tokens": 40}
+        assert (rewritten, cleared, failed) == (2, 1, 0)
+        assert usage == {"input_tokens": 200, "output_tokens": 40}  # no call for Camp 3
         cg = registry.get_by_facility_id("1", BookingSystem.RECGOV)
         assert (cg.elevator_pitch, cg.description_rewrite, cg.best_for) == (
             "Lakeside camp 1.", "Desc 1.", "anglers",
         )
         assert cg.tags == ["lakeside"] and cg.vibe == "Serene escape"
         rows = json.loads(out.read_text())["pitches"]
-        assert [r["elevator_pitch"] for r in rows] == ["Lakeside camp 1.", "Lakeside camp 2."]
+        assert [r["elevator_pitch"] for r in rows] == ["Lakeside camp 1.", "Lakeside camp 2.", ""]
+        none = registry.get_by_facility_id("3", BookingSystem.RECGOV)
+        assert (none.elevator_pitch, none.description_rewrite, none.best_for) == ("", "", "")
         # The checked-in fixture is only written when asked for.
         assert (FIXTURE_PATH.read_bytes() if FIXTURE_PATH.exists() else None) == before
 
@@ -344,7 +353,7 @@ class TestRegenerateDescriptions:
 
         self._seed(registry)
         with patch("pnw_campsites.enrichment.llm_tags.generate_description", self._fake({})):
-            rewritten, failed, _ = await regenerate_descriptions(
+            rewritten, _, failed, _ = await regenerate_descriptions(
                 registry_path=str(registry._db_path), api_key="k",
             )
 
@@ -360,12 +369,14 @@ class TestRegenerateDescriptions:
         new = {"Camp 1": {"elevator_pitch": "New.", "description_rewrite": "", "best_for": ""}}
         out = tmp_path / "pitches.json"
         with patch("pnw_campsites.enrichment.llm_tags.generate_description", self._fake(new)):
-            rewritten, _, _ = await regenerate_descriptions(
+            rewritten, cleared, _, _ = await regenerate_descriptions(
                 registry_path=str(registry._db_path), api_key="k", dry_run=True,
-                export_path=out, limit=1,
+                export_path=out,
             )
 
-        assert rewritten == 1
+        assert (rewritten, cleared) == (1, 1)
         assert not out.exists()
         cg = registry.get_by_facility_id("1", BookingSystem.RECGOV)
         assert cg.elevator_pitch == "Peaceful haven for solitude seekers."
+        cg = registry.get_by_facility_id("3", BookingSystem.RECGOV)
+        assert cg.elevator_pitch == "Rustic charm for nature lovers."
