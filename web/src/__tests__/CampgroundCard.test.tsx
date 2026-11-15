@@ -59,7 +59,7 @@ describe("CampgroundCard", () => {
     render(<CampgroundCard result={dashPoint} params={juneWeekends} rank={3} />);
     await userEvent.click(screen.getByRole("button", { name: /see open sites$/ }));
     expect(track).toHaveBeenCalledWith("window_chip_opened", {
-      facility_id: "-2147483624", result_rank: 3, source: "wa_state", sites_in_chip: 6, nights: 3,
+      facility_id: "-2147483624", result_rank: 3, source: "wa_state", sites_in_chip: 6, nights: 2,
       chip_start: "2027-06-04", ui_version: "v2",
     });
     const dialog = screen.getByRole("dialog", { name: "Dash Point State Park" });

@@ -2,15 +2,15 @@ import "./sitePanel.css";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CampgroundResult, SearchParams } from "../api";
-import { formatDriveTime, parseIsoDate } from "../lib/dates";
+import { formatDriveTime } from "../lib/dates";
 import { IconClose, IconExternal } from "../icons";
 import { FEW_LEFT, type WindowChip } from "./chips";
 import { BOOKING_SITES, handoffCopy, stayLabel } from "./handoff";
-import { panelGroups, type PanelSite } from "./siteGroups";
+import { panelGroups, partLabel, type PanelSite } from "./siteGroups";
 
 interface Props {
   result: CampgroundResult;
-  chip: Pick<WindowChip, "start" | "end">;
+  chip: Pick<WindowChip, "start" | "end" | "stay">;
   params: SearchParams | null;
   /** Gets focus back when the panel closes: the chip that opened it. */
   returnFocus: HTMLElement | null;
@@ -19,11 +19,6 @@ interface Props {
 }
 
 const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):checked, input:not([type="radio"]):not([disabled])';
-const weekday = (iso: string) => parseIsoDate(iso).toLocaleDateString("en-US", { weekday: "short" });
-
-function partText({ start, end }: { start: string; end: string }): string {
-  return start === end ? `${weekday(start)} night only` : `${weekday(start)}–${weekday(end)} nights only`;
-}
 
 /**
  * The open sites behind one chip (v1.48 P3b): a modal dialog, a side panel
@@ -88,7 +83,7 @@ export function SitePanel({ result, chip, params, returnFocus, onClose, onBook }
         <div className="rv2-panel-head">
           <div className="rv2-panel-titles">
             <h2 id={`${id}-h`} className="rv2-panel-title">{result.name}</h2>
-            <p className="rv2-panel-stay">{stayLabel(chip.start, chip.end)}</p>
+            <p className="rv2-panel-stay">{stayLabel(chip.stay.start, chip.stay.end)}</p>
             {meta && <p className="rv2-panel-meta">{meta}</p>}
           </div>
           <button type="button" className="rv2-panel-close" aria-label="Close" onClick={onClose}>
@@ -110,7 +105,7 @@ export function SitePanel({ result, chip, params, returnFocus, onClose, onBook }
               </legend>
               {g.sites.map((s) => {
                 const detail = [s.loop, s.people != null && `up to ${s.people} people`,
-                  s.part && partText(s.part)].filter(Boolean).join(" · ");
+                  s.part && partLabel(s.part, chip.stay)].filter(Boolean).join(" · ");
                 const listed = s.kind !== "unlisted";
                 return (
                   <label key={s.id} className="rv2-site">

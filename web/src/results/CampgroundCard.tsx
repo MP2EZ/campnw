@@ -49,7 +49,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
     result_rank: rank,
     source: result.booking_system,
     sites_in_chip: chip.open,
-    nights: nightsIn(chip.start, chip.end),
+    nights: nightsIn(chip.stay.start, chip.stay.end),
     ui_version: "v2",
   });
   const onOpen = (chip: WindowChip, el: HTMLElement) => {
