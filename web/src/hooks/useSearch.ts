@@ -194,7 +194,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
 
     clearTimeout(scrollTimerRef.current);
     scrollTimerRef.current = setTimeout(() => {
-      document.querySelector(".results-skeleton, .results")?.scrollIntoView?.({
+      document.querySelector(".results")?.scrollIntoView?.({
         behavior: "smooth", block: "start",
       });
     }, 100);
@@ -225,11 +225,13 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     let streamedEnd: Partial<SearchResponse> = {};
     let rafId: number | null = null;
     let checkedCount = 0;
+    let plannedCount: number | undefined;
     // Known only once the stream finishes; undefined until then.
     let matchedCount: number | undefined;
     const snapshot = (): SearchResponse => ({
       campgrounds_checked: checkedCount,
       campgrounds_matched: matchedCount,
+      campgrounds_planned: plannedCount,
       campgrounds_with_availability: streamedResults.filter(
         (r) => r.total_available_sites > 0,
       ).length,
@@ -331,8 +333,9 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       },
       // v2 doesn't show the AI summary (v1.48 flip).
       () => {},
-      (checked) => {
+      (checked, total) => {
         checkedCount = checked;
+        plannedCount = total;
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;

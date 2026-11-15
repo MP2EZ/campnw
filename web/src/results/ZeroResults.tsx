@@ -3,9 +3,9 @@ import { track, type CampgroundResult, type SearchParams, type SearchResponse } 
 import type { SearchMode } from "../hooks/useSearch";
 import { parseIsoDate } from "../lib/dates";
 import { IconBell } from "../icons";
-import { searchedDays, unavailability } from "./candidates";
+import { searchedDays } from "./candidates";
 import { FullGroup } from "./FullGroup";
-import { releaseTimeline, soonerOptions, zeroLede } from "./zero";
+import { releaseTimeline, soonerOptions, zeroGroupTitle, zeroLede } from "./zero";
 
 interface Props {
   results: SearchResponse;
@@ -32,7 +32,6 @@ export function ZeroResults({ results, places, params, onSearch, searchId }: Pro
   const timeline = releaseTimeline(places, params);
   const options = soonerOptions(results, places, params, isoToday());
   const lede = zeroLede(results, places, params);
-  const allNyr = places.length > 0 && places.every((r) => unavailability(r, params).kind !== "full");
   // Recreation.gov releases at 7 am PT (search/release.py); WA's time is unverified.
   const at = places.length > 0 && places.every((r) => r.booking_system === "recgov") ? "7:00 am PT" : null;
   const unit = params?.mode === "exact" ? "your dates open" : searchedDays(params) ? "each weekend opens" : "each arrival opens";
@@ -94,7 +93,7 @@ export function ZeroResults({ results, places, params, onSearch, searchId }: Pro
         </section>
       )}
 
-      <FullGroup places={places} params={params} title={allNyr ? "Not released yet" : undefined} />
+      <FullGroup places={places} params={params} title={zeroGroupTitle(places, params)} />
     </div>
   );
 }

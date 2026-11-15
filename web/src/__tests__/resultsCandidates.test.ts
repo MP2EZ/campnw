@@ -130,7 +130,7 @@ describe("unavailability and its wording", () => {
     const u = unavailability(r, juneWeekends);
     expect(u).toMatchObject({ kind: "mixed", full: 2, notReleased: 2 });
     expect(unavailableText(u, juneWeekends))
-      .toEqual({ status: "2 weekends full · 2 open Dec 18 – 25", action: "Remind me" });
+      .toEqual({ status: "2 weekends full · 2 release Dec 18 – 25", action: "Remind me" });
   });
 
   test("not reservable anywhere: no alert to offer", () => {
@@ -145,7 +145,7 @@ describe("unavailability and its wording", () => {
     const r = place([], [{ start: "2027-06-25", end: "2027-06-27", releases_on: "2026-12-25" }],
       [{ start: "2027-06-01", end: "2027-06-13" }]);
     expect(unavailableText(unavailability(r, juneWeekends), juneWeekends)).toEqual({
-      status: "1 weekend full · 2 not reservable · 1 open Dec 25", action: "Remind me",
+      status: "1 weekend full · 2 not reservable · 1 releases Dec 25", action: "Remind me",
     });
     const noNyr = place([], [], [{ start: "2027-06-01", end: "2027-06-13" }]);
     expect(unavailableText(unavailability(noNyr, juneWeekends), juneWeekends))

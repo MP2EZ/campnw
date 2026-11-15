@@ -229,8 +229,7 @@
 .rv2-chip-watch {
   font: inherit;
   cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
 }
-.rv2-chip-watch:hover { border-style: solid; }
 .rv2-full-action--live { cursor: pointer; opacity: 1; transition: background var(--transition-fast); }
 .rv2-full-action--live:hover { background: var(--bg-hover); }

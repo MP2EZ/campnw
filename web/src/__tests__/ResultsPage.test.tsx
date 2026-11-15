@@ -67,7 +67,7 @@ describe("ResultsPage", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "2 campgrounds have a June weekend open within 3 hours of Seattle.",
     );
-    expect(screen.getByText(/Checked 20 of 46 nearby campgrounds/)).toHaveTextContent(/searched just now/);
+    expect(screen.getByText(/Checked the 20 closest of 46 nearby campgrounds/)).toHaveTextContent(/searched just now/);
     expect(screen.getByRole("note")).toHaveTextContent(
       "18 campgrounds haven't released these dates yet. Booking typically opens Dec 4 – 25.",
     );
@@ -83,9 +83,28 @@ describe("ResultsPage", () => {
 
   test("while streaming it shows no timestamp and no zero state", () => {
     renderPage({ loading: true, filteredResults: [] });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^Checking campgrounds for a June weekend/);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^Looking for an open June weekend/);
     expect(screen.queryByText(/searched/)).not.toBeInTheDocument();
     expect(screen.queryByText("zero state")).not.toBeInTheDocument();
+  });
+
+  test("while streaming, places with nothing to book wait for the end", () => {
+    const full = { ...place("Kachess", 0), windows: [] } as CampgroundResult;
+    renderPage({ loading: true, results: { ...results, unavailable: [full] } });
+    expect(screen.queryByRole("region", { name: /Full or not released yet/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /full or not released yet/ })).not.toBeInTheDocument();
+  });
+
+  test("placeholder cards sit in the list until the first open place arrives", () => {
+    const { container, rerender } = renderPage({ loading: true, filteredResults: [] });
+    expect(container.querySelectorAll(".rv2-split .results-v2 .skeleton-card")).toHaveLength(2);
+    rerender(
+      <SearchContext.Provider value={{ results, loading: true, searchDates: null, searchParams: null,
+        sourceFilter: new Set(["wa_state"]), filteredResults: results.results }}>
+        <ResultsPage maxResults={20} onCheckRest={() => {}} completedAt={null} onSearch={() => {}} />
+      </SearchContext.Provider>,
+    );
+    expect(container.querySelector(".skeleton-card")).toBeNull();
   });
 
   test("no notices when everything was released and checked", () => {

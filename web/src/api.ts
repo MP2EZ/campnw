@@ -264,6 +264,8 @@ export interface SearchResponse extends Partial<NotReleasedSummary> {
    * was capped. Optional because a streaming search only learns it at the end.
    */
   campgrounds_matched?: number;
+  /** Stream only: how many this search will check, from its progress frames. */
+  campgrounds_planned?: number;
   campgrounds_with_availability: number;
   results: CampgroundResult[];
   /**

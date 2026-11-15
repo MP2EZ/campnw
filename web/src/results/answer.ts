@@ -51,13 +51,22 @@ function daysLabel(days: number[]): string {
 /** "a" or "an", by sound: an April, an 8-night, an 11-night. */
 const article = (next: string) => (/^(?:[aeiou]|8|1[18](?!\d))/i.test(next) ? `an ${next}` : `a ${next}`);
 
-/** "a June weekend open", "sites open Jun 4 – 6", "a 2-night stay open in June". */
-function whatOpen(p: SearchParams | null): string {
-  if (!p?.start_date || !p.end_date) return "sites open";
-  if (p.mode === "exact") return `sites open ${formatDateRange(p.start_date, p.end_date)}`;
+/**
+ * What the search asked for: no dates yet, exact dates, a named weekend kind
+ * ("weekend", "long weekend"), or an n-night stay. `month` is set when the
+ * range is exactly one calendar month, else `range` names the dates.
+ */
+type Shape =
+  | { kind: "none" }
+  | { kind: "exact"; range: string }
+  | { kind: "named" | "stay"; noun: string; month: string | null; range: string };
+
+function shape(p: SearchParams | null): Shape {
+  if (!p?.start_date || !p.end_date) return { kind: "none" };
+  const range = formatDateRange(p.start_date, p.end_date);
+  if (p.mode === "exact") return { kind: "exact", range };
 
   const month = wholeMonth(p.start_date, p.end_date);
-  const range = formatDateRange(p.start_date, p.end_date);
   const nights = p.nights ?? 1;
   const night = nights === 1;
   const days = (p.days_of_week ?? "").split(",").filter(Boolean).map(Number).sort((x, y) => x - y);
@@ -66,11 +75,30 @@ function whatOpen(p: SearchParams | null): string {
     "4,5,6": night ? "weekend night" : "weekend",
     "3,4,5,6": night ? "long-weekend night" : "long weekend",
   };
-  const kind = weekendish[key];
-  if (kind) return month ? `${article(`${month} ${kind}`)} open` : `${article(kind)} open ${range}`;
+  if (weekendish[key]) return { kind: "named", noun: weekendish[key], month, range };
 
   const label = key === "0,1,2,3,4" ? "weekday " : days.length ? `${daysLabel(days)} ` : "";
-  return `${article(`${nights}-night ${label}stay`)} open ${month ? `in ${month}` : range}`;
+  return { kind: "stay", noun: `${nights}-night ${label}stay`, month, range };
+}
+
+/** "a June weekend open", "sites open Jun 4 – 6", "a 2-night stay open in June". */
+function whatOpen(p: SearchParams | null): string {
+  const s = shape(p);
+  if (s.kind === "none") return "sites open";
+  if (s.kind === "exact") return `sites open ${s.range}`;
+  if (s.kind === "named") {
+    return s.month ? `${article(`${s.month} ${s.noun}`)} open` : `${article(s.noun)} open ${s.range}`;
+  }
+  return `${article(s.noun)} open ${s.month ? `in ${s.month}` : s.range}`;
+}
+
+/** While searching: "an open June weekend", "an open 2-night stay in June", "open sites". */
+function lookingFor(p: SearchParams | null): string {
+  const s = shape(p);
+  if (s.kind === "none") return "open sites";
+  if (s.kind === "exact") return `sites open ${s.range}`;
+  if (s.kind === "named") return s.month ? `an open ${s.month} ${s.noun}` : `an open ${s.noun} ${s.range}`;
+  return `an open ${s.noun} ${s.month ? `in ${s.month}` : s.range}`;
 }
 
 function hoursLabel(minutes: number): string {
@@ -95,11 +123,9 @@ function campgrounds(n: number, p: SearchParams | null): string {
 }
 
 export function answerSentence({ params, open, checked, notReleased, loading, failed }: AnswerInput): string {
-  const what = whatOpen(params);
   const where = within(params);
-  if (loading) {
-    return what === "sites open" ? "Checking campgrounds…" : `Checking campgrounds for ${what}${where}…`;
-  }
+  if (loading) return `Looking for ${lookingFor(params)}${where}…`;
+  const what = whatOpen(params);
   if (open > 0) {
     const found = `${open} ${campgrounds(open, params)} ${open === 1 ? "has" : "have"} ${what}${where}`;
     return failed ? `${found}, from a search that didn’t finish.` : `${found}.`;

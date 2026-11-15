@@ -261,6 +261,8 @@
   justify-content: center;
   align-items: flex-start;
   padding: 0.35rem var(--space-3);
+  /* Every state has a 1px edge, transparent or not, so mixed rows line up (UX #20). */
+  border: 1px solid transparent;
   border-radius: var(--radius-xl);
   background: var(--chip-open-bg);
   color: var(--chip-open-text);
@@ -268,9 +270,8 @@
   transition: box-shadow var(--transition-fast);
 }
 
-/* Open chips open the site panel (P3b). Full chips keep their dashed look (watchSheet.css). */
-button.rv2-chip:not(.rv2-chip-full) {
-  border: 0;
+/* Open chips open the site panel (P3b); Watch and Remind chips open their sheet. */
+button.rv2-chip {
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -402,10 +403,41 @@ button.rv2-chip:not(.rv2-chip-full):hover {
 }
 
 /* ── Full or not released yet (P2c, D4) ──────────────────────────── */
+/*
+ * Two looks, told apart by more than colour (UX #2): a chip that opens the
+ * Watch or Remind sheet is outlined with a solid edge and leads its action
+ * with a bell; a chip with nothing to do is flat, with no edge, and its dates
+ * step down a weight.
+ */
 .rv2-chip-full {
-  border: 1px dashed var(--chip-full-border);
   background: var(--chip-full-bg);
   color: var(--chip-full-text);
+}
+
+.rv2-chip-inert .rv2-chip-dates {
+  font-weight: var(--weight-semi);
+}
+
+.rv2-chip-watch {
+  border-color: var(--chip-action-border);
+  background: var(--chip-action-bg);
+}
+
+button.rv2-chip-watch:hover {
+  color: var(--chip-full-text);
+  box-shadow: inset 0 0 0 1px var(--chip-action-border);
+}
+
+.rv2-chip-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--chip-action-text);
+  font-weight: var(--weight-bold);
+}
+
+.rv2-chip-watch .rv2-chip-count {
+  gap: var(--space-2);
 }
 
 .rv2-answer-link {
@@ -467,8 +499,10 @@ button.rv2-chip:not(.rv2-chip-full):hover {
 
 .rv2-full-action {
   min-height: 2.75rem;
+  min-width: 8rem; /* Watch and Remind me line up in one column */
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   padding: 0 var(--space-3);
   border: 1px solid var(--border);
@@ -502,7 +536,8 @@ button.rv2-chip:not(.rv2-chip-full):hover {
 
 .rv2-picks-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Two picks fill the row rather than leaving a third column empty (UX #13). */
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
@@ -548,9 +583,34 @@ button.rv2-chip:not(.rv2-chip-full):hover {
   color: var(--text-muted);
 }
 
+/* Phones: one row that scrolls sideways, so the first card is nearer the fold (UX #11). */
 @media (max-width: 640px) {
   .rv2-picks-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 72%;
+    gap: var(--space-2);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin-inline: calc(-1 * var(--space-3));
+    padding-inline: var(--space-3);
+    scroll-padding-inline: var(--space-3);
+    scrollbar-width: none;
+  }
+  .rv2-picks-grid::-webkit-scrollbar { display: none; }
+  .rv2-picks-grid > li { scroll-snap-align: start; }
+
+  .rv2-pick {
+    padding: var(--space-3);
+  }
+
+  .rv2-pick-name {
+    font-size: var(--text-md);
+  }
+
+  .rv2-notice-info {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
   }
 }
 
@@ -732,8 +792,10 @@ button.rv2-chip:not(.rv2-chip-full):hover {
     overflow-x: auto;
     /* Scroll edge to edge: bleed through .app's phone padding. */
     margin-inline: calc(-1 * var(--space-3));
-    padding: 0.3rem var(--space-3);
+    padding: 0.3rem var(--space-7) 0.3rem var(--space-3);
     scrollbar-width: none;
+    /* The right edge fades so a cut-off chip reads as "scrolls", not as clipped (UX #30). */
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--space-7)), transparent);
   }
   .rv2-dates::-webkit-scrollbar { display: none; }
 }

@@ -48,6 +48,23 @@ const subscribeClock = (cb: () => void) => {
 const readClock = () => Math.floor(Date.now() / TICK) * TICK;
 
 /**
+ * Stand-ins for cards until the first open place arrives. They sit in the list
+ * column under the answer, so nothing above them (or the map) moves when they go.
+ */
+function CardPlaceholders() {
+  return (
+    <div className="results-skeleton" aria-hidden="true">
+      {[0, 1].map((i) => (
+        <div key={i} className="skeleton-card">
+          <div className="skeleton-line skeleton-title" />
+          <div className="skeleton-line skeleton-summary" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Results v2 (v1.48): the answer, then the notices that qualify it, then
  * places. App mounts it once a search has results.
  */
@@ -94,14 +111,16 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
       <AnswerHeader
         sentence={sentence}
         searched={!loading && completedAt ? searchedAgo(completedAt, Math.max(now, completedAt)) : null}
-        full={unavailable.length}
+        full={loading ? 0 : unavailable.length}
         fullTitle={fullGroupTitle(unavailable, searchParams)}
         coverage={{
           checked: results.campgrounds_checked,
           matched: results.campgrounds_matched,
+          planned: results.campgrounds_planned,
           limit: maxResults,
           withAvailability: cards.length,
           nearby: !!searchParams?.from_location,
+          driveLimit: !!searchParams?.max_drive,
           loading,
           onCheckRest,
         }}
@@ -113,10 +132,13 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
           onPick={(id) => setPick((p) => ({ id, n: (p?.n ?? 0) + 1 }))} />
       )}
       <DriveBands results={cards} params={searchParams} reveal={pick?.id} />
+      {loading && cards.length === 0 && <CardPlaceholders />}
+      {/* Held until the stream ends: mid-search "nothing to book" is a premature
+          verdict, and open cards arriving above it kept pushing it down. */}
       {zero ? (
         <ZeroResults results={results} places={unavailable} params={searchParams} onSearch={onSearch}
           searchId={searchId} />
-      ) : (
+      ) : !loading && (
         <FullGroup places={unavailable} params={searchParams} />
       )}
     </section>

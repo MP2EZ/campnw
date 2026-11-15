@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { releaseTimeline, soonerOptions, zeroLede } from "../results/zero";
+import { releaseTimeline, soonerOptions, zeroGroupTitle, zeroLede } from "../results/zero";
 import type { CampgroundResult, NotReleasedRange, SearchParams, SearchResponse } from "../api";
 
 // June 2027: Fridays are the 4th, 11th, 18th and 25th. "Today" is 2026-11-07.
@@ -78,13 +78,55 @@ describe("soonerOptions", () => {
       { action: "drop_days", label: "Try any day", params: { days_of_week: null } },
       { action: "watch", label: "Set a watch", params: {} },
     ] }), [], juneWeekends, TODAY);
-    expect(opts.map((o) => o.title)).toEqual(["Expand to 180 min", "Try any day"]);
+    expect(opts.map((o) => o.title)).toEqual(["Drive up to 3 h", "Try any day"]);
     expect(opts[0].params.max_drive).toBe(180);
     expect(opts[1].params.days_of_week).toBeUndefined();
+  });
+
+  test("drive options speak in hours, like the Drive control, and each says how it differs", () => {
+    const opts = soonerOptions(response({ action_chips: [
+      { action: "expand_radius", label: "Expand to 180 min", params: { max_drive_minutes: 180 } },
+      { action: "expand_radius", label: "Remove drive limit", params: { max_drive_minutes: null } },
+    ] }), [], juneWeekends, TODAY);
+    expect(opts.map((o) => [o.title, o.detail])).toEqual([
+      ["Drive up to 3 h", "Instead of 2 h"],
+      ["Remove drive limit", "Any distance"],
+    ]);
+    expect(opts[1].params.max_drive).toBeUndefined();
+  });
+});
+
+describe("zeroGroupTitle", () => {
+  const closed = { not_released_ranges: [], closed_ranges: [{ start: "2027-06-01", end: "2027-06-30" }] };
+
+  test("“Not released yet” only when every place is waiting on a release", () => {
+    expect(zeroGroupTitle([place("A"), place("B")], juneWeekends)).toBe("Not released yet");
+  });
+
+  test("a place not taking reservations isn't called not released", () => {
+    expect(zeroGroupTitle([place("A", closed)], juneWeekends)).toBe("Nothing to book");
+    expect(zeroGroupTitle([place("A"), place("B", closed)], juneWeekends)).toBe("Nothing to book");
+  });
+
+  test("full places keep the group's usual name", () => {
+    expect(zeroGroupTitle([place("A"), place("B", { not_released_ranges: [] })], juneWeekends))
+      .toBe("Full or not released yet");
   });
 });
 
 describe("zeroLede", () => {
+  test("counts against the same number the answer does when some checks didn't come back", () => {
+    const closed = { not_released_ranges: [], closed_ranges: [{ start: "2027-06-01", end: "2027-06-30" }] };
+    expect(zeroLede(response({ campgrounds_checked: 3 }), [place("A", closed)], juneWeekends)).toBe(
+      "1 of the 3 campgrounds checked isn’t taking reservations online for these dates: it’s closed, or first-come, first-served only.",
+    );
+    expect(zeroLede(response({ campgrounds_checked: 3 }), [place("A")], juneWeekends)).toBe(
+      "1 of the 3 Recreation.gov campgrounds checked isn’t full. Its June weekends just haven’t opened for booking.",
+    );
+    expect(zeroLede(response({ campgrounds_checked: 3 }), [place("A", { not_released_ranges: [] })], anyDay))
+      .toBe("1 of the 3 campgrounds checked is full on your dates.");
+  });
+
   test("nothing released: not full, just not open yet, naming the booking system", () => {
     expect(zeroLede(response(), [place("A"), place("B")], juneWeekends)).toBe(
       "The 2 Recreation.gov campgrounds checked aren’t full. Their June weekends just haven’t opened for booking.",
@@ -92,7 +134,7 @@ describe("zeroLede", () => {
   });
 
   test("all full", () => {
-    expect(zeroLede(response(), [place("A", { not_released_ranges: [] })], anyDay))
+    expect(zeroLede(response({ campgrounds_checked: 1 }), [place("A", { not_released_ranges: [] })], anyDay))
       .toBe("The 1 campground checked is full on your dates.");
   });
 

@@ -13,8 +13,11 @@ export interface QuickPick {
   detail: string;
 }
 
-/** Fewer open places than this and there's nothing to choose between. */
-export const MIN_PLACES = 3;
+/**
+ * Fewer open places than this and the list is short enough to scan: picks
+ * would only repeat it above itself (UX #13).
+ */
+export const MIN_PLACES = 6;
 
 const SETTINGS: [tag: string, kicker: string, needs?: string][] = [
   ["lakeside", "Lake you can swim in", "swimming"],
