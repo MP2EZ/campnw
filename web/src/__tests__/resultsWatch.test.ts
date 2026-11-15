@@ -30,7 +30,7 @@ describe("watchStays", () => {
   test("exact dates are the one stay", () => {
     const exact = { start_date: "2027-07-02", end_date: "2027-07-03", mode: "exact", nights: 1 };
     expect(watchStays(place(), exact)).toEqual([
-      { start: "2027-07-02", end: "2027-07-03", label: "Fri Jul 2 → Sat 3" },
+      { start: "2027-07-02", end: "2027-07-02", label: "Fri Jul 2 → Sat 3" },
     ]);
   });
 
@@ -85,6 +85,16 @@ describe("watchRequest", () => {
     expect(req).not.toHaveProperty("min_people");
     expect(req).not.toHaveProperty("site_types");
     expect(hasFilters(req)).toBe(false);
+  });
+});
+
+describe("exact-date watches (checkout isn't a night)", () => {
+  test("a full Fri → Sun stay watches Fri and Sat nights, 2 of them", () => {
+    const exact = { start_date: "2027-07-02", end_date: "2027-07-04", mode: "exact", nights: 2 };
+    const [stay] = watchStays(place(), exact);
+    expect(stay).toEqual({ start: "2027-07-02", end: "2027-07-03", label: "Fri Jul 2 → Sun 4" });
+    const req = watchRequest(place(), stay, exact, { who: { people: null, equipment: null, rigLength: null }, hookups: false });
+    expect([req.start_date, req.end_date, req.min_nights]).toEqual(["2027-07-02", "2027-07-03", 2]);
   });
 });
 

@@ -115,8 +115,16 @@ describe("buildWindowChips: exact dates", () => {
       win("B", "2027-06-05", "2027-06-06"),
     ]), { start_date: "2027-06-04", end_date: "2027-06-06", mode: "exact", nights: 2 });
     expect(r.shown).toEqual([
-      expect.objectContaining({ start: "2027-06-04", end: "2027-06-06", label: "Fri 4 → Sun 6", open: 2 }),
+      expect.objectContaining({ start: "2027-06-04", end: "2027-06-05", label: "Fri 4 → Sun 6", open: 2 }),
     ]);
+  });
+});
+
+describe("buildWindowChips: exact dates end at checkout", () => {
+  test("the chip spans the nights, not the checkout day", () => {
+    const r = buildWindowChips(place([win("A", "2027-06-04", "2027-06-05")]),
+      { start_date: "2027-06-04", end_date: "2027-06-06", mode: "exact", nights: 2 });
+    expect(r.shown).toEqual([expect.objectContaining({ start: "2027-06-04", end: "2027-06-05", label: "Fri 4 → Sun 6" })]);
   });
 });
 
