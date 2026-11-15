@@ -107,6 +107,8 @@ describe("results v2 token contrast", () => {
     ["--focus-ring", "--notice-info-bg", 3],
     ["--pick-kicker", "--surface-tile", 4.5],
     ["--text", "--surface-tile", 4.5],
+    // The active mode tab's text and underline (UX #15: --accent was 2.8:1 in dark).
+    ["--accent-text", "--bg", 4.5],
     // Map pins (D13): each pin's edge against its own halo, so it reads on any tile.
     ["--pin-open", "--pin-halo", 3],
     ["--pin-boat", "--pin-halo", 3],

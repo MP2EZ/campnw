@@ -1,4 +1,5 @@
 import type { CampgroundResult, SearchParams } from "../api";
+import { displayName } from "../lib/displayName";
 import { quickPicks } from "./picks";
 
 /**
@@ -23,7 +24,7 @@ export function QuickPicks({ results, params, onPick }: {
               onClick={(e) => { e.preventDefault(); onPick(p.result.facility_id); }}>
               {/* Spaces between the parts keep the link's name readable; flex hides them. */}
               <span className="rv2-pick-kicker">{p.kicker}</span>{" "}
-              <span className="rv2-pick-name">{p.result.name}</span>{" "}
+              <span className="rv2-pick-name">{displayName(p.result.name)}</span>{" "}
               <span className="rv2-pick-detail">{p.detail}</span>
             </a>
           </li>

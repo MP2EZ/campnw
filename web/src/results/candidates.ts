@@ -26,6 +26,36 @@ export function addDays(iso: string, n: number): string {
 export const nightsIn = (start: string, end: string) =>
   Math.round((parseIsoDate(end).getTime() - parseIsoDate(start).getTime()) / 86_400_000) + 1;
 
+/** A stay: arrival and last night. */
+export interface Stay {
+  start: string;
+  end: string;
+}
+
+/** The runs of consecutive nights some spans cover, earliest first. */
+export function nightRuns(spans: [string, string][]): [string, string][] {
+  const runs: [string, string][] = [];
+  for (const [s, e] of [...spans].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const run = runs[runs.length - 1];
+    if (run && s <= addDays(run[1], 1)) {
+      if (e > run[1]) run[1] = e;
+    } else {
+      runs.push([s, e]);
+    }
+  }
+  return runs;
+}
+
+/** The first `nights` nights from `start`, cut at `end`. */
+export function firstStay(start: string, end: string, nights: number): Stay {
+  const last = addDays(start, nights - 1);
+  return { start, end: last < end ? last : end };
+}
+
+/** The stay a block names when its sites don't say otherwise: its first stay of the searched length. */
+export const blockStay = ({ start, end }: Stay, p: SearchParams | null): Stay =>
+  firstStay(start, end, p?.nights || (p?.mode === "exact" ? nightsIn(start, end) : 2));
+
 /** The searched days, or null when every day counts (no blocks to group by). */
 export function searchedDays(p: SearchParams | null): Set<number> | null {
   const days = new Set((p?.days_of_week ?? "").split(",").filter(Boolean).map(Number));
@@ -42,9 +72,13 @@ export function blockAround(night: string, days: Set<number>, p: SearchParams): 
   return [start, end];
 }
 
+/** Exact dates are arrival and checkout (`end_date`); the last night is the day before. */
+export const exactLastNight = (p: Pick<SearchParams, "start_date" | "end_date">) =>
+  p.end_date > p.start_date ? addDays(p.end_date, -1) : p.end_date;
+
 export function candidateWindows(p: SearchParams | null): Candidate[] {
   if (!p?.start_date || !p.end_date || p.end_date < p.start_date) return [];
-  if (p.mode === "exact") return [{ start: p.start_date, end: p.end_date, stay: false }];
+  if (p.mode === "exact") return [{ start: p.start_date, end: exactLastNight(p), stay: false }];
   const nights = p.nights || 2;
   const days = searchedDays(p);
   const out: Candidate[] = [];

@@ -13,7 +13,12 @@ import json
 import logging
 import time
 
-from pnw_campsites.enrichment.llm_tags import VALID_TAGS, TagExtractionResult, _truncate
+from pnw_campsites.enrichment.llm_tags import (
+    COPY_RULES,
+    VALID_TAGS,
+    TagExtractionResult,
+    _truncate,
+)
 from pnw_campsites.posthog_client import HAIKU_MODEL
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import Campground
@@ -87,16 +92,19 @@ def _build_prompt(cg: Campground) -> str:
         f'- "tags": array of tags from this list: {json.dumps(VALID_TAGS)}\n'
         '  Only include tags clearly supported by the description.\n'
         '- "vibe": One sentence (max 100 chars) capturing the feel or character.\n'
-        '- "elevator_pitch": One sentence (max 120 chars) for a search result card.\n'
-        '- "description_rewrite": 2-3 sentences (max 350 chars) for an expanded view.\n'
-        '- "best_for": Short label (max 50 chars) for who this campground suits.\n\n'
+        '- "elevator_pitch": One sentence (max 110 chars) for a search result '
+        "card: setting and what is there. Don't repeat the campground name.\n"
+        '- "description_rewrite": 1-3 sentences (max 350 chars) for the '
+        "campground's page. One short sentence when the facts are thin.\n"
+        '- "best_for": What the campground suits, as uses or site types (max '
+        '40 chars), e.g. "tent camping, fishing". Lowercase, only uses the '
+        'tags or description support, empty if none. Never a kind of person.\n\n'
         f"Campground: {cg.name}\n"
         f"State: {cg.state}\n"
         f"{existing_tags}\n"
         f"{size_hint}\n"
         f"Description: {description[:2000]}\n\n"
-        "Only reference features explicitly stated. No invented amenities. "
-        "Return ONLY the JSON object."
+        f"{COPY_RULES} Return ONLY the JSON object."
     )
 
 

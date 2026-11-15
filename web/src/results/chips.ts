@@ -1,22 +1,33 @@
 import type { CampgroundResult, SearchParams, Window } from "../api";
 import { formatDateRange, formatDay, parseIsoDate } from "../lib/dates";
-import { addDays, blockAround, candidateStatus, candidateWindows, nightsIn, searchedDays } from "./candidates";
+import {
+  addDays, blockAround, blockStay, candidateStatus, candidateWindows, exactLastNight, firstStay, nightRuns, nightsIn,
+  searchedDays, type Stay,
+} from "./candidates";
 
 /**
  * Window chips (v1.48 D3): the stays a card offers, one chip per weekend (or
  * per block of the searched days), one for exact dates, or one per arrival
  * date for a flexible range ("stay chips": the searched number of nights from
- * that arrival). Dates are nights, like a window's start/end.
+ * that arrival). Dates are nights, like a window's start/end. Every chip is
+ * labelled as one stay of the searched length, arrival → checkout, the way
+ * its site panel says it (#4).
  */
 export type ChipStatus = "open" | "full" | "not_released" | "closed";
 
 export interface WindowChip {
-  /** First and last night, YYYY-MM-DD. */
+  /** First and last night of the block (or stay), YYYY-MM-DD. */
   start: string;
   end: string;
   /**
-   * Blocks: their nights, "Fri 4 – Sun 6"; "Fri Jul 30 – Sun Aug 1" when the
-   * search spans months. Stays: arrival to checkout, "Tue 8 – Thu 10".
+   * The stay the label names. A block can hold more nights than the search
+   * asked for (Fri, Sat and Sun nights on a 2-night search): this is the
+   * searched length from the arrival most of its sites offer.
+   */
+  stay: Stay;
+  /**
+   * The stay, arrival → checkout: "Fri 4 → Sun 6"; "Fri Jul 30 → Sun Aug 1"
+   * when the search spans months.
    */
   label: string;
   /** Sites with a bookable stay in this chip. */
@@ -77,26 +88,39 @@ const part = (d: Date, unit: "weekday" | "month") => d.toLocaleDateString("en-US
 const day = (d: Date, month: boolean) =>
   [part(d, "weekday"), month && part(d, "month"), d.getDate()].filter(Boolean).join(" ");
 
+/** Arrival → checkout. `end` is the checkout day; see `stayText` for a stay. */
 export function chipLabel(start: string, end: string, withMonth: boolean): string {
   const s = parseIsoDate(start);
   const e = parseIsoDate(end);
   const newMonth = s.getMonth() !== e.getMonth();
-  return `${day(s, withMonth || newMonth)} – ${day(e, newMonth)}`;
+  // A one-month search already says the arrival's month; the checkout's is said when it differs.
+  return `${day(s, withMonth)} → ${day(e, newMonth)}`;
 }
 
-/** Longest run of consecutive nights the spans cover. */
-function longestRun(spans: [string, string][]): number {
-  let best = 0;
-  let run: [string, string] | null = null;
-  for (const [s, e] of [...spans].sort((a, b) => a[0].localeCompare(b[0]))) {
-    if (run && s <= addDays(run[1], 1)) {
-      if (e > run[1]) run[1] = e;
-    } else {
-      run = [s, e];
+/** "Fri 4 → Sun 6" for the stay from Fri to Sat night. */
+export const stayText = (stay: Stay, withMonth: boolean) => chipLabel(stay.start, addDays(stay.end, 1), withMonth);
+
+const longestRun = (spans: [string, string][]) => Math.max(...nightRuns(spans).map(([s, e]) => nightsIn(s, e)));
+
+/**
+ * The `nights`-night stay in a block that most of its sites can take
+ * (earliest on a tie), so a chip names a stay its sites have.
+ */
+function commonStay(start: string, end: string, nights: number, sites: { spans: [string, string][] }[]): Stay {
+  const counts = new Map<string, number>();
+  for (const { spans } of sites) {
+    const arrivals = new Set<string>();
+    for (const [s, e] of nightRuns(spans)) {
+      for (let a = s; nightsIn(a, e) >= nights; a = addDays(a, 1)) arrivals.add(a);
     }
-    best = Math.max(best, nightsIn(run[0], run[1]));
+    for (const a of arrivals) counts.set(a, (counts.get(a) ?? 0) + 1);
   }
-  return best;
+  let best = start;
+  let most = 0;
+  for (const [a, c] of [...counts].sort((x, y) => x[0].localeCompare(y[0]))) {
+    if (c > most) [best, most] = [a, c];
+  }
+  return firstStay(best, end, nights);
 }
 
 interface Group {
@@ -126,7 +150,7 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
 
   for (const w of windows) {
     if (exact || (days && params)) {
-      const [start, end] = exact ? [params.start_date, params.end_date] : blockAround(w.start_date, days!, params!);
+      const [start, end] = exact ? [params.start_date, exactLastNight(params)] : blockAround(w.start_date, days!, params!);
       const clipped: [string, string] = [w.start_date > start ? w.start_date : start, w.end_date < end ? w.end_date : end];
       add(start, end, w, clipped);
       continue;
@@ -142,14 +166,17 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
   const chips = [...groups.values()]
     .sort((a, b) => a.start.localeCompare(b.start))
     .map(({ start, end, stay, sites }): WindowChip => {
-      const label = stay ? chipLabel(start, addDays(end, 1), withMonth) : chipLabel(start, end, withMonth);
+      // Exact dates name the user's own stay (their end date is the checkout).
+      const named = stay ? { start, end }
+        : exact ? blockStay({ start, end }, params)
+        : commonStay(start, end, stayNights, [...sites.values()]);
       const open = sites.size;
       const only = open === 1 ? [...sites.values()][0].window.booking_url : null;
       const shortest = Math.min(...[...sites.values()].map((s) => longestRun(s.spans)));
       return {
-        start, end, label, open, fit: open, few: open <= FEW_LEFT,
+        start, end, stay: named, label: stayText(named, withMonth), open, fit: open, few: open <= FEW_LEFT,
         // Two nights is a whole weekend, so only a shorter shortest stay is said.
-        minNights: shortest < Math.min(nightsIn(start, end), 2) ? shortest : null,
+        minNights: shortest < Math.min(nightsIn(named.start, named.end), 2) ? shortest : null,
         status: "open", releasesOn: null, href: only ?? result.availability_url, blocks: 1,
       };
     });
@@ -161,8 +188,9 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
       if (open.has(c.start)) continue;
       const s = candidateStatus(result, c);
       if (s.status === "open") continue;
+      const stay = blockStay(c, params);
       chips.push({
-        start: c.start, end: c.end, label: chipLabel(c.start, c.end, withMonth), open: 0, fit: 0, few: false,
+        start: c.start, end: c.end, stay, label: stayText(stay, withMonth), open: 0, fit: 0, few: false,
         minNights: null, status: s.status, releasesOn: s.status === "not_released" ? s.releasesOn : null, href: null,
         blocks: 1,
       });

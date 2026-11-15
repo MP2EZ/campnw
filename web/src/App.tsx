@@ -31,6 +31,7 @@ const ResultsPage = lazy(() => import("./results/ResultsPage"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 import { Footer } from "./components/Footer";
+import { SIGN_IN_EVENT } from "./lib/signIn";
 
 import "./tokens.css";
 import "./App.css";
@@ -128,6 +129,15 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authEntryPoint, setAuthEntryPoint] = useState("unknown");
   const [helpModalOpen, setHelpModalOpen] = useState(false);
+  // Pages (Trips, Pricing) ask for the sign-in modal through an event.
+  useEffect(() => {
+    const open = (e: Event) => {
+      setAuthEntryPoint((e as CustomEvent<string>).detail || "unknown");
+      setAuthModalOpen(true);
+    };
+    window.addEventListener(SIGN_IN_EVENT, open);
+    return () => window.removeEventListener(SIGN_IN_EVENT, open);
+  }, []);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [darkMode, setDarkMode] = useState(() => {

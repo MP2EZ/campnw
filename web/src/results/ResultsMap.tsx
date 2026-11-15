@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import L from "../leaflet-setup";
 import "leaflet.markercluster";
 import type { CampgroundResult } from "../api";
-import { pinLabel, pinLegend, pinStyle, pinSvg } from "./pins";
+import { framedPlaces, hasCoords, pinLabel, pinLegend, pinStyle, pinSvg } from "./pins";
 import type { SelectionStore } from "./selection";
 import { tileLayerConfig, type Theme } from "./tiles";
 import "./ResultsMap.css";
@@ -19,6 +19,8 @@ declare module "leaflet" {
 }
 
 const PNW_CENTER: L.LatLngExpression = [47.3, -121.0];
+/** Places with nothing to book sit in their own pane, under every open pin and cluster. */
+const MUTED_PANE = "rv2-muted";
 const MAPBOX_TOKEN: string | undefined = import.meta.env.VITE_PUBLIC_MAPBOX_TOKEN;
 
 const currentTheme = (): Theme => (document.documentElement.dataset.theme === "dark" ? "dark" : "light");
@@ -33,21 +35,21 @@ function pinIcon(r: CampgroundResult): L.DivIcon {
   return L.divIcon({
     className: `rv2-marker${style.muted ? " rv2-marker--muted" : ""}`,
     html: pinSvg(style) + name,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+    // Muted pins are smaller: present for context, never the answer.
+    iconSize: style.muted ? [20, 20] : [32, 32],
+    iconAnchor: style.muted ? [10, 10] : [16, 16],
   });
 }
 
+/** Clusters hold only open places, so the count is places with something to book. */
 function clusterIcon(cluster: L.MarkerCluster): L.DivIcon {
   const n = cluster.getChildCount();
   return L.divIcon({
     className: "rv2-cluster",
-    html: `<span>${n}</span><span class="sr-only"> places, zoom in</span>`,
+    html: `<span>${n}</span><span class="sr-only"> open places, zoom in</span>`,
     iconSize: [36, 36],
   });
 }
-
-const hasCoords = (r: CampgroundResult) => !!r.latitude && !!r.longitude;
 
 interface Props {
   /** Open places in list order, then places with nothing to book. */
@@ -69,6 +71,9 @@ export default function ResultsMap({ places, searchKey, selection, onSelect }: P
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
+  const mutedRef = useRef<L.LayerGroup | null>(null);
+  // Fits the map to the current results; null until there are any.
+  const fitRef = useRef<(() => void) | null>(null);
   // The user moved the map since this search started: stop refitting.
   const movedRef = useRef(false);
   const fittingRef = useRef(false);
@@ -124,6 +129,8 @@ export default function ResultsMap({ places, searchKey, selection, onSelect }: P
     });
     map.on("moveend", () => { fittingRef.current = false; });
     map.on("zoomend moveend", () => paintRef.current());
+    map.createPane(MUTED_PANE);
+    const muted = L.layerGroup().addTo(map);
     const cluster = L.markerClusterGroup({
       // Cluster only pins that would overlap, and never once zoomed in.
       maxClusterRadius: 20,
@@ -137,17 +144,23 @@ export default function ResultsMap({ places, searchKey, selection, onSelect }: P
     });
     cluster.on("animationend", () => paintRef.current());
     map.addLayer(cluster);
-    // The aside resizes with the window and the sticky height.
-    const resize = new ResizeObserver(() => map.invalidateSize());
+    // The aside resizes with the window and the sticky height, and the phone
+    // sheet with its snap points: keep the results framed until the user pans.
+    const resize = new ResizeObserver(() => {
+      map.invalidateSize();
+      if (!movedRef.current) fitRef.current?.();
+    });
     resize.observe(containerRef.current);
     mapRef.current = map;
     clusterRef.current = cluster;
+    mutedRef.current = muted;
     return () => {
       themeWatch.disconnect();
       resize.disconnect();
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
+      mutedRef.current = null;
     };
   }, []);
 
@@ -158,8 +171,10 @@ export default function ResultsMap({ places, searchKey, selection, onSelect }: P
   useEffect(() => {
     const map = mapRef.current;
     const cluster = clusterRef.current;
-    if (!map || !cluster) return;
+    const mutedLayer = mutedRef.current;
+    if (!map || !cluster || !mutedLayer) return;
     cluster.clearLayers();
+    mutedLayer.clearLayers();
     markersRef.current.clear();
     paintedRef.current = {};
     const shown = places.filter(hasCoords);
@@ -169,7 +184,7 @@ export default function ResultsMap({ places, searchKey, selection, onSelect }: P
         icon: pinIcon(r),
         interactive: !muted,
         keyboard: !muted,
-        zIndexOffset: muted ? -1000 : 0,
+        ...(muted && { pane: MUTED_PANE }),
       });
       if (!muted) {
         const id = r.facility_id;
@@ -183,14 +198,18 @@ export default function ResultsMap({ places, searchKey, selection, onSelect }: P
         });
         markersRef.current.set(id, marker);
       }
-      cluster.addLayer(marker);
+      // Open places cluster among themselves; a cluster never hides an empty place.
+      (muted ? mutedLayer : cluster).addLayer(marker);
     }
-    if (shown.length && !movedRef.current) {
+    const framed = framedPlaces(shown);
+    fitRef.current = framed.length ? () => {
       fittingRef.current = true;
-      map.fitBounds(L.latLngBounds(shown.map((r) => [r.latitude, r.longitude] as L.LatLngTuple)),
-        { padding: [48, 48], maxZoom: 11, animate: false });
+      map.fitBounds(L.latLngBounds(framed.map((r) => [r.latitude, r.longitude] as L.LatLngTuple)),
+        // The key sits over the bottom edge: keep framed pins clear of it.
+        { paddingTopLeft: [48, 48], paddingBottomRight: [48, 88], maxZoom: 11, animate: false });
       fittingRef.current = false;
-    }
+    } : null;
+    if (!movedRef.current) fitRef.current?.();
     paint();
   }, [places, paint]);
 

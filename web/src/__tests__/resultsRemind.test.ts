@@ -19,8 +19,8 @@ const juneNyr = place({
 describe("remindStays", () => {
   test("each not-released weekend, with the day its first night opens", () => {
     expect(remindStays(juneNyr, juneWeekends, TODAY)).toEqual([
-      { start: "2027-06-18", end: "2027-06-20", label: "Fri Jun 18 – Sun 20", releasesOn: "2026-12-18" },
-      { start: "2027-06-25", end: "2027-06-27", label: "Fri Jun 25 – Sun 27", releasesOn: "2026-12-25" },
+      { start: "2027-06-18", end: "2027-06-20", label: "Fri Jun 18 → Sun 20", releasesOn: "2026-12-18" },
+      { start: "2027-06-25", end: "2027-06-27", label: "Fri Jun 25 → Sun 27", releasesOn: "2026-12-25" },
     ]);
   });
 
@@ -34,9 +34,9 @@ describe("remindStays", () => {
   });
 
   test("exact dates are the one stay", () => {
-    const exact = { start_date: "2027-06-25", end_date: "2027-06-26", mode: "exact" };
+    const exact = { start_date: "2027-06-25", end_date: "2027-06-26", mode: "exact", nights: 1 };
     expect(remindStays(juneNyr, exact, TODAY)).toEqual([
-      { start: "2027-06-25", end: "2027-06-26", label: "Fri Jun 25 – Sat 26", releasesOn: "2026-12-25" },
+      { start: "2027-06-25", end: "2027-06-25", label: "Fri Jun 25 → Sat 26", releasesOn: "2026-12-25" },
     ]);
   });
 
@@ -45,7 +45,7 @@ describe("remindStays", () => {
     const stays = remindStays(juneNyr, flexible, TODAY);
     expect(stays).toHaveLength(REMIND_LIMIT);
     expect(stays[0]).toEqual(
-      { start: "2027-06-17", end: "2027-06-18", label: "Thu Jun 17 – Fri 18", releasesOn: "2026-12-18" },
+      { start: "2027-06-17", end: "2027-06-18", label: "Thu Jun 17 → Sat 19", releasesOn: "2026-12-18" },
     );
   });
 

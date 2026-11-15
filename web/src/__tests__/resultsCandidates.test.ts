@@ -7,7 +7,8 @@ const juneWeekends: SearchParams = {
   start_date: "2027-06-01", end_date: "2027-06-30", mode: "find", nights: 2, days_of_week: "4,5,6",
 };
 const anyDay: SearchParams = { start_date: "2027-06-01", end_date: "2027-06-07", mode: "find", nights: 2 };
-const exact: SearchParams = { start_date: "2027-06-04", end_date: "2027-06-05", mode: "exact", nights: 2 };
+// Exact dates are arrival and checkout, as the search bar sends them.
+const exact: SearchParams = { start_date: "2027-06-04", end_date: "2027-06-06", mode: "exact", nights: 2 };
 
 const win = (start: string, end: string, extra: Partial<Window> = {}): Window => ({
   campsite_id: "A", site_name: "A", loop: "", campsite_type: "STANDARD",
@@ -41,7 +42,7 @@ describe("candidateWindows", () => {
       .toEqual(["2027-06-06→2027-06-07"]);
   });
 
-  test("exact dates: the one stay searched", () => {
+  test("exact dates: the one stay searched, whose last night is the day before checkout", () => {
     expect(spans(exact)).toEqual(["2027-06-04→2027-06-05"]);
   });
 

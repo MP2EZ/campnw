@@ -37,16 +37,17 @@ describe("CampgroundCard", () => {
     expect(card).toHaveTextContent("~48m drive");
     expect(card).toHaveTextContent("Federal Way, WA");
     expect(card).toHaveTextContent("Typical weather: Mid-June 67° / 50°");
-    expect(card).toHaveTextContent("Puget Sound beach park.");
+    // Generated pitches read as marketing (UX #16, BRAND voice); cards don't show them.
+    expect(card).not.toHaveTextContent("Puget Sound beach park.");
     expect(card).toHaveTextContent("Tent · RV ≤35′");
     expect(card).toHaveTextContent("Book via WA State Parks");
     expect(card).toHaveTextContent("+ 7 first-come, first-served sites");
     expect(within(card).getByRole("group", { name: "Weekends at Dash Point State Park" })).toBeInTheDocument();
   });
 
-  test("the boat-in tag isn't repeated in the tag line", () => {
+  test("tags read as words, and the boat-in tag isn't repeated in the tag line", () => {
     render(<CampgroundCard result={dashPoint} params={juneWeekends} rank={0} />);
-    expect(screen.getByText("beach")).toBeInTheDocument();
+    expect(screen.getByText("Beach")).toBeInTheDocument();
     expect(screen.queryByText(/boat-in/)).not.toBeInTheDocument();
   });
 
@@ -59,7 +60,7 @@ describe("CampgroundCard", () => {
     render(<CampgroundCard result={dashPoint} params={juneWeekends} rank={3} />);
     await userEvent.click(screen.getByRole("button", { name: /see open sites$/ }));
     expect(track).toHaveBeenCalledWith("window_chip_opened", {
-      facility_id: "-2147483624", result_rank: 3, source: "wa_state", sites_in_chip: 6, nights: 3,
+      facility_id: "-2147483624", result_rank: 3, source: "wa_state", sites_in_chip: 6, nights: 2,
       chip_start: "2027-06-04", ui_version: "v2",
     });
     const dialog = screen.getByRole("dialog", { name: "Dash Point State Park" });
@@ -92,5 +93,12 @@ describe("CampgroundCard", () => {
     fireEvent.error(img);
     expect(container.querySelector(".rv2-thumb img")).toBeNull();
     expect(container.querySelector(".rv2-thumb svg")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  test("an all-caps Recreation.gov name reads as a name; a searched rig leads the fit line", () => {
+    render(<CampgroundCard result={{ ...dashPoint, name: "OHANAPECOSH CAMPGROUND" }}
+      params={{ ...juneWeekends, equipment: "tent" }} rank={0} />);
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Ohanapecosh Campground");
+    expect(screen.getByRole("article")).toHaveTextContent(/\d+ sites? fits? your tent/);
   });
 });

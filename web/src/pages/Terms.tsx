@@ -33,8 +33,8 @@ export default function Terms() {
           </p>
           <p>
             <strong>Campable Pro</strong> is $5/month. It unlocks unlimited
-            simultaneous watches, 5-minute polling instead of 15-minute, more
-            trip-planner sessions per month, and anomaly-based deal alerts.
+            simultaneous watches, 5-minute polling instead of 15-minute, and
+            more trip-planner sessions per month.
             See <Link to="/pricing">/pricing</Link> for the full comparison.
           </p>
         </section>

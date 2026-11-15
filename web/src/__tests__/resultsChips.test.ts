@@ -34,8 +34,8 @@ describe("buildWindowChips: weekend searches", () => {
       win("A", "2027-06-11", "2027-06-12"),
     ]), juneWeekends));
     expect(r.shown).toEqual([
-      expect.objectContaining({ start: "2027-06-04", end: "2027-06-06", label: "Fri 4 – Sun 6", open: 3 }),
-      expect.objectContaining({ start: "2027-06-11", end: "2027-06-13", label: "Fri 11 – Sun 13", open: 1 }),
+      expect.objectContaining({ start: "2027-06-04", end: "2027-06-06", label: "Fri 4 → Sun 6", open: 3 }),
+      expect.objectContaining({ start: "2027-06-11", end: "2027-06-13", label: "Fri 11 → Sun 13", open: 1 }),
     ]);
     expect(r.more).toEqual([]);
   });
@@ -52,7 +52,7 @@ describe("buildWindowChips: weekend searches", () => {
   test("a weekend cut by the search range only spans the searched nights", () => {
     const r = openOnly(buildWindowChips(place([win("A", "2027-06-05", "2027-06-06")]),
       { ...juneWeekends, start_date: "2027-06-05" }));
-    expect(r.shown[0]).toMatchObject({ start: "2027-06-05", end: "2027-06-06", label: "Sat 5 – Sun 6" });
+    expect(r.shown[0]).toMatchObject({ start: "2027-06-05", end: "2027-06-06", label: "Sat 5 → Mon 7" });
   });
 
   test("searches across months put the month in the label", () => {
@@ -60,16 +60,51 @@ describe("buildWindowChips: weekend searches", () => {
       win("A", "2027-07-30", "2027-07-31"),
       win("B", "2027-06-04", "2027-06-05"),
     ]), { ...juneWeekends, end_date: "2027-08-31" }));
-    expect(labels(r)).toEqual(["Fri Jun 4 – Sun 6", "Fri Jul 30 – Sun Aug 1"]);
+    expect(labels(r)).toEqual(["Fri Jun 4 → Sun 6", "Fri Jul 30 → Sun Aug 1"]);
+  });
+
+  test("a stay that checks out next month names only the checkout's month", () => {
+    // Prod (Feb 2027 search): "Sat Feb 27 → Mon Mar 1" wrapped to two lines at 375.
+    const r = openOnly(buildWindowChips(place([win("A", "2027-02-27", "2027-02-28")]),
+      { ...juneWeekends, start_date: "2027-02-01", end_date: "2027-02-28" }));
+    expect(labels(r)).toEqual(["Sat 27 → Mon Mar 1"]);
   });
 
   test("long weekends and day sets that wrap the week group the same way", () => {
     const thuSun = openOnly(buildWindowChips(place([win("A", "2027-06-03", "2027-06-05")]),
       { ...juneWeekends, days_of_week: "3,4,5,6" }));
-    expect(labels(thuSun)).toEqual(["Thu 3 – Sun 6"]);
+    expect(labels(thuSun)).toEqual(["Thu 3 → Sat 5"]);
     const sunMon = openOnly(buildWindowChips(place([win("A", "2027-06-06", "2027-06-07")]),
       { ...juneWeekends, days_of_week: "6,0" }));
-    expect(labels(sunMon)).toEqual(["Sun 6 – Mon 7"]);
+    expect(labels(sunMon)).toEqual(["Sun 6 → Tue 8"]);
+  });
+});
+
+describe("buildWindowChips: a chip is one stay of the searched length (#4)", () => {
+  // Prod (2026-11-14): on a 2-night weekend search the chip read "Fri 5 – Sun 7"
+  // (the block's nights) while its panel opened "Fri Feb 5 → Mon Feb 8 · 3 nights".
+  test("a site open all three nights still makes a 2-night chip, arrival → checkout", () => {
+    const r = openOnly(buildWindowChips(place([win("A", "2027-06-04", "2027-06-06", { nights: 3 })]), juneWeekends));
+    expect(r.shown[0]).toMatchObject({
+      start: "2027-06-04", end: "2027-06-06", stay: { start: "2027-06-04", end: "2027-06-05" }, label: "Fri 4 → Sun 6",
+    });
+  });
+
+  test("when sites only have Saturday and Sunday nights, the chip says so", () => {
+    const r = openOnly(buildWindowChips(place([win("A", "2027-06-05", "2027-06-06")]), juneWeekends));
+    expect(r.shown[0]).toMatchObject({ stay: { start: "2027-06-05", end: "2027-06-06" }, label: "Sat 5 → Mon 7" });
+  });
+
+  test("the stay most sites offer names the chip; every site still counts", () => {
+    const r = openOnly(buildWindowChips(place([
+      win("A", "2027-06-04", "2027-06-05"), win("B", "2027-06-05", "2027-06-06"), win("C", "2027-06-05", "2027-06-06"),
+    ]), juneWeekends));
+    expect(r.shown[0]).toMatchObject({ label: "Sat 5 → Mon 7", open: 3 });
+  });
+
+  test("weekends with nothing open name the weekend's first stay", () => {
+    const r = buildWindowChips(place([win("A", "2027-06-11", "2027-06-12")]), juneWeekends);
+    expect(r.shown[0]).toMatchObject({ status: "full", label: "Fri 4 → Sun 6", stay: { start: "2027-06-04", end: "2027-06-05" } });
   });
 });
 
@@ -80,8 +115,16 @@ describe("buildWindowChips: exact dates", () => {
       win("B", "2027-06-05", "2027-06-06"),
     ]), { start_date: "2027-06-04", end_date: "2027-06-06", mode: "exact", nights: 2 });
     expect(r.shown).toEqual([
-      expect.objectContaining({ start: "2027-06-04", end: "2027-06-06", label: "Fri 4 – Sun 6", open: 2 }),
+      expect.objectContaining({ start: "2027-06-04", end: "2027-06-05", label: "Fri 4 → Sun 6", open: 2 }),
     ]);
+  });
+});
+
+describe("buildWindowChips: exact dates end at checkout", () => {
+  test("the chip spans the nights, not the checkout day", () => {
+    const r = buildWindowChips(place([win("A", "2027-06-04", "2027-06-05")]),
+      { start_date: "2027-06-04", end_date: "2027-06-06", mode: "exact", nights: 2 });
+    expect(r.shown).toEqual([expect.objectContaining({ start: "2027-06-04", end: "2027-06-05", label: "Fri 4 → Sun 6" })]);
   });
 });
 
@@ -91,7 +134,7 @@ describe("buildWindowChips: flexible ranges give stay chips", () => {
   test("one chip per arrival date, labelled arrival to checkout", () => {
     const r = buildWindowChips(place([win("A", "2027-06-08", "2027-06-09")]), anyDay);
     expect(r.shown).toEqual([
-      expect.objectContaining({ start: "2027-06-08", end: "2027-06-09", label: "Tue 8 – Thu 10", open: 1 }),
+      expect.objectContaining({ start: "2027-06-08", end: "2027-06-09", label: "Tue 8 → Thu 10", open: 1 }),
     ]);
   });
 
@@ -128,7 +171,7 @@ describe("buildWindowChips: flexible ranges give stay chips", () => {
   test("every day of the week selected is the same as none", () => {
     const r = buildWindowChips(place([win("A", "2027-06-01", "2027-06-02")]),
       { ...anyDay, days_of_week: "0,1,2,3,4,5,6" });
-    expect(labels(r)).toEqual(["Tue 1 – Thu 3"]);
+    expect(labels(r)).toEqual(["Tue 1 → Thu 3"]);
   });
 
   test("shows the earliest few arrivals and holds the rest back", () => {
@@ -155,21 +198,21 @@ describe("buildWindowChips: flexible ranges give stay chips", () => {
 
   test("without search params, each window is its own stay", () => {
     const r = buildWindowChips(place([win("A", "2027-06-01", "2027-06-03", { nights: 3 })]), null);
-    expect(labels(r)).toEqual(["Tue 1 – Fri 4"]);
+    expect(labels(r)).toEqual(["Tue 1 → Fri 4"]);
   });
 });
 
 describe("buildWindowChips: partial weekend stays", () => {
   const oneNight = { ...juneWeekends, nights: 1 };
 
-  test("a weekend whose sites only offer part of it says the shortest stay", () => {
+  test("a 1-night search names a 1-night stay, so one-night sites need no “1+ nights”", () => {
     const r = buildWindowChips(place([
       win("A", "2027-06-04", "2027-06-04", { nights: 1 }),
       win("B", "2027-06-05", "2027-06-05", { nights: 1 }),
       win("C", "2027-06-04", "2027-06-06", { nights: 3 }),
     ]), oneNight);
-    expect(r.shown[0]).toMatchObject({ open: 3, minNights: 1 });
-    expect(chipCountText(r.shown[0])).toBe("3 left · 1+ nights");
+    expect(r.shown[0]).toMatchObject({ open: 3, minNights: null, label: "Fri 4 → Sat 5" });
+    expect(chipCountText(r.shown[0])).toBe("3 left");
   });
 
   test("counts the longest run a site has in the weekend, not its first window", () => {
@@ -203,10 +246,10 @@ describe("buildWindowChips: weekends that aren't open (D4)", () => {
       not_released_ranges: [{ start: "2027-06-18", end: "2027-06-30", releases_on: "2026-12-18" }],
     }), juneWeekends);
     expect(r.shown.map((c) => [c.label, c.status, c.open, c.releasesOn])).toEqual([
-      ["Fri 4 – Sun 6", "full", 0, null],
-      ["Fri 11 – Sun 13", "open", 1, null],
-      ["Fri 18 – Sun 20", "not_released", 0, "2026-12-18"],
-      ["Fri 25 – Sun 27", "not_released", 0, "2026-12-25"],
+      ["Fri 4 → Sun 6", "full", 0, null],
+      ["Fri 11 → Sun 13", "open", 1, null],
+      ["Fri 18 → Sun 20", "not_released", 0, "2026-12-18"],
+      ["Fri 25 → Sun 27", "not_released", 0, "2026-12-25"],
     ]);
     expect(r.shown.filter((c) => c.status !== "open").every((c) => c.href === null)).toBe(true);
   });
@@ -246,8 +289,8 @@ describe("buildWindowChips: runs of weekends nothing can be reserved (UX #3)", (
     }), mayWeekends);
     expect(r.shown.map((c) => [c.label, c.status, c.blocks])).toEqual([
       ["May 1 – 16", "closed", 3],
-      ["Fri 21 – Sun 23", "full", 1],
-      ["Fri 28 – Sun 30", "open", 1],
+      ["Fri 21 → Sun 23", "full", 1],
+      ["Fri 28 → Sun 30", "open", 1],
     ]);
     expect(r.shown[0]).toMatchObject({ start: "2027-05-01", end: "2027-05-16", href: null });
     expect(chipCountText(r.shown[0])).toBe("Not reservable");
@@ -257,14 +300,14 @@ describe("buildWindowChips: runs of weekends nothing can be reserved (UX #3)", (
     const r = buildWindowChips(place([win("A", "2027-06-11", "2027-06-12")], {
       closed_ranges: [{ start: "2027-06-04", end: "2027-06-06" }],
     }), juneWeekends);
-    expect(r.shown[0]).toMatchObject({ label: "Fri 4 – Sun 6", status: "closed", blocks: 1 });
+    expect(r.shown[0]).toMatchObject({ label: "Fri 4 → Sun 6", status: "closed", blocks: 1 });
   });
 
   test("a run broken by another weekend is two chips", () => {
     const r = buildWindowChips(place([win("A", "2027-06-11", "2027-06-12")], {
       closed_ranges: [{ start: "2027-06-04", end: "2027-06-06" }, { start: "2027-06-18", end: "2027-06-30" }],
     }), juneWeekends);
-    expect(r.shown.map((c) => c.label)).toEqual(["Fri 4 – Sun 6", "Fri 11 – Sun 13", "Jun 18 – 27"]);
+    expect(r.shown.map((c) => c.label)).toEqual(["Fri 4 → Sun 6", "Fri 11 → Sun 13", "Jun 18 – 27"]);
   });
 
   test("not-released weekends with no release date collapse too; dated ones stay apart for reminders", () => {
@@ -275,7 +318,7 @@ describe("buildWindowChips: runs of weekends nothing can be reserved (UX #3)", (
       ],
     }), juneWeekends);
     expect(r.shown.map((c) => [c.label, c.blocks])).toEqual([
-      ["Jun 4 – 13", 2], ["Fri 18 – Sun 20", 1], ["Fri 25 – Sun 27", 1],
+      ["Jun 4 – 13", 2], ["Fri 18 → Sun 20", 1], ["Fri 25 → Sun 27", 1],
     ]);
   });
 

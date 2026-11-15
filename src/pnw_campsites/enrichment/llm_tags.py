@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
 from pydantic import BaseModel, field_validator
 
@@ -24,6 +25,18 @@ def _truncate(text: str, max_len: int) -> str:
     if last_space > 0:
         return truncated[:last_space] + "..."
     return truncated[:max_len]
+
+
+# Shared by the sync and batch prompts. BRAND.md: no outdoor-lifestyle
+# marketing copy; the user is already a camper.
+COPY_RULES = (
+    "Rules: State facts given above and nothing else. No invented amenities, "
+    "views or activities. No mood or quality words (peaceful, serene, "
+    "tranquil, scenic, stunning, pristine, cozy, charming, rustic charm, "
+    "convenient, perfect, ideal, haven, retreat, escape, getaway, nestled, "
+    "gem). No audience labels (lovers, enthusiasts, seekers, families "
+    "wanting). Never say that information is limited or unavailable."
+)
 
 
 VALID_TAGS = [
@@ -192,44 +205,49 @@ async def generate_vibe(
 async def generate_description(
     name: str,
     tags: list[str],
-    vibe: str,
     total_sites: int | None,
     state: str,
     notes: str,
     api_key: str,
+    usage: dict[str, int] | None = None,
 ) -> dict[str, str]:
     """Generate elevator_pitch, description_rewrite, best_for for a campground.
 
     Returns dict with keys: elevator_pitch, description_rewrite, best_for.
-    Empty dict on failure.
+    Empty dict on failure. ``usage``, when given, accumulates input/output tokens.
     """
     from pnw_campsites.posthog_client import HAIKU_MODEL, get_anthropic_client
 
     client = get_anthropic_client(api_key)
 
     tag_str = ", ".join(tags) if tags else "none"
-    size_str = f"{total_sites} sites" if total_sites else "unknown size"
-    vibe_str = f"Character: {vibe}" if vibe else ""
-    source_desc = notes[:2000] if notes else ""
+    size_str = f"{total_sites} sites" if total_sites else "unknown"
+    source_desc = notes[:2000] if notes else "none"
 
+    # The vibe is earlier LLM output, not a source: feeding it back in carried
+    # its marketing tone ("rustic charm", "serene escape") into the new copy.
     prompt = (
-        "Generate three descriptions for this campground. Return ONLY a JSON "
+        "Write short, plain copy for this campground. Return ONLY a JSON "
         "object with these keys:\n"
-        '- "elevator_pitch": One sentence (max 120 chars) for a search result '
-        "card. Capture what makes this place distinctive.\n"
-        '- "description_rewrite": 2-3 sentences (max 350 chars) for an expanded '
-        "view. Setting, key activities, what sets it apart.\n"
-        '- "best_for": A short label (max 50 chars) for who this campground is '
-        'ideal for. Examples: "families with young kids", "RV road-trippers", '
-        '"backpackers seeking solitude".\n\n'
+        '- "elevator_pitch": One sentence (max 110 chars) for a search result '
+        "card. Setting and what is there, from the facts below. Don't repeat "
+        "the campground name. With no facts beyond the name and state, just "
+        "say what kind of camp it is and where, e.g. \"Horse camp in "
+        "California.\"\n"
+        '- "description_rewrite": 1-3 sentences (max 350 chars) for the '
+        "campground's page. Only facts from below. When the facts are thin, "
+        "write one short sentence.\n"
+        '- "best_for": What the campground suits, as uses or site types (max '
+        '40 chars). Examples: "tent camping, fishing", "horse camping", "group '
+        'camping", "RVs and tents". Lowercase. Only uses the tags or '
+        'description support; an empty string if none. Never a kind of '
+        "person.\n\n"
         f"Campground: {name}\n"
         f"State: {state}\n"
         f"Tags: {tag_str}\n"
-        f"Size: {size_str}\n"
-        f"{vibe_str}\n"
-        f"Original description: {source_desc}\n\n"
-        "Constraints: Only reference features explicitly stated above. Do not "
-        "invent amenities. Be specific, not generic. Return ONLY the JSON."
+        f"Sites: {size_str}\n"
+        f"Description: {source_desc}\n\n"
+        f"{COPY_RULES} Return ONLY the JSON."
     )
 
     try:
@@ -239,6 +257,9 @@ async def generate_description(
             messages=[{"role": "user", "content": prompt}],
             posthog_privacy_mode=True,
         )
+        if usage is not None:
+            usage["input_tokens"] += response.usage.input_tokens
+            usage["output_tokens"] += response.usage.output_tokens
         text = response.content[0].text.strip()
         # Handle markdown code blocks
         if text.startswith("```"):
@@ -344,8 +365,7 @@ async def enrich_registry(
 
     for cg in desc_candidates:
         desc = await generate_description(
-            cg.name, cg.tags, cg.vibe, cg.total_sites,
-            cg.state, cg.notes, api_key,
+            cg.name, cg.tags, cg.total_sites, cg.state, cg.notes, api_key,
         )
 
         if dry_run:
@@ -366,3 +386,92 @@ async def enrich_registry(
 
     registry.close()
     return enriched
+
+
+def has_copy_facts(cg) -> bool:
+    """Whether the registry holds anything to write copy from beyond name and state."""
+    return bool(cg.tags or cg.notes or cg.total_sites)
+
+
+async def regenerate_descriptions(
+    registry_path: str | None = None,
+    api_key: str | None = None,
+    limit: int | None = None,
+    dry_run: bool = False,
+    export_path: Path | None = None,
+    concurrency: int = 8,
+) -> tuple[int, int, int, dict[str, int]]:
+    """Rewrite pitch, description and best-for for every enabled campground.
+
+    Unlike ``enrich_registry``, existing copy is overwritten, and tags and vibe
+    are left alone. A campground with no facts (no tags, notes or site count)
+    gets its copy cleared without a model call: anything written from the name
+    alone is invented. A failed generation keeps the old copy. When
+    ``export_path`` is set (and not a dry run), the result is exported to the
+    pitch fixture, which is how new copy reaches prod.
+
+    Returns (rewritten, cleared, failed, token usage).
+    """
+    import asyncio
+    import os
+
+    from pnw_campsites.registry.db import CampgroundRegistry
+    from pnw_campsites.registry.pitch_fixture import export_pitch_fixture
+
+    api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
+    usage = {"input_tokens": 0, "output_tokens": 0}
+    if not api_key:
+        _logger.error("ANTHROPIC_API_KEY not set")
+        return 0, 0, 0, usage
+
+    registry = (
+        CampgroundRegistry(registry_path) if registry_path else CampgroundRegistry()
+    )
+    candidates = registry.search(enabled_only=True)[:limit]
+    with_facts = [cg for cg in candidates if has_copy_facts(cg)]
+    without = [cg for cg in candidates if not has_copy_facts(cg)]
+    _logger.info(
+        "Rewriting copy for %d campgrounds, clearing %d with no facts",
+        len(with_facts), len(without),
+    )
+    for cg in without:
+        if dry_run:
+            _logger.info(
+                "DRY RUN %s\n  before: %s\n  after:  (cleared)", cg.name, cg.elevator_pitch,
+            )
+        else:
+            registry.update_description(cg.id, "", "", "")
+
+    sem = asyncio.Semaphore(concurrency)
+
+    async def one(cg):
+        async with sem:
+            return cg, await generate_description(
+                cg.name, cg.tags, cg.total_sites, cg.state, cg.notes, api_key,
+                usage=usage,
+            )
+
+    rewritten = failed = 0
+    for fut in asyncio.as_completed([one(cg) for cg in with_facts]):
+        cg, desc = await fut
+        if not desc.get("elevator_pitch"):
+            failed += 1
+            _logger.warning("No copy generated for %s; keeping the old copy", cg.name)
+            continue
+        rewritten += 1
+        if dry_run:
+            _logger.info(
+                "DRY RUN %s\n  before: %s | %s\n  after:  %s | %s\n  desc:   %s",
+                cg.name, cg.elevator_pitch, cg.best_for,
+                desc["elevator_pitch"], desc["best_for"], desc["description_rewrite"],
+            )
+            continue
+        registry.update_description(
+            cg.id, desc["elevator_pitch"], desc["description_rewrite"], desc["best_for"],
+        )
+
+    if export_path is not None and not dry_run:
+        rows = export_pitch_fixture(registry._conn, export_path)
+        _logger.info("Exported %d rows to %s", rows, export_path)
+    registry.close()
+    return rewritten, len(without), failed, usage

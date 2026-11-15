@@ -231,7 +231,7 @@ describe("Accessibility: results v2", () => {
   test("an open chip opens the site panel (P3b): a modal that passes axe, focus back to the chip on Escape", async () => {
     renderV2();
     const chip = screen.getAllByRole("button", { name: /see open sites$/ })[0];
-    expect(chip).toHaveAccessibleName(/^Fri 4 – Sun 6, 1 left/);
+    expect(chip).toHaveAccessibleName(/^Fri 4 → Sat 5, 1 left/);
     await userEvent.click(chip);
     const dialog = screen.getByRole("dialog", { name: "Dash Point State Park" });
     expect(dialog).toHaveAttribute("aria-modal", "true");

@@ -1,5 +1,6 @@
 import type { CampgroundResult } from "../api";
 import { formatDriveTime } from "../lib/dates";
+import { displayName } from "../lib/displayName";
 
 /** Drive bands match DriveBands' hours: under 1 h, 1–2 h, 2 h or more. */
 export type PinTier = "near" | "mid" | "far" | "unknown" | "boat" | "none";
@@ -29,11 +30,24 @@ export function pinStyle(r: CampgroundResult): PinStyle {
   return { tier: "far", shape: "ring", muted: false };
 }
 
+export const hasCoords = (r: CampgroundResult) => !!r.latitude && !!r.longitude;
+
+/**
+ * The places the map frames: the open ones, since they're the answer. Places
+ * with nothing to book still show, but only frame the map when nothing is open.
+ */
+export function framedPlaces(places: CampgroundResult[]): CampgroundResult[] {
+  const shown = places.filter(hasCoords);
+  const open = shown.filter((r) => r.total_available_sites > 0);
+  return open.length ? open : shown;
+}
+
 /** The pin's accessible name: the place, then how far it is. */
 export function pinLabel(r: CampgroundResult): string {
-  if (r.boat_in) return `${r.name}, boat-in only`;
+  const name = displayName(r.name);
+  if (r.boat_in) return `${name}, boat-in only`;
   const drive = formatDriveTime(r.estimated_drive_minutes);
-  return drive ? `${r.name}, ${drive} drive` : r.name;
+  return drive ? `${name}, ${drive} drive` : name;
 }
 
 const LEGEND: [PinTier, string, PinShape][] = [

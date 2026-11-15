@@ -1,6 +1,7 @@
 import type { CampgroundResult, CreateWatchParams, SearchParams } from "../api";
-import { candidateStatus, candidateWindows, nightsIn, searchedDays } from "./candidates";
-import { chipLabel } from "./chips";
+import { formatDateRange } from "../lib/dates";
+import { blockStay, candidateStatus, candidateWindows, nightsIn, searchedDays } from "./candidates";
+import { stayText } from "./chips";
 import type { Equipment } from "./searchState";
 
 /**
@@ -32,8 +33,11 @@ export function watchStays(r: CampgroundResult, p: SearchParams | null): WatchSt
   const candidates = candidateWindows(p);
   const full = candidates.filter((c) => candidateStatus(r, c).status === "full");
   if (full.length === 0 || !p?.start_date || !p.end_date) return [];
-  const stays = p.mode === "exact" || searchedDays(p) ? full : [{ start: p.start_date, end: p.end_date }];
-  return stays.map(({ start, end }) => ({ start, end, label: chipLabel(start, end, true) }));
+  if (p.mode !== "exact" && !searchedDays(p)) {
+    return [{ start: p.start_date, end: p.end_date, label: formatDateRange(p.start_date, p.end_date) }];
+  }
+  // Labelled like the chip: the block's first stay of the searched length.
+  return full.map(({ start, end }) => ({ start, end, label: stayText(blockStay({ start, end }, p), true) }));
 }
 
 /** A not-released stay and the day its first unreleased night opens. */
@@ -61,7 +65,7 @@ export function remindStays(r: CampgroundResult, p: SearchParams | null, today: 
   for (const c of candidateWindows(p)) {
     const s = candidateStatus(r, c);
     if (s.status !== "not_released" || !s.releasesOn || s.releasesOn < today) continue;
-    out.push({ start: c.start, end: c.end, label: chipLabel(c.start, c.end, true), releasesOn: s.releasesOn });
+    out.push({ start: c.start, end: c.end, label: stayText(blockStay(c, p), true), releasesOn: s.releasesOn });
     if (out.length === REMIND_LIMIT) break;
   }
   return out;
