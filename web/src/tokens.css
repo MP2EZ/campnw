@@ -124,6 +124,9 @@
   --chip-full-bg: #f1efe6;
   --chip-full-text: #55554e;
   --chip-full-border: #b0ad9f;   /* decorative: the "Full" label carries the state */
+  --chip-action-bg: #fffdf8;     /* Watch / Remind chips: outlined, on the card */
+  --chip-action-text: #2d5016;
+  --chip-action-border: #4a6b3a;
   --notice-info-bg: #e7eff1;
   --notice-info-text: #1d4a5a;
   --focus-ring: #b4561a;
@@ -173,6 +176,9 @@
   --chip-full-bg: #2b2a25;
   --chip-full-text: #b8b6aa;
   --chip-full-border: #6e6c62;
+  --chip-action-bg: #21211e;
+  --chip-action-text: #a5c48f;
+  --chip-action-border: #7aad5a;
   --notice-info-bg: #15282e;
   --notice-info-text: #9fd0de;
   --focus-ring: #e8894a;

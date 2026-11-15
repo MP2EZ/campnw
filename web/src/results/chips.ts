@@ -1,5 +1,5 @@
 import type { CampgroundResult, SearchParams, Window } from "../api";
-import { parseIsoDate } from "../lib/dates";
+import { formatDateRange, formatDay, parseIsoDate } from "../lib/dates";
 import { addDays, blockAround, candidateStatus, candidateWindows, nightsIn, searchedDays } from "./candidates";
 
 /**
@@ -40,16 +40,37 @@ export interface WindowChip {
   releasesOn: string | null;
   /** The one site's booking page, else the campground's. */
   href: string | null;
+  /**
+   * Blocks this chip stands for: 1, or a run of consecutive blocks nothing
+   * can be booked in, collapsed into one "May 1 – 16 · Not reservable" chip.
+   */
+  blocks: number;
+}
+
+/** A flexible range open on most arrivals, said once instead of one chip per arrival. */
+export interface ChipSummary {
+  /** "Every arrival Apr 1 – 29", or "Most arrivals …" when some have nothing. */
+  label: string;
+  /** Site counts across the arrivals: "33–83 open", "1–2 left". */
+  open: string;
+  /** Arrivals with nothing open, YYYY-MM-DD; only said when there are a couple. */
+  gaps: string[];
 }
 
 export interface WindowChips {
   shown: WindowChip[];
   /** Behind a "+k more" button. */
   more: WindowChip[];
+  /** Shown in place of the chips until expanded; null when the chips say it well enough. */
+  summary: ChipSummary | null;
 }
 
 export const CHIP_LIMIT = 4;
 export const FEW_LEFT = 5;
+/** Share of a flexible range's arrivals that must be open for a summary. */
+export const SUMMARY_SHARE = 0.8;
+/** Gaps listed by date in a summary; more and it just says "Most arrivals". */
+const SUMMARY_GAPS = 2;
 
 // Intl orders weekday + day as "4 Fri"; build the parts in the design's order.
 const part = (d: Date, unit: "weekday" | "month") => d.toLocaleDateString("en-US", { [unit]: "short" });
@@ -129,7 +150,7 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
         start, end, label, open, fit: open, few: open <= FEW_LEFT,
         // Two nights is a whole weekend, so only a shorter shortest stay is said.
         minNights: shortest < Math.min(nightsIn(start, end), 2) ? shortest : null,
-        status: "open", releasesOn: null, href: only ?? result.availability_url,
+        status: "open", releasesOn: null, href: only ?? result.availability_url, blocks: 1,
       };
     });
 
@@ -143,14 +164,60 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
       chips.push({
         start: c.start, end: c.end, label: chipLabel(c.start, c.end, withMonth), open: 0, fit: 0, few: false,
         minNights: null, status: s.status, releasesOn: s.status === "not_released" ? s.releasesOn : null, href: null,
+        blocks: 1,
       });
     }
     chips.sort((a, b) => a.start.localeCompare(b.start));
   }
 
+  const list = collapseInert(chips);
   // Hiding a single chip behind "+1 more" saves nothing.
-  const cut = chips.length > CHIP_LIMIT + 1 ? CHIP_LIMIT : chips.length;
-  return { shown: chips.slice(0, cut), more: chips.slice(cut) };
+  const cut = list.length > CHIP_LIMIT + 1 ? CHIP_LIMIT : list.length;
+  return { shown: list.slice(0, cut), more: list.slice(cut), summary: summarise(list, params, cut < list.length) };
+}
+
+/**
+ * Nothing to do with these: not reservable, or not released with no date to
+ * be reminded of. Full chips stay apart, since each can be watched.
+ */
+const inert = (c: WindowChip) => c.status === "closed" || (c.status === "not_released" && !c.releasesOn);
+
+/** Runs of inert chips with the same text become one chip spanning the run. */
+function collapseInert(chips: WindowChip[]): WindowChip[] {
+  const out: WindowChip[] = [];
+  for (const c of chips) {
+    const prev = out[out.length - 1];
+    if (prev && inert(c) && inert(prev) && prev.status === c.status) {
+      out[out.length - 1] = { ...prev, end: c.end, blocks: prev.blocks + 1, label: formatDateRange(prev.start, c.end) };
+    } else {
+      out.push(c);
+    }
+  }
+  return out;
+}
+
+/** Flexible ranges with more chips than fit and most arrivals open: one line for the lot. */
+function summarise(chips: WindowChip[], params: SearchParams | null, overflows: boolean): ChipSummary | null {
+  if (!overflows || searchedDays(params) || params?.mode === "exact") return null;
+  const arrivals = candidateWindows(params).map((c) => c.start);
+  const open = new Set(chips.map((c) => c.start));
+  if (arrivals.length === 0 || open.size < arrivals.length * SUMMARY_SHARE) return null;
+  const gaps = arrivals.filter((a) => !open.has(a));
+  const counts = chips.map((c) => c.open);
+  const [lo, hi] = [Math.min(...counts), Math.max(...counts)];
+  const word = hi <= FEW_LEFT ? "left" : "open";
+  return {
+    label: `${gaps.length ? "Most" : "Every"} arrival${gaps.length ? "s" : ""} ${formatDateRange(arrivals[0], arrivals[arrivals.length - 1])}`,
+    open: lo === hi ? `${lo} ${word}` : `${lo}–${hi} ${word}`,
+    gaps: gaps.length <= SUMMARY_GAPS ? gaps : [],
+  };
+}
+
+/** "except Apr 11, 12" for a summary's listed gaps; the month is said once per month. */
+export function summaryGapText(gaps: string[]): string {
+  const days = gaps.map((g, i) =>
+    i > 0 && g.slice(0, 7) === gaps[i - 1].slice(0, 7) ? String(parseIsoDate(g).getDate()) : formatDay(g));
+  return days.length ? `except ${days.join(", ")}` : "";
 }
 
 /**

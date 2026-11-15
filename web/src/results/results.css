@@ -261,6 +261,8 @@
   justify-content: center;
   align-items: flex-start;
   padding: 0.35rem var(--space-3);
+  /* Every state has a 1px edge, transparent or not, so mixed rows line up (UX #20). */
+  border: 1px solid transparent;
   border-radius: var(--radius-xl);
   background: var(--chip-open-bg);
   color: var(--chip-open-text);
@@ -268,9 +270,8 @@
   transition: box-shadow var(--transition-fast);
 }
 
-/* Open chips open the site panel (P3b). Full chips keep their dashed look (watchSheet.css). */
-button.rv2-chip:not(.rv2-chip-full) {
-  border: 0;
+/* Open chips open the site panel (P3b); Watch and Remind chips open their sheet. */
+button.rv2-chip {
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -402,10 +403,41 @@ button.rv2-chip:not(.rv2-chip-full):hover {
 }
 
 /* ── Full or not released yet (P2c, D4) ──────────────────────────── */
+/*
+ * Two looks, told apart by more than colour (UX #2): a chip that opens the
+ * Watch or Remind sheet is outlined with a solid edge and leads its action
+ * with a bell; a chip with nothing to do is flat, with no edge, and its dates
+ * step down a weight.
+ */
 .rv2-chip-full {
-  border: 1px dashed var(--chip-full-border);
   background: var(--chip-full-bg);
   color: var(--chip-full-text);
+}
+
+.rv2-chip-inert .rv2-chip-dates {
+  font-weight: var(--weight-semi);
+}
+
+.rv2-chip-watch {
+  border-color: var(--chip-action-border);
+  background: var(--chip-action-bg);
+}
+
+button.rv2-chip-watch:hover {
+  color: var(--chip-full-text);
+  box-shadow: inset 0 0 0 1px var(--chip-action-border);
+}
+
+.rv2-chip-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--chip-action-text);
+  font-weight: var(--weight-bold);
+}
+
+.rv2-chip-watch .rv2-chip-count {
+  gap: var(--space-2);
 }
 
 .rv2-answer-link {

@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { buildWindowChips, chipCountText, CHIP_LIMIT } from "../results/chips";
+import { buildWindowChips, chipCountText, CHIP_LIMIT, SUMMARY_SHARE, summaryGapText } from "../results/chips";
 import type { CampgroundResult, SearchParams, Window } from "../api";
 
 // June 2027: Fridays are the 4th, 11th, 18th and 25th.
@@ -215,7 +215,7 @@ describe("buildWindowChips: weekends that aren't open (D4)", () => {
     const r = buildWindowChips(place([win("A", "2027-06-04", "2027-06-05")], {
       closed_ranges: [{ start: "2027-06-10", end: "2027-06-30" }],
     }), juneWeekends);
-    expect(r.shown.map((c) => c.status)).toEqual(["open", "closed", "closed", "closed"]);
+    expect(r.shown.map((c) => [c.status, c.blocks])).toEqual([["open", 1], ["closed", 3]]);
   });
 
   test("they say so in words", () => {
@@ -232,6 +232,98 @@ describe("buildWindowChips: weekends that aren't open (D4)", () => {
     const r = buildWindowChips(place([win("A", "2027-06-08", "2027-06-09")]),
       { start_date: "2027-06-01", end_date: "2027-06-30", mode: "find", nights: 2 });
     expect([...r.shown, ...r.more].every((c) => c.status === "open")).toBe(true);
+  });
+});
+
+describe("buildWindowChips: runs of weekends nothing can be reserved (UX #3)", () => {
+  // May 2027: Sat 1 (the search starts that day), then Fridays 7, 14, 21, 28.
+  const mayWeekends: SearchParams = { ...juneWeekends, start_date: "2027-05-01", end_date: "2027-05-31" };
+
+  test("collapse into one chip, so the bookable weekend isn't pushed to the next row", () => {
+    // Prod, Denny Creek: three "Not reservable" chips, then Full, then "1 left".
+    const r = buildWindowChips(place([win("A", "2027-05-28", "2027-05-29")], {
+      closed_ranges: [{ start: "2027-05-01", end: "2027-05-16" }],
+    }), mayWeekends);
+    expect(r.shown.map((c) => [c.label, c.status, c.blocks])).toEqual([
+      ["May 1 – 16", "closed", 3],
+      ["Fri 21 – Sun 23", "full", 1],
+      ["Fri 28 – Sun 30", "open", 1],
+    ]);
+    expect(r.shown[0]).toMatchObject({ start: "2027-05-01", end: "2027-05-16", href: null });
+    expect(chipCountText(r.shown[0])).toBe("Not reservable");
+  });
+
+  test("a single not-reservable weekend keeps its weekend label", () => {
+    const r = buildWindowChips(place([win("A", "2027-06-11", "2027-06-12")], {
+      closed_ranges: [{ start: "2027-06-04", end: "2027-06-06" }],
+    }), juneWeekends);
+    expect(r.shown[0]).toMatchObject({ label: "Fri 4 – Sun 6", status: "closed", blocks: 1 });
+  });
+
+  test("a run broken by another weekend is two chips", () => {
+    const r = buildWindowChips(place([win("A", "2027-06-11", "2027-06-12")], {
+      closed_ranges: [{ start: "2027-06-04", end: "2027-06-06" }, { start: "2027-06-18", end: "2027-06-30" }],
+    }), juneWeekends);
+    expect(r.shown.map((c) => c.label)).toEqual(["Fri 4 – Sun 6", "Fri 11 – Sun 13", "Jun 18 – 27"]);
+  });
+
+  test("not-released weekends with no release date collapse too; dated ones stay apart for reminders", () => {
+    const r = buildWindowChips(place([], {
+      not_released_ranges: [
+        { start: "2027-06-04", end: "2027-06-13", releases_on: null },
+        { start: "2027-06-18", end: "2027-06-27", releases_on: "2026-12-18" },
+      ],
+    }), juneWeekends);
+    expect(r.shown.map((c) => [c.label, c.blocks])).toEqual([
+      ["Jun 4 – 13", 2], ["Fri 18 – Sun 20", 1], ["Fri 25 – Sun 27", 1],
+    ]);
+  });
+
+  test("full weekends never collapse: each one can be watched", () => {
+    const r = buildWindowChips(place([]), juneWeekends);
+    expect(r.shown.map((c) => [c.status, c.blocks])).toEqual(Array(4).fill(["full", 1]));
+  });
+});
+
+describe("buildWindowChips: summary for flexible ranges open most days (UX #25)", () => {
+  // April 2027, 2 nights: arrivals Apr 1 – 29.
+  const april: SearchParams = { start_date: "2027-04-01", end_date: "2027-04-30", mode: "find", nights: 2 };
+  const site = (s: string, start = "2027-04-01", end = "2027-04-30") => win(s, start, end);
+
+  test("every arrival open: one summary of the range and the site counts", () => {
+    const r = buildWindowChips(place([site("A"), site("B", "2027-04-10", "2027-04-20")]), april);
+    expect(r.summary).toEqual({ label: "Every arrival Apr 1 – 29", open: "1–2 left", gaps: [] });
+    expect(r.shown.length + r.more.length).toBe(29);
+  });
+
+  test("open on most arrivals: says the gaps when there are only a couple", () => {
+    // A is open Apr 1 – 11 and 13 – 30: arrivals Apr 11 and 12 can't hold 2 nights.
+    const r = buildWindowChips(place([site("A", "2027-04-01", "2027-04-11"), site("A", "2027-04-13", "2027-04-30")]), april);
+    expect(r.summary).toEqual({ label: "Most arrivals Apr 1 – 29", open: "1 left", gaps: ["2027-04-11", "2027-04-12"] });
+    expect(summaryGapText(r.summary!.gaps)).toBe("except Apr 11, 12");
+  });
+
+  test("more than a couple of gaps aren't listed", () => {
+    const r = buildWindowChips(place([site("A", "2027-04-01", "2027-04-10"), site("A", "2027-04-14", "2027-04-30")]), april);
+    expect(r.summary).toMatchObject({ label: "Most arrivals Apr 1 – 29", gaps: [] });
+    expect(summaryGapText([])).toBe("");
+  });
+
+  test(`no summary below ${SUMMARY_SHARE * 100}% of arrivals open`, () => {
+    const r = buildWindowChips(place([site("A", "2027-04-01", "2027-04-20")]), april);
+    expect(r.summary).toBeNull();
+  });
+
+  test("no summary when every chip already fits", () => {
+    const short: SearchParams = { ...april, end_date: "2027-04-05" };
+    const r = buildWindowChips(place([site("A", "2027-04-01", "2027-04-05")]), short);
+    expect(r.summary).toBeNull();
+  });
+
+  test("weekend and exact searches never summarise", () => {
+    const r = buildWindowChips(place(["04", "11", "18", "25"].map((d) => win("A", `2027-06-${d}`, `2027-06-${d}`))),
+      juneWeekends);
+    expect(r.summary).toBeNull();
   });
 });
 

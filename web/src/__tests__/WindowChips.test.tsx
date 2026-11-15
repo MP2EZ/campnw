@@ -102,5 +102,32 @@ describe("WindowChips", () => {
     expect(screen.queryByRole("button", { name: /Fri 18/ })).not.toBeInTheDocument();
     expect(screen.getByText("Fri 18 – Sun 20")).toBeInTheDocument();
   });
-});
 
+  test("a watchable chip leads with a bell and an outline; a chip with nothing to do is flat (UX #2)", () => {
+    const result = {
+      ...place(six.map((s) => win(s, "2027-06-04", "2027-06-06"))),
+      closed_ranges: [{ start: "2027-06-18", end: "2027-06-30" }],
+    } as CampgroundResult;
+    render(<WindowChips chips={buildWindowChips(result, juneWeekends)} name="Dash Point" params={juneWeekends}
+      onOpen={vi.fn()} onWatch={vi.fn()} />);
+    const watch = screen.getByRole("button", { name: "Fri 11 – Sun 13, Full · Watch" });
+    expect(watch).toHaveClass("rv2-chip-watch");
+    expect(watch.querySelector(".rv2-chip-cta svg")).toHaveAttribute("aria-hidden", "true");
+    const inert = screen.getByText("Jun 18 – 27").closest(".rv2-chip");
+    expect(inert?.tagName).toBe("SPAN");
+    expect(inert).toHaveClass("rv2-chip-inert");
+    expect(inert).toHaveTextContent("Not reservable");
+  });
+
+  test("a range open most days is one summary that expands to every arrival (UX #25)", async () => {
+    const april: SearchParams = { start_date: "2027-04-01", end_date: "2027-04-30", mode: "find", nights: 2 };
+    renderChips([win("A", "2027-04-01", "2027-04-11"), win("A", "2027-04-13", "2027-04-30")], april);
+    const summary = screen.getByRole("button", { name: "Most arrivals Apr 1 – 29, 1 left · except Apr 11, 12, pick a date" });
+    expect(summary).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: /see open sites$/ })).not.toBeInTheDocument();
+    await userEvent.click(summary);
+    expect(screen.getAllByRole("button", { name: /see open sites$/ })).toHaveLength(27);
+    await userEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+    expect(screen.getByRole("button", { name: /pick a date$/ })).toBeInTheDocument();
+  });
+});
