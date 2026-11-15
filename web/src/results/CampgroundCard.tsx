@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { track, type CampgroundResult, type SearchParams } from "../api";
 import { formatDriveTime, parseIsoDate } from "../lib/dates";
+import { displayName } from "../lib/displayName";
 import { SOURCE_NAMES } from "../lib/sources";
 import { IconBoat, IconClock, IconSun, IconTent } from "../icons";
 import { nightsIn } from "./candidates";
@@ -12,6 +13,7 @@ import { SitePanel } from "./SitePanel";
 import type { PanelSite } from "./siteGroups";
 import { WindowChips } from "./WindowChips";
 import { remindStays, todayIso } from "./watch";
+import { tagLabels } from "./tags";
 import { useOpenWatch } from "./watchContext";
 
 interface Props {
@@ -40,9 +42,10 @@ function weatherLabel(r: CampgroundResult, p: SearchParams | null): string | nul
 export const CampgroundCard = memo(function CampgroundCard({ result, params, rank }: Props) {
   const source = SOURCE_NAMES[result.booking_system] ?? result.booking_system;
   const id = `rv2-card-${result.facility_id}`;
+  const name = displayName(result.name);
   const weather = weatherLabel(result, params);
-  const tags = (result.tags ?? []).filter((t) => t !== "boat-in");
-  const fit = fitLine(result.windows);
+  const tags = tagLabels(result.tags ?? []);
+  const fit = fitLine(result.windows, params);
   const [panel, setPanel] = useState<{ chip: WindowChip; el: HTMLElement } | null>(null);
   const event = (chip: WindowChip) => ({
     facility_id: result.facility_id,
@@ -80,7 +83,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
     <article className={selected ? "rv2-card is-selected" : "rv2-card"} aria-labelledby={id} {...selection}>
       <PlaceThumb result={result} />
       <div className="rv2-card-head">
-        <h3 id={id} className="rv2-card-name" tabIndex={-1}>{result.name}</h3>
+        <h3 id={id} className="rv2-card-name" tabIndex={-1}>{name}</h3>
         <p className="rv2-card-meta">
           {result.boat_in ? (
             <span className="rv2-boat"><IconBoat className="rv2-icon" />Boat-in only</span>
@@ -98,9 +101,8 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
         </p>
       </div>
       <div className="rv2-card-main">
-        {result.elevator_pitch && <p className="rv2-card-pitch">{result.elevator_pitch}</p>}
         <p className="rv2-card-fit">
-          <span className={fit === NOT_LISTED ? "rv2-fit rv2-card-muted" : "rv2-fit"}>
+          <span className={fit.startsWith(NOT_LISTED) ? "rv2-fit rv2-card-muted" : "rv2-fit"}>
             <IconTent className="rv2-icon" />{fit}
           </span>
           <span className="rv2-card-muted">Book via {source}</span>
@@ -110,7 +112,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
         </p>
         <WindowChips
           chips={buildWindowChips(result, params)}
-          name={result.name}
+          name={name}
           params={params}
           onOpen={onOpen}
           onWatch={openWatch ? (c) => openWatch(result, c.start, "chip") : undefined}

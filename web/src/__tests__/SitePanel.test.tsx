@@ -60,7 +60,7 @@ describe("SitePanel", () => {
     const dialog = await open();
     const groups = within(dialog).getAllByRole("group");
     expect(groups.map((g) => g.querySelector("legend")?.textContent)).toEqual([
-      "Tent and van sites, 1 open", "RV and trailer sites, 2 open", "Site types not listed yet, 1 open",
+      "Tent sites, 1 open", "RV and trailer sites, 2 open", "Site types not listed yet, 1 open",
     ]);
     expect(within(groups[1]).getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual([
       "Site 7, Tent, van or RV up to 30′, Loop Main · up to 8 people",

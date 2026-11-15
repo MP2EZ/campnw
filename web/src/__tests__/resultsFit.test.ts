@@ -54,3 +54,31 @@ describe("fitLine", () => {
     ])).toBe("Tent");
   });
 });
+
+describe("fitLine with the searched rig (UX #18)", () => {
+  const sites = [
+    site("1", { fits_tent: true, fits_van: true, fits_rv: false }),
+    site("2", { fits_tent: true, fits_van: true, fits_rv: true, max_rv_ft: 25, hookups: true }),
+    site("3", { fits_tent: false, fits_van: true, fits_rv: true, max_rv_ft: 40 }),
+    site("4"),
+  ];
+
+  test("leads with how many sites take it", () => {
+    expect(fitLine(sites, { equipment: "tent" })).toBe("2 sites fit your tent · Hookups at 1 site");
+    expect(fitLine(sites, { equipment: "van" })).toBe("3 sites fit your van · Hookups at 1 site");
+  });
+
+  test("a trailer counts its length; an RV site with no length takes any", () => {
+    expect(fitLine(sites, { equipment: "trailer", rig_length: 30 })).toBe("1 site fits your 30′ trailer · Hookups at 1 site");
+    expect(fitLine(sites, { equipment: "trailer" })).toBe("2 sites fit your trailer · Hookups at 1 site");
+  });
+
+  test("when no site lists its type, the line says so before the hookups", () => {
+    expect(fitLine([site("4", { hookups: true })], { equipment: "tent" })).toBe("Site types not listed yet · Hookups at 1 site");
+  });
+
+  test("when no site says, the line says what's listed instead", () => {
+    expect(fitLine([site("4")], { equipment: "tent" })).toBe("Site types not listed yet");
+  });
+});
+

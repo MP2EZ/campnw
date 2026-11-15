@@ -153,6 +153,24 @@ describe("panelGroups: each site books the chip's stay, not a longer one (#4)", 
   });
 });
 
+describe("panelGroups: group titles say what the sites take (UX #18)", () => {
+  test("tent-only sites are \"Tent sites\", not \"Tent and van sites\"", () => {
+    const tentOnly = { ...tent, fits_van: false };
+    expect(panelGroups(place([win("9", "2027-06-18", "2027-06-19", tentOnly)]), fri18, juneWeekends)[0].title)
+      .toBe("Tent sites");
+    expect(panelGroups(place([win("9", "2027-06-18", "2027-06-19", { ...tentOnly, fits_tent: false, fits_van: true })]),
+      fri18, juneWeekends)[0].title).toBe("Van sites");
+    expect(panelGroups(place([win("9", "2027-06-18", "2027-06-19", tentOnly), win("8", "2027-06-18", "2027-06-19", tent)]),
+      fri18, juneWeekends)[0].title).toBe("Tent and van sites");
+  });
+
+  test("all-caps loop and site names read as names (UX #17)", () => {
+    const [site] = panelGroups(place([win("034 GROUP", "2027-06-18", "2027-06-19", { loop: "DAIRY CREEK WEST" })]),
+      fri18, juneWeekends)[0].sites;
+    expect([site.name, site.loop]).toEqual(["034 Group", "Loop Dairy Creek West"]);
+  });
+});
+
 describe("siteFit: what one site takes", () => {
   test("lists what it's known to take, with the RV length", () => {
     expect(siteFit(win("7", "", "", rv30))).toBe("Tent, van or RV up to 30′");

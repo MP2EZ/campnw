@@ -8,6 +8,7 @@ import { useBilling } from "../hooks/useBilling";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { IconClose } from "../icons";
 import { parseIsoDate } from "../lib/dates";
+import { displayName } from "../lib/displayName";
 import { UpgradeModal } from "../components/UpgradeModal";
 import type { Equipment } from "./searchState";
 import {
@@ -138,7 +139,7 @@ export function WatchSheet({ place, params, mode = "watch", stays, initial, from
       setDone(true);
     } catch (err) {
       if (err instanceof WatchLimitError) setLimit({ limit: err.limit, current: err.current });
-      else setError(errorText(err, place.name, remind));
+      else setError(errorText(err, displayName(place.name), remind));
     } finally {
       setSaving(false);
     }
@@ -175,7 +176,7 @@ export function WatchSheet({ place, params, mode = "watch", stays, initial, from
           <div className="rv2-watch-head">
             <div className="rv2-watch-heading">
               <h2 id={`${id}-title`} className="rv2-watch-title" tabIndex={-1} data-autofocus={done ? undefined : ""}>
-                {remind ? `Remind me: ${place.name}` : `Watch ${place.name}`}
+                {remind ? `Remind me: ${displayName(place.name)}` : `Watch ${displayName(place.name)}`}
               </h2>
               <p className="rv2-watch-muted">
                 {!remind ? `We check every ${isPro ? 5 : 15} minutes and alert you when a site that fits you opens.`

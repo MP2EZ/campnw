@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { findCampgrounds, type CampgroundMatch } from "../api";
+import { displayName } from "../lib/displayName";
 import { SOURCE_NAMES } from "../lib/sources";
 import { FromSelect, type PanelProps } from "./SearchPanels";
 
@@ -40,11 +41,12 @@ export function CampgroundCombobox({ value, onChange, inputRef }: {
   }, [query]);
 
   const pick = (m: CampgroundMatch) => {
-    onChange(m.name);
+    // Name search matches without case, so the readable name searches the same.
+    onChange(displayName(m.name));
     setExpanded(false);
     setActive(-1);
     setQuery(null);
-    setStatus(`${m.name} selected`);
+    setStatus(`${displayName(m.name)} selected`);
   };
 
   return (
@@ -98,7 +100,7 @@ export function CampgroundCombobox({ value, onChange, inputRef }: {
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => pick(m)}
           >
-            <span className="sb-option-name">{m.name}</span>
+            <span className="sb-option-name">{displayName(m.name)}</span>
             <span className="sb-option-meta">{[m.region || m.state, SOURCE_NAMES[m.booking_system]].filter(Boolean).join(" · ")}</span>
           </li>
         ))}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CampgroundResult, SearchParams } from "../api";
 import { formatDriveTime } from "../lib/dates";
+import { displayName } from "../lib/displayName";
 import { SOURCE_NAMES } from "../lib/sources";
 import { IconBell } from "../icons";
 import { fullGroupTitle, unavailability, unavailableText } from "./candidates";
@@ -66,29 +67,30 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
       <ul className="rv2-full-list">
         {shown.map(({ r, status, action, live }) => {
           const source = SOURCE_NAMES[r.booking_system] ?? r.booking_system;
+          const name = displayName(r.name);
           const where = r.boat_in
             ? "Boat-in only"
             : r.estimated_drive_minutes != null ? `${formatDriveTime(r.estimated_drive_minutes)} drive` : null;
           return (
             <li key={r.facility_id} className="rv2-full-row">
               <div className="rv2-full-place">
-                <h3 className="rv2-full-name">{r.name}</h3>
+                <h3 className="rv2-full-name">{name}</h3>
                 <p className="rv2-full-meta">{[where, source].filter(Boolean).join(" · ")}</p>
               </div>
               <span className="rv2-full-status">{status}</span>
               {live === "watch" ? (
                 <button type="button" className="rv2-full-action rv2-full-action--live"
-                  aria-label={`Watch: ${r.name}`} onClick={() => openWatch?.(r, undefined, "full_group")}>
+                  aria-label={`Watch: ${name}`} onClick={() => openWatch?.(r, undefined, "full_group")}>
                   <IconBell className="rv2-icon" />Watch
                 </button>
               ) : live === "remind" ? (
                 <button type="button" className="rv2-full-action rv2-full-action--live"
-                  aria-label={`Remind me: ${r.name}`} onClick={() => openWatch?.(r, undefined, "full_group", "remind")}>
+                  aria-label={`Remind me: ${name}`} onClick={() => openWatch?.(r, undefined, "full_group", "remind")}>
                   <IconBell className="rv2-icon" />Remind me
                 </button>
               ) : live === null && action && (
                 <button type="button" className="rv2-full-action" aria-disabled="true"
-                  aria-label={`${action}: ${r.name}`} aria-describedby={noteId}>
+                  aria-label={`${action}: ${name}`} aria-describedby={noteId}>
                   <IconBell className="rv2-icon" />{action}
                 </button>
               )}
