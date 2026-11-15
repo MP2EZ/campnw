@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 import type { CampgroundResult } from "../api";
-import { pinLabel, pinLegend, pinStyle, pinSvg, type PinStyle } from "../results/pins";
+import { framedPlaces, pinLabel, pinLegend, pinStyle, pinSvg, type PinStyle } from "../results/pins";
 
 const place = (drive: number | null, extra: Partial<CampgroundResult> = {}) =>
   ({ facility_id: "1", name: "Dash Point", estimated_drive_minutes: drive, total_available_sites: 4,
@@ -89,5 +89,23 @@ describe("pinSvg", () => {
   test("muted pins carry the muted class (dashed edge in CSS)", () => {
     expect(pinSvg({ tier: "none", shape: "ring", muted: true })).toContain("rv2-pin--muted");
     expect(pinSvg({ tier: "far", shape: "ring", muted: false })).not.toContain("rv2-pin--muted");
+  });
+});
+
+describe("framedPlaces", () => {
+  const at = (id: string, open: number, lat = 47, lon = -122) =>
+    ({ ...place(60, { total_available_sites: open }), facility_id: id, latitude: lat, longitude: lon }) as CampgroundResult;
+
+  test("open places set the frame, so empty places elsewhere don't pull it away", () => {
+    const places = [at("or1", 4, 44.5, -123.9), at("or2", 1, 45.1, -123.8), at("wa1", 0, 47.6, -122.3)];
+    expect(framedPlaces(places).map((r) => r.facility_id)).toEqual(["or1", "or2"]);
+  });
+
+  test("with nothing open, every place on the map sets the frame", () => {
+    expect(framedPlaces([at("a", 0), at("b", 0)]).map((r) => r.facility_id)).toEqual(["a", "b"]);
+  });
+
+  test("places without coordinates never count", () => {
+    expect(framedPlaces([at("a", 2, 0, 0), at("b", 0)]).map((r) => r.facility_id)).toEqual(["b"]);
   });
 });

@@ -104,6 +104,13 @@
   stroke: var(--pin-boat);
 }
 
+/* Nothing to book: a smaller dashed ring in its own pane, never clustered
+   and never on top of an open pin (ResultsMap.tsx, MUTED_PANE). */
+.rv2-marker--muted .rv2-pin {
+  width: 18px;
+  height: 18px;
+}
+
 .rv2-pin--muted .rv2-pin-halo {
   fill: none;
 }
