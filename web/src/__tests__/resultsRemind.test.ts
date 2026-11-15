@@ -36,7 +36,7 @@ describe("remindStays", () => {
   test("exact dates are the one stay", () => {
     const exact = { start_date: "2027-06-25", end_date: "2027-06-26", mode: "exact", nights: 1 };
     expect(remindStays(juneNyr, exact, TODAY)).toEqual([
-      { start: "2027-06-25", end: "2027-06-26", label: "Fri Jun 25 → Sat 26", releasesOn: "2026-12-25" },
+      { start: "2027-06-25", end: "2027-06-25", label: "Fri Jun 25 → Sat 26", releasesOn: "2026-12-25" },
     ]);
   });
 

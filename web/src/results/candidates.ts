@@ -72,9 +72,13 @@ export function blockAround(night: string, days: Set<number>, p: SearchParams): 
   return [start, end];
 }
 
+/** Exact dates are arrival and checkout (`end_date`); the last night is the day before. */
+export const exactLastNight = (p: Pick<SearchParams, "start_date" | "end_date">) =>
+  p.end_date > p.start_date ? addDays(p.end_date, -1) : p.end_date;
+
 export function candidateWindows(p: SearchParams | null): Candidate[] {
   if (!p?.start_date || !p.end_date || p.end_date < p.start_date) return [];
-  if (p.mode === "exact") return [{ start: p.start_date, end: p.end_date, stay: false }];
+  if (p.mode === "exact") return [{ start: p.start_date, end: exactLastNight(p), stay: false }];
   const nights = p.nights || 2;
   const days = searchedDays(p);
   const out: Candidate[] = [];

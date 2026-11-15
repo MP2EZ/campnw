@@ -52,9 +52,11 @@ SOURCE_CONCURRENCY: dict[BookingSystem, int] = {BookingSystem.OR_STATE: 2}
 class SearchQuery:
     """Flexible search parameters for campsite discovery."""
 
-    # Date range
+    # Date range. `end_date` is the last night, unless `end_is_checkout`:
+    # exact-date searches (`mode=exact`) send arrival and checkout.
     start_date: date | None = None
     end_date: date | None = None
+    end_is_checkout: bool = False
 
     # Registry filters
     state: str | None = None
@@ -76,6 +78,14 @@ class SearchQuery:
 
     # Result limits
     max_campgrounds: int = 20  # limit how many campgrounds to check availability for
+
+    @property
+    def last_night(self) -> date | None:
+        """The last night searched: the day before checkout for exact dates."""
+        end, start = self.end_date, self.start_date
+        if self.end_is_checkout and end and start and end > start:
+            return end - timedelta(days=1)
+        return end
 
 
 @dataclass
@@ -487,7 +497,7 @@ def _not_released_nights(
         night = date.fromisoformat(day)
         if query.start_date and night < query.start_date:
             continue
-        if query.end_date and night > query.end_date:
+        if query.last_night and night > query.last_night:
             continue
         if query.days_of_week is not None and night.weekday() not in query.days_of_week:
             continue
@@ -496,11 +506,11 @@ def _not_released_nights(
 
 
 def _requested_nights(query: SearchQuery) -> list[date]:
-    if not query.start_date or not query.end_date:
+    if not query.start_date or not query.last_night:
         return []
     nights = []
     night = query.start_date
-    while night <= query.end_date:
+    while night <= query.last_night:
         if query.days_of_week is None or night.weekday() in query.days_of_week:
             nights.append(night)
         night += timedelta(days=1)
@@ -577,7 +587,7 @@ def _process_availability(
                     loop=site.loop,
                     campsite_type=site.campsite_type,
                     start_date=(query.start_date or date.today()).isoformat(),
-                    end_date=(query.end_date or query.start_date or date.today()).isoformat(),
+                    end_date=(query.last_night or query.start_date or date.today()).isoformat(),
                     nights=0,  # unknown — FCFS
                     max_people=site.max_num_people,
                     max_people_known=site.max_people_known,
@@ -595,7 +605,7 @@ def _process_availability(
         windows = _find_consecutive_windows(
             site,
             query.start_date,
-            query.end_date,
+            query.last_night,
             query.min_consecutive_nights,
             query.days_of_week,
         )
@@ -1044,6 +1054,7 @@ class SearchEngine:
             probes.append((shifted_start, shifted_end, reason, SearchQuery(
                 start_date=shifted_start,
                 end_date=shifted_end,
+                end_is_checkout=query.end_is_checkout,
                 state=query.state,
                 tags=query.tags,
                 max_drive_minutes=query.max_drive_minutes,

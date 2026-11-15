@@ -1,8 +1,8 @@
 import type { CampgroundResult, SearchParams, Window } from "../api";
 import { formatDateRange, formatDay, parseIsoDate } from "../lib/dates";
 import {
-  addDays, blockAround, blockStay, candidateStatus, candidateWindows, firstStay, nightRuns, nightsIn, searchedDays,
-  type Stay,
+  addDays, blockAround, blockStay, candidateStatus, candidateWindows, exactLastNight, firstStay, nightRuns, nightsIn,
+  searchedDays, type Stay,
 } from "./candidates";
 
 /**
@@ -150,7 +150,7 @@ export function buildWindowChips(result: CampgroundResult, params: SearchParams 
 
   for (const w of windows) {
     if (exact || (days && params)) {
-      const [start, end] = exact ? [params.start_date, params.end_date] : blockAround(w.start_date, days!, params!);
+      const [start, end] = exact ? [params.start_date, exactLastNight(params)] : blockAround(w.start_date, days!, params!);
       const clipped: [string, string] = [w.start_date > start ? w.start_date : start, w.end_date < end ? w.end_date : end];
       add(start, end, w, clipped);
       continue;

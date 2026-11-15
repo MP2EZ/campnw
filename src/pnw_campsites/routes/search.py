@@ -502,11 +502,14 @@ async def search(
         else None
     )
     booking_system = BookingSystem(source) if source else None
+    # Exact dates are arrival and checkout; everything else sends nights.
+    exact = mode == "exact"
 
     query = SearchQuery(
         state=state,
         start_date=start_date,
         end_date=end_date,
+        end_is_checkout=exact,
         min_consecutive_nights=nights,
         days_of_week=days_set,
         tags=tags.split(",") if tags else None,
@@ -623,6 +626,8 @@ async def search_stream(
 
     engine = get_engine()
     nl_parsed: dict | None = None
+    # Exact dates are arrival and checkout; dates parsed from `q` are nights.
+    exact_dates_given = start_date is not None and end_date is not None
     user_id = get_current_user(request)
     ph_distinct_id = str(user_id) if user_id else None
 
@@ -665,11 +670,13 @@ async def search_stream(
         {int(d) for d in days_of_week.split(",")} if days_of_week else None
     )
     booking_system = BookingSystem(source) if source else None
+    exact = mode == "exact" and exact_dates_given
 
     query = SearchQuery(
         state=state,
         start_date=start_date,
         end_date=end_date,
+        end_is_checkout=exact,
         min_consecutive_nights=nights,
         days_of_week=days_set,
         tags=tags.split(",") if tags else None,
