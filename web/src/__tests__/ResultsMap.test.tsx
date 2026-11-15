@@ -70,6 +70,13 @@ describe("ResultsMap", () => {
     expect(pin).not.toHaveClass("is-selected");
   });
 
+  test("places with nothing to book sit in their own pane, below the open pins", () => {
+    const { container } = renderMap();
+    const pane = container.querySelector(".leaflet-rv2-muted-pane");
+    expect(pane?.querySelectorAll(".rv2-marker--muted")).toHaveLength(1);
+    expect(container.querySelector(".leaflet-marker-pane .rv2-marker--muted")).toBeNull();
+  });
+
   test("has no axe violations", async () => {
     const { container } = renderMap();
     expect(await axe(container)).toHaveNoViolations();
