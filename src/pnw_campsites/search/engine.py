@@ -43,6 +43,11 @@ PARK_TIMEOUT_S = 60.0
 # A streamed search reports parks still unchecked after this as "timeout" and
 # finishes, instead of leaving the UI on "Checking campgrounds…".
 SEARCH_DEADLINE_S = 90.0
+# Oregon parks still unchecked after this are cut so the user gets a verdict.
+# A month search needs 110-170 ReserveAmerica requests at 1 req/s, so the full
+# answer takes about as long whatever this is; a cut park keeps fetching in the
+# background, reports "pending", and a repeat search gets it from the cache.
+OREGON_DEADLINE_S = 30.0
 # Parks checked at once per source, on top of the search-wide fan-out.
 # Zero-result date probes: three shifted searches after the main one. They run
 # once the stream has nothing else to send, so they get a short budget of
@@ -324,7 +329,7 @@ class SearchResults:
 
 def _describe_source(name: str, t: dict[str, int]) -> str:
     """'or_state 20 in 90.0s (4 timeout)' for the search_stream log line."""
-    extra = [f"{t[k]} {k.rstrip('s')}" for k in ("timeouts", "errors") if t[k]]
+    extra = [f"{t[k]} {k.rstrip('s')}" for k in ("timeouts", "pending", "errors") if t.get(k)]
     tail = f" ({', '.join(extra)})" if extra else ""
     return f"{name} {t['checked']} in {t['done_ms'] / 1000:.1f}s{tail}"
 
@@ -1292,13 +1297,16 @@ class SearchEngine:
                 raise
 
         deadline = loop.time() + SEARCH_DEADLINE_S
+        oregon_deadline = loop.time() + OREGON_DEADLINE_S
         pending = {
             asyncio.ensure_future(_check_with_sem(cg)): cg for cg in campgrounds
         }
         try:
             while pending:
+                oregon_left = any(_is_oregon(cg) for cg in pending.values())
+                cut_at = min(deadline, oregon_deadline) if oregon_left else deadline
                 done, _ = await asyncio.wait(
-                    pending, timeout=max(0.0, deadline - loop.time()),
+                    pending, timeout=max(0.0, cut_at - loop.time()),
                     return_when=asyncio.FIRST_COMPLETED,
                 )
                 if done:
@@ -1307,28 +1315,25 @@ class SearchEngine:
                         del pending[t]
                 else:
                     # Deadline: report what's left instead of waiting on it.
+                    finished = await self._cut(pending, loop.time() >= deadline)
                     logger.warning(
-                        "Search deadline (%.0fs): %d of %d campgrounds unchecked",
-                        SEARCH_DEADLINE_S, len(pending), total,
+                        "Search deadline (%.1fs): %d of %d campgrounds cut (%d pending)",
+                        loop.time() - started, len(finished), total,
+                        sum(r.error == "pending" for r in finished),
                     )
-                    for t in pending:
-                        t.cancel()
-                    finished = [
-                        CampgroundResult(campground=cg, error="timeout")
-                        for cg in pending.values()
-                    ]
-                    pending.clear()
 
                 for r in finished:
                     checked_count += 1
                     src = sources.setdefault(
                         r.campground.booking_system.value,
-                        {"checked": 0, "done_ms": 0, "timeouts": 0, "errors": 0},
+                        {"checked": 0, "done_ms": 0, "timeouts": 0, "pending": 0, "errors": 0},
                     )
                     src["checked"] += 1
                     src["done_ms"] = _ms()
                     if r.error == "timeout":
                         src["timeouts"] += 1
+                    elif r.error == "pending":
+                        src["pending"] += 1
                     elif r.error:
                         src["errors"] += 1
 
@@ -1387,7 +1392,11 @@ class SearchEngine:
             )
             if query.name_like:
                 chips.extend(self._suggest_similar_campgrounds(query))
-            date_suggestions = await self._suggest_alternative_dates(query)
+            # Other dates can't be judged while Oregon parks are unanswered.
+            still_checking = any(r.error == "pending" for r in errored)
+            date_suggestions = (
+                [] if still_checking else await self._suggest_alternative_dates(query)
+            )
             yield StreamDiagnosisEvent(
                 diagnosis=diagnosis,
                 date_suggestions=date_suggestions,
@@ -1441,7 +1450,10 @@ class SearchEngine:
                     campground.booking_system.value, campground.facility_id,
                     PARK_TIMEOUT_S,
                 )
-                return CampgroundResult(campground=campground, error="timeout")
+                still = oregon and self.oregon.is_pending(campground.facility_id)
+                return CampgroundResult(
+                    campground=campground, error="pending" if still else "timeout",
+                )
             if not oregon:
                 self._cache_set(campground, start_month, end_month, availability)
             return _process_availability(campground, availability, query)
@@ -1465,6 +1477,26 @@ class SearchEngine:
                 type(exc).__name__, exc,
             )
             return CampgroundResult(campground=campground, error="unavailable")
+
+    async def _cut(
+        self, pending: dict[asyncio.Future, Campground], everything: bool,
+    ) -> list[CampgroundResult]:
+        """Cancel the parks past their deadline (all of them, or just Oregon)
+        and report each. Cancelling lets an Oregon park hand its windows to the
+        background; one that did is "pending", else "timeout"."""
+        cut = {t: cg for t, cg in pending.items() if everything or _is_oregon(cg)}
+        for t in cut:
+            t.cancel()
+            del pending[t]
+        await asyncio.gather(*cut, return_exceptions=True)
+        return [
+            CampgroundResult(
+                campground=cg,
+                error="pending" if _is_oregon(cg) and self.oregon
+                and self.oregon.is_pending(cg.facility_id) else "timeout",
+            )
+            for cg in cut.values()
+        ]
 
     def _background_oregon(
         self, cg: Campground, prep: _PreparedSearch, query: SearchQuery,
@@ -1596,6 +1628,10 @@ def _oregon_nights(query: SearchQuery, start: date, end: date) -> list[date]:
     if nights:
         return nights
     return [start + timedelta(days=i) for i in range((end - start).days + 1)]
+
+
+def _is_oregon(cg: Campground) -> bool:
+    return cg.booking_system == BookingSystem.OR_STATE
 
 
 def _source_semaphores() -> dict[BookingSystem, asyncio.Semaphore]:

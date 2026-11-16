@@ -157,6 +157,11 @@ WARNING_TEMPLATES: dict[str, tuple[str, str]] = {
         "Some {source} campgrounds couldn't be checked due to a service issue.",
         "Some campgrounds couldn't be checked due to a service issue.",
     ),
+    "pending": (
+        "Still checking {count} {source} {campgrounds}. Check again in a minute"
+        " to add them.",
+        "Still checking some campgrounds. Check again in a minute to add them.",
+    ),
     "timeout": (
         "Some {source} campgrounds took too long to check. Try again, or"
         " narrow the search.",
@@ -168,14 +173,17 @@ WARNING_TEMPLATES: dict[str, tuple[str, str]] = {
 _UNKNOWN_KIND_MESSAGE = "Some campgrounds couldn't be checked."
 
 
-def warning_message(kind: str, source: str) -> str:
+def warning_message(kind: str, source: str, count: int = 0) -> str:
     """Build a user-facing warning naming the source that actually failed."""
     label = SOURCE_LABELS.get(source)
     named, generic = WARNING_TEMPLATES.get(
         kind, (None, _UNKNOWN_KIND_MESSAGE)
     )
     if label and named:
-        return named.format(source=label)
+        return named.format(
+            source=label, count=count,
+            campgrounds="campground" if count == 1 else "campgrounds",
+        )
     return generic
 
 
@@ -563,7 +571,7 @@ async def search(
                 kind=w.kind,
                 count=w.count,
                 source=w.source,
-                message=warning_message(w.kind, w.source),
+                message=warning_message(w.kind, w.source, w.count),
             )
             for w in results.warnings
         ],
@@ -746,7 +754,7 @@ async def search_stream(
                                 "kind": w.kind,
                                 "count": w.count,
                                 "source": w.source,
-                                "message": warning_message(w.kind, w.source),
+                                "message": warning_message(w.kind, w.source, w.count),
                             }
                             for w in item.warnings
                         ],

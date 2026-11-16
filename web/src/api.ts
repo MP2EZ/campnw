@@ -246,6 +246,8 @@ export interface SourceTiming {
   /** When its last campground finished, in ms from the server's search start. */
   done_ms: number;
   timeouts: number;
+  /** Cut by the deadline but still being checked in the background (Oregon). */
+  pending?: number;
   errors: number;
 }
 

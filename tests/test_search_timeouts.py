@@ -87,12 +87,14 @@ async def test_a_slow_park_times_out_and_the_stream_finishes(
     )
 
     assert time.monotonic() - t0 < 2
+    # The slow park keeps fetching in the background, so it's "still checking".
     errors = {r.campground.facility_id: r.error for r in _results(events)}
-    assert errors == {"or0": None, "or1": "timeout", "or2": None}
+    assert errors == {"or0": None, "or1": "pending", "or2": None}
     warnings = next(ev for ev in events if isinstance(ev, StreamWarningsEvent))
     assert [(w.kind, w.source, w.count) for w in warnings.warnings] == [
-        ("timeout", "or_state", 1),
+        ("pending", "or_state", 1),
     ]
+    await engine.oregon.aclose()
 
 
 async def test_the_search_deadline_ends_the_stream_with_every_park_reported(
@@ -112,8 +114,8 @@ async def test_the_search_deadline_ends_the_stream_with_every_park_reported(
     assert time.monotonic() - t0 < 1.5
     results = _results(events)
     assert len(results) == 12
-    timed_out = [r for r in results if r.error == "timeout"]
-    assert 0 < len(timed_out) < 12
+    cut = [r for r in results if r.error == "pending"]
+    assert 0 < len(cut) < 12
     coverage = next(ev for ev in events if isinstance(ev, StreamCoverageEvent))
     assert coverage.campgrounds_checked == 12
     # Cut parks finish in the background, including those never started.

@@ -104,6 +104,7 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
     notReleased: results.not_released_campgrounds ?? 0,
     loading,
     failed,
+    pending: (results.warnings ?? []).reduce((n, w) => n + (w.kind === "pending" ? w.count : 0), 0),
   });
 
   const page = (
@@ -126,7 +127,10 @@ export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSe
         }}
       />
       <DateChips params={searchParams} onSearch={onSearch} />
-      <ResultsNotices results={results} withNotReleased={!zero} />
+      <ResultsNotices results={results} withNotReleased={!zero}
+        onCheckAgain={!loading && searchParams
+          ? () => onSearch(searchParams, searchParams.mode === "exact" ? "exact" : "find")
+          : undefined} />
       {!loading && (
         <QuickPicks results={cards} params={searchParams}
           onPick={(id) => setPick((p) => ({ id, n: (p?.n ?? 0) + 1 }))} />
