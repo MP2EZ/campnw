@@ -20,6 +20,7 @@ from pnw_campsites.routes.deps import (
     get_current_user,
     get_engine,
     get_registry,
+    get_search_timings,
 )
 from pnw_campsites.search.engine import (
     SearchQuery,
@@ -27,6 +28,7 @@ from pnw_campsites.search.engine import (
     StreamDiagnosisEvent,
     StreamNotReleasedEvent,
     StreamProgressEvent,
+    StreamTimingEvent,
     StreamWarningsEvent,
 )
 from pnw_campsites.urls import (
@@ -757,6 +759,20 @@ async def search_stream(
                     "campgrounds_checked": item.campgrounds_checked,
                 }
                 yield f"data: {json.dumps(coverage)}\n\n"
+                continue
+
+            # StreamTimingEvent = per-source completion, last from the engine.
+            # Its total is the stream's real duration; the HTTP middleware
+            # only sees the response start (~50 ms) for a stream.
+            if isinstance(item, StreamTimingEvent):
+                get_search_timings().append(item.total_ms)
+                payload = {
+                    "type": "timing",
+                    "sources": item.sources,
+                    "first_result_ms": item.first_result_ms,
+                    "total_ms": item.total_ms,
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
                 continue
 
             if isinstance(item, StreamNotReleasedEvent):

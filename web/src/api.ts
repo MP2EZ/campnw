@@ -145,6 +145,11 @@ function isSSEUnavailable(data: unknown): data is { type: "unavailable"; result:
     && (data as Record<string, unknown>).type === "unavailable";
 }
 
+function isSSETiming(data: unknown): data is { type: "timing" } & SearchTiming {
+  return typeof data === "object" && data !== null
+    && (data as Record<string, unknown>).type === "timing";
+}
+
 function isCampgroundResult(data: unknown): data is CampgroundResult {
   return typeof data === "object" && data !== null
     && typeof (data as Record<string, unknown>).facility_id === "string"
@@ -233,6 +238,21 @@ export interface SearchWarning {
   count: number;
   source: string;
   message: string;
+}
+
+/** One booking system's part of a search, from the stream's last frame. */
+export interface SourceTiming {
+  checked: number;
+  /** When its last campground finished, in ms from the server's search start. */
+  done_ms: number;
+  timeouts: number;
+  errors: number;
+}
+
+export interface SearchTiming {
+  sources: Record<string, SourceTiming>;
+  first_result_ms: number | null;
+  total_ms: number;
 }
 
 export interface Diagnosis {
@@ -412,6 +432,7 @@ export async function searchCampsitesStream(
   onCoverage?: (matched: number, checked: number) => void,
   onNotReleased?: (summary: NotReleasedSummary) => void,
   onUnavailable?: (result: CampgroundResult) => void,
+  onTiming?: (timing: SearchTiming) => void,
 ): Promise<void> {
   const query = new URLSearchParams();
   if (params.q) {
@@ -493,6 +514,12 @@ export async function searchCampsitesStream(
                 });
               } else if (isSSEUnavailable(parsed)) {
                 onUnavailable?.(parsed.result);
+              } else if (isSSETiming(parsed)) {
+                onTiming?.({
+                  sources: parsed.sources,
+                  first_result_ms: parsed.first_result_ms,
+                  total_ms: parsed.total_ms,
+                });
               } else if (isSSEDiagnosis(parsed) && onDiagnosis) {
                 onDiagnosis(parsed);
               } else if (isCampgroundResult(parsed)) {
