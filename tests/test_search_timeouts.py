@@ -43,7 +43,7 @@ def _oregon(delay_for: dict[str, float], default: float = 0.0):
     """Fake ReserveAmerica client whose parks take the given seconds."""
     state = {"running": 0, "max_running": 0, "cancelled": 0}
 
-    async def get_availability(park_id, *_args, **_kwargs):
+    async def get_window(park_id, *_args, **_kwargs):
         state["running"] += 1
         state["max_running"] = max(state["max_running"], state["running"])
         try:
@@ -56,7 +56,7 @@ def _oregon(delay_for: dict[str, float], default: float = 0.0):
         return make_campground_availability(facility_id=park_id)
 
     client = AsyncMock()
-    client.get_availability = AsyncMock(side_effect=get_availability)
+    client.get_window = AsyncMock(side_effect=get_window)
     return client, state
 
 

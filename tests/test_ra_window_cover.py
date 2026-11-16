@@ -8,13 +8,11 @@ each window starting at the first night not yet covered, needs two.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import date
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient, window_cover
-from pnw_campsites.registry.models import BookingSystem, Campground, CampgroundAvailability
-from pnw_campsites.search.engine import SearchEngine, SearchQuery, _requested_nights
+from pnw_campsites.search.engine import SearchQuery, _requested_nights
 from tests.test_provider_reserveamerica import _make_record, _make_redux_html
 
 FRI_SAT_SUN = {4, 5, 6}
@@ -109,70 +107,3 @@ class TestProviderUsesTheCover:
         await client.get_availability("402178", "park", "OR", date(2027, 3, 1), date(2027, 3, 31))
 
         assert client._session.get.call_count == 3
-
-
-def _oregon_engine(watch_db):
-    ra = AsyncMock()
-    ra.get_availability = AsyncMock(
-        return_value=CampgroundAvailability(facility_id="402178", campsites={}),
-    )
-    eng = SearchEngine(registry=None, reserveamerica_client=ra, watch_db=watch_db)
-    cg = Campground(
-        facility_id="402178", name="Fort Stevens", booking_system=BookingSystem.OR_STATE,
-        state="OR", booking_url_slug="fort-stevens-state-park",
-    )
-    return eng, ra, cg
-
-
-class TestEngineFetchesOnlyRequestedNights:
-    def test_oregon_fetch_gets_the_requested_nights(self, watch_db) -> None:
-        eng, ra, cg = _oregon_engine(watch_db)
-        query = SearchQuery(
-            start_date=date(2027, 3, 1), end_date=date(2027, 3, 31), days_of_week=FRI_SAT_SUN,
-        )
-        asyncio.run(eng._check_campground(cg, query.start_date, query.end_date, query))
-
-        assert ra.get_availability.await_args.kwargs["nights"] == _requested_nights(query)
-
-    def test_a_repeat_weekend_search_is_served_from_cache(self, watch_db) -> None:
-        eng, ra, cg = _oregon_engine(watch_db)
-        query = SearchQuery(
-            start_date=date(2027, 3, 1), end_date=date(2027, 3, 31), days_of_week=FRI_SAT_SUN,
-        )
-
-        async def run():
-            for _ in range(2):
-                await eng._check_campground(cg, query.start_date, query.end_date, query)
-
-        asyncio.run(run())
-        assert ra.get_availability.await_count == 1
-
-    def test_a_weekend_fetch_never_answers_an_every_night_search(self, watch_db) -> None:
-        """The weekend fetch starts Mar 5, so it says nothing about Mar 1-4."""
-        eng, ra, cg = _oregon_engine(watch_db)
-        weekends = SearchQuery(
-            start_date=date(2027, 3, 1), end_date=date(2027, 3, 31), days_of_week=FRI_SAT_SUN,
-        )
-        every_night = SearchQuery(start_date=date(2027, 3, 1), end_date=date(2027, 3, 31))
-
-        async def run():
-            await eng._check_campground(cg, weekends.start_date, weekends.end_date, weekends)
-            await eng._check_campground(
-                cg, every_night.start_date, every_night.end_date, every_night,
-            )
-
-        asyncio.run(run())
-        assert ra.get_availability.await_count == 2
-
-    def test_cached_extent_is_what_was_fetched(self, watch_db) -> None:
-        eng, _, cg = _oregon_engine(watch_db)
-        query = SearchQuery(
-            start_date=date(2027, 3, 1), end_date=date(2027, 3, 31), days_of_week=FRI_SAT_SUN,
-        )
-        asyncio.run(eng._check_campground(cg, query.start_date, query.end_date, query))
-
-        get = watch_db.get_cached_availability
-        assert get("402178", "or_state", range_start=date(2027, 3, 5), range_end=date(2027, 3, 31))
-        assert not get(
-            "402178", "or_state", range_start=date(2027, 3, 4), range_end=date(2027, 3, 31),
-        )

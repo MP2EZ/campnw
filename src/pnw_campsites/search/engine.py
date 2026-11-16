@@ -14,7 +14,7 @@ from pnw_campsites.geo import estimated_drive_minutes, geocode_address, is_known
 from pnw_campsites.providers.errors import FacilityNotFoundError, RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
-from pnw_campsites.providers.reserveamerica import ReserveAmericaClient, window_cover
+from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import (
     AvailabilityStatus,
@@ -24,6 +24,7 @@ from pnw_campsites.registry.models import (
     CampsiteAvailability,
     SiteFit,
 )
+from pnw_campsites.search.oregon_windows import OregonWindows
 from pnw_campsites.search.release import (
     NotReleasedRange,
     format_release_range,
@@ -672,6 +673,10 @@ class SearchEngine:
         self._recgov = recgov_client
         self._goingtocamp = goingtocamp_client
         self._reserveamerica = reserveamerica_client
+        # Oregon availability, fetched and cached per ReserveAmerica window.
+        self.oregon = (
+            OregonWindows(reserveamerica_client, watch_db) if reserveamerica_client else None
+        )
         # Optional: when supplied, availability is served from (and written to)
         # the same availability_cache the watch poller uses. Discovery searches
         # previously hit the provider on every request, so two users searching
@@ -1410,9 +1415,9 @@ class SearchEngine:
     ) -> CampgroundResult:
         """Check availability for a single campground, dispatching to the right provider."""
         try:
-            nights = _oregon_nights(campground, query)
-            lookup = (nights[0], nights[-1]) if nights else (start_month, end_month)
-            cached = self._cache_get(campground, *lookup)
+            oregon = campground.booking_system == BookingSystem.OR_STATE
+            # Oregon is cached per window inside OregonWindows.
+            cached = None if oregon else self._cache_get(campground, start_month, end_month)
             if cached is not None:
                 return _process_availability(campground, cached, query)
 
@@ -1423,7 +1428,7 @@ class SearchEngine:
                 return CampgroundResult(campground=campground, error="waf_blocked")
             try:
                 availability = await asyncio.wait_for(
-                    self._fetch_availability(campground, start_month, end_month, nights),
+                    self._fetch_availability(campground, start_month, end_month, query),
                     timeout=PARK_TIMEOUT_S,
                 )
             except TimeoutError:
@@ -1433,9 +1438,8 @@ class SearchEngine:
                     PARK_TIMEOUT_S,
                 )
                 return CampgroundResult(campground=campground, error="timeout")
-            extent = _fetched_extent(nights, end_month) if nights else (start_month, end_month)
-            if extent:
-                self._cache_set(campground, *extent, availability)
+            if not oregon:
+                self._cache_set(campground, start_month, end_month, availability)
             return _process_availability(campground, availability, query)
         except FacilityNotFoundError:
             # Silently drop — bad registry entry, no availability to show
@@ -1463,12 +1467,12 @@ class SearchEngine:
         if system == BookingSystem.WA_STATE:
             return None if self._goingtocamp else "GoingToCamp client not configured"
         if system == BookingSystem.OR_STATE:
-            return None if self._reserveamerica else "ReserveAmerica client not configured"
+            return None if self.oregon else "ReserveAmerica client not configured"
         return None if self._recgov else "RecGov client not configured"
 
     async def _fetch_availability(
         self, campground: Campground, start_month: date, end_month: date,
-        nights: list[date] | None = None,
+        query: SearchQuery,
     ) -> CampgroundAvailability:
         if campground.booking_system == BookingSystem.WA_STATE:
             availability = await self._goingtocamp.get_availability(
@@ -1477,13 +1481,8 @@ class SearchEngine:
             self._enrich_wa_availability(campground.facility_id, availability)
             return availability
         if campground.booking_system == BookingSystem.OR_STATE:
-            return await self._reserveamerica.get_availability(
-                campground.facility_id,
-                campground.booking_url_slug,
-                campground.state,
-                start_month,
-                end_month,
-                nights=nights,
+            return await self.oregon.park(
+                campground, _oregon_nights(query, start_month, end_month), end_month,
             )
         return await self._recgov.get_availability_range(
             campground.facility_id, start_month, end_month
@@ -1569,30 +1568,19 @@ class SearchEngine:
 # ---------------------------------------------------------------------------
 
 
-def _oregon_nights(campground: Campground, query: SearchQuery) -> list[date] | None:
-    """The nights to fetch for an Oregon park, or None for the whole range.
+def _oregon_nights(query: SearchQuery, start: date, end: date) -> list[date]:
+    """The nights to fetch for an Oregon park: the requested ones, else every
+    night of the range.
 
     Each ReserveAmerica request covers 14 nights and Oregon shares one 1 req/s
     limit, so fetching only windows that hold a requested night saves a third
     of the requests for a month of weekends. Other providers fetch whole
     months for the same cost and keep their range.
     """
-    if campground.booking_system != BookingSystem.OR_STATE:
-        return None
-    return _requested_nights(query) or None
-
-
-def _fetched_extent(nights: list[date], end: date) -> tuple[date, date] | None:
-    """The span the windows for `nights` cover, or None if they leave gaps.
-
-    The cache serves a payload for any range inside its extent, so a gap
-    would answer nights that were never fetched.
-    """
-    cover = window_cover(nights, end)
-    for (_, prev_end), (start, _) in zip(cover, cover[1:], strict=False):
-        if start != prev_end + timedelta(days=1):
-            return None
-    return cover[0][0], cover[-1][1]
+    nights = _requested_nights(query)
+    if nights:
+        return nights
+    return [start + timedelta(days=i) for i in range((end - start).days + 1)]
 
 
 def _source_semaphores() -> dict[BookingSystem, asyncio.Semaphore]:
