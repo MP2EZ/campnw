@@ -21,7 +21,7 @@ import logging
 import os
 import re
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import date, timedelta
 
 from curl_cffi import requests as curl_requests
@@ -180,9 +180,10 @@ class ReserveAmericaClient:
         start_date: date,
         end_date: date,
         page: int = 0,
+        background: Callable[[], bool] | None = None,
     ) -> tuple[list[dict], int]:
         queued = time.monotonic()
-        await self._limiter.wait()
+        await self._limiter.wait(background)
         sent = time.monotonic()
         try:
             return await run_blocking(
@@ -229,12 +230,16 @@ class ReserveAmericaClient:
 
     async def get_window(
         self, park_id: str, slug: str, state: str, arrival: date, departure: date,
+        *, background: Callable[[], bool] | None = None,
     ) -> CampgroundAvailability:
-        """Every page of one window: nights ``arrival`` to ``departure``."""
+        """Every page of one window: nights ``arrival`` to ``departure``.
+        While ``background()`` is true its requests yield to everyone else's."""
         campsites: dict[str, CampsiteAvailability] = {}
         page = 0
         while True:
-            records, total = await self._fetch(park_id, slug, state, arrival, departure, page)
+            records, total = await self._fetch(
+                park_id, slug, state, arrival, departure, page, background,
+            )
             for rec in records:
                 site_id = str(rec["id"])
                 avail_dict = _parse_availability_grid(rec.get("availabilityGrid", []))
