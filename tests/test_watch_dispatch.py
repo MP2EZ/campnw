@@ -51,7 +51,7 @@ def _clients():
     recgov, gtc, ra = AsyncMock(), AsyncMock(), AsyncMock()
     recgov.get_availability_range.side_effect = lambda f, s, e: _avail(f)
     gtc.get_availability.side_effect = lambda f, s, e: _avail(str(f))
-    ra.get_window.side_effect = lambda f, slug, state, a, d: _avail(f)
+    ra.get_window.side_effect = lambda f, slug, state, a, d, **kw: _avail(f)
     return recgov, gtc, ra
 
 
