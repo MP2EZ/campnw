@@ -4,18 +4,23 @@ Uses curl_cffi to fetch the unified www.reserveamerica.com availability pages.
 The site is a React SSR app with Redux state embedded in a <script> tag.
 Each request returns a 14-day availability window for 20 campsites.
 
-For date ranges > 14 days, multiple requests are made in 14-day windows.
+For date ranges > 14 days, multiple requests are made in 14-day windows. A
+search passes the nights it asks about, and only windows holding one of them
+are fetched (``window_cover``).
 Requests run on the provider thread pool, one at a time, and the client spaces
 them app-wide with a shared limiter: no thread is held between requests.
 """
 
 from __future__ import annotations
 
+import contextvars
+import functools
 import json
 import logging
 import os
 import re
 import time
+from collections.abc import Iterable
 from datetime import date, timedelta
 
 from curl_cffi import requests as curl_requests
@@ -60,6 +65,31 @@ _MIN_INTERVAL_ENV = "RESERVEAMERICA_MIN_INTERVAL_S"
 _DEFAULT_MIN_INTERVAL_S = 1.0
 
 
+def window_cover(nights: Iterable[date], end: date) -> list[tuple[date, date]]:
+    """Fewest 14-day windows holding every night, as (arrival, departure).
+
+    Each window starts at the first night not yet covered, so a month of
+    weekends from the 1st takes two windows where 1st-to-end takes three.
+    A window never runs past ``end``.
+    """
+    windows: list[tuple[date, date]] = []
+    covered_through: date | None = None
+    for night in sorted(set(nights)):
+        if covered_through is not None and night <= covered_through:
+            continue
+        covered_through = night + timedelta(days=_WINDOW_DAYS - 1)
+        windows.append((night, min(covered_through, end)))
+    return windows
+
+
+def _range_windows(start: date, end: date) -> list[tuple[date, date]]:
+    windows = []
+    while start <= end:
+        windows.append((start, min(start + timedelta(days=_WINDOW_DAYS - 1), end)))
+        start += timedelta(days=_WINDOW_DAYS)
+    return windows
+
+
 def _min_interval() -> float:
     raw = os.getenv(_MIN_INTERVAL_ENV)
     if raw is None:
@@ -80,6 +110,40 @@ _ATTR_MAX_PEOPLE = 12
 _ATTR_MAX_VEHICLE_FT = 109  # "Maximum Vehicle Length"
 _ATTR_ELECTRIC = 218  # "Electricity Hookup" (amps)
 _ATTR_CATEGORIES = 99999  # "Looking For Category": Tent / RV / Trailer Site
+
+
+# Requests made by the get_availability call running in this task. Each park
+# runs in its own task, so concurrent parks don't share a count.
+_park_requests: contextvars.ContextVar[list[int] | None] = contextvars.ContextVar(
+    "_park_requests", default=None,
+)
+
+
+def _log_park_fetch(fn):
+    """One INFO line per park: requests, seconds and outcome. Also on a
+    timeout (the search cancels the park), which is when it matters most."""
+
+    @functools.wraps(fn)
+    async def wrapper(self, park_id, *args, **kwargs):
+        count = [0]
+        token = _park_requests.set(count)
+        started = time.monotonic()
+        outcome = "cancelled"
+        try:
+            result = await fn(self, park_id, *args, **kwargs)
+            outcome = f"{len(result.campsites)} sites"
+            return result
+        except Exception as exc:
+            outcome = type(exc).__name__
+            raise
+        finally:
+            _park_requests.reset(token)
+            logger.info(
+                "ReserveAmerica %s: %d requests in %.1fs (%s)",
+                park_id, count[0], time.monotonic() - started, outcome,
+            )
+
+    return wrapper
 
 
 class ReserveAmericaClient:
@@ -107,11 +171,23 @@ class ReserveAmericaClient:
         end_date: date,
         page: int = 0,
     ) -> tuple[list[dict], int]:
+        queued = time.monotonic()
         await self._limiter.wait()
-        return await run_blocking(
-            self._fetch_window, park_id, slug, state, start_date, end_date, page,
-        )
+        sent = time.monotonic()
+        try:
+            return await run_blocking(
+                self._fetch_window, park_id, slug, state, start_date, end_date, page,
+            )
+        finally:
+            count = _park_requests.get()
+            if count is not None:
+                count[0] += 1
+            logger.debug(
+                "ReserveAmerica %s %s page %d: %.2fs (%.2fs waiting on the limiter)",
+                park_id, start_date, page, time.monotonic() - sent, sent - queued,
+            )
 
+    @_log_park_fetch
     async def get_availability(
         self,
         park_id: str,
@@ -119,17 +195,20 @@ class ReserveAmericaClient:
         state: str,
         start_date: date,
         end_date: date,
+        *,
+        nights: Iterable[date] | None = None,
     ) -> CampgroundAvailability:
         """Fetch per-site availability for an Oregon State Park.
 
-        Makes one request per page of each 14-day window in the date range.
+        Makes one request per page of each 14-day window in the date range,
+        or, given ``nights``, of each window ``window_cover`` picks for them.
         """
         all_campsites: dict[str, CampsiteAvailability] = {}
-
-        window_start = start_date
-        while window_start <= end_date:
-            window_end = min(window_start + timedelta(days=_WINDOW_DAYS - 1), end_date)
-
+        windows = (
+            window_cover(nights, end_date) if nights is not None
+            else _range_windows(start_date, end_date)
+        )
+        for window_start, window_end in windows:
             page = 0
             while True:
                 records, total = await self._fetch(
@@ -148,8 +227,6 @@ class ReserveAmericaClient:
                 page += 1
                 if not records or page * _PAGE_SIZE >= total:
                     break
-
-            window_start = window_end + timedelta(days=1)
 
         return CampgroundAvailability(
             facility_id=park_id,

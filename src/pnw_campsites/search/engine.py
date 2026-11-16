@@ -14,7 +14,7 @@ from pnw_campsites.geo import estimated_drive_minutes, geocode_address, is_known
 from pnw_campsites.providers.errors import FacilityNotFoundError, RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
-from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
+from pnw_campsites.providers.reserveamerica import ReserveAmericaClient, window_cover
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import (
     AvailabilityStatus,
@@ -43,9 +43,20 @@ PARK_TIMEOUT_S = 60.0
 # finishes, instead of leaving the UI on "Checking campgrounds…".
 SEARCH_DEADLINE_S = 90.0
 # Parks checked at once per source, on top of the search-wide fan-out.
+# Zero-result date probes: three shifted searches after the main one. They run
+# once the stream has nothing else to send, so they get a short budget of
+# their own instead of the search deadline.
+PROBE_DEADLINE_S = 10.0
+
 # ReserveAmerica requests share one app-wide rate limit: eight Oregon parks in
 # parallel would each get an eighth of it and all finish last.
 SOURCE_CONCURRENCY: dict[BookingSystem, int] = {BookingSystem.OR_STATE: 2}
+
+# After GoingToCamp's WAF blocks a request, WA is skipped for this long: the
+# rest of that search and every search in the pause. Prod's egress IP was
+# blocked for days (2026-11-06), so every search spent 20 slots on 403s. The
+# pause ends on its own, and the next search retries WA.
+WAF_BACKOFF_S = 600.0
 
 
 @dataclass
@@ -220,6 +231,9 @@ class _PreparedSearch:
     # the registry, tag and distance filters. registry_count is *pre*-distance,
     # so it cannot answer "how many matched?".
     matched_count: int = 0
+    # Picked for this search but skipped because their provider is blocking
+    # us; reported as warnings, not checked.
+    skipped: list = field(default_factory=list)
 
 
 @dataclass
@@ -265,6 +279,20 @@ class StreamCoverageEvent:
 
 
 @dataclass
+class StreamTimingEvent:
+    """The stream's last event: when each source finished, from search start.
+
+    `sources` maps a booking system to checked, done_ms, timeouts and errors.
+    Without it a slow search looked like any other in the logs and PostHog,
+    and nothing said which provider held it up (RCA 2026-11-15).
+    """
+
+    sources: dict[str, dict[str, int]]
+    first_result_ms: int | None
+    total_ms: int
+
+
+@dataclass
 class StreamNotReleasedEvent:
     """Yielded by search_stream once every campground has been checked, when
     any had requested nights not yet released. Most such campgrounds have no
@@ -291,6 +319,13 @@ class SearchResults:
     @property
     def has_availability(self) -> bool:
         return self.campgrounds_with_availability > 0
+
+
+def _describe_source(name: str, t: dict[str, int]) -> str:
+    """'or_state 20 in 90.0s (4 timeout)' for the search_stream log line."""
+    extra = [f"{t[k]} {k.rstrip('s')}" for k in ("timeouts", "errors") if t[k]]
+    tail = f" ({', '.join(extra)})" if extra else ""
+    return f"{name} {t['checked']} in {t['done_ms'] / 1000:.1f}s{tail}"
 
 
 def aggregate_warnings(results: list[CampgroundResult]) -> list[SearchWarning]:
@@ -644,6 +679,11 @@ class SearchEngine:
         # and rec.gov returns whole months even for a 3-day query, so the hit
         # rate across users sharing a weekend is high.
         self._watch_db = watch_db
+        # monotonic() until which WA is treated as blocked (WAF_BACKOFF_S).
+        self._wa_blocked_until = float("-inf")
+
+    def _wa_blocked(self) -> bool:
+        return time.monotonic() < self._wa_blocked_until
 
     async def _resolve_drive_times(
         self,
@@ -744,13 +784,23 @@ class SearchEngine:
         # before the cap, so matched >= checked always holds.
         matched_count = len(campgrounds)
 
+        skipped: list[Campground] = []
         if not query.booking_system:
             by_source: dict[str, list] = {}
             for cg in campgrounds:
                 by_source.setdefault(cg.booking_system.value, []).append(cg)
+            # A blocked WA's slots go to Recreation.gov, the other source
+            # that costs nothing to check.
+            caps = dict.fromkeys(by_source, query.max_campgrounds)
+            wa = BookingSystem.WA_STATE.value
+            if self._wa_blocked() and wa in by_source:
+                skipped = by_source.pop(wa)[: query.max_campgrounds]
+                recgov = BookingSystem.RECGOV.value
+                if recgov in caps:
+                    caps[recgov] += len(skipped)
             campgrounds = []
-            for source_cgs in by_source.values():
-                campgrounds.extend(source_cgs[: query.max_campgrounds])
+            for src, source_cgs in by_source.items():
+                campgrounds.extend(source_cgs[: caps[src]])
             if from_coords:
                 campgrounds.sort(
                     key=lambda cg: drive_times.get(cg.facility_id, 9999)
@@ -781,6 +831,7 @@ class SearchEngine:
             end_month=end_month,
             from_coords=from_coords,
             matched_count=matched_count,
+            skipped=skipped,
         )
 
     async def search(
@@ -848,7 +899,7 @@ class SearchEngine:
                 if fid in drive_times and not r.boat_in:
                     r.estimated_drive_minutes = drive_times[fid]
 
-        warnings = aggregate_warnings(all_results)
+        warnings = aggregate_warnings(all_results + _skipped_results(prep))
         not_released = summarize_not_released(all_results)
 
         campgrounds_with_availability = sum(
@@ -1074,8 +1125,14 @@ class SearchEngine:
         if not probes:
             return []
 
-        # Pre-resolve registry/drive data once; reuse across all probes
+        # Pre-resolve registry/drive data once; reuse across all probes.
+        # Oregon parks are left out: at 1 req/s app-wide a probe of even one
+        # big park outlasts the budget, and spends requests other searches need.
         base_prep = await self._prepare_search(query)
+        pool = [
+            cg for cg in base_prep.campgrounds
+            if cg.booking_system != BookingSystem.OR_STATE
+        ]
 
         # Run all probes in parallel, reusing the prepared campground list
         async def _run_probe(q: SearchQuery) -> SearchResults:
@@ -1089,7 +1146,7 @@ class SearchEngine:
             # 180 extra provider fetches on searches that already returned
             # nothing.
             probe_prep = _PreparedSearch(
-                campgrounds=base_prep.campgrounds[: q.max_campgrounds],
+                campgrounds=pool[: q.max_campgrounds],
                 drive_times=base_prep.drive_times,
                 registry_count=base_prep.registry_count,
                 distance_filtered=base_prep.distance_filtered,
@@ -1100,14 +1157,24 @@ class SearchEngine:
             )
             return await self.search(q, _skip_diagnosis=True, _prep=probe_prep)
 
-        probe_results = await asyncio.gather(
-            *(_run_probe(q) for _, _, _, q in probes)
-        )
+        tasks = [asyncio.ensure_future(_run_probe(q)) for _, _, _, q in probes]
+        done, pending = await asyncio.wait(tasks, timeout=PROBE_DEADLINE_S)
+        if pending:
+            logger.info(
+                "Date suggestions: %d of %d probes past the %.0fs budget",
+                len(pending), len(tasks), PROBE_DEADLINE_S,
+            )
+            for t in pending:
+                t.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
 
         suggestions: list[DateSuggestion] = []
-        for (shifted_start, shifted_end, reason, _), result in zip(
-            probes, probe_results, strict=True,
+        for (shifted_start, shifted_end, reason, _), task in zip(
+            probes, tasks, strict=True,
         ):
+            if task not in done or task.exception() is not None:
+                continue
+            result = task.result()
             if result.campgrounds_with_availability > 0:
                 suggestions.append(DateSuggestion(
                     start_date=shifted_start.isoformat(),
@@ -1169,6 +1236,8 @@ class SearchEngine:
         StreamCoverageEvent with matched/checked counts, and a final
         StreamDiagnosisEvent if zero results were found.
         """
+        loop = asyncio.get_running_loop()
+        started = loop.time()
         prep = await self._prepare_search(query)
         campgrounds = prep.campgrounds
         drive_times = prep.drive_times
@@ -1201,6 +1270,11 @@ class SearchEngine:
         ramped = False
 
         source_sems = _source_semaphores()
+        sources: dict[str, dict[str, int]] = {}
+        first_result_ms: int | None = None
+
+        def _ms() -> int:
+            return round((loop.time() - started) * 1000)
 
         async def _check_with_sem(cg: Campground) -> CampgroundResult:
             async with _source_slot(source_sems, cg), sem:
@@ -1208,7 +1282,6 @@ class SearchEngine:
                     cg, prep.start_month, prep.end_month, query,
                 )
 
-        loop = asyncio.get_running_loop()
         deadline = loop.time() + SEARCH_DEADLINE_S
         pending = {
             asyncio.ensure_future(_check_with_sem(cg)): cg for cg in campgrounds
@@ -1239,6 +1312,16 @@ class SearchEngine:
 
                 for r in finished:
                     checked_count += 1
+                    src = sources.setdefault(
+                        r.campground.booking_system.value,
+                        {"checked": 0, "done_ms": 0, "timeouts": 0, "errors": 0},
+                    )
+                    src["checked"] += 1
+                    src["done_ms"] = _ms()
+                    if r.error == "timeout":
+                        src["timeouts"] += 1
+                    elif r.error:
+                        src["errors"] += 1
 
                     # Ramp up concurrency after first results arrive
                     if not ramped and checked_count >= initial_concurrency:
@@ -1256,6 +1339,8 @@ class SearchEngine:
                         unreleased.append(r)
                     if r.total_available_sites > 0 or r.fcfs_sites > 0:
                         available_count += 1
+                        if first_result_ms is None:
+                            first_result_ms = _ms()
                         yield r
                     else:
                         if not r.error:
@@ -1272,6 +1357,7 @@ class SearchEngine:
         # Report provider degradation. The non-streaming endpoint has always
         # done this; the stream did not, so an outage reached the UI as simply
         # fewer results with no explanation.
+        errored.extend(_skipped_results(prep))
         if errored:
             yield StreamWarningsEvent(warnings=aggregate_warnings(errored))
 
@@ -1299,6 +1385,17 @@ class SearchEngine:
                 action_chips=chips,
             )
 
+        total_ms = _ms()
+        logger.info(
+            "search_stream %.1fs: %s | first result %s",
+            total_ms / 1000,
+            ", ".join(_describe_source(name, t) for name, t in sources.items()),
+            f"{first_result_ms / 1000:.1f}s" if first_result_ms is not None else "none",
+        )
+        yield StreamTimingEvent(
+            sources=sources, first_result_ms=first_result_ms, total_ms=total_ms,
+        )
+
     def _enrich_wa_availability(
         self, park_facility_id: str, availability: CampgroundAvailability
     ) -> None:
@@ -1313,16 +1410,20 @@ class SearchEngine:
     ) -> CampgroundResult:
         """Check availability for a single campground, dispatching to the right provider."""
         try:
-            cached = self._cache_get(campground, start_month, end_month)
+            nights = _oregon_nights(campground, query)
+            lookup = (nights[0], nights[-1]) if nights else (start_month, end_month)
+            cached = self._cache_get(campground, *lookup)
             if cached is not None:
                 return _process_availability(campground, cached, query)
 
             missing = self._missing_client(campground)
             if missing:
                 return CampgroundResult(campground=campground, error=missing)
+            if campground.booking_system == BookingSystem.WA_STATE and self._wa_blocked():
+                return CampgroundResult(campground=campground, error="waf_blocked")
             try:
                 availability = await asyncio.wait_for(
-                    self._fetch_availability(campground, start_month, end_month),
+                    self._fetch_availability(campground, start_month, end_month, nights),
                     timeout=PARK_TIMEOUT_S,
                 )
             except TimeoutError:
@@ -1332,7 +1433,9 @@ class SearchEngine:
                     PARK_TIMEOUT_S,
                 )
                 return CampgroundResult(campground=campground, error="timeout")
-            self._cache_set(campground, start_month, end_month, availability)
+            extent = _fetched_extent(nights, end_month) if nights else (start_month, end_month)
+            if extent:
+                self._cache_set(campground, *extent, availability)
             return _process_availability(campground, availability, query)
         except FacilityNotFoundError:
             # Silently drop — bad registry entry, no availability to show
@@ -1340,6 +1443,12 @@ class SearchEngine:
         except RateLimitedError:
             return CampgroundResult(campground=campground, error="rate_limited")
         except WAFBlockedError:
+            if campground.booking_system == BookingSystem.WA_STATE:
+                if not self._wa_blocked():
+                    logger.warning(
+                        "GoingToCamp WAF block: skipping WA for %.0fs", WAF_BACKOFF_S,
+                    )
+                self._wa_blocked_until = time.monotonic() + WAF_BACKOFF_S
             return CampgroundResult(campground=campground, error="waf_blocked")
         except Exception as exc:
             logger.warning(
@@ -1359,6 +1468,7 @@ class SearchEngine:
 
     async def _fetch_availability(
         self, campground: Campground, start_month: date, end_month: date,
+        nights: list[date] | None = None,
     ) -> CampgroundAvailability:
         if campground.booking_system == BookingSystem.WA_STATE:
             availability = await self._goingtocamp.get_availability(
@@ -1373,6 +1483,7 @@ class SearchEngine:
                 campground.state,
                 start_month,
                 end_month,
+                nights=nights,
             )
         return await self._recgov.get_availability_range(
             campground.facility_id, start_month, end_month
@@ -1458,6 +1569,32 @@ class SearchEngine:
 # ---------------------------------------------------------------------------
 
 
+def _oregon_nights(campground: Campground, query: SearchQuery) -> list[date] | None:
+    """The nights to fetch for an Oregon park, or None for the whole range.
+
+    Each ReserveAmerica request covers 14 nights and Oregon shares one 1 req/s
+    limit, so fetching only windows that hold a requested night saves a third
+    of the requests for a month of weekends. Other providers fetch whole
+    months for the same cost and keep their range.
+    """
+    if campground.booking_system != BookingSystem.OR_STATE:
+        return None
+    return _requested_nights(query) or None
+
+
+def _fetched_extent(nights: list[date], end: date) -> tuple[date, date] | None:
+    """The span the windows for `nights` cover, or None if they leave gaps.
+
+    The cache serves a payload for any range inside its extent, so a gap
+    would answer nights that were never fetched.
+    """
+    cover = window_cover(nights, end)
+    for (_, prev_end), (start, _) in zip(cover, cover[1:], strict=False):
+        if start != prev_end + timedelta(days=1):
+            return None
+    return cover[0][0], cover[-1][1]
+
+
 def _source_semaphores() -> dict[BookingSystem, asyncio.Semaphore]:
     return {src: asyncio.Semaphore(n) for src, n in SOURCE_CONCURRENCY.items()}
 
@@ -1468,6 +1605,10 @@ def _source_slot(
     """The park's per-source slot. Taken before the search-wide slot, so a park
     waiting on its source never holds a slot another source could use."""
     return sems.get(cg.booking_system) or contextlib.nullcontext()
+
+
+def _skipped_results(prep: _PreparedSearch) -> list[CampgroundResult]:
+    return [CampgroundResult(campground=cg, error="waf_blocked") for cg in prep.skipped]
 
 
 def this_weekend() -> tuple[date, date]:

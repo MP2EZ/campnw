@@ -196,3 +196,20 @@ pre-promotion safety net, not a production monitor.
 
 Passive real-user product analytics + error tracking. Keeps the "what did a real
 user experience" record that synthetic checks can't reproduce.
+
+### Search latency
+
+A search's time goes almost entirely to the slowest booking system, usually
+Oregon (ReserveAmerica, 1 req/s app-wide). Each search reports which source held it:
+
+- **PostHog `search_executed`:**
+  - `elapsed_ms` is the time to `[DONE]`.
+  - `first_result_ms` is the time to the first card with open sites.
+  - `recgov_ms`, `wa_state_ms` and `or_state_ms` are when each source finished, measured on the server.
+  - `oregon_timeouts` counts Oregon parks that ran out of time.
+  - `total_checked` is the number of campgrounds checked.
+- **`fly logs`:**
+  - One line per search: `search_stream 90.4s: recgov 20 in 0.7s, or_state 20 in 90.0s (4 timeout), … | first result 4.0s`.
+  - One line per Oregon park: `ReserveAmerica 402178: 22 requests in 58.1s (175 sites)`. It ends in `(cancelled)` when the park timed out.
+  - Per-request timing and limiter wait are logged at DEBUG.
+- **Admin `GET /api/perf`:** percentiles of whole-search durations. For the stream this is the full stream, not the time to start the response.

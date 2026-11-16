@@ -29,7 +29,7 @@ from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.search.engine import SearchEngine
 
 # App version — surfaced by /healthz so monitors can confirm what's deployed.
-APP_VERSION = "1.48.2"
+APP_VERSION = "1.48.3"
 
 # ---------------------------------------------------------------------------
 # App state — initialized in lifespan
@@ -563,7 +563,9 @@ async def timing_middleware(request: Request, call_next):
     response = await call_next(request)
     elapsed_ms = (time.monotonic() - start) * 1000
     response.headers["Server-Timing"] = f"total;dur={elapsed_ms:.0f}"
-    if request.url.path.startswith("/api/search"):
+    # The stream records its own duration (routes/search.py, timing frame):
+    # here it would only measure the time to start the response.
+    if request.url.path.startswith("/api/search") and request.url.path != "/api/search/stream":
         _search_timings.append(elapsed_ms)
         _search_logger.info("search_timing path=%s elapsed_ms=%.0f", request.url.path, elapsed_ms)
     # Security headers

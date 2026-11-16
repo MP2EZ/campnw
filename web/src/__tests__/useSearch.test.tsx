@@ -17,6 +17,7 @@ let capturedOnNotReleased: ((s: unknown) => void) | null = null;
 let capturedOnCoverage: ((matched: number, checked: number) => void) | null = null;
 let capturedSignal: AbortSignal | null = null;
 let capturedOnUnavailable: ((r: CampgroundResult) => void) | null = null;
+let capturedOnTiming: ((t: unknown) => void) | null = null;
 
 vi.mock("../api", () => ({
   searchCampsitesStream: vi.fn(
@@ -40,6 +41,7 @@ vi.mock("../api", () => ({
         (rest[6] as ((matched: number, checked: number) => void)) ?? null;
       capturedOnNotReleased = (rest[7] as ((s: unknown) => void)) ?? null;
       capturedOnUnavailable = (rest[8] as ((r: CampgroundResult) => void)) ?? null;
+      capturedOnTiming = (rest[9] as ((t: unknown) => void)) ?? null;
     },
   ),
   saveSearchHistory: vi.fn(),
@@ -603,6 +605,37 @@ describe("useSearch funnel events", () => {
       mode: "find",
     });
     expect(call![1].search_id).toBeTruthy();
+  });
+
+  // Slow searches were invisible (RCA 2026-11-15): elapsed_ms was time to
+  // [DONE] only, and total_checked counted result frames, not campgrounds.
+  test("search_executed says what the user waited for and which source held it", async () => {
+    const hook = renderHook(() => useSearch(null));
+    await runSearch(hook);
+    await act(async () => {
+      capturedOnResult?.(MOCK_RESULT);
+      capturedOnCoverage?.(1368, 60);
+      capturedOnTiming?.({
+        sources: {
+          recgov: { checked: 20, done_ms: 700, timeouts: 0, errors: 0 },
+          or_state: { checked: 20, done_ms: 90000, timeouts: 4, errors: 0 },
+        },
+        first_result_ms: 4000,
+        total_ms: 90400,
+      });
+      capturedOnDone?.();
+    });
+
+    const call = vi.mocked(track).mock.calls.find((c) => c[0] === "search_executed");
+    expect(call![1]).toMatchObject({
+      total_checked: 60,
+      server_ms: 90400,
+      recgov_ms: 700,
+      or_state_ms: 90000,
+      oregon_timeouts: 4,
+    });
+    expect(call![1].wa_state_ms).toBeUndefined();
+    expect(typeof call![1].first_result_ms).toBe("number");
   });
 
   // A failed search emitted nothing at all, so it was indistinguishable from a
