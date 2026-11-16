@@ -43,15 +43,15 @@ PARK_TIMEOUT_S = 60.0
 # finishes, instead of leaving the UI on "Checking campgrounds…".
 SEARCH_DEADLINE_S = 90.0
 # Parks checked at once per source, on top of the search-wide fan-out.
+# ReserveAmerica requests share one app-wide rate limit: eight Oregon parks in
+# parallel would each get an eighth of it and all finish last.
+SOURCE_CONCURRENCY: dict[BookingSystem, int] = {BookingSystem.OR_STATE: 2}
+
 # After GoingToCamp's WAF blocks a request, WA is skipped for this long: the
 # rest of that search and every search in the pause. Prod's egress IP was
 # blocked for days (2026-11-06), so every search spent 20 slots on 403s. The
 # pause ends on its own, and the next search retries WA.
 WAF_BACKOFF_S = 600.0
-
-# ReserveAmerica requests share one app-wide rate limit: eight Oregon parks in
-# parallel would each get an eighth of it and all finish last.
-SOURCE_CONCURRENCY: dict[BookingSystem, int] = {BookingSystem.OR_STATE: 2}
 
 
 @dataclass
@@ -1492,10 +1492,6 @@ class SearchEngine:
 # ---------------------------------------------------------------------------
 
 
-def _skipped_results(prep: _PreparedSearch) -> list[CampgroundResult]:
-    return [CampgroundResult(campground=cg, error="waf_blocked") for cg in prep.skipped]
-
-
 def _source_semaphores() -> dict[BookingSystem, asyncio.Semaphore]:
     return {src: asyncio.Semaphore(n) for src, n in SOURCE_CONCURRENCY.items()}
 
@@ -1506,6 +1502,10 @@ def _source_slot(
     """The park's per-source slot. Taken before the search-wide slot, so a park
     waiting on its source never holds a slot another source could use."""
     return sems.get(cg.booking_system) or contextlib.nullcontext()
+
+
+def _skipped_results(prep: _PreparedSearch) -> list[CampgroundResult]:
+    return [CampgroundResult(campground=cg, error="waf_blocked") for cg in prep.skipped]
 
 
 def this_weekend() -> tuple[date, date]:
