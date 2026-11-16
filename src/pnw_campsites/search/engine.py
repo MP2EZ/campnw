@@ -307,6 +307,13 @@ class SearchResults:
         return self.campgrounds_with_availability > 0
 
 
+def _describe_source(name: str, t: dict[str, int]) -> str:
+    """'or_state 20 in 90.0s (4 timeout)' for the search_stream log line."""
+    extra = [f"{t[k]} {k.rstrip('s')}" for k in ("timeouts", "errors") if t[k]]
+    tail = f" ({', '.join(extra)})" if extra else ""
+    return f"{name} {t['checked']} in {t['done_ms'] / 1000:.1f}s{tail}"
+
+
 def aggregate_warnings(results: list[CampgroundResult]) -> list[SearchWarning]:
     """Roll per-campground errors up into per-(kind, source) warnings.
 
@@ -1499,13 +1506,6 @@ class SearchEngine:
 # ---------------------------------------------------------------------------
 # Date helpers for natural-language-style queries
 # ---------------------------------------------------------------------------
-
-
-def _describe_source(name: str, t: dict[str, int]) -> str:
-    """'or_state 20 in 90.0s (4 timeout)' for the search_stream log line."""
-    extra = [f"{t[k]} {k.rstrip('s')}" for k in ("timeouts", "errors") if t[k]]
-    tail = f" ({', '.join(extra)})" if extra else ""
-    return f"{name} {t['checked']} in {t['done_ms'] / 1000:.1f}s{tail}"
 
 
 def _source_semaphores() -> dict[BookingSystem, asyncio.Semaphore]:
