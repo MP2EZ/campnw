@@ -695,6 +695,10 @@ async def search_stream(
     )
 
     async def event_generator():
+        # An SSE comment, so headers go out now. Otherwise nothing reaches the
+        # client until the first park finishes: up to a minute for one big
+        # Oregon park. Clients ignore comment lines.
+        yield ": searching\n\n"
         # Emit parsed params so the frontend can show what was understood
         if nl_parsed:
             parsed_event = {
