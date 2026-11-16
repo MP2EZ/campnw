@@ -212,6 +212,6 @@ Oregon (ReserveAmerica, 1 req/s app-wide). Each search reports which source held
   - One line per search: `search_stream 90.4s: recgov 20 in 0.7s, or_state 20 in 90.0s (4 timeout), … | first result 4.0s`.
   - One line per Oregon park: `ReserveAmerica 402178: 2 windows (1 cached, 1 fetched), 11 requests in 23.4s (175 sites)`. It ends in `(cancelled)` when the park timed out.
     - Oregon is cached per 14-day window for 10 min (`ra_window_cache`), and searches and watch polls share it. A repeat search shows `cached` windows and 0 requests.
-    - Windows in flight when the deadline or a closed tab cuts a park keep fetching in the background (at most 24 windows, yielding the 1 req/s limit to live searches): `ReserveAmerica 402178 2027-02-19: background window, 11 requests in 31.2s (cached)`. `background full, N windows dropped` means the cap was hit.
+    - Parks cut by the deadline or a closed tab keep fetching in the background (at most 24 windows, yielding the 1 req/s limit to live searches): `ReserveAmerica 402178 2027-02-19: background window, 11 requests in 31.2s (cached)`. `background full, N windows dropped` means the cap was hit.
   - Per-request timing and limiter wait are logged at DEBUG.
 - **Admin `GET /api/perf`:** percentiles of whole-search durations. For the stream this is the full stream, not the time to start the response.

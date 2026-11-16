@@ -116,9 +116,12 @@ async def test_the_search_deadline_ends_the_stream_with_every_park_reported(
     assert 0 < len(timed_out) < 12
     coverage = next(ev for ev in events if isinstance(ev, StreamCoverageEvent))
     assert coverage.campgrounds_checked == 12
-    # Parks cut mid-fetch finish in the background.
+    # Cut parks finish in the background, including those never started.
     await asyncio.wait_for(engine.oregon.idle(), timeout=5)
     assert state["running"] == 0
+    assert sorted(c.args[0] for c in ra.get_window.await_args_list) == sorted(
+        f"or{i}" for i in range(12)
+    )
 
 
 async def test_closing_the_stream_hands_oregon_work_to_the_background(registry) -> None:
@@ -137,7 +140,7 @@ async def test_closing_the_stream_hands_oregon_work_to_the_background(registry) 
     await asyncio.sleep(0)
 
     assert state["cancelled"] == 0
-    assert engine.oregon.is_pending("or1")
+    assert all(engine.oregon.is_pending(f"or{i}") for i in range(1, 6))
     await engine.oregon.aclose()
     assert state["running"] == 0
 

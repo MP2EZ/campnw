@@ -4,7 +4,8 @@ The search deadline used to cancel a park's fetch and throw its pages away, so
 the next search for the same dates paid for the slowest parks again (43 s warm
 in the slow-search RCA). Window fetches now belong to OregonWindows: searches
 and the watch poller share one fetch per window, a window nobody waits on
-finishes at background priority into the cache, within a cap.
+finishes at background priority into the cache, and windows a cut park never
+started are queued, within a cap.
 """
 
 from __future__ import annotations
@@ -125,6 +126,21 @@ class TestSharedWindows:
         assert client.calls == [(d(5), d(18))]
         assert client.background[d(5)] is False
 
+    async def test_windows_a_cut_park_never_started_are_queued(self, watch_db) -> None:
+        client = GatedClient()
+        windows = OregonWindows(client, watch_db)
+        search = asyncio.create_task(windows.park(CG, nights(d(1), d(28)), d(28)))
+        await within(client.was_started(d(1)).wait())
+        search.cancel()
+        await within(asyncio.gather(search, return_exceptions=True))
+
+        client.gate(d(1)).set()
+        client.gate(d(15)).set()
+        await within(windows.idle())
+        assert client.calls == [(d(1), d(14)), (d(15), d(28))]
+        assert client.background == {d(1): True, d(15): True}
+        assert stored(watch_db, d(1), d(28)) == [(d(1), d(14)), (d(15), d(28))]
+
     async def test_a_failed_window_stores_nothing_and_reaches_its_waiter(
         self, watch_db,
     ) -> None:
@@ -136,6 +152,13 @@ class TestSharedWindows:
 
 
 class TestBackgroundBound:
+    async def test_queued_windows_past_the_cap_are_dropped(self, watch_db) -> None:
+        client = GatedClient(open_all=True)
+        windows = OregonWindows(client, watch_db, max_background=2)
+        windows.enqueue_background(CG, [(d(1), d(14)), (d(15), d(28)), (d(1, 3), d(14, 3))])
+        await within(windows.idle())
+        assert client.calls == [(d(1), d(14)), (d(15), d(28))]
+
     async def test_a_window_losing_its_last_waiter_over_the_cap_is_cancelled(
         self, watch_db,
     ) -> None:
@@ -149,19 +172,48 @@ class TestBackgroundBound:
         assert not windows.is_pending("402178")
         assert stored(watch_db, d(5), d(18)) == []
 
+    async def test_an_old_queued_window_is_dropped(self, watch_db) -> None:
+        now = [100.0]
+        client = GatedClient()
+        windows = OregonWindows(client, watch_db, clock=lambda: now[0])
+        windows.enqueue_background(CG, [(d(1), d(14)), (d(15), d(28))])
+        await within(client.was_started(d(1)).wait())
+        now[0] += 301  # past the 5-min queue age while the first window runs
+        client.gate(d(1)).set()
+        await within(windows.idle())
+        assert client.calls == [(d(1), d(14))]
+
+    async def test_a_queued_window_already_stored_is_skipped(self, watch_db) -> None:
+        client = GatedClient(open_all=True)
+        windows = OregonWindows(client, watch_db)
+        await within(windows.park(CG, nights(d(1), d(14)), d(14)))
+        windows.enqueue_background(CG, [(d(1), d(14))])
+        await within(windows.idle())
+        assert client.calls == [(d(1), d(14))]
+
+
+    async def test_a_park_never_started_is_queued_minus_what_is_stored(
+        self, watch_db,
+    ) -> None:
+        client = GatedClient(open_all=True)
+        windows = OregonWindows(client, watch_db)
+        await within(windows.park(CG, nights(d(1), d(14)), d(14)))
+        windows.enqueue_park(CG, nights(d(1), d(28)), d(28))
+        await within(windows.idle())
+        assert client.calls == [(d(1), d(14)), (d(15), d(28))]
 
 
 class TestShutdown:
-    async def test_aclose_cancels_background_windows(self, watch_db) -> None:
+    async def test_aclose_cancels_running_and_queued_windows(self, watch_db) -> None:
         client = GatedClient()
         windows = OregonWindows(client, watch_db)
-        search = asyncio.create_task(windows.park(CG, [d(1)], d(14)))
+        windows.enqueue_background(CG, [(d(1), d(14)), (d(15), d(28))])
         await within(client.was_started(d(1)).wait())
-        search.cancel()
-        await within(asyncio.gather(search, return_exceptions=True))
 
         await within(windows.aclose())
 
         assert not windows.is_pending("402178")
-        assert stored(watch_db, d(1), d(14)) == []
+        assert client.calls == [(d(1), d(14))]
+        assert stored(watch_db, d(1), d(28)) == []
         assert not [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+

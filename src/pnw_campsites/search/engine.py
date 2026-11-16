@@ -1282,10 +1282,14 @@ class SearchEngine:
             return round((loop.time() - started) * 1000)
 
         async def _check_with_sem(cg: Campground) -> CampgroundResult:
-            async with _source_slot(source_sems, cg), sem:
-                return await self._check_campground(
-                    cg, prep.start_month, prep.end_month, query,
-                )
+            try:
+                async with _source_slot(source_sems, cg), sem:
+                    return await self._check_campground(
+                        cg, prep.start_month, prep.end_month, query,
+                    )
+            except asyncio.CancelledError:
+                self._background_oregon(cg, prep, query)
+                raise
 
         deadline = loop.time() + SEARCH_DEADLINE_S
         pending = {
@@ -1461,6 +1465,17 @@ class SearchEngine:
                 type(exc).__name__, exc,
             )
             return CampgroundResult(campground=campground, error="unavailable")
+
+    def _background_oregon(
+        self, cg: Campground, prep: _PreparedSearch, query: SearchQuery,
+    ) -> None:
+        """A cut or abandoned Oregon park finishes in the background. A park
+        that had started queues its own remaining windows; this covers the
+        ones still waiting for a slot."""
+        if cg.booking_system == BookingSystem.OR_STATE and self.oregon is not None:
+            self.oregon.enqueue_park(
+                cg, _oregon_nights(query, prep.start_month, prep.end_month), prep.end_month,
+            )
 
     def _missing_client(self, campground: Campground) -> str | None:
         system = campground.booking_system
