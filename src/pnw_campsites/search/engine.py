@@ -52,6 +52,12 @@ PROBE_DEADLINE_S = 10.0
 # parallel would each get an eighth of it and all finish last.
 SOURCE_CONCURRENCY: dict[BookingSystem, int] = {BookingSystem.OR_STATE: 2}
 
+# After GoingToCamp's WAF blocks a request, WA is skipped for this long: the
+# rest of that search and every search in the pause. Prod's egress IP was
+# blocked for days (2026-11-06), so every search spent 20 slots on 403s. The
+# pause ends on its own, and the next search retries WA.
+WAF_BACKOFF_S = 600.0
+
 
 @dataclass
 class SearchQuery:
@@ -225,6 +231,9 @@ class _PreparedSearch:
     # the registry, tag and distance filters. registry_count is *pre*-distance,
     # so it cannot answer "how many matched?".
     matched_count: int = 0
+    # Picked for this search but skipped because their provider is blocking
+    # us; reported as warnings, not checked.
+    skipped: list = field(default_factory=list)
 
 
 @dataclass
@@ -670,6 +679,11 @@ class SearchEngine:
         # and rec.gov returns whole months even for a 3-day query, so the hit
         # rate across users sharing a weekend is high.
         self._watch_db = watch_db
+        # monotonic() until which WA is treated as blocked (WAF_BACKOFF_S).
+        self._wa_blocked_until = float("-inf")
+
+    def _wa_blocked(self) -> bool:
+        return time.monotonic() < self._wa_blocked_until
 
     async def _resolve_drive_times(
         self,
@@ -770,13 +784,23 @@ class SearchEngine:
         # before the cap, so matched >= checked always holds.
         matched_count = len(campgrounds)
 
+        skipped: list[Campground] = []
         if not query.booking_system:
             by_source: dict[str, list] = {}
             for cg in campgrounds:
                 by_source.setdefault(cg.booking_system.value, []).append(cg)
+            # A blocked WA's slots go to Recreation.gov, the other source
+            # that costs nothing to check.
+            caps = dict.fromkeys(by_source, query.max_campgrounds)
+            wa = BookingSystem.WA_STATE.value
+            if self._wa_blocked() and wa in by_source:
+                skipped = by_source.pop(wa)[: query.max_campgrounds]
+                recgov = BookingSystem.RECGOV.value
+                if recgov in caps:
+                    caps[recgov] += len(skipped)
             campgrounds = []
-            for source_cgs in by_source.values():
-                campgrounds.extend(source_cgs[: query.max_campgrounds])
+            for src, source_cgs in by_source.items():
+                campgrounds.extend(source_cgs[: caps[src]])
             if from_coords:
                 campgrounds.sort(
                     key=lambda cg: drive_times.get(cg.facility_id, 9999)
@@ -807,6 +831,7 @@ class SearchEngine:
             end_month=end_month,
             from_coords=from_coords,
             matched_count=matched_count,
+            skipped=skipped,
         )
 
     async def search(
@@ -874,7 +899,7 @@ class SearchEngine:
                 if fid in drive_times and not r.boat_in:
                     r.estimated_drive_minutes = drive_times[fid]
 
-        warnings = aggregate_warnings(all_results)
+        warnings = aggregate_warnings(all_results + _skipped_results(prep))
         not_released = summarize_not_released(all_results)
 
         campgrounds_with_availability = sum(
@@ -1332,6 +1357,7 @@ class SearchEngine:
         # Report provider degradation. The non-streaming endpoint has always
         # done this; the stream did not, so an outage reached the UI as simply
         # fewer results with no explanation.
+        errored.extend(_skipped_results(prep))
         if errored:
             yield StreamWarningsEvent(warnings=aggregate_warnings(errored))
 
@@ -1391,6 +1417,8 @@ class SearchEngine:
             missing = self._missing_client(campground)
             if missing:
                 return CampgroundResult(campground=campground, error=missing)
+            if campground.booking_system == BookingSystem.WA_STATE and self._wa_blocked():
+                return CampgroundResult(campground=campground, error="waf_blocked")
             try:
                 availability = await asyncio.wait_for(
                     self._fetch_availability(campground, start_month, end_month),
@@ -1411,6 +1439,12 @@ class SearchEngine:
         except RateLimitedError:
             return CampgroundResult(campground=campground, error="rate_limited")
         except WAFBlockedError:
+            if campground.booking_system == BookingSystem.WA_STATE:
+                if not self._wa_blocked():
+                    logger.warning(
+                        "GoingToCamp WAF block: skipping WA for %.0fs", WAF_BACKOFF_S,
+                    )
+                self._wa_blocked_until = time.monotonic() + WAF_BACKOFF_S
             return CampgroundResult(campground=campground, error="waf_blocked")
         except Exception as exc:
             logger.warning(
@@ -1539,6 +1573,10 @@ def _source_slot(
     """The park's per-source slot. Taken before the search-wide slot, so a park
     waiting on its source never holds a slot another source could use."""
     return sems.get(cg.booking_system) or contextlib.nullcontext()
+
+
+def _skipped_results(prep: _PreparedSearch) -> list[CampgroundResult]:
+    return [CampgroundResult(campground=cg, error="waf_blocked") for cg in prep.skipped]
 
 
 def this_weekend() -> tuple[date, date]:
