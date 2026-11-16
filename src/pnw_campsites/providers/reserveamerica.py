@@ -4,7 +4,9 @@ Uses curl_cffi to fetch the unified www.reserveamerica.com availability pages.
 The site is a React SSR app with Redux state embedded in a <script> tag.
 Each request returns a 14-day availability window for 20 campsites.
 
-For date ranges > 14 days, multiple requests are made in 14-day windows.
+For date ranges > 14 days, multiple requests are made in 14-day windows. A
+search passes the nights it asks about, and only windows holding one of them
+are fetched (``window_cover``).
 Requests run on the provider thread pool, one at a time, and the client spaces
 them app-wide with a shared limiter: no thread is held between requests.
 """
@@ -16,6 +18,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Iterable
 from datetime import date, timedelta
 
 from curl_cffi import requests as curl_requests
@@ -58,6 +61,31 @@ _PAGE_SIZE = 50
 # deliberately (2 req/s roughly halves Oregon search time; see PR #241).
 _MIN_INTERVAL_ENV = "RESERVEAMERICA_MIN_INTERVAL_S"
 _DEFAULT_MIN_INTERVAL_S = 1.0
+
+
+def window_cover(nights: Iterable[date], end: date) -> list[tuple[date, date]]:
+    """Fewest 14-day windows holding every night, as (arrival, departure).
+
+    Each window starts at the first night not yet covered, so a month of
+    weekends from the 1st takes two windows where 1st-to-end takes three.
+    A window never runs past ``end``.
+    """
+    windows: list[tuple[date, date]] = []
+    covered_through: date | None = None
+    for night in sorted(set(nights)):
+        if covered_through is not None and night <= covered_through:
+            continue
+        covered_through = night + timedelta(days=_WINDOW_DAYS - 1)
+        windows.append((night, min(covered_through, end)))
+    return windows
+
+
+def _range_windows(start: date, end: date) -> list[tuple[date, date]]:
+    windows = []
+    while start <= end:
+        windows.append((start, min(start + timedelta(days=_WINDOW_DAYS - 1), end)))
+        start += timedelta(days=_WINDOW_DAYS)
+    return windows
 
 
 def _min_interval() -> float:
@@ -119,17 +147,20 @@ class ReserveAmericaClient:
         state: str,
         start_date: date,
         end_date: date,
+        *,
+        nights: Iterable[date] | None = None,
     ) -> CampgroundAvailability:
         """Fetch per-site availability for an Oregon State Park.
 
-        Makes one request per page of each 14-day window in the date range.
+        Makes one request per page of each 14-day window in the date range,
+        or, given ``nights``, of each window ``window_cover`` picks for them.
         """
         all_campsites: dict[str, CampsiteAvailability] = {}
-
-        window_start = start_date
-        while window_start <= end_date:
-            window_end = min(window_start + timedelta(days=_WINDOW_DAYS - 1), end_date)
-
+        windows = (
+            window_cover(nights, end_date) if nights is not None
+            else _range_windows(start_date, end_date)
+        )
+        for window_start, window_end in windows:
             page = 0
             while True:
                 records, total = await self._fetch(
@@ -148,8 +179,6 @@ class ReserveAmericaClient:
                 page += 1
                 if not records or page * _PAGE_SIZE >= total:
                     break
-
-            window_start = window_end + timedelta(days=1)
 
         return CampgroundAvailability(
             facility_id=park_id,

@@ -43,7 +43,7 @@ def _oregon(delay_for: dict[str, float], default: float = 0.0):
     """Fake ReserveAmerica client whose parks take the given seconds."""
     state = {"running": 0, "max_running": 0, "cancelled": 0}
 
-    async def get_availability(park_id, *_args):
+    async def get_availability(park_id, *_args, **_kwargs):
         state["running"] += 1
         state["max_running"] = max(state["max_running"], state["running"])
         try:
