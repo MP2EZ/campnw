@@ -62,6 +62,28 @@ _MIN_INTERVAL_ENV = "RESERVEAMERICA_MIN_INTERVAL_S"
 _DEFAULT_MIN_INTERVAL_S = 1.0
 
 
+def _min_interval() -> float:
+    raw = os.getenv(_MIN_INTERVAL_ENV)
+    if raw is None:
+        return _DEFAULT_MIN_INTERVAL_S
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        logger.warning("Ignoring %s=%r: not a number", _MIN_INTERVAL_ENV, raw)
+        return _DEFAULT_MIN_INTERVAL_S
+
+# Regex to extract the Redux state JSON blob from the HTML
+_REDUX_RE = re.compile(r'(\{"application"\s*:\s*\{.+\})\s*</script>')
+
+# Attribute IDs for min/max occupants
+_ATTR_MIN_PEOPLE = 111
+_ATTR_MAX_PEOPLE = 12
+# Attribute IDs for site fit (seen on Oregon parks, 2026-11-07)
+_ATTR_MAX_VEHICLE_FT = 109  # "Maximum Vehicle Length"
+_ATTR_ELECTRIC = 218  # "Electricity Hookup" (amps)
+_ATTR_CATEGORIES = 99999  # "Looking For Category": Tent / RV / Trailer Site
+
+
 # Requests made by the get_availability call running in this task. Each park
 # runs in its own task, so concurrent parks don't share a count.
 _park_requests: contextvars.ContextVar[list[int] | None] = contextvars.ContextVar(
@@ -94,28 +116,6 @@ def _log_park_fetch(fn):
             )
 
     return wrapper
-
-
-def _min_interval() -> float:
-    raw = os.getenv(_MIN_INTERVAL_ENV)
-    if raw is None:
-        return _DEFAULT_MIN_INTERVAL_S
-    try:
-        return max(0.0, float(raw))
-    except ValueError:
-        logger.warning("Ignoring %s=%r: not a number", _MIN_INTERVAL_ENV, raw)
-        return _DEFAULT_MIN_INTERVAL_S
-
-# Regex to extract the Redux state JSON blob from the HTML
-_REDUX_RE = re.compile(r'(\{"application"\s*:\s*\{.+\})\s*</script>')
-
-# Attribute IDs for min/max occupants
-_ATTR_MIN_PEOPLE = 111
-_ATTR_MAX_PEOPLE = 12
-# Attribute IDs for site fit (seen on Oregon parks, 2026-11-07)
-_ATTR_MAX_VEHICLE_FT = 109  # "Maximum Vehicle Length"
-_ATTR_ELECTRIC = 218  # "Electricity Hookup" (amps)
-_ATTR_CATEGORIES = 99999  # "Looking For Category": Tent / RV / Trailer Site
 
 
 class ReserveAmericaClient:
