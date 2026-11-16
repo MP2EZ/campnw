@@ -265,6 +265,20 @@ class StreamCoverageEvent:
 
 
 @dataclass
+class StreamTimingEvent:
+    """The stream's last event: when each source finished, from search start.
+
+    `sources` maps a booking system to checked, done_ms, timeouts and errors.
+    Without it a slow search looked like any other in the logs and PostHog,
+    and nothing said which provider held it up (RCA 2026-11-15).
+    """
+
+    sources: dict[str, dict[str, int]]
+    first_result_ms: int | None
+    total_ms: int
+
+
+@dataclass
 class StreamNotReleasedEvent:
     """Yielded by search_stream once every campground has been checked, when
     any had requested nights not yet released. Most such campgrounds have no
@@ -1169,6 +1183,8 @@ class SearchEngine:
         StreamCoverageEvent with matched/checked counts, and a final
         StreamDiagnosisEvent if zero results were found.
         """
+        loop = asyncio.get_running_loop()
+        started = loop.time()
         prep = await self._prepare_search(query)
         campgrounds = prep.campgrounds
         drive_times = prep.drive_times
@@ -1201,6 +1217,11 @@ class SearchEngine:
         ramped = False
 
         source_sems = _source_semaphores()
+        sources: dict[str, dict[str, int]] = {}
+        first_result_ms: int | None = None
+
+        def _ms() -> int:
+            return round((loop.time() - started) * 1000)
 
         async def _check_with_sem(cg: Campground) -> CampgroundResult:
             async with _source_slot(source_sems, cg), sem:
@@ -1208,7 +1229,6 @@ class SearchEngine:
                     cg, prep.start_month, prep.end_month, query,
                 )
 
-        loop = asyncio.get_running_loop()
         deadline = loop.time() + SEARCH_DEADLINE_S
         pending = {
             asyncio.ensure_future(_check_with_sem(cg)): cg for cg in campgrounds
@@ -1239,6 +1259,16 @@ class SearchEngine:
 
                 for r in finished:
                     checked_count += 1
+                    src = sources.setdefault(
+                        r.campground.booking_system.value,
+                        {"checked": 0, "done_ms": 0, "timeouts": 0, "errors": 0},
+                    )
+                    src["checked"] += 1
+                    src["done_ms"] = _ms()
+                    if r.error == "timeout":
+                        src["timeouts"] += 1
+                    elif r.error:
+                        src["errors"] += 1
 
                     # Ramp up concurrency after first results arrive
                     if not ramped and checked_count >= initial_concurrency:
@@ -1256,6 +1286,8 @@ class SearchEngine:
                         unreleased.append(r)
                     if r.total_available_sites > 0 or r.fcfs_sites > 0:
                         available_count += 1
+                        if first_result_ms is None:
+                            first_result_ms = _ms()
                         yield r
                     else:
                         if not r.error:
@@ -1298,6 +1330,17 @@ class SearchEngine:
                 date_suggestions=date_suggestions,
                 action_chips=chips,
             )
+
+        total_ms = _ms()
+        logger.info(
+            "search_stream %.1fs: %s | first result %s",
+            total_ms / 1000,
+            ", ".join(_describe_source(name, t) for name, t in sources.items()),
+            f"{first_result_ms / 1000:.1f}s" if first_result_ms is not None else "none",
+        )
+        yield StreamTimingEvent(
+            sources=sources, first_result_ms=first_result_ms, total_ms=total_ms,
+        )
 
     def _enrich_wa_availability(
         self, park_facility_id: str, availability: CampgroundAvailability
@@ -1456,6 +1499,13 @@ class SearchEngine:
 # ---------------------------------------------------------------------------
 # Date helpers for natural-language-style queries
 # ---------------------------------------------------------------------------
+
+
+def _describe_source(name: str, t: dict[str, int]) -> str:
+    """'or_state 20 in 90.0s (4 timeout)' for the search_stream log line."""
+    extra = [f"{t[k]} {k.rstrip('s')}" for k in ("timeouts", "errors") if t[k]]
+    tail = f" ({', '.join(extra)})" if extra else ""
+    return f"{name} {t['checked']} in {t['done_ms'] / 1000:.1f}s{tail}"
 
 
 def _source_semaphores() -> dict[BookingSystem, asyncio.Semaphore]:

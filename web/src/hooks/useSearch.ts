@@ -12,7 +12,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { getPosthog, searchCampsitesStream, saveSearchHistory, track } from "../api";
 import type {
   CampgroundResult, SearchParams, SearchResponse, SearchWarning,
-  DiagnosisEvent, UserData,
+  DiagnosisEvent, SearchTiming, UserData,
 } from "../api";
 
 /**
@@ -223,6 +223,9 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     // can't drop them — onDone used to, so the zero-results screen never
     // received a diagnosis.
     let streamedEnd: Partial<SearchResponse> = {};
+    // For search_executed: what the user waited for, and which source held it.
+    let firstResultMs: number | undefined;
+    let timing: SearchTiming | undefined;
     let rafId: number | null = null;
     let checkedCount = 0;
     let plannedCount: number | undefined;
@@ -252,6 +255,9 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       (result) => {
         streamedResults.push(result);
         checkedCount++;
+        if (firstResultMs === undefined && result.total_available_sites > 0) {
+          firstResultMs = Math.round(performance.now() - startedAt);
+        }
         if (!rafId) {
           rafId = requestAnimationFrame(() => {
             rafId = null;
@@ -276,7 +282,18 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           state: params.state || "all",
           nights: params.nights || 2,
           result_count: withAvail,
-          total_checked: streamedResults.length,
+          // Campgrounds checked (from the coverage frame). It counted result
+          // frames, which left out every campground with nothing open.
+          total_checked: checkedCount,
+          oregon_timeouts: timing?.sources.or_state?.timeouts ?? 0,
+          // Left out when unknown: a source the search didn't use has no time.
+          ...definedOnly({
+            first_result_ms: firstResultMs,
+            server_ms: timing?.total_ms,
+            recgov_ms: timing?.sources.recgov?.done_ms,
+            wa_state_ms: timing?.sources.wa_state?.done_ms,
+            or_state_ms: timing?.sources.or_state?.done_ms,
+          }),
           mode,
           days_preset: params.days_of_week || "any",
           date_range_days: dateRangeDays(params),
@@ -371,6 +388,9 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           });
         }
       },
+      (t) => {
+        timing = t;
+      },
     );
   }, [user]);
 
@@ -428,4 +448,10 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       setResults(null);
     }, []),
   };
+}
+
+function definedOnly(props: Record<string, number | undefined>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(props)) if (v !== undefined) out[k] = v;
+  return out;
 }
