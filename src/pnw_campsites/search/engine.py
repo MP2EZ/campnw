@@ -43,6 +43,11 @@ PARK_TIMEOUT_S = 60.0
 # finishes, instead of leaving the UI on "Checking campgrounds…".
 SEARCH_DEADLINE_S = 90.0
 # Parks checked at once per source, on top of the search-wide fan-out.
+# Zero-result date probes: three shifted searches after the main one. They run
+# once the stream has nothing else to send, so they get a short budget of
+# their own instead of the search deadline.
+PROBE_DEADLINE_S = 10.0
+
 # ReserveAmerica requests share one app-wide rate limit: eight Oregon parks in
 # parallel would each get an eighth of it and all finish last.
 SOURCE_CONCURRENCY: dict[BookingSystem, int] = {BookingSystem.OR_STATE: 2}
@@ -1074,8 +1079,14 @@ class SearchEngine:
         if not probes:
             return []
 
-        # Pre-resolve registry/drive data once; reuse across all probes
+        # Pre-resolve registry/drive data once; reuse across all probes.
+        # Oregon parks are left out: at 1 req/s app-wide a probe of even one
+        # big park outlasts the budget, and spends requests other searches need.
         base_prep = await self._prepare_search(query)
+        pool = [
+            cg for cg in base_prep.campgrounds
+            if cg.booking_system != BookingSystem.OR_STATE
+        ]
 
         # Run all probes in parallel, reusing the prepared campground list
         async def _run_probe(q: SearchQuery) -> SearchResults:
@@ -1089,7 +1100,7 @@ class SearchEngine:
             # 180 extra provider fetches on searches that already returned
             # nothing.
             probe_prep = _PreparedSearch(
-                campgrounds=base_prep.campgrounds[: q.max_campgrounds],
+                campgrounds=pool[: q.max_campgrounds],
                 drive_times=base_prep.drive_times,
                 registry_count=base_prep.registry_count,
                 distance_filtered=base_prep.distance_filtered,
@@ -1100,14 +1111,24 @@ class SearchEngine:
             )
             return await self.search(q, _skip_diagnosis=True, _prep=probe_prep)
 
-        probe_results = await asyncio.gather(
-            *(_run_probe(q) for _, _, _, q in probes)
-        )
+        tasks = [asyncio.ensure_future(_run_probe(q)) for _, _, _, q in probes]
+        done, pending = await asyncio.wait(tasks, timeout=PROBE_DEADLINE_S)
+        if pending:
+            logger.info(
+                "Date suggestions: %d of %d probes past the %.0fs budget",
+                len(pending), len(tasks), PROBE_DEADLINE_S,
+            )
+            for t in pending:
+                t.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
 
         suggestions: list[DateSuggestion] = []
-        for (shifted_start, shifted_end, reason, _), result in zip(
-            probes, probe_results, strict=True,
+        for (shifted_start, shifted_end, reason, _), task in zip(
+            probes, tasks, strict=True,
         ):
+            if task not in done or task.exception() is not None:
+                continue
+            result = task.result()
             if result.campgrounds_with_availability > 0:
                 suggestions.append(DateSuggestion(
                     start_date=shifted_start.isoformat(),
