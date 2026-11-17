@@ -39,18 +39,17 @@ def populate(dry_run: bool = False) -> None:
         for cg in with_coords:
             minutes = estimated_drive_minutes(BASE_LAT, BASE_LON, cg.latitude, cg.longitude)
 
+            if cg.drive_minutes_from_base == minutes:
+                continue
             if dry_run:
-                if cg.drive_minutes_from_base != minutes:
-                    print(f"  {cg.name} [{cg.state}]: {cg.drive_minutes_from_base} -> {minutes} min")
-                    updated += 1
+                print(f"  {cg.name} [{cg.state}]: {cg.drive_minutes_from_base} -> {minutes} min")
             else:
-                if cg.drive_minutes_from_base != minutes:
-                    registry._conn.execute(
-                        "UPDATE campgrounds SET drive_minutes_from_base=? "
-                        "WHERE booking_system=? AND facility_id=?",
-                        (minutes, cg.booking_system.value, cg.facility_id),
-                    )
-                    updated += 1
+                registry._conn.execute(
+                    "UPDATE campgrounds SET drive_minutes_from_base=? "
+                    "WHERE booking_system=? AND facility_id=?",
+                    (minutes, cg.booking_system.value, cg.facility_id),
+                )
+            updated += 1
 
         if not dry_run:
             registry._conn.commit()
