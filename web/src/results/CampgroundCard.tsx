@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from "react";
 import { track, type CampgroundResult, type SearchParams } from "../api";
-import { formatDriveTime, parseIsoDate } from "../lib/dates";
+import { formatDriveTime, parseIsoDate, todayIso } from "../lib/dates";
 import { displayName } from "../lib/displayName";
+import { plural } from "../lib/plural";
 import { SOURCE_NAMES } from "../lib/sources";
 import { IconBoat, IconClock, IconSun, IconTent } from "../icons";
 import { nightsIn } from "./candidates";
@@ -12,7 +13,7 @@ import { useCardSelection } from "./selection";
 import { SitePanel } from "./SitePanel";
 import type { PanelSite } from "./siteGroups";
 import { WindowChips } from "./WindowChips";
-import { remindStays, todayIso } from "./watch";
+import { remindStays } from "./watch";
 import { tagLabels } from "./tags";
 import { useOpenWatch } from "./watchContext";
 
@@ -53,7 +54,6 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
     source: result.booking_system,
     sites_in_chip: chip.open,
     nights: nightsIn(chip.stay.start, chip.stay.end),
-    ui_version: "v2",
   });
   const onOpen = (chip: WindowChip, el: HTMLElement) => {
     track("window_chip_opened", { ...event(chip), chip_start: chip.start });
@@ -75,8 +75,8 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
   const { selected, ...selection } = useCardSelection(result.facility_id);
   const openWatch = useOpenWatch();
   const remindStarts = useMemo(
-    () => new Set(openWatch ? remindStays(result, params, todayIso()).map((s) => s.start) : []),
-    [openWatch, result, params],
+    () => new Set(remindStays(result, params, todayIso()).map((s) => s.start)),
+    [result, params],
   );
 
   return (
@@ -107,7 +107,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
           </span>
           <span className="rv2-card-muted">Book via {source}</span>
           {result.fcfs_sites > 0 && (
-            <span className="rv2-card-muted">+ {result.fcfs_sites} first-come, first-served site{result.fcfs_sites === 1 ? "" : "s"}</span>
+            <span className="rv2-card-muted">+ {plural(result.fcfs_sites, "first-come, first-served site")}</span>
           )}
         </p>
         <WindowChips
@@ -115,8 +115,8 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
           name={name}
           params={params}
           onOpen={onOpen}
-          onWatch={openWatch ? (c) => openWatch(result, c.start, "chip") : undefined}
-          onRemind={openWatch ? (c) => openWatch(result, c.start, "chip", "remind") : undefined}
+          onWatch={(c) => openWatch(result, c.start, "chip")}
+          onRemind={(c) => openWatch(result, c.start, "chip", "remind")}
           remindStarts={remindStarts}
         />
         {panel && (

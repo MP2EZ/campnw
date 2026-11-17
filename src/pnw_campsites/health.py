@@ -18,11 +18,13 @@ mutated anywhere. Safe to point at production.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import importlib
 import os
 import sqlite3
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Literal
@@ -63,14 +65,7 @@ class CheckResult:
     error: str = ""
 
     def to_dict(self) -> dict:
-        return {
-            "name": self.name,
-            "category": self.category,
-            "status": self.status,
-            "latency_ms": self.latency_ms,
-            "detail": self.detail,
-            "error": self.error,
-        }
+        return asdict(self)
 
 
 @dataclass
@@ -82,12 +77,12 @@ class Check:
     # Env vars that must be set for the check to be meaningful. Missing ones
     # produce "skip", not "fail" — an unconfigured optional integration is not
     # an outage, and conflating the two trains you to ignore red.
-    requires: tuple[str, ...] = field(default_factory=tuple)
+    requires: tuple[str, ...] = ()
     # Modules this check imports lazily, warmed before timing starts (see
     # _preload_modules). Only the selected checks' modules are loaded, which
     # keeps `--only data` from dragging in stripe and curl_cffi — it matters on
     # a memory-capped box where a second Python process competes with uvicorn.
-    modules: tuple[str, ...] = field(default_factory=tuple)
+    modules: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -251,8 +246,6 @@ def _resolve_ra_probe() -> tuple[str, str, str]:
     can change facility IDs, and a hardcoded ID that quietly 404s would report
     a provider outage that isn't one.
     """
-    import contextlib
-
     from pnw_campsites.registry.db import DEFAULT_DB_PATH
 
     # Read-only for the same reason as the DB checks above.
@@ -476,9 +469,6 @@ CHECKS: list[Check] = [
 
 def _preload_modules(names: tuple[str, ...] | list[str]) -> None:
     """Import the given modules before any timing begins."""
-    import contextlib
-    import importlib
-
     for name in names:
         # A genuinely broken import resurfaces as that check's own failure, with
         # a useful message; suppressing it here only skips the warmup.

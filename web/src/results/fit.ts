@@ -1,8 +1,8 @@
 import type { SearchParams, Window } from "../api";
+import { plural } from "../lib/plural";
 
 export const NOT_LISTED = "Site types not listed yet";
 
-const sites = (n: number) => `${n} site${n === 1 ? "" : "s"}`;
 
 /** Takes the searched rig, as far as the booking system says. */
 function takes(w: Window, { equipment, rig_length }: Pick<SearchParams, "equipment" | "rig_length">): boolean {
@@ -16,12 +16,12 @@ const RIGS: Record<string, string> = { tent: "tent", van: "van", trailer: "trail
 
 /**
  * "Tent · Van · RV ≤30′ · Hookups at 4 sites": what the open sites take, from
- * the per-window fit fields (P1a). Only what some site is known to take is
+ * the per-window fit fields. Only what some site is known to take is
  * listed: `null` is unknown, never "doesn't fit". An RV site with no length
  * stated has no upper limit, so any such site drops the "≤".
  *
  * With a rig searched, it leads with how many sites are known to take it
- * instead (UX #18): "12 sites fit your 30′ trailer". Sites known not to take
+ * instead: "12 sites fit your 30′ trailer". Sites known not to take
  * it never reach here (the backend's `who` filter).
  */
 export function fitLine(windows: Window[], who?: Pick<SearchParams, "equipment" | "rig_length"> | null): string {
@@ -33,7 +33,7 @@ export function fitLine(windows: Window[], who?: Pick<SearchParams, "equipment" 
   const fit = rig ? count((w) => takes(w, who)) : 0;
   if (rig && fit) {
     const length = who.equipment === "trailer" && who.rig_length ? `${who.rig_length}′ ` : "";
-    parts.push(`${sites(fit)} fit${fit === 1 ? "s" : ""} your ${length}${rig}`);
+    parts.push(`${plural(fit, "site")} fit${fit === 1 ? "s" : ""} your ${length}${rig}`);
   } else {
     if (open.some((w) => w.fits_tent)) parts.push("Tent");
     if (open.some((w) => w.fits_van)) parts.push("Van");
@@ -46,8 +46,8 @@ export function fitLine(windows: Window[], who?: Pick<SearchParams, "equipment" 
     if (!parts.length) parts.push(NOT_LISTED);
   }
   const hookups = count((w) => w.hookups);
-  if (hookups) parts.push(`Hookups at ${sites(hookups)}`);
+  if (hookups) parts.push(`Hookups at ${plural(hookups, "site")}`);
   const walkIn = count((w) => w.walk_in);
-  if (walkIn) parts.push(`${walkIn} walk-in site${walkIn === 1 ? "" : "s"}`);
+  if (walkIn) parts.push(`${plural(walkIn, "walk-in site")}`);
   return parts.join(" · ");
 }

@@ -148,7 +148,7 @@ describe("api: WatchLimitError on 402", () => {
     );
   });
 
-  test("planChat throws PlannerLimitError on 402 with matching payload", async () => {
+  test("planChatStream reports PlannerLimitError on 402 with matching payload", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 402,
@@ -162,13 +162,13 @@ describe("api: WatchLimitError on 402", () => {
           },
         }),
     });
-    const { planChat, PlannerLimitError } = await import("../api");
+    const { planChatStream, PlannerLimitError } = await import("../api");
     let caught: unknown = null;
-    try {
-      await planChat([{ role: "user", content: "x" }]);
-    } catch (e) {
-      caught = e;
-    }
+    await planChatStream(
+      [{ role: "user", content: "x" }],
+      vi.fn(), vi.fn(), vi.fn(), vi.fn(),
+      (e) => { caught = e; },
+    );
     expect(caught).toBeInstanceOf(PlannerLimitError);
     expect((caught as InstanceType<typeof PlannerLimitError>).limit).toBe(3);
   });

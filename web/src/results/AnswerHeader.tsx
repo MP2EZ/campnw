@@ -8,13 +8,13 @@ interface Props {
   /** "searched just now", or null while the search is still running. */
   searched: string | null;
   /** Checked places with nothing to book, linked to their group. */
-  full?: number;
+  full: number;
   /** The group's name, for the link. */
-  fullTitle?: string;
+  fullTitle: string;
 }
 
 /** The answer first, then how much was checked. The answer is the page's h1. */
-export function AnswerHeader({ sentence, coverage, searched, full = 0, fullTitle = "Full or not released yet" }: Props) {
+export function AnswerHeader({ sentence, coverage, searched, full, fullTitle }: Props) {
   const linkText = fullTitle === "Nothing to book" ? `${full} with nothing to book` : `${full} full or not released yet`;
   const after = (
     <>

@@ -103,52 +103,24 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 // SSE type guards — runtime checks instead of unsafe `as T` casts
 // ---------------------------------------------------------------------------
 
-function isSSEDiagnosis(data: unknown): data is DiagnosisEvent {
-  return typeof data === "object" && data !== null
-    && (data as Record<string, unknown>).type === "diagnosis";
-}
+const isFrame =
+  <T extends { type: string }>(tag: T["type"]) =>
+  (data: unknown): data is T =>
+    typeof data === "object" && data !== null && (data as { type?: unknown }).type === tag;
 
-function isSSEParsedParams(data: unknown): data is { type: "parsed_params"; params: ParsedParams } {
-  return typeof data === "object" && data !== null
-    && (data as Record<string, unknown>).type === "parsed_params";
-}
-
-function isSSESummary(data: unknown): data is { type: "summary"; text: string } {
-  return typeof data === "object" && data !== null
-    && (data as Record<string, unknown>).type === "summary";
-}
-
-function isSSEProgress(data: unknown): data is { type: "progress"; checked: number; total: number } {
-  return typeof data === "object" && data !== null
-    && (data as Record<string, unknown>).type === "progress";
-}
-
-function isSSEWarnings(data: unknown): data is { type: "warnings"; warnings: SearchWarning[] } {
-  return typeof data === "object" && data !== null
-    && (data as Record<string, unknown>).type === "warnings";
-}
-
-function isSSECoverage(
-  data: unknown,
-): data is { type: "coverage"; campgrounds_matched: number; campgrounds_checked: number } {
-  return typeof data === "object" && data !== null
-    && (data as Record<string, unknown>).type === "coverage";
-}
-
-function isSSENotReleased(data: unknown): data is { type: "not_released" } & NotReleasedSummary {
-  return typeof data === "object" && data !== null
-    && (data as Record<string, unknown>).type === "not_released";
-}
-
-function isSSEUnavailable(data: unknown): data is { type: "unavailable"; result: CampgroundResult } {
-  return typeof data === "object" && data !== null
-    && (data as Record<string, unknown>).type === "unavailable";
-}
-
-function isSSETiming(data: unknown): data is { type: "timing" } & SearchTiming {
-  return typeof data === "object" && data !== null
-    && (data as Record<string, unknown>).type === "timing";
-}
+const isSSEDiagnosis = isFrame<DiagnosisEvent>("diagnosis");
+const isSSEParsedParams = isFrame<{ type: "parsed_params"; params: ParsedParams }>("parsed_params");
+const isSSESummary = isFrame<{ type: "summary"; text: string }>("summary");
+const isSSEProgress = isFrame<{ type: "progress"; checked: number; total: number }>("progress");
+const isSSEWarnings = isFrame<{ type: "warnings"; warnings: SearchWarning[] }>("warnings");
+const isSSECoverage = isFrame<{
+  type: "coverage";
+  campgrounds_matched: number;
+  campgrounds_checked: number;
+}>("coverage");
+const isSSENotReleased = isFrame<{ type: "not_released" } & NotReleasedSummary>("not_released");
+const isSSEUnavailable = isFrame<{ type: "unavailable"; result: CampgroundResult }>("unavailable");
+const isSSETiming = isFrame<{ type: "timing" } & SearchTiming>("timing");
 
 function isCampgroundResult(data: unknown): data is CampgroundResult {
   return typeof data === "object" && data !== null
@@ -318,7 +290,7 @@ export interface SearchParams {
   include_fcfs?: boolean;
   limit?: number;
   /**
-   * Who's going (v1.48 D5). The API drops windows at sites known not to fit;
+   * Who's going. The API drops windows at sites known not to fit;
    * sites with no type or capacity data always stay.
    */
   people?: number;
@@ -342,29 +314,6 @@ function setWho(query: URLSearchParams, params: SearchParams): void {
   if (params.equipment === "trailer" && inRange(params.rig_length, 100)) {
     query.set("rig_length", String(params.rig_length));
   }
-}
-
-export async function searchCampsites(
-  params: SearchParams
-): Promise<SearchResponse> {
-  const query = new URLSearchParams();
-  query.set("start_date", params.start_date);
-  query.set("end_date", params.end_date);
-  if (params.state) query.set("state", params.state);
-  if (params.nights) query.set("nights", String(params.nights));
-  if (params.days_of_week) query.set("days_of_week", params.days_of_week);
-  if (params.tags) query.set("tags", params.tags);
-  if (params.name) query.set("name", params.name);
-  if (params.source) query.set("source", params.source);
-  if (params.from_location) query.set("from", params.from_location);
-  if (params.max_drive) query.set("max_drive", String(params.max_drive));
-  if (params.mode) query.set("mode", params.mode);
-  if (params.no_groups) query.set("no_groups", "true");
-  if (params.include_fcfs) query.set("include_fcfs", "true");
-  if (params.limit) query.set("limit", String(params.limit));
-  setWho(query, params);
-
-  return fetchJson<SearchResponse>(`${API_BASE}/api/search?${query}`);
 }
 
 /** A registry campground, as `/api/campgrounds` lists it (trimmed to what the UI reads). */
@@ -569,7 +518,7 @@ export interface WatchData {
   equipment?: string | null;
   rig_length?: number | null;
   site_types?: string[] | null;
-  /** Release reminders (v1.48 P3d): the day the stay opens for booking. */
+  /** Release reminders: the day the stay opens for booking. */
   releases_on?: string | null;
 }
 
@@ -678,12 +627,12 @@ export interface CreateWatchParams {
   min_nights?: number;
   days_of_week?: number[];
   notification_channel?: string;
-  /** "release": a reminder on release day that then becomes a watch (P3d). */
+  /** "release": a reminder on release day that then becomes a watch. */
   watch_type?: "single" | "template" | "release";
   search_params?: Record<string, unknown>;
   /** Release reminders only: the day the stay's first night opens. */
   releases_on?: string;
-  /** Site filters (v1.48 P3c); unset = any site. Unknown fit never suppresses an alert. */
+  /** Site filters; unset = any site. Unknown fit never suppresses an alert. */
   min_people?: number;
   equipment?: "tent" | "van" | "trailer";
   /** Feet; trailers only. */
@@ -721,7 +670,6 @@ export interface Recommendation {
 
 export async function getMe(): Promise<UserData | null> {
   const resp = await authFetch(`${API_BASE}/api/auth/me`);
-  if (resp.status === 401) return null;
   if (!resp.ok) return null;
   const data = await resp.json();
   return data.user;
@@ -774,39 +722,46 @@ export async function getWatches(): Promise<WatchData[]> {
   return fetchJson<WatchData[]>(`${API_BASE}/api/watches`);
 }
 
-/**
- * Thrown when POST /api/watches returns HTTP 402 (free-tier cap reached).
- * UI catches this and renders <UpgradeModal>.
- */
-export class WatchLimitError extends Error {
+interface LimitDetail {
+  limit: number;
+  current: number;
+  upgrade_url: string;
+}
+
+/** Base for the 402 "free-tier cap reached" errors; the UI shows <UpgradeModal>. */
+class LimitError extends Error {
   limit: number;
   current: number;
   upgradeUrl: string;
-  constructor(detail: { limit: number; current: number; upgrade_url: string }) {
-    super("watch_limit_reached");
-    this.name = "WatchLimitError";
+  constructor(message: string, name: string, detail: LimitDetail) {
+    super(message);
+    this.name = name;
     this.limit = detail.limit;
     this.current = detail.current;
     this.upgradeUrl = detail.upgrade_url;
   }
 }
 
-/**
- * Thrown when POST /api/plan/chat returns HTTP 402 — the user has used
- * their monthly trip-planner session budget. UI catches and renders
- * <UpgradeModal reason="planner_limit">.
- */
-export class PlannerLimitError extends Error {
-  limit: number;
-  current: number;
-  upgradeUrl: string;
-  constructor(detail: { limit: number; current: number; upgrade_url: string }) {
-    super("planner_session_limit_reached");
-    this.name = "PlannerLimitError";
-    this.limit = detail.limit;
-    this.current = detail.current;
-    this.upgradeUrl = detail.upgrade_url;
+/** Thrown when POST /api/watches returns 402 (free-tier watch cap). */
+export class WatchLimitError extends LimitError {
+  constructor(detail: LimitDetail) {
+    super("watch_limit_reached", "WatchLimitError", detail);
   }
+}
+
+/** Thrown when the planner returns 402 (monthly trip-planner session budget used). */
+export class PlannerLimitError extends LimitError {
+  constructor(detail: LimitDetail) {
+    super("planner_session_limit_reached", "PlannerLimitError", detail);
+  }
+}
+
+/** The limit detail from a 402 body, when its `error` is `code`. */
+async function readLimitDetail(resp: Response, code: string): Promise<LimitDetail | null> {
+  const body = await resp.json().catch(() => null) as
+    | { detail?: LimitDetail & { error?: string } }
+    | null;
+  return body?.detail?.error === code ? body.detail : null;
 }
 
 /**
@@ -831,12 +786,8 @@ export async function createWatch(
     body: JSON.stringify(params),
   });
   if (resp.status === 402) {
-    const body = await resp.json().catch(() => null) as
-      | { detail?: { limit: number; current: number; upgrade_url: string; error?: string } }
-      | null;
-    if (body?.detail?.error === "watch_limit_reached") {
-      throw new WatchLimitError(body.detail);
-    }
+    const detail = await readLimitDetail(resp, "watch_limit_reached");
+    if (detail) throw new WatchLimitError(detail);
   }
   if (resp.status === 422) {
     const body = await resp.json().catch(() => null) as { detail?: { error?: unknown } } | null;
@@ -975,35 +926,6 @@ export interface ToolCall {
   result_summary?: string;
 }
 
-export interface ChatResponse {
-  role: string;
-  content: string;
-  tool_calls: ToolCall[];
-}
-
-export async function planChat(
-  messages: ChatMessage[]
-): Promise<ChatResponse> {
-  const resp = await authFetch(`${API_BASE}/api/plan/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
-  });
-  if (resp.status === 402) {
-    const body = await resp.json().catch(() => null) as
-      | { detail?: { limit: number; current: number; upgrade_url: string; error?: string } }
-      | null;
-    if (body?.detail?.error === "planner_session_limit_reached") {
-      throw new PlannerLimitError(body.detail);
-    }
-  }
-  if (!resp.ok) {
-    const data = await resp.json().catch(() => ({}));
-    throw new Error((data as { detail?: string }).detail || `Chat failed: ${resp.status}`);
-  }
-  return resp.json() as Promise<ChatResponse>;
-}
-
 export async function planChatStream(
   messages: ChatMessage[],
   onText: (chunk: string) => void,
@@ -1020,12 +942,8 @@ export async function planChatStream(
     });
     if (!resp.ok) {
       if (resp.status === 402) {
-        const body = await resp.json().catch(() => null) as
-          | { detail?: { limit: number; current: number; upgrade_url: string; error?: string } }
-          | null;
-        if (body?.detail?.error === "planner_session_limit_reached") {
-          throw new PlannerLimitError(body.detail);
-        }
+        const detail = await readLimitDetail(resp, "planner_session_limit_reached");
+        if (detail) throw new PlannerLimitError(detail);
       }
       const data = await resp.json().catch(() => ({}));
       throw new Error(
@@ -1104,7 +1022,7 @@ export async function getPollStatus(): Promise<PollStatus | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Billing (v1.4)
+// Billing
 // ---------------------------------------------------------------------------
 
 export interface BillingStatus {

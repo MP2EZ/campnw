@@ -18,12 +18,13 @@ Rules:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+
+from pnw_campsites.registry.fixture_meta import fixture_changed, record_fixture
 
 logger = logging.getLogger(__name__)
 
@@ -49,18 +50,12 @@ def export_pitch_fixture(conn: sqlite3.Connection, path: Path | None = None) -> 
 
 def apply_pitch_fixture(conn: sqlite3.Connection, path: Path | None = None) -> int:
     """Import the fixture if it changed since the last import. Returns rows updated."""
-    path = path or FIXTURE_PATH
-    if not path.exists():
+    changed = fixture_changed(
+        conn, path or FIXTURE_PATH, _META_KEY, "SELECT 1 FROM campgrounds LIMIT 1",
+    )
+    if changed is None:
         return 0
-    # Nothing to attach copy to yet (a fresh or test registry). Not recorded,
-    # so the import runs on a later open once campgrounds are seeded.
-    if conn.execute("SELECT 1 FROM campgrounds LIMIT 1").fetchone() is None:
-        return 0
-    raw = path.read_bytes()
-    digest = hashlib.sha256(raw).hexdigest()
-    row = conn.execute("SELECT value FROM registry_meta WHERE key=?", (_META_KEY,)).fetchone()
-    if row is not None and row[0] == digest:
-        return 0
+    raw, digest = changed
 
     rows = json.loads(raw)["pitches"]
     now = datetime.now().isoformat()
@@ -81,11 +76,7 @@ def apply_pitch_fixture(conn: sqlite3.Connection, path: Path | None = None) -> i
             ),
         )
         updated += cur.rowcount
-    conn.execute(
-        "INSERT INTO registry_meta (key, value) VALUES (?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        (_META_KEY, digest),
-    )
+    record_fixture(conn, _META_KEY, digest)
     conn.commit()
     logger.info("Imported pitch fixture: %d of %d campgrounds updated", updated, len(rows))
     return updated

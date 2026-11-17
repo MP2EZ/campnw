@@ -1,14 +1,3 @@
-/**
- * About page (/about) for v1.42.
- *
- * Trust signal for fence-sitters on /pricing. Same first-person,
- * no-marketing voice as the Pricing page. Built to be skimmed
- * top-to-bottom in 60 seconds by someone deciding whether to give
- * a $5/mo subscription to a stranger on the internet. Concrete facts
- * (data sources, funding model) carry more weight than "we're committed
- * to quality" copy ever would.
- */
-
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 

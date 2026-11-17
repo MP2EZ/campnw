@@ -1,6 +1,7 @@
 import { track, type SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
-import { barToParams, EDIT_DATES_EVENT, localToday, paramsToBar, quickDates } from "./searchState";
+import { todayIso } from "../lib/dates";
+import { barToParams, EDIT_DATES_EVENT, paramsToBar, quickDates } from "./searchState";
 
 interface Props {
   params: SearchParams | null;
@@ -8,13 +9,13 @@ interface Props {
 }
 
 /**
- * One-tap date changes under the answer (P4a, phones only): this weekend,
+ * One-tap date changes under the answer (phones only): this weekend,
  * next weekend, a month, or "Pick dates" to open the search bar's sheet.
  * Everything else about the search stays as it was.
  */
 export function DateChips({ params, onSearch }: Props) {
   if (!params?.start_date) return null;
-  const today = localToday();
+  const today = todayIso();
   const bar = paramsToBar(params, today);
   return (
     <div className="rv2-dates" role="group" aria-label="Dates">

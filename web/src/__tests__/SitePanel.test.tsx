@@ -88,7 +88,7 @@ describe("SitePanel", () => {
     expect(dialog).toHaveTextContent("Opens WA State Parks in a new tab at Loop Main with Jun 18–20 filled in. Find site 27 there");
     expect(dialog).toHaveTextContent("Someone else can book the site before you finish.");
     await userEvent.click(book);
-    expect(onBook).toHaveBeenCalledWith(expect.objectContaining({ id: "27", hookups: true }), 4);
+    expect(onBook).toHaveBeenCalledWith(expect.objectContaining({ id: "27", hookups: true }));
   });
 
   test("Escape closes and focus goes back to the chip", async () => {

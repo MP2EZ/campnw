@@ -14,8 +14,6 @@ export default function TripDetail() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
-  // Both destructive actions here were irreversible, unconfirmed and
-  // un-caught: a failed request left the UI showing the row already gone.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 

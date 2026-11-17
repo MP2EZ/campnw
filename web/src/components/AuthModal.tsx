@@ -19,9 +19,6 @@ export function AuthModal({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // The modal had zero track() calls, so the landing -> signup funnel had
-  // exactly one step: the success event. No open, no mode toggle, no submit
-  // attempt, and — the classic silent funnel killer — no failure.
   useEffect(() => {
     if (open) track("auth_modal_opened", { entry_point: entryPoint, mode });
     // Only on open; a mode toggle emits its own event below.

@@ -10,7 +10,7 @@ from datetime import date
 import pytest
 
 from pnw_campsites.registry.models import BookingSystem, SiteFit
-from pnw_campsites.search.engine import SearchQuery, _process_availability
+from pnw_campsites.search.engine import SearchQuery, _process_availability, enrich_wa_availability
 from pnw_campsites.search.who import fits_equipment, fits_party, fits_site_types
 from tests.conftest import (
     make_campground,
@@ -141,16 +141,14 @@ def test_ra_capacity_known_only_when_listed() -> None:
 
 
 def test_wa_enrichment_makes_capacity_known(registry) -> None:
-    from pnw_campsites.search.engine import SearchEngine
-
     registry.bulk_upsert_wa_sites(
         "-9", [{"resource_id": -1, "name": "1", "loop_map_id": None, "max_capacity": 4,
                 "allowed_equipment": []}],
     )
     site = _site("-1", max_people=8, campsite_type="STANDARD")
     site.max_people_known = False
-    SearchEngine(registry=registry)._enrich_wa_availability(
-        "-9", make_campground_availability("-9", {"-1": site}),
+    enrich_wa_availability(
+        registry, "-9", make_campground_availability("-9", {"-1": site}),
     )
     assert (site.max_num_people, site.max_people_known) == (4, True)
 

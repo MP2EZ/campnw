@@ -96,13 +96,6 @@ describe('App Component', () => {
     expect(within(screen.getByRole('banner')).queryByRole('search')).toBeNull()
   })
 
-  test('forgets the old per-browser ui override', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
-    localStorage.setItem('campable-ui', 'v1')
-    renderApp()
-    expect(localStorage.getItem('campable-ui')).toBeNull()
-  })
-
   test('renders search button and is enabled initially', async () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => [] })
     renderApp()

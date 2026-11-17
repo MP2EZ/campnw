@@ -140,8 +140,6 @@ class GoingToCampClient:
                 continue
             resp.raise_for_status()
             return resp.json()
-        resp.raise_for_status()
-        return resp.json()
 
     # -------------------------------------------------------------------
     # Park locations

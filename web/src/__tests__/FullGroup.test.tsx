@@ -14,13 +14,15 @@ const place = (name: string, drive: number | null, extra: Partial<CampgroundResu
     not_released_ranges: [{ start: "2027-06-01", end: "2027-06-30", releases_on: "2026-12-01" }],
     ...extra }) as CampgroundResult;
 
+const inResults = (ui: React.ReactElement) => <WatchContext.Provider value={vi.fn()}>{ui}</WatchContext.Provider>;
+
 describe("FullGroup", () => {
   test("lists places closest first with what's in the way and the alert that would help", () => {
-    render(<FullGroup params={juneWeekends} places={[
+    render(inResults(<FullGroup params={juneWeekends} places={[
       place("Turlo", 88),
       place("Wallace Falls", 88, { booking_system: "wa_state", not_released_ranges: [] }),
       place("Kachess", 77),
-    ]} />);
+    ]} />));
     const group = screen.getByRole("region", { name: "Full or not released yet" });
     expect(within(group).getByText("3 places")).toBeInTheDocument();
     const rows = within(group).getAllByRole("listitem");
@@ -32,17 +34,10 @@ describe("FullGroup", () => {
     expect(within(rows[2]).getByRole("button", { name: "Watch: Wallace Falls" })).toBeInTheDocument();
   });
 
-  test("the alerts are stubs: disabled, and the note says they're coming", () => {
-    render(<FullGroup params={juneWeekends} places={[place("Kachess", 77)]} />);
-    const remind = screen.getByRole("button", { name: "Remind me: Kachess" });
-    expect(remind).toHaveAttribute("aria-disabled", "true");
-    expect(remind).toHaveAccessibleDescription(/coming soon/);
-  });
-
   test("a place taking no reservations gets no alert button", () => {
-    render(<FullGroup params={juneWeekends} places={[place("Tinkham", 54, {
+    render(inResults(<FullGroup params={juneWeekends} places={[place("Tinkham", 54, {
       not_released_ranges: [], closed_ranges: [{ start: "2027-06-01", end: "2027-06-30" }],
-    })]} />);
+    })]} />));
     expect(screen.getByRole("region", { name: "Nothing to book" })).toBeInTheDocument();
     expect(screen.getByRole("listitem")).toHaveTextContent("Not reservable these weekends");
     expect(screen.queryByRole("button", { name: /Tinkham/ })).not.toBeInTheDocument();
@@ -65,15 +60,15 @@ describe("FullGroup", () => {
   });
 
   test("past six places the rest wait behind a button", async () => {
-    render(<FullGroup params={juneWeekends}
-      places={Array.from({ length: 9 }, (_, i) => place(`P${i}`, 60 + i))} />);
+    render(inResults(<FullGroup params={juneWeekends}
+      places={Array.from({ length: 9 }, (_, i) => place(`P${i}`, 60 + i))} />));
     expect(screen.getAllByRole("listitem")).toHaveLength(6);
     await userEvent.click(screen.getByRole("button", { name: "Show 3 more" }));
     expect(screen.getAllByRole("listitem")).toHaveLength(9);
   });
 
   test("renders nothing with nothing to list", () => {
-    const { container } = render(<FullGroup params={juneWeekends} places={[]} />);
+    const { container } = render(inResults(<FullGroup params={juneWeekends} places={[]} />));
     expect(container).toBeEmptyDOMElement();
   });
 

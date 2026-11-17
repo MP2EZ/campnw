@@ -62,13 +62,13 @@ class Watch:
     trip_id: int | None = None
     watch_type: str = "single"  # "single", "template" or "release"
     search_params: str = ""  # JSON search pattern for template watches
-    # Site filters (v1.48 P3c), the search's `who` rules (search/who.py).
+    # Site filters, the search's `who` rules (search/who.py).
     # None = any site; a site the booking system says nothing about passes.
     min_people: int | None = None
     equipment: str | None = None  # tent | van | trailer
     rig_length: int | None = None  # feet, trailers only
     site_types: list[str] | None = None  # any of who.SITE_TYPES
-    # Release reminders (v1.48 P3d): the day the stay's first night opens.
+    # Release reminders: the day the stay's first night opens.
     releases_on: str | None = None  # YYYY-MM-DD, release watches only
 
     @property
@@ -154,6 +154,9 @@ class SharedLink:
     expires_at: str = ""
     revoked: bool = False
     created_at: str = ""
+
+
+_USER_FIELDS = {f.name for f in fields(User)}
 
 
 def _as_iso_date(value: date | str | None) -> str | None:
@@ -371,7 +374,7 @@ class WatchDB:
                 created_at TEXT NOT NULL
             );
         """)
-        # v1.0: recommendations opt-in flag
+        # recommendations opt-in flag
         user_cols = [
             r[1] for r in self._conn.execute("PRAGMA table_info(users)")
         ]
@@ -390,7 +393,7 @@ class WatchDB:
                 "ALTER TABLE users ADD COLUMN"
                 " onboarding_complete INTEGER DEFAULT 0"
             )
-        # v1.33: Supabase Auth — add supabase_id to users
+        # Supabase Auth: supabase_id on users
         if "supabase_id" not in user_cols:
             self._conn.execute(
                 "ALTER TABLE users ADD COLUMN supabase_id TEXT"
@@ -399,7 +402,7 @@ class WatchDB:
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_supabase_id "
                 "ON users(supabase_id) WHERE supabase_id IS NOT NULL"
             )
-        # v1.2: trips
+        # trips
         self._conn.executescript("""\
             CREATE TABLE IF NOT EXISTS trips (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -424,7 +427,7 @@ class WatchDB:
                 UNIQUE(trip_id, facility_id, source)
             );
         """)
-        # v1.2: link watches to trips
+        # link watches to trips
         watch_cols2 = [
             r[1] for r in self._conn.execute("PRAGMA table_info(watches)")
         ]
@@ -432,13 +435,13 @@ class WatchDB:
             self._conn.execute(
                 "ALTER TABLE watches ADD COLUMN trip_id INTEGER"
             )
-        # v1.28: booking_system on watches
+        # booking_system on watches
         if "booking_system" not in watch_cols2:
             self._conn.execute(
                 "ALTER TABLE watches ADD COLUMN"
                 " booking_system TEXT NOT NULL DEFAULT 'recgov'"
             )
-        # v1.2: shared links
+        # shared links
         self._conn.executescript("""\
             CREATE TABLE IF NOT EXISTS shared_links (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -454,7 +457,7 @@ class WatchDB:
         """)
         self._conn.commit()
 
-        # v1.2: analytics digests
+        # analytics digests
         self._conn.executescript("""\
             CREATE TABLE IF NOT EXISTS analytics_digests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -465,7 +468,7 @@ class WatchDB:
                 UNIQUE(digest_type, period)
             );
         """)
-        # v1.2: template watches
+        # template watches
         watch_cols3 = [
             r[1] for r in self._conn.execute("PRAGMA table_info(watches)")
         ]
@@ -479,15 +482,15 @@ class WatchDB:
                 "ALTER TABLE watches ADD COLUMN"
                 " search_params TEXT DEFAULT ''"
             )
-        # v1.48: site filters. NULL on existing rows = unfiltered, as before.
+        # Site filters. NULL on existing rows = unfiltered, as before.
         for col, kind in (
             ("min_people", "INTEGER"), ("equipment", "TEXT"),
             ("rig_length", "INTEGER"), ("site_types", "TEXT"),
-            ("releases_on", "TEXT"),  # P3d release reminders
+            ("releases_on", "TEXT"),
         ):
             if col not in watch_cols3:
                 self._conn.execute(f"ALTER TABLE watches ADD COLUMN {col} {kind}")
-        # v1.4: billing — subscription state on users
+        # billing: subscription state on users
         user_cols2 = [
             r[1] for r in self._conn.execute("PRAGMA table_info(users)")
         ]
@@ -517,7 +520,7 @@ class WatchDB:
                 "ALTER TABLE users ADD COLUMN"
                 " subscription_expires_at TEXT NOT NULL DEFAULT ''"
             )
-        # v1.4: webhook event idempotency + subscription audit trail
+        # webhook event idempotency + subscription audit trail
         self._conn.executescript("""\
             CREATE TABLE IF NOT EXISTS stripe_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -625,18 +628,6 @@ class WatchDB:
             ),
         )
         self._conn.commit()
-
-    def clear_expired_cache(self) -> int:
-        """Remove stale cache entries. Returns count removed."""
-        cutoff = datetime.now().isoformat()
-        # SQLite datetime comparison works on ISO strings
-        cursor = self._conn.execute(
-            "DELETE FROM availability_cache"
-            " WHERE datetime(cached_at, '+10 minutes') < datetime(?)",
-            (cutoff,),
-        )
-        self._conn.commit()
-        return cursor.rowcount
 
     def get_ra_windows(
         self,
@@ -825,14 +816,6 @@ class WatchDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def delete_push_subscription(self, endpoint: str) -> None:
-        """Remove a push subscription (e.g. after 404/410 from push service)."""
-        self._conn.execute(
-            "DELETE FROM push_subscriptions WHERE endpoint=?",
-            (endpoint,),
-        )
-        self._conn.commit()
-
     def delete_push_subscription_scoped(
         self,
         endpoint: str,
@@ -884,12 +867,6 @@ class WatchDB:
         user.id = self._conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         user.created_at = now
         return user
-
-    def get_user_by_email(self, email: str) -> User | None:
-        row = self._conn.execute(
-            "SELECT * FROM users WHERE email=? COLLATE NOCASE", (email,)
-        ).fetchone()
-        return self._row_to_user(row) if row else None
 
     def get_user_by_supabase_id(self, supabase_id: str) -> User | None:
         row = self._conn.execute(
@@ -948,14 +925,10 @@ class WatchDB:
         d["onboarding_complete"] = bool(d.get("onboarding_complete", 0))
         tags_raw = d.pop("preferred_tags", "[]") or "[]"
         d["preferred_tags"] = json.loads(tags_raw) if isinstance(tags_raw, str) else tags_raw
-        # Filter to known User fields (DB may have extra columns from other branches)
-        import dataclasses
-        valid_fields = {f.name for f in dataclasses.fields(User)}
-        d = {k: v for k, v in d.items() if k in valid_fields}
-        return User(**d)
+        return User(**{k: v for k, v in d.items() if k in _USER_FIELDS})
 
     # -------------------------------------------------------------------
-    # Billing (v1.4)
+    # Billing
     # -------------------------------------------------------------------
 
     def has_stripe_event(self, event_id: str) -> bool:
@@ -1022,7 +995,7 @@ class WatchDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    # --- Planner session tracking (v1.4 trip-planner gating) ----------------
+    # --- Planner session tracking (trip-planner gating) ----------------
 
     def log_planner_session(
         self,
@@ -1049,7 +1022,7 @@ class WatchDB:
     ) -> int:
         """Count this user's (or session's) planner sessions so far this month.
 
-        Used by the v1.4 free-tier cap (3/mo) vs Pro (20/mo). "This month"
+        Used by the free-tier cap (3/mo) vs Pro (20/mo). "This month"
         is calendar-month UTC — the simplest definition that doesn't require
         tracking subscription anniversaries.
         """
@@ -1071,7 +1044,7 @@ class WatchDB:
             ).fetchone()
         return int(row[0]) if row else 0
 
-    # --- Tier-filtered watch listing (v1.4 5-min Pro polling) --------------
+    # --- Tier-filtered watch listing (5-min Pro polling) --------------
 
     def list_watches_for_polling(self, tier: str = "all") -> list[Watch]:
         """Return enabled watches filtered by owner subscription tier.
@@ -1367,7 +1340,7 @@ class WatchDB:
         )
         self._conn.commit()
 
-    def toggle_enabled(self, watch_id: int, session_token: str = "") -> bool:
+    def toggle_enabled(self, watch_id: int) -> bool:
         """Toggle a watch's enabled state. Returns new state."""
         row = self._conn.execute(
             "SELECT enabled FROM watches WHERE id=?",

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from pnw_campsites.geo import estimated_drive_minutes, geocode_address, is_known_base, resolve_base
+from pnw_campsites.mapbox import get_drive_times_matrix
 from pnw_campsites.providers.errors import FacilityNotFoundError, RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
@@ -48,12 +49,12 @@ SEARCH_DEADLINE_S = 90.0
 # answer takes about as long whatever this is; a cut park keeps fetching in the
 # background, reports "pending", and a repeat search gets it from the cache.
 OREGON_DEADLINE_S = 30.0
-# Parks checked at once per source, on top of the search-wide fan-out.
 # Zero-result date probes: three shifted searches after the main one. They run
 # once the stream has nothing else to send, so they get a short budget of
 # their own instead of the search deadline.
 PROBE_DEADLINE_S = 10.0
 
+# Parks checked at once per source, on top of the search-wide fan-out.
 # ReserveAmerica requests share one app-wide rate limit: eight Oregon parks in
 # parallel would each get an eighth of it and all finish last.
 SOURCE_CONCURRENCY: dict[BookingSystem, int] = {BookingSystem.OR_STATE: 2}
@@ -158,7 +159,7 @@ class CampgroundResult:
     not_released_nights: int = 0
     releases_on: date | None = None
     releases_through: date | None = None
-    # For per-weekend status (v1.48 D4): runs of requested nights some
+    # For per-weekend status: runs of requested nights some
     # matching site hasn't released, each with its first night's release
     # date (looser than not_released_nights, which needs every site NYR),
     # and runs of nights nothing could be reserved online at all (closed,
@@ -337,9 +338,8 @@ def _describe_source(name: str, t: dict[str, int]) -> str:
 def aggregate_warnings(results: list[CampgroundResult]) -> list[SearchWarning]:
     """Roll per-campground errors up into per-(kind, source) warnings.
 
-    `count` describes the source the warning names. It previously used
-    `sum(sources.values())` — the total across every source — so a rate limit
-    hitting 3 rec.gov and 1 WA campground reported "4" for both.
+    `count` describes the source the warning names, not the total across every
+    source.
     """
     counts: dict[tuple[str, str], int] = {}
     for r in results:
@@ -401,60 +401,34 @@ def _find_consecutive_windows(
     if not available_dates:
         return []
 
-    # Group into consecutive runs
-    windows: list[AvailableWindow] = []
-    run_start = available_dates[0]
-    run_end = available_dates[0]
-    run_length = 1
-
-    for i in range(1, len(available_dates)):
-        curr = available_dates[i][:10]
-        prev = available_dates[i - 1][:10]
-
-        curr_date = date.fromisoformat(curr)
-        prev_date = date.fromisoformat(prev)
-
-        if (curr_date - prev_date).days == 1:
-            run_end = available_dates[i]
-            run_length += 1
+    # Group into runs of consecutive days: [first, last, nights]
+    runs: list[list] = []
+    prev_date: date | None = None
+    for d in available_dates:
+        day = date.fromisoformat(d[:10])
+        if prev_date is not None and (day - prev_date).days == 1:
+            runs[-1][1] = d[:10]
+            runs[-1][2] += 1
         else:
-            if run_length >= min_nights:
-                windows.append(
-                    AvailableWindow(
-                        campsite_id=site.campsite_id,
-                        site_name=site.site,
-                        loop=site.loop,
-                        campsite_type=site.campsite_type,
-                        start_date=run_start[:10],
-                        end_date=run_end[:10],
-                        nights=run_length,
-                        max_people=site.max_num_people,
-                        max_people_known=site.max_people_known,
-                        loop_map_id=site.loop_map_id,
-                    )
-                )
-            run_start = available_dates[i]
-            run_end = available_dates[i]
-            run_length = 1
+            runs.append([d[:10], d[:10], 1])
+        prev_date = day
 
-    # Don't forget the last run
-    if run_length >= min_nights:
-        windows.append(
-            AvailableWindow(
-                campsite_id=site.campsite_id,
-                site_name=site.site,
-                loop=site.loop,
-                campsite_type=site.campsite_type,
-                start_date=run_start[:10],
-                end_date=run_end[:10],
-                nights=run_length,
-                max_people=site.max_num_people,
-                max_people_known=site.max_people_known,
-                loop_map_id=site.loop_map_id,
-            )
+    return [
+        AvailableWindow(
+            campsite_id=site.campsite_id,
+            site_name=site.site,
+            loop=site.loop,
+            campsite_type=site.campsite_type,
+            start_date=first,
+            end_date=last,
+            nights=nights,
+            max_people=site.max_num_people,
+            max_people_known=site.max_people_known,
+            loop_map_id=site.loop_map_id,
         )
-
-    return windows
+        for first, last, nights in runs
+        if nights >= min_nights
+    ]
 
 
 def enrich_wa_availability(
@@ -506,7 +480,7 @@ def _site_in_scope(site: CampsiteAvailability, query: SearchQuery) -> bool:
 
 
 def _fits_who(site: CampsiteAvailability, query: SearchQuery, system: BookingSystem) -> bool:
-    """Party size and rig (v1.48 D5). Unknown capacity or type never drops a site."""
+    """Party size and rig. Unknown capacity or type never drops a site."""
     return site_fits(
         site, system,
         people=query.max_people, equipment=query.equipment, rig_length=query.rig_length,
@@ -683,11 +657,9 @@ class SearchEngine:
             OregonWindows(reserveamerica_client, watch_db) if reserveamerica_client else None
         )
         # Optional: when supplied, availability is served from (and written to)
-        # the same availability_cache the watch poller uses. Discovery searches
-        # previously hit the provider on every request, so two users searching
-        # "WA this weekend" seconds apart each re-fetched every campground —
-        # and rec.gov returns whole months even for a 3-day query, so the hit
-        # rate across users sharing a weekend is high.
+        # the same availability_cache the watch poller uses. rec.gov returns
+        # whole months even for a 3-day query, so users searching the same
+        # weekend share cache hits.
         self._watch_db = watch_db
         # monotonic() until which WA is treated as blocked (WAF_BACKOFF_S).
         self._wa_blocked_until = float("-inf")
@@ -727,8 +699,6 @@ class SearchEngine:
 
         # Tier 2: custom address — Mapbox Matrix for filtered set
         try:
-            from pnw_campsites.mapbox import get_drive_times_matrix
-
             destinations = [
                 (cg.facility_id, cg.latitude, cg.longitude)
                 for cg in campgrounds
@@ -875,7 +845,6 @@ class SearchEngine:
         # Fetch availability concurrently (semaphore-limited)
         concurrency = 8
         sem = asyncio.Semaphore(concurrency)
-        all_results: list[CampgroundResult] = []
         search_start = time.monotonic()
 
         source_sems = _source_semaphores()
@@ -902,7 +871,7 @@ class SearchEngine:
             sum(1 for r in all_results if r.total_available_sites > 0),
         )
 
-        # Step 4: Attach drive times to results (never to boat-in campgrounds)
+        # Attach drive times (never to boat-in campgrounds)
         if drive_times:
             for r in all_results:
                 fid = r.campground.facility_id
@@ -1092,7 +1061,7 @@ class SearchEngine:
         return diagnosis, chips
 
     async def _suggest_alternative_dates(
-        self, query: SearchQuery, max_suggestions: int = 3,
+        self, query: SearchQuery,
     ) -> list[DateSuggestion]:
         """Probe nearby date windows for availability (in parallel)."""
         if not query.start_date or not query.end_date:
@@ -1200,7 +1169,7 @@ class SearchEngine:
                 (date.fromisoformat(s.start_date) - query.start_date).days
             ),
         )
-        return suggestions[:max_suggestions]
+        return suggestions[:3]
 
     def _suggest_similar_campgrounds(
         self, query: SearchQuery,
@@ -1414,11 +1383,6 @@ class SearchEngine:
             sources=sources, first_result_ms=first_result_ms, total_ms=total_ms,
         )
 
-    def _enrich_wa_availability(
-        self, park_facility_id: str, availability: CampgroundAvailability
-    ) -> None:
-        enrich_wa_availability(self._registry, park_facility_id, availability)
-
     async def _check_campground(
         self,
         campground: Campground,
@@ -1525,7 +1489,7 @@ class SearchEngine:
             availability = await self._goingtocamp.get_availability(
                 int(campground.facility_id), start_month, end_month
             )
-            self._enrich_wa_availability(campground.facility_id, availability)
+            enrich_wa_availability(self._registry, campground.facility_id, availability)
             return availability
         if campground.booking_system == BookingSystem.OR_STATE:
             return await self.oregon.park(
@@ -1610,11 +1574,6 @@ class SearchEngine:
         )
 
 
-# ---------------------------------------------------------------------------
-# Date helpers for natural-language-style queries
-# ---------------------------------------------------------------------------
-
-
 def _oregon_nights(query: SearchQuery, start: date, end: date) -> list[date]:
     """The nights to fetch for an Oregon park: the requested ones, else every
     night of the range.
@@ -1654,8 +1613,6 @@ def this_weekend() -> tuple[date, date]:
     """Return (Friday, Sunday) for the upcoming weekend."""
     today = date.today()
     days_until_friday = (4 - today.weekday()) % 7
-    if days_until_friday == 0 and today.weekday() > 4:
-        days_until_friday = 7
     friday = today + timedelta(days=days_until_friday)
     sunday = friday + timedelta(days=2)
     return friday, sunday

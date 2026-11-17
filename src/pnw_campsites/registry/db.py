@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import unicodedata
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
@@ -128,6 +129,83 @@ CREATE TABLE IF NOT EXISTS registry_meta (
 """
 
 
+# Columns added after each table's first release, in the order they are ALTERed in.
+_CAMPGROUND_COLUMNS = {
+    "vibe": "TEXT DEFAULT ''",
+    "booking_url_slug": "TEXT DEFAULT ''",
+    "elevator_pitch": "TEXT DEFAULT ''",
+    "description_rewrite": "TEXT DEFAULT ''",
+    "best_for": "TEXT DEFAULT ''",
+    "booking_tips": "TEXT DEFAULT ''",
+    "slug": "TEXT DEFAULT ''",
+    "image_urls": "TEXT DEFAULT '[]'",
+    "image_attribution": "TEXT DEFAULT ''",
+    "image_verified_at": "TEXT",
+}
+_WA_SITES_COLUMNS = {
+    "max_capacity": "INTEGER",
+    "min_capacity": "INTEGER",
+    "allowed_equipment": "TEXT DEFAULT '[]'",
+}
+
+
+_UPSERT_SQL = """\
+INSERT INTO campgrounds (
+    facility_id, name, booking_system, latitude, longitude,
+    region, state, drive_minutes_from_base, tags, notes,
+    rating, total_sites, enabled, booking_url_slug, slug,
+    image_urls, image_attribution, image_verified_at,
+    created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(booking_system, facility_id) DO UPDATE SET
+    name=excluded.name,
+    latitude=excluded.latitude,
+    longitude=excluded.longitude,
+    region=excluded.region,
+    state=excluded.state,
+    drive_minutes_from_base=COALESCE(
+        campgrounds.drive_minutes_from_base,
+        excluded.drive_minutes_from_base
+    ),
+    tags=CASE WHEN campgrounds.tags = '[]'
+        THEN excluded.tags ELSE campgrounds.tags END,
+    notes=CASE WHEN campgrounds.notes = ''
+        THEN excluded.notes ELSE campgrounds.notes END,
+    rating=COALESCE(campgrounds.rating, excluded.rating),
+    total_sites=excluded.total_sites,
+    enabled=campgrounds.enabled,
+    booking_url_slug=CASE WHEN campgrounds.booking_url_slug = ''
+        THEN excluded.booking_url_slug
+        ELSE campgrounds.booking_url_slug END,
+    slug=CASE WHEN campgrounds.slug = ''
+        THEN excluded.slug ELSE campgrounds.slug END,
+    image_urls=CASE WHEN excluded.image_urls != '[]'
+        THEN excluded.image_urls ELSE campgrounds.image_urls END,
+    image_attribution=CASE WHEN excluded.image_attribution != ''
+        THEN excluded.image_attribution
+        ELSE campgrounds.image_attribution END,
+    image_verified_at=COALESCE(
+        excluded.image_verified_at, campgrounds.image_verified_at
+    ),
+    updated_at=?
+"""
+
+
+def _upsert_params(cg: Campground, now: str) -> tuple:
+    """Values for `_UPSERT_SQL`; `now` fills created_at, updated_at and the conflict update."""
+    return (
+        cg.facility_id, cg.name, cg.booking_system.value,
+        cg.latitude, cg.longitude, cg.region, cg.state,
+        cg.drive_minutes_from_base, json.dumps(cg.tags), cg.notes,
+        cg.rating, cg.total_sites, int(cg.enabled), cg.booking_url_slug,
+        cg.slug or slugify(cg.name),
+        json.dumps(cg.image_urls),
+        cg.image_attribution,
+        cg.image_verified_at.isoformat() if cg.image_verified_at else None,
+        now, now, now,
+    )
+
+
 class CampgroundRegistry:
     """CRUD operations for the local campground registry."""
 
@@ -140,48 +218,14 @@ class CampgroundRegistry:
         self._conn.executescript(SCHEMA)
 
         # Migrations — add columns that didn't exist in the original schema
-        cols = {
-            row[1]
-            for row in self._conn.execute("PRAGMA table_info(campgrounds)").fetchall()
-        }
-        if "vibe" not in cols:
-            self._conn.execute(
-                "ALTER TABLE campgrounds ADD COLUMN vibe TEXT DEFAULT ''"
-            )
-            self._conn.commit()
-        if "booking_url_slug" not in cols:
-            self._conn.execute(
-                "ALTER TABLE campgrounds ADD COLUMN booking_url_slug TEXT DEFAULT ''"
-            )
-            self._conn.commit()
-        for col in ("elevator_pitch", "description_rewrite", "best_for", "booking_tips"):
-            if col not in cols:
-                self._conn.execute(
-                    f"ALTER TABLE campgrounds ADD COLUMN {col} TEXT DEFAULT ''"
-                )
-                self._conn.commit()
-        if "slug" not in cols:
-            self._conn.execute(
-                "ALTER TABLE campgrounds ADD COLUMN slug TEXT DEFAULT ''"
-            )
-            self._conn.commit()
+        added = self._add_missing_columns("campgrounds", _CAMPGROUND_COLUMNS)
+        if "slug" in added:
             self._backfill_slugs()
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_campgrounds_slug"
                 " ON campgrounds(state, slug)"
             )
             self._conn.commit()
-        # v1.35 — source-site photo URLs and attribution per facility.
-        for col, sql_type in (
-            ("image_urls", "TEXT DEFAULT '[]'"),
-            ("image_attribution", "TEXT DEFAULT ''"),
-            ("image_verified_at", "TEXT"),
-        ):
-            if col not in cols:
-                self._conn.execute(
-                    f"ALTER TABLE campgrounds ADD COLUMN {col} {sql_type}"
-                )
-                self._conn.commit()
 
         # Migration: weather_normals PK changed from (lat,lon,month) to (lat,lon,month,day)
         wn_cols = {
@@ -193,24 +237,9 @@ class CampgroundRegistry:
             self._conn.executescript(SCHEMA)
             self._conn.commit()
 
-        # Migration: wa_state_sites gained capacity + equipment columns post-A1.
-        # CREATE TABLE IF NOT EXISTS leaves an existing table alone, so explicitly
-        # add the new columns to already-created tables.
-        wa_sites_cols = {
-            row[1]
-            for row in self._conn.execute("PRAGMA table_info(wa_state_sites)").fetchall()
-        }
-        if wa_sites_cols:  # only migrate if the table already exists
-            for col, sql_type in (
-                ("max_capacity", "INTEGER"),
-                ("min_capacity", "INTEGER"),
-                ("allowed_equipment", "TEXT DEFAULT '[]'"),
-            ):
-                if col not in wa_sites_cols:
-                    self._conn.execute(
-                        f"ALTER TABLE wa_state_sites ADD COLUMN {col} {sql_type}"
-                    )
-                    self._conn.commit()
+        # CREATE TABLE IF NOT EXISTS leaves an existing table alone, so add the
+        # columns wa_state_sites gained after its first release.
+        self._add_missing_columns("wa_state_sites", _WA_SITES_COLUMNS)
 
         # Curated tag fixes (boat-in, river parks wrongly tagged beach). Prod's
         # registry.db is never re-seeded, so these ship as an idempotent migration.
@@ -235,13 +264,26 @@ class CampgroundRegistry:
     # Helpers
     # -------------------------------------------------------------------
 
+    def _add_missing_columns(self, table: str, columns: dict[str, str]) -> set[str]:
+        """ALTER in the columns an older DB lacks, in order. Returns those added."""
+        existing = {
+            row[1] for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        added = set()
+        if existing:  # a table that doesn't exist yet gets its columns from SCHEMA
+            for col, sql_type in columns.items():
+                if col not in existing:
+                    self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {sql_type}")
+                    added.add(col)
+            self._conn.commit()
+        return added
+
     def _backfill_slugs(self) -> None:
         """One-time backfill: generate slugs for all existing campgrounds."""
         rows = self._conn.execute(
             "SELECT id, name, state, facility_id FROM campgrounds"
         ).fetchall()
         # Detect duplicate names within state for disambiguation
-        from collections import Counter
         state_name_counts = Counter((r["state"], slugify(r["name"])) for r in rows)
         dupes = {k for k, v in state_name_counts.items() if v > 1}
 
@@ -273,73 +315,7 @@ class CampgroundRegistry:
 
     def upsert(self, cg: Campground) -> Campground:
         """Insert or update a campground. Returns the campground with its id."""
-        now = datetime.now().isoformat()
-        slug = cg.slug or slugify(cg.name)
-        self._conn.execute(
-            """\
-            INSERT INTO campgrounds (
-                facility_id, name, booking_system, latitude, longitude,
-                region, state, drive_minutes_from_base, tags, notes,
-                rating, total_sites, enabled, booking_url_slug, slug,
-                image_urls, image_attribution, image_verified_at,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(booking_system, facility_id) DO UPDATE SET
-                name=excluded.name,
-                latitude=excluded.latitude,
-                longitude=excluded.longitude,
-                region=excluded.region,
-                state=excluded.state,
-                drive_minutes_from_base=COALESCE(
-                    campgrounds.drive_minutes_from_base,
-                    excluded.drive_minutes_from_base
-                ),
-                tags=CASE WHEN campgrounds.tags = '[]'
-                    THEN excluded.tags ELSE campgrounds.tags END,
-                notes=CASE WHEN campgrounds.notes = ''
-                    THEN excluded.notes ELSE campgrounds.notes END,
-                rating=COALESCE(campgrounds.rating, excluded.rating),
-                total_sites=excluded.total_sites,
-                enabled=campgrounds.enabled,
-                booking_url_slug=CASE WHEN campgrounds.booking_url_slug = ''
-                    THEN excluded.booking_url_slug
-                    ELSE campgrounds.booking_url_slug END,
-                slug=CASE WHEN campgrounds.slug = ''
-                    THEN excluded.slug ELSE campgrounds.slug END,
-                image_urls=CASE WHEN excluded.image_urls != '[]'
-                    THEN excluded.image_urls ELSE campgrounds.image_urls END,
-                image_attribution=CASE WHEN excluded.image_attribution != ''
-                    THEN excluded.image_attribution
-                    ELSE campgrounds.image_attribution END,
-                image_verified_at=COALESCE(
-                    excluded.image_verified_at, campgrounds.image_verified_at
-                ),
-                updated_at=?
-            """,
-            (
-                cg.facility_id,
-                cg.name,
-                cg.booking_system.value,
-                cg.latitude,
-                cg.longitude,
-                cg.region,
-                cg.state,
-                cg.drive_minutes_from_base,
-                json.dumps(cg.tags),
-                cg.notes,
-                cg.rating,
-                cg.total_sites,
-                int(cg.enabled),
-                cg.booking_url_slug,
-                slug,
-                json.dumps(cg.image_urls),
-                cg.image_attribution,
-                cg.image_verified_at.isoformat() if cg.image_verified_at else None,
-                now,
-                now,
-                now,  # for the ON CONFLICT updated_at
-            ),
-        )
+        self._conn.execute(_UPSERT_SQL, _upsert_params(cg, datetime.now().isoformat()))
         self._conn.commit()
 
         row = self._conn.execute(
@@ -351,61 +327,9 @@ class CampgroundRegistry:
     def bulk_upsert(self, campgrounds: list[Campground]) -> int:
         """Upsert multiple campgrounds in a single transaction."""
         now = datetime.now().isoformat()
-        sql = """\
-            INSERT INTO campgrounds (
-                facility_id, name, booking_system, latitude, longitude,
-                region, state, drive_minutes_from_base, tags, notes,
-                rating, total_sites, enabled, booking_url_slug, slug,
-                image_urls, image_attribution, image_verified_at,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(booking_system, facility_id) DO UPDATE SET
-                name=excluded.name,
-                latitude=excluded.latitude,
-                longitude=excluded.longitude,
-                region=excluded.region,
-                state=excluded.state,
-                drive_minutes_from_base=COALESCE(
-                    campgrounds.drive_minutes_from_base,
-                    excluded.drive_minutes_from_base
-                ),
-                tags=CASE WHEN campgrounds.tags = '[]'
-                    THEN excluded.tags ELSE campgrounds.tags END,
-                notes=CASE WHEN campgrounds.notes = ''
-                    THEN excluded.notes ELSE campgrounds.notes END,
-                rating=COALESCE(campgrounds.rating, excluded.rating),
-                total_sites=excluded.total_sites,
-                enabled=campgrounds.enabled,
-                booking_url_slug=CASE WHEN campgrounds.booking_url_slug = ''
-                    THEN excluded.booking_url_slug
-                    ELSE campgrounds.booking_url_slug END,
-                slug=CASE WHEN campgrounds.slug = ''
-                    THEN excluded.slug ELSE campgrounds.slug END,
-                image_urls=CASE WHEN excluded.image_urls != '[]'
-                    THEN excluded.image_urls ELSE campgrounds.image_urls END,
-                image_attribution=CASE WHEN excluded.image_attribution != ''
-                    THEN excluded.image_attribution
-                    ELSE campgrounds.image_attribution END,
-                image_verified_at=COALESCE(
-                    excluded.image_verified_at, campgrounds.image_verified_at
-                ),
-                updated_at=?
-        """
-        rows = [
-            (
-                cg.facility_id, cg.name, cg.booking_system.value,
-                cg.latitude, cg.longitude, cg.region, cg.state,
-                cg.drive_minutes_from_base, json.dumps(cg.tags), cg.notes,
-                cg.rating, cg.total_sites, int(cg.enabled), cg.booking_url_slug,
-                cg.slug or slugify(cg.name),
-                json.dumps(cg.image_urls),
-                cg.image_attribution,
-                cg.image_verified_at.isoformat() if cg.image_verified_at else None,
-                now, now, now,
-            )
-            for cg in campgrounds
-        ]
-        self._conn.executemany(sql, rows)
+        self._conn.executemany(
+            _UPSERT_SQL, [_upsert_params(cg, now) for cg in campgrounds],
+        )
         self._conn.commit()
         return len(campgrounds)
 
@@ -450,9 +374,8 @@ class CampgroundRegistry:
     ) -> list[Campground]:
         """Flexible search across the registry.
 
-        `states` filters on several states at once — callers that wanted two
-        states previously had to pass state=None and scan the whole registry,
-        which is ~1,368 rows of pydantic hydration (~556ms measured).
+        `states` filters on several states at once, instead of scanning the
+        whole registry with state=None.
         `limit` bounds the result set for endpoints that don't need all of it.
         """
         clauses: list[str] = []
@@ -654,26 +577,6 @@ class CampgroundRegistry:
         )
         self._conn.commit()
 
-    def update_notes(self, campground_id: int, notes: str, rating: int | None = None) -> None:
-        if rating is not None:
-            self._conn.execute(
-                "UPDATE campgrounds SET notes=?, rating=?, updated_at=? WHERE id=?",
-                (notes, rating, datetime.now().isoformat(), campground_id),
-            )
-        else:
-            self._conn.execute(
-                "UPDATE campgrounds SET notes=?, updated_at=? WHERE id=?",
-                (notes, datetime.now().isoformat(), campground_id),
-            )
-        self._conn.commit()
-
-    def set_enabled(self, campground_id: int, enabled: bool) -> None:
-        self._conn.execute(
-            "UPDATE campgrounds SET enabled=?, updated_at=? WHERE id=?",
-            (int(enabled), datetime.now().isoformat(), campground_id),
-        )
-        self._conn.commit()
-
     def delete(self, campground_id: int) -> None:
         self._conn.execute("DELETE FROM campgrounds WHERE id=?", (campground_id,))
         self._conn.commit()
@@ -841,14 +744,13 @@ class CampgroundRegistry:
         ).fetchall()
 
         # Group by (lat, lon, month), pick closest day
-        from collections import defaultdict
         grouped: dict[tuple[float, float, int], list] = defaultdict(list)
         for r in rows:
             grouped[(r["lat_2dp"], r["lon_2dp"], r["month"])].append(r)
 
         result = {}
         for key, candidates in grouped.items():
-            target_day = key_to_day.get(key, 15)
+            target_day = key_to_day[key]
             best = min(candidates, key=lambda r: abs(r["day"] - target_day))
             result[key] = (best["temp_high_f"], best["temp_low_f"], best["precip_pct"])
         return result
@@ -881,23 +783,6 @@ class CampgroundRegistry:
         )
         self._conn.commit()
         return len(rows)
-
-    def count_cached_normals(
-        self, lat: float, lon: float, day: int,
-    ) -> int:
-        """Count how many months are cached for a specific (lat, lon, day).
-
-        Used by warmup script to skip fully-cached campgrounds.
-        """
-        lat_2dp = round(lat, 2)
-        lon_2dp = round(lon, 2)
-        row = self._conn.execute(
-            "SELECT COUNT(*) FROM weather_normals "
-            "WHERE lat_2dp = ? AND lon_2dp = ? AND day = ? "
-            "AND month BETWEEN 4 AND 10",
-            [lat_2dp, lon_2dp, day],
-        ).fetchone()
-        return row[0]
 
     # ------------------------------------------------------------------
     # WA State Parks site/loop name cache (GoingToCamp metadata)

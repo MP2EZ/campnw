@@ -1,4 +1,4 @@
-"""The `who` filter (v1.48 D5): does a site take this party and rig?
+"""The `who` filter: does a site take this party and rig?
 
 Pure functions. Unknown (None) always passes: a site the booking system
 says nothing about must never drop out of results.
@@ -34,7 +34,7 @@ def fits_equipment(fit: SiteFit, equipment: str | None, rig_length: int | None) 
     return True
 
 
-# Watch site-type filter values (v1.48 P3c). A site passes when it has any
+# Watch site-type filter values. A site passes when it has any
 # listed feature, or when the booking system doesn't say.
 SITE_TYPES = ("hookups", "walk_in")
 
