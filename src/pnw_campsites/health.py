@@ -25,7 +25,7 @@ import sqlite3
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -182,6 +182,40 @@ async def _check_watch_db() -> str:
         return f"{active} active watch(es), {users} user(s)"
 
     return await asyncio.to_thread(_query)
+
+
+HISTORY_STALE_AFTER = timedelta(days=1)
+
+
+async def _check_availability_history() -> str:
+    """Fail when the history poller has stopped recording.
+
+    Prod's history stopped on 2026-07-31 and nobody noticed for three and a
+    half months. Reads one HISTORY_FACILITIES campground (the probe facility)
+    through the primary key, rather than scanning the whole table.
+    """
+    if os.getenv("HISTORY_POLLER", "1") == "0":
+        raise SkipCheck("history poller off here (HISTORY_POLLER=0)")
+    from pnw_campsites.monitor.db import DEFAULT_DB_PATH as WATCH_DB_PATH
+
+    def _query() -> str | None:
+        conn = _readonly_conn(WATCH_DB_PATH)
+        try:
+            return conn.execute(
+                "SELECT MAX(last_seen) FROM availability_daily WHERE campground_id=?",
+                (PROBE_FACILITY_ID,),
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+    last = await asyncio.to_thread(_query)
+    if last is None:
+        raise RuntimeError(f"no history recorded for {PROBE_FACILITY_ID}")
+    # last_seen is the server's naive local time, as is datetime.now() here.
+    age = datetime.now() - datetime.fromisoformat(last)
+    if age > HISTORY_STALE_AFTER:
+        raise RuntimeError(f"history has not grown since {last[:16]}")
+    return f"last recorded {int(age.total_seconds() // 60)} min ago"
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +447,9 @@ CHECKS: list[Check] = [
           modules=("pnw_campsites.registry.db",)),
     Check("watch.db", "data", _check_watch_db, slow_ms=500,
           modules=("pnw_campsites.monitor.db",)),
+    # Only a deployed server runs the poller; a laptop's history is always old.
+    Check("availability history", "data", _check_availability_history, slow_ms=500,
+          requires=("FLY_APP_NAME",), modules=("pnw_campsites.monitor.db",)),
     Check("rec.gov RIDB", "provider", _check_recgov_ridb, requires=("RIDB_API_KEY",),
           modules=("pnw_campsites.providers.recgov",)),
     Check("rec.gov availability", "provider", _check_recgov_availability,

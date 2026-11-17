@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 
 from pnw_campsites.auth import warm_jwks_client
 from pnw_campsites.monitor.db import DEFAULT_DB_PATH, WatchDB
+from pnw_campsites.monitor.pacific import pacific_today
 from pnw_campsites.posthog_client import capture_event, get_posthog_client
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
@@ -97,6 +98,34 @@ async def _refresh_booking_tips() -> None:
     from pnw_campsites.analytics.patterns import refresh_all_tips
 
     await refresh_all_tips(_watch_db, _registry)
+
+
+async def _record_history() -> None:
+    """Background job: record availability history for HISTORY_FACILITIES.
+
+    Runs on the event loop for the same reason as _cleanup_expired_links.
+    """
+    if not _watch_db or not _recgov:
+        return
+    from pnw_campsites.monitor.history import record_history
+
+    await record_history(_recgov, _watch_db)
+
+
+# Thirteen months, so a campground's tips can compare a month with the same
+# month a year earlier.
+HISTORY_RETENTION = timedelta(days=400)
+
+
+async def _prune_history() -> None:
+    """Background job: drop availability history older than HISTORY_RETENTION."""
+    if not _watch_db:
+        return
+    removed = _watch_db.prune_availability_history(
+        before=pacific_today() - HISTORY_RETENTION,
+    )
+    if removed:
+        _poll_logger.info("Pruned %d availability history row(s)", removed)
 
 
 async def _poll_tranche(
@@ -368,6 +397,30 @@ async def lifespan(app: FastAPI):
             minute=30,
             timezone="America/Los_Angeles",
             id="cleanup_expired_links",
+            max_instances=1,
+            coalesce=True,
+        )
+
+        # Booking tips' data source. Off where the history isn't wanted
+        # (staging sets HISTORY_POLLER=0 at deploy).
+        if os.getenv("HISTORY_POLLER", "1") != "0":
+            scheduler.add_job(
+                _record_history,
+                "interval",
+                minutes=15,
+                id="history_poller",
+                max_instances=1,
+                coalesce=True,
+                # Between the two watch tranches, to spread rec.gov load.
+                next_run_time=datetime.now() + timedelta(minutes=3),
+            )
+        scheduler.add_job(
+            _prune_history,
+            "cron",
+            hour=3,
+            minute=45,
+            timezone="America/Los_Angeles",
+            id="prune_history",
             max_instances=1,
             coalesce=True,
         )

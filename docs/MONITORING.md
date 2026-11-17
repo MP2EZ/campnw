@@ -143,6 +143,13 @@ Prod can't reach GoingToCamp, so re-seed from a laptop
 (`scripts/seed_wa_state_metadata.py --only-missing`) and ship the regenerated
 `registry/fixtures/wa_state_sites.json`. The next boot imports it.
 
+`availability history` fails when Kalaloch's `availability_daily` rows haven't
+been updated for a day, which means the history poller
+(`monitor/history.py`, every 15 minutes) has stopped. Booking tips are built
+from that history. It runs only on a deployed server (needs `FLY_APP_NAME`) and
+skips where `HISTORY_POLLER=0` (staging). Prod's history once stopped unnoticed
+from 2026-07-31 to November.
+
 ### Where to run it
 
 | From | Command | Sees |
