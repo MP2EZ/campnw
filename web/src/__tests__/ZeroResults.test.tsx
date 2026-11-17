@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { CampgroundResult, SearchParams, SearchResponse } from "../api";
 import { ZeroResults } from "../results/ZeroResults";
+import { WatchContext } from "../results/watchContext";
 
 vi.mock("../api", async (orig) => ({ ...(await orig<typeof import("../api")>()), track: vi.fn() }));
 
@@ -21,9 +22,12 @@ const results: SearchResponse = {
   warnings: [{ kind: "waf_blocked", count: 9, source: "wa_state", message: "" }],
 };
 
+const renderZero = (ui: React.ReactElement, openWatch = vi.fn()) =>
+  render(<WatchContext.Provider value={openWatch}>{ui}</WatchContext.Provider>);
+
 describe("ZeroResults", () => {
   test("not released: says so, when each weekend opens, and lists the places", () => {
-    render(<ZeroResults results={results} places={[place("Kachess", 77), place("Turlo", 88)]}
+    renderZero(<ZeroResults results={results} places={[place("Kachess", 77), place("Turlo", 88)]}
       params={params} onSearch={() => {}} />);
     expect(screen.getByText(/aren’t full\. Their June weekends just haven’t opened/)).toHaveTextContent(
       /WA State Parks couldn’t be checked right now/,
@@ -33,15 +37,25 @@ describe("ZeroResults", () => {
     expect(items[0]).toHaveTextContent("Jun 4 – 6");
     expect(items[0]).toHaveTextContent("7:00 am PT");
     expect(within(timeline).getByRole("button", { name: /Remind me on release mornings/ }))
-      .toHaveAttribute("aria-disabled", "true");
+      .not.toHaveAttribute("aria-disabled");
+    expect(screen.queryByText(/coming soon/)).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Not released yet" })).toHaveTextContent("Kachess");
   });
 
   test("a camp-sooner option runs its search", async () => {
     const onSearch = vi.fn();
-    render(<ZeroResults results={results} places={[place("Kachess", 77)]} params={params} onSearch={onSearch} />);
+    renderZero(<ZeroResults results={results} places={[place("Kachess", 77)]} params={params} onSearch={onSearch} />);
     const sooner = screen.getByRole("region", { name: "Or camp sooner" });
     await userEvent.click(within(sooner).getByRole("button", { name: /Search released dates/ }));
     expect(onSearch).toHaveBeenCalledWith(expect.objectContaining({ from_location: "seattle", days_of_week: "4,5,6" }), "find");
+  });
+
+  test("Remind me on release mornings opens the Watch sheet in remind mode for the closest place", async () => {
+    const openWatch = vi.fn();
+    const kachess = place("Kachess", 77);
+    renderZero(<ZeroResults results={results} places={[place("Turlo", 88), kachess]} params={params}
+      onSearch={() => {}} />, openWatch);
+    await userEvent.click(screen.getByRole("button", { name: /Remind me on release mornings/ }));
+    expect(openWatch).toHaveBeenCalledWith(kachess, undefined, "full_group", "remind");
   });
 });
