@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from datetime import date
+
+from pnw_campsites.enrichment.llm_tags import parse_llm_json
 
 _logger = logging.getLogger(__name__)
 
@@ -71,20 +72,10 @@ async def enrich_notification(
         )
 
         text = response.content[0].text.strip()
-
-        # Try parsing JSON directly
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError:
-            # Try extracting from markdown code block
-            if "```" in text:
-                json_str = text.split("```")[1]
-                if json_str.startswith("json"):
-                    json_str = json_str[4:]
-                data = json.loads(json_str.strip())
-            else:
-                _logger.warning("Could not parse LLM response: %s", text[:200])
-                return _fallback_message(campground_name, site_count)
+        data = parse_llm_json(text)
+        if data is None:
+            _logger.warning("Could not parse LLM response: %s", text[:200])
+            return _fallback_message(campground_name, site_count)
 
         message = data.get("message", "")
         urgency = data.get("urgency", 2)
@@ -92,7 +83,6 @@ async def enrich_notification(
         if not message or not isinstance(message, str):
             return _fallback_message(campground_name, site_count)
 
-        # Clamp urgency to valid range
         urgency = max(1, min(3, int(urgency)))
 
         return message, urgency

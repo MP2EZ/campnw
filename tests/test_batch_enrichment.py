@@ -1,143 +1,46 @@
-"""Tests for batch enrichment: truncation scoring, request building, JSON parsing."""
+"""Tests for batch enrichment: request building, JSON parsing."""
 
 from __future__ import annotations
 
-from pnw_campsites.enrichment.batch import (
-    _parse_json_response,
-    build_batch_requests,
-    campground_truncation_score,
-    truncation_score,
-)
+from pnw_campsites.enrichment.batch import build_batch_requests
+from pnw_campsites.enrichment.llm_tags import parse_llm_json
 from tests.conftest import make_campground
 
 # ---------------------------------------------------------------------------
-# truncation_score
+# parse_llm_json
 # ---------------------------------------------------------------------------
 
 
-class TestTruncationScore:
-    def test_clean_sentence_scores_zero(self):
-        assert truncation_score("Perfect for families.", "best_for") == 0.0
-
-    def test_empty_string_scores_zero(self):
-        assert truncation_score("", "elevator_pitch") == 0.0
-
-    def test_exact_old_limit_high_score(self):
-        """Text hitting the old 100-char limit exactly should score high."""
-        text = "A" * 100
-        score = truncation_score(text, "elevator_pitch")
-        assert score >= 0.8  # old limit (0.5) + mid-word (0.3)
-
-    def test_exact_old_limit_250(self):
-        text = "B" * 250
-        score = truncation_score(text, "description_rewrite")
-        assert score >= 0.8
-
-    def test_exact_old_limit_30(self):
-        text = "C" * 30
-        score = truncation_score(text, "best_for")
-        assert score >= 0.8
-
-    def test_ellipsis_ending(self):
-        score = truncation_score("Beautiful lakeside camping...", "vibe")
-        assert score >= 0.4
-
-    def test_mid_word_cut(self):
-        """Ending mid-word without punctuation should score."""
-        score = truncation_score("Perfect for families and pet", "best_for")
-        assert score >= 0.3
-
-    def test_complete_sentence_low_score(self):
-        """A properly ended sentence should score very low (only short-length signal)."""
-        score = truncation_score("Shaded riverside camping with old-growth trees and river access.", "elevator_pitch")
-        assert score == 0.0
-
-    def test_question_mark_ending_low_score(self):
-        score = truncation_score("Ready for an adventure along the riverside trails and lakeside views?", "elevator_pitch")
-        assert score == 0.0
-
-    def test_quote_ending_low_score(self):
-        score = truncation_score('This campground is locally known as "the quiet camp"', "vibe")
-        assert score == 0.0
-
-    def test_suspiciously_short(self):
-        """Very short text for a field that expects more."""
-        score = truncation_score("camp", "description_rewrite")
-        assert score > 0.0
-
-    def test_score_capped_at_one(self):
-        """Multiple signals shouldn't exceed 1.0."""
-        # Hits old limit + mid-word + no punctuation
-        text = "A" * 100
-        score = truncation_score(text, "elevator_pitch")
-        assert score <= 1.0
-
-
-# ---------------------------------------------------------------------------
-# campground_truncation_score
-# ---------------------------------------------------------------------------
-
-
-class TestCampgroundTruncationScore:
-    def test_no_fields_scores_zero(self):
-        cg = make_campground(elevator_pitch="", description_rewrite="", best_for="", vibe="")
-        assert campground_truncation_score(cg) == 0.0
-
-    def test_one_truncated_field(self):
-        cg = make_campground(
-            elevator_pitch="A" * 100,  # hits old limit
-            description_rewrite="Clean sentence here.",
-            best_for="families",
-        )
-        assert campground_truncation_score(cg) >= 0.8
-
-    def test_all_clean_fields(self):
-        cg = make_campground(
-            elevator_pitch="Beautiful lakeside camping for families with river access and trails.",
-            description_rewrite="Nestled along the river with towering old-growth trees surrounding the campground. Perfect for weekend getaways.",
-            best_for="Families with young kids and pets.",
-            vibe="Quiet riverside camping under towering Douglas fir and cedar trees.",
-        )
-        assert campground_truncation_score(cg) == 0.0
-
-    def test_returns_max_of_fields(self):
-        """Should return the highest score among all fields."""
-        cg = make_campground(
-            elevator_pitch="Clean sentence.",  # 0.0
-            best_for="A" * 30,  # hits old limit → high
-        )
-        score = campground_truncation_score(cg)
-        assert score >= 0.5
-
-
-# ---------------------------------------------------------------------------
-# _parse_json_response
-# ---------------------------------------------------------------------------
-
-
-class TestParseJsonResponse:
+class TestParseLlmJson:
     def test_plain_json(self):
-        result = _parse_json_response('{"tags": ["lakeside"], "vibe": "Nice"}')
+        result = parse_llm_json('{"tags": ["lakeside"], "vibe": "Nice"}')
         assert result == {"tags": ["lakeside"], "vibe": "Nice"}
 
     def test_markdown_fenced_json(self):
         text = '```json\n{"tags": ["forest"]}\n```'
-        result = _parse_json_response(text)
+        result = parse_llm_json(text)
         assert result == {"tags": ["forest"]}
 
     def test_markdown_no_language(self):
         text = '```\n{"tags": []}\n```'
-        result = _parse_json_response(text)
+        result = parse_llm_json(text)
         assert result == {"tags": []}
 
+    def test_fence_after_preamble(self):
+        text = 'Here you go:\n```json\n{"tags": ["forest"]}\n```'
+        assert parse_llm_json(text) == {"tags": ["forest"]}
+
+    def test_backticks_inside_plain_json(self):
+        assert parse_llm_json('{"vibe": "a ``` b"}') == {"vibe": "a ``` b"}
+
     def test_invalid_json_returns_none(self):
-        assert _parse_json_response("not json at all") is None
+        assert parse_llm_json("not json at all") is None
 
     def test_empty_string_returns_none(self):
-        assert _parse_json_response("") is None
+        assert parse_llm_json("") is None
 
     def test_whitespace_wrapped(self):
-        result = _parse_json_response('  \n {"tags": []}  \n ')
+        result = parse_llm_json('  \n {"tags": []}  \n ')
         assert result == {"tags": []}
 
 

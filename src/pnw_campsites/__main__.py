@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -11,6 +12,8 @@ from datetime import date
 
 from dotenv import load_dotenv
 
+from pnw_campsites.enrichment.batch import enrich_registry_batch
+from pnw_campsites.enrichment.llm_tags import enrich_registry, regenerate_descriptions
 from pnw_campsites.geo import format_drive_time
 from pnw_campsites.monitor.db import Watch, WatchDB
 from pnw_campsites.monitor.notify import notify_console, notify_ntfy
@@ -20,7 +23,11 @@ from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import BookingSystem
+from pnw_campsites.registry.pitch_fixture import FIXTURE_PATH
 from pnw_campsites.search.engine import (
+    LONG_WEEKEND,
+    WEEKDAYS,
+    WEEKEND,
     SearchEngine,
     SearchQuery,
     days,
@@ -29,6 +36,7 @@ from pnw_campsites.search.engine import (
 )
 from pnw_campsites.search.who import EQUIPMENT, SITE_TYPES
 from pnw_campsites.urls import (
+    or_state_availability_url,
     recgov_availability_url,
     recgov_campsite_booking_url,
     wa_state_availability_url,
@@ -51,8 +59,6 @@ def _parse_dates(date_str: str) -> tuple[date, date]:
 
 def _parse_days(days_str: str) -> set[int]:
     """Parse day names: 'thu,fri,sat,sun' or presets like 'weekend'."""
-    from pnw_campsites.search.engine import LONG_WEEKEND, WEEKDAYS, WEEKEND
-
     presets = {
         "weekend": WEEKEND,
         "long-weekend": LONG_WEEKEND,
@@ -63,7 +69,7 @@ def _parse_days(days_str: str) -> set[int]:
     return days(*days_str.split(","))
 
 
-def _format_results(results, show_urls: bool = True) -> None:
+def _format_results(results) -> None:
     """Print search results in a clean, readable format."""
     print(f"Searched {results.campgrounds_checked} campgrounds")
     print(f"Found availability at {results.campgrounds_with_availability} campgrounds")
@@ -90,7 +96,6 @@ def _format_results(results, show_urls: bool = True) -> None:
             continue
 
         cg = r.campground
-        # Summary line with FCFS context and drive time
         parts = [f"{r.total_available_sites} reservable"]
         if r.estimated_drive_minutes is not None:
             parts.insert(0, format_drive_time(r.estimated_drive_minutes))
@@ -99,30 +104,28 @@ def _format_results(results, show_urls: bool = True) -> None:
         summary = ", ".join(parts)
         source = "WA Parks" if cg.booking_system == BookingSystem.WA_STATE else cg.state
         print(f"=== {cg.name} ({source}) — {summary} ===")
-        if show_urls:
-            reservable_windows = [w for w in r.available_windows if not w.is_fcfs]
-            start = (
-                date.fromisoformat(reservable_windows[0].start_date)
+        reservable_windows = [w for w in r.available_windows if not w.is_fcfs]
+        start = (
+            date.fromisoformat(reservable_windows[0].start_date)
+            if reservable_windows else None
+        )
+        if cg.booking_system == BookingSystem.WA_STATE:
+            end = (
+                date.fromisoformat(reservable_windows[-1].end_date)
                 if reservable_windows else None
             )
-            if cg.booking_system == BookingSystem.WA_STATE:
-                end = (
-                    date.fromisoformat(reservable_windows[-1].end_date)
-                    if reservable_windows else None
-                )
-                print(f"  Book: {wa_state_availability_url(cg.facility_id, start, end)}")
-            elif cg.booking_system == BookingSystem.OR_STATE:
-                end = (
-                    date.fromisoformat(reservable_windows[-1].end_date)
-                    if reservable_windows else None
-                )
-                from pnw_campsites.urls import or_state_availability_url
-                book = or_state_availability_url(
-                    cg.facility_id, cg.booking_url_slug, start, end,
-                )
-                print(f"  Book: {book}")
-            else:
-                print(f"  Book: {recgov_availability_url(cg.facility_id, start)}")
+            print(f"  Book: {wa_state_availability_url(cg.facility_id, start, end)}")
+        elif cg.booking_system == BookingSystem.OR_STATE:
+            end = (
+                date.fromisoformat(reservable_windows[-1].end_date)
+                if reservable_windows else None
+            )
+            book = or_state_availability_url(
+                cg.facility_id, cg.booking_url_slug, start, end,
+            )
+            print(f"  Book: {book}")
+        else:
+            print(f"  Book: {recgov_availability_url(cg.facility_id, start)}")
 
         # Group windows by site
         by_site: dict[str, list] = {}
@@ -166,7 +169,7 @@ def _parse_booking_system(value: str | None) -> BookingSystem | None:
 async def cmd_search(args: argparse.Namespace) -> None:
     """Run a discovery search."""
     load_dotenv()
-    booking_system = _parse_booking_system(getattr(args, "source", None))
+    booking_system = _parse_booking_system(args.source)
 
     start_date, end_date = _parse_dates(args.dates)
     days_of_week = _parse_days(args.days) if args.days else None
@@ -179,7 +182,7 @@ async def cmd_search(args: argparse.Namespace) -> None:
         days_of_week=days_of_week,
         tags=args.tags.split(",") if args.tags else None,
         max_drive_minutes=args.max_drive,
-        from_location=getattr(args, "from_location", None),
+        from_location=args.from_location,
         name_like=args.name,
         include_group_sites=not args.no_groups,
         include_fcfs=args.include_fcfs,
@@ -188,7 +191,6 @@ async def cmd_search(args: argparse.Namespace) -> None:
         booking_system=booking_system,
     )
 
-    # Determine which providers to initialize
     need_recgov = booking_system in (None, BookingSystem.RECGOV)
     need_goingtocamp = booking_system in (None, BookingSystem.WA_STATE)
     need_reserveamerica = booking_system in (None, BookingSystem.OR_STATE)
@@ -204,7 +206,7 @@ async def cmd_search(args: argparse.Namespace) -> None:
             sys.exit(1)
 
     registry = CampgroundRegistry()
-    recgov = RecGovClient(ridb_api_key=api_key) if need_recgov and api_key else None
+    recgov = RecGovClient(ridb_api_key=api_key) if need_recgov else None
     goingtocamp = GoingToCampClient() if need_goingtocamp else None
     reserveamerica = ReserveAmericaClient() if need_reserveamerica else None
 
@@ -233,7 +235,7 @@ async def cmd_search(args: argparse.Namespace) -> None:
 async def cmd_check(args: argparse.Namespace) -> None:
     """Check a specific campground."""
     load_dotenv()
-    booking_system = _parse_booking_system(getattr(args, "source", None))
+    booking_system = _parse_booking_system(args.source)
 
     start_date, end_date = _parse_dates(args.dates)
 
@@ -284,7 +286,6 @@ async def cmd_check(args: argparse.Namespace) -> None:
     if is_wa_state:
         print(f"Book: {wa_state_availability_url(cg.facility_id, start_date, end_date)}")
     elif is_or_state:
-        from pnw_campsites.urls import or_state_availability_url
         book = or_state_availability_url(
             cg.facility_id, cg.booking_url_slug, start_date, end_date,
         )
@@ -308,22 +309,20 @@ async def cmd_check(args: argparse.Namespace) -> None:
             for w in windows:
                 d = date.fromisoformat(w.start_date)
                 day_name = d.strftime("%a")
+                print(f"    {day_name} {w.start_date} → {w.end_date} ({w.nights}n)")
                 if not is_wa_state:
                     book_url = recgov_campsite_booking_url(
                         cg.facility_id, w.campsite_id, d,
                         date.fromisoformat(w.end_date),
                     )
-                    print(f"    {day_name} {w.start_date} → {w.end_date} ({w.nights}n)")
                     print(f"      Book: {book_url}")
-                else:
-                    print(f"    {day_name} {w.start_date} → {w.end_date} ({w.nights}n)")
 
     registry.close()
 
 
 async def cmd_list(args: argparse.Namespace) -> None:
     """List campgrounds in the registry."""
-    booking_system = _parse_booking_system(getattr(args, "source", None))
+    booking_system = _parse_booking_system(args.source)
     registry = CampgroundRegistry()
     results = registry.search(
         state=args.state,
@@ -346,7 +345,6 @@ async def cmd_watch_add(args: argparse.Namespace) -> None:
     start_date, end_date = _parse_dates(args.dates)
     days_of_week = list(_parse_days(args.days)) if args.days else None
 
-    # Look up name from registry if possible
     registry = CampgroundRegistry()
     booking_system = resolve_booking_system(args.facility_id, "recgov", registry)
     name = args.name or ""
@@ -482,10 +480,7 @@ async def cmd_enrich(args: argparse.Namespace) -> None:
         print("ERROR: ANTHROPIC_API_KEY not set in .env")
         sys.exit(1)
 
-    if getattr(args, "only_pitch", False):
-        from pnw_campsites.enrichment.llm_tags import regenerate_descriptions
-        from pnw_campsites.registry.pitch_fixture import FIXTURE_PATH
-
+    if args.only_pitch:
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         logging.getLogger("httpx").setLevel(logging.WARNING)
         rewritten, cleared, failed, usage = await regenerate_descriptions(
@@ -503,21 +498,15 @@ async def cmd_enrich(args: argparse.Namespace) -> None:
             print(f"Exported to {FIXTURE_PATH}; commit it to ship the copy.")
         return
 
-    if getattr(args, "batch", False) or getattr(args, "batch_id", None):
-        from pnw_campsites.enrichment.batch import enrich_registry_batch
-
+    if args.batch or args.batch_id:
         enriched = await enrich_registry_batch(
             api_key=api_key,
             limit=args.limit,
             dry_run=args.dry_run,
-            batch_id=getattr(args, "batch_id", None),
-            force=getattr(args, "force", False),
-            truncated=getattr(args, "truncated", False),
-            truncated_threshold=getattr(args, "truncated_threshold", 0.5),
+            batch_id=args.batch_id,
+            force=args.force,
         )
     else:
-        from pnw_campsites.enrichment.llm_tags import enrich_registry
-
         enriched = await enrich_registry(
             api_key=api_key, limit=args.limit, dry_run=args.dry_run
         )
@@ -562,8 +551,6 @@ def _exit_now(code: int) -> None:
 
 
 async def cmd_doctor(args: argparse.Namespace) -> None:
-    import json
-
     from pnw_campsites.health import run_all, summarize
 
     load_dotenv()
@@ -718,17 +705,6 @@ def main() -> None:
         "--force",
         action="store_true",
         help="Re-enrich all campgrounds regardless of existing data",
-    )
-    p_enrich.add_argument(
-        "--truncated",
-        action="store_true",
-        help="Re-enrich campgrounds with likely-truncated descriptions",
-    )
-    p_enrich.add_argument(
-        "--truncated-threshold",
-        type=float,
-        default=0.5,
-        help="Confidence threshold for truncation detection (0.0-1.0, default: 0.5)",
     )
     p_enrich.add_argument(
         "--only-pitch",
