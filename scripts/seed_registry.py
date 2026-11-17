@@ -2,12 +2,12 @@
 """
 Seed the campground registry from RIDB.
 
-Pulls all camping facilities for WA, OR, and ID from the Recreation.gov
-RIDB API, filters to actual campgrounds, and inserts into the local
+Pulls all camping facilities for WA, OR, ID, MT, WY and NorCal from the
+Recreation.gov RIDB API, filters to actual campgrounds, and inserts into the local
 SQLite registry.
 
 Usage:
-    python scripts/seed_registry.py              # Seed all 3 states
+    python scripts/seed_registry.py              # Seed all 6 states
     python scripts/seed_registry.py --state WA   # Seed WA only
     python scripts/seed_registry.py --dry-run     # Preview without writing
 """
@@ -55,9 +55,6 @@ REGION_BOUNDS = {
     "max_lon": -104.0,  # eastern WY border
 }
 
-# NorCal latitude cutoff — CA campgrounds south of this are excluded
-NORCAL_MIN_LAT = 37.5
-
 
 def is_campground(facility: RIDBFacility) -> bool:
     """Filter RIDB results to actual campgrounds."""
@@ -101,16 +98,6 @@ def facility_to_campground(facility: RIDBFacility, state: str) -> Campground:
     )
 
 
-async def fetch_state_facilities(
-    client: RecGovClient, state: str
-) -> list[RIDBFacility]:
-    """Fetch all camping facilities for a state from RIDB."""
-    print(f"  Fetching {state} facilities from RIDB...")
-    facilities = await client.get_all_facilities(state=state)
-    print(f"  Got {len(facilities)} raw facilities for {state}")
-    return facilities
-
-
 async def seed(
     states: list[str], dry_run: bool = False, photos: bool = False,
 ) -> None:
@@ -125,22 +112,20 @@ async def seed(
         all_campgrounds: list[Campground] = []
 
         for state in states:
-            facilities = await fetch_state_facilities(client, state)
-            campgrounds = []
-            for f in facilities:
-                if not is_campground(f):
-                    continue
-                # NorCal filter: exclude southern CA campgrounds
-                if state == "CA" and f.latitude < NORCAL_MIN_LAT:
-                    continue
-                campgrounds.append(facility_to_campground(f, state))
+            print(f"  Fetching {state} facilities from RIDB...")
+            facilities = await client.get_all_facilities(state=state)
+            print(f"  Got {len(facilities)} raw facilities for {state}")
+            campgrounds = [
+                facility_to_campground(f, state)
+                for f in facilities
+                if is_campground(f)
+            ]
             excluded = len(facilities) - len(campgrounds)
             print(f"  {state}: {len(campgrounds)} campgrounds ({excluded} filtered out)")
             all_campgrounds.extend(campgrounds)
 
-        # v1.35: fetch source photos for campgrounds that don't already have them.
-        # The bulk_upsert CASE guards preserve existing image_urls, so this is
-        # idempotent — re-runs only hit RIDB for new/missing facilities.
+        # bulk_upsert's CASE guards preserve existing image_urls, so re-runs
+        # only hit RIDB for new/missing facilities.
         if photos:
             existing_photo_ids: set[str] = set()
             with CampgroundRegistry() as registry:
@@ -156,16 +141,16 @@ async def seed(
                 f"(skipping {len(all_campgrounds) - len(to_fetch)} already cached)..."
             )
             fetched = 0
-            for cg in to_fetch:
+            for i, cg in enumerate(to_fetch, 1):
                 urls = await client.fetch_facility_media(cg.facility_id)
                 if urls:
                     cg.image_urls = urls
                     cg.image_attribution = "Recreation.gov"
                     cg.image_verified_at = datetime.now()
                     fetched += 1
-                if (to_fetch.index(cg) + 1) % 25 == 0:
+                if i % 25 == 0:
                     print(
-                        f"  photos: scanned {to_fetch.index(cg) + 1}/{len(to_fetch)},"
+                        f"  photos: scanned {i}/{len(to_fetch)},"
                         f" {fetched} have media"
                     )
             print(f"  photos: done — {fetched}/{len(to_fetch)} campgrounds have media")
