@@ -7,7 +7,7 @@ import dataclasses
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from pnw_campsites.monitor.db import Snapshot, Watch, WatchDB
@@ -23,6 +23,7 @@ from pnw_campsites.registry.models import (
     CampgroundAvailability,
 )
 from pnw_campsites.search.engine import enrich_wa_availability
+from pnw_campsites.search.oregon_windows import OregonWindows
 from pnw_campsites.search.who import site_fits
 from pnw_campsites.urls import availability_url
 
@@ -127,8 +128,14 @@ async def _fetch_availability(
     goingtocamp: GoingToCampClient | None,
     watch_db: WatchDB,
     reserveamerica: ReserveAmericaClient | None = None,
+    oregon: OregonWindows | None = None,
+    registry: CampgroundRegistry | None = None,
 ) -> CampgroundAvailability:
     """Fetch availability from the right provider, using cache."""
+    if booking_system == BookingSystem.OR_STATE:
+        return await _fetch_oregon(
+            facility_id, start, end, watch_db, reserveamerica, oregon, registry,
+        )
     source = booking_system.value
     month_key = start.strftime("%Y-%m")
 
@@ -148,12 +155,6 @@ async def _fetch_availability(
         avail = await goingtocamp.get_availability(
             int(facility_id), start, end,
         )
-    elif booking_system == BookingSystem.OR_STATE:
-        if not reserveamerica:
-            raise RuntimeError("ReserveAmerica client not available")
-        avail = await reserveamerica.get_availability(
-            facility_id, start, end,
-        )
     else:
         if not recgov:
             raise RuntimeError("RecGov client not available")
@@ -171,6 +172,29 @@ async def _fetch_availability(
     return avail
 
 
+async def _fetch_oregon(
+    facility_id: str,
+    start: date,
+    end: date,
+    watch_db: WatchDB,
+    reserveamerica: ReserveAmericaClient | None,
+    oregon: OregonWindows | None,
+    registry: CampgroundRegistry | None,
+) -> CampgroundAvailability:
+    """Every night of [start, end] through the per-window cache that search
+    shares. ReserveAmerica URLs need the park's slug and state, so the park
+    must be in the registry."""
+    if oregon is None:
+        if not reserveamerica:
+            raise RuntimeError("ReserveAmerica client not available")
+        oregon = OregonWindows(reserveamerica, watch_db)
+    cg = registry.get_by_facility_id(facility_id, BookingSystem.OR_STATE) if registry else None
+    if cg is None or not cg.booking_url_slug:
+        raise RuntimeError(f"Oregon park {facility_id} has no registry entry")
+    nights = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    return await oregon.park(cg, nights, end)
+
+
 async def poll_watch(
     watch: Watch,
     recgov: RecGovClient | None,
@@ -179,6 +203,7 @@ async def poll_watch(
     registry: CampgroundRegistry | None = None,
     reserveamerica: ReserveAmericaClient | None = None,
     blocked: set[str] | None = None,
+    oregon: OregonWindows | None = None,
 ) -> PollResult:
     """Poll a single watch: fetch availability, diff, store snapshot.
 
@@ -206,7 +231,7 @@ async def poll_watch(
         availability = await _fetch_availability(
             watch.facility_id, start, end,
             booking_system, recgov, goingtocamp, watch_db,
-            reserveamerica=reserveamerica,
+            reserveamerica=reserveamerica, oregon=oregon, registry=registry,
         )
         if booking_system == BookingSystem.WA_STATE and registry:
             # Site names and fit from the seeded cache, as search does.
@@ -340,6 +365,7 @@ async def poll_all(
     reserveamerica: ReserveAmericaClient | None = None,
     tier_filter: str = "all",
     today: date | None = None,
+    oregon: OregonWindows | None = None,
 ) -> list[PollResult]:
     """Poll all enabled watches, grouping by facility to minimize API calls.
 
@@ -399,6 +425,8 @@ async def poll_all(
     for watch in expanded:
         by_facility[(watch.booking_system, watch.facility_id)].append(watch)
     blocked: set[str] = set()
+    if oregon is None and reserveamerica is not None:
+        oregon = OregonWindows(reserveamerica, watch_db)
 
     # Pre-warm cache: for each facility, fetch the widest date range needed
     # so individual poll_watch calls all hit cache
@@ -418,7 +446,7 @@ async def poll_all(
                     _fetch_availability(
                         fid, wide_start, wide_end, BookingSystem(source),
                         recgov, goingtocamp, watch_db,
-                        reserveamerica=reserveamerica,
+                        reserveamerica=reserveamerica, oregon=oregon, registry=registry,
                     ),
                     timeout=15.0,
                 )
@@ -444,7 +472,7 @@ async def poll_all(
                 return await asyncio.wait_for(
                     poll_watch(
                         watch, recgov, goingtocamp, watch_db, registry,
-                        reserveamerica=reserveamerica, blocked=blocked,
+                        reserveamerica=reserveamerica, blocked=blocked, oregon=oregon,
                     ),
                     timeout=15.0,
                 )

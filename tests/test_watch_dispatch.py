@@ -51,7 +51,7 @@ def _clients():
     recgov, gtc, ra = AsyncMock(), AsyncMock(), AsyncMock()
     recgov.get_availability_range.side_effect = lambda f, s, e: _avail(f)
     gtc.get_availability.side_effect = lambda f, s, e: _avail(str(f))
-    ra.get_availability.side_effect = lambda f, s, e: _avail(f)
+    ra.get_window.side_effect = lambda f, slug, state, a, d, **kw: _avail(f)
     return recgov, gtc, ra
 
 
@@ -88,7 +88,7 @@ class TestDispatch:
         gtc.get_availability.assert_called_once_with(
             int(WA_ID), date(2027, 6, 1), date(2027, 6, 30),
         )
-        assert ra.get_availability.call_args.args[0] == OR_ID
+        assert ra.get_window.call_args.args[:3] == (OR_ID, "ainsworth", "OR")
         assert [c.args[0] for c in recgov.get_availability_range.call_args_list] == [RG_ID]
         assert watch_db.get_watch(wa.id).booking_system == "wa_state"
         assert watch_db.get_watch(orw.id).booking_system == "or_state"
@@ -102,7 +102,7 @@ class TestDispatch:
 
         await poll_all(recgov, gtc, watch_db, seeded, reserveamerica=ra, today=TODAY)
 
-        assert ra.get_availability.call_args.args[0] == OR_ID
+        assert ra.get_window.call_args.args[:3] == (OR_ID, "ainsworth", "OR")
         recgov.get_availability_range.assert_not_called()
 
     def test_startup_heal_covers_disabled_watches_and_is_idempotent(

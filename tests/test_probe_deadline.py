@@ -75,14 +75,14 @@ async def test_probes_skip_oregon(registry) -> None:
         booking_system=BookingSystem.OR_STATE, state="OR", booking_url_slug="fort-stevens",
     ))
     ra = AsyncMock()
-    ra.get_availability = AsyncMock(return_value=make_campground_availability(campsites={}))
+    ra.get_window = AsyncMock(return_value=make_campground_availability(campsites={}))
     engine = SearchEngine(registry, reserveamerica_client=ra)
 
     diag = await _diagnosis(
         engine, SearchQuery(start_date=START, end_date=END, name_like="fort stevens"),
     )
 
-    assert ra.get_availability.await_count == 1
+    assert ra.get_window.await_count == 1
     assert diag.date_suggestions == []
 
 

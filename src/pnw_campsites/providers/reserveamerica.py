@@ -13,6 +13,7 @@ them app-wide with a shared limiter: no thread is held between requests.
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import functools
 import json
@@ -20,7 +21,7 @@ import logging
 import os
 import re
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Iterator
 from datetime import date, timedelta
 
 from curl_cffi import requests as curl_requests
@@ -119,29 +120,38 @@ _park_requests: contextvars.ContextVar[list[int] | None] = contextvars.ContextVa
 )
 
 
+@contextlib.contextmanager
+def count_requests() -> Iterator[list[int]]:
+    """Count the requests this task makes while inside; read ``[0]``."""
+    count = [0]
+    token = _park_requests.set(count)
+    try:
+        yield count
+    finally:
+        _park_requests.reset(token)
+
+
 def _log_park_fetch(fn):
     """One INFO line per park: requests, seconds and outcome. Also on a
     timeout (the search cancels the park), which is when it matters most."""
 
     @functools.wraps(fn)
     async def wrapper(self, park_id, *args, **kwargs):
-        count = [0]
-        token = _park_requests.set(count)
         started = time.monotonic()
         outcome = "cancelled"
-        try:
-            result = await fn(self, park_id, *args, **kwargs)
-            outcome = f"{len(result.campsites)} sites"
-            return result
-        except Exception as exc:
-            outcome = type(exc).__name__
-            raise
-        finally:
-            _park_requests.reset(token)
-            logger.info(
-                "ReserveAmerica %s: %d requests in %.1fs (%s)",
-                park_id, count[0], time.monotonic() - started, outcome,
-            )
+        with count_requests() as count:
+            try:
+                result = await fn(self, park_id, *args, **kwargs)
+                outcome = f"{len(result.campsites)} sites"
+                return result
+            except Exception as exc:
+                outcome = type(exc).__name__
+                raise
+            finally:
+                    logger.info(
+                    "ReserveAmerica %s: %d requests in %.1fs (%s)",
+                    park_id, count[0], time.monotonic() - started, outcome,
+                )
 
     return wrapper
 
@@ -170,9 +180,10 @@ class ReserveAmericaClient:
         start_date: date,
         end_date: date,
         page: int = 0,
+        background: Callable[[], bool] | None = None,
     ) -> tuple[list[dict], int]:
         queued = time.monotonic()
-        await self._limiter.wait()
+        await self._limiter.wait(background)
         sent = time.monotonic()
         try:
             return await run_blocking(
@@ -203,35 +214,43 @@ class ReserveAmericaClient:
         Makes one request per page of each 14-day window in the date range,
         or, given ``nights``, of each window ``window_cover`` picks for them.
         """
-        all_campsites: dict[str, CampsiteAvailability] = {}
         windows = (
             window_cover(nights, end_date) if nights is not None
             else _range_windows(start_date, end_date)
         )
+        campsites: dict[str, CampsiteAvailability] = {}
         for window_start, window_end in windows:
-            page = 0
-            while True:
-                records, total = await self._fetch(
-                    park_id, slug, state, window_start, window_end, page,
-                )
+            window = await self.get_window(park_id, slug, state, window_start, window_end)
+            for site_id, site in window.campsites.items():
+                if site_id in campsites:
+                    campsites[site_id].availabilities.update(site.availabilities)
+                else:
+                    campsites[site_id] = site
+        return CampgroundAvailability(facility_id=park_id, campsites=campsites)
 
-                for rec in records:
-                    site_id = str(rec["id"])
-                    avail_dict = _parse_availability_grid(rec.get("availabilityGrid", []))
-
-                    if site_id in all_campsites:
-                        all_campsites[site_id].availabilities.update(avail_dict)
-                    else:
-                        all_campsites[site_id] = _record_to_campsite(rec, avail_dict)
-
-                page += 1
-                if not records or page * _PAGE_SIZE >= total:
-                    break
-
-        return CampgroundAvailability(
-            facility_id=park_id,
-            campsites=all_campsites,
-        )
+    async def get_window(
+        self, park_id: str, slug: str, state: str, arrival: date, departure: date,
+        *, background: Callable[[], bool] | None = None,
+    ) -> CampgroundAvailability:
+        """Every page of one window: nights ``arrival`` to ``departure``.
+        While ``background()`` is true its requests yield to everyone else's."""
+        campsites: dict[str, CampsiteAvailability] = {}
+        page = 0
+        while True:
+            records, total = await self._fetch(
+                park_id, slug, state, arrival, departure, page, background,
+            )
+            for rec in records:
+                site_id = str(rec["id"])
+                avail_dict = _parse_availability_grid(rec.get("availabilityGrid", []))
+                if site_id in campsites:
+                    campsites[site_id].availabilities.update(avail_dict)
+                else:
+                    campsites[site_id] = _record_to_campsite(rec, avail_dict)
+            page += 1
+            if not records or page * _PAGE_SIZE >= total:
+                break
+        return CampgroundAvailability(facility_id=park_id, campsites=campsites)
 
     async def ping(self, park_id: str, slug: str, state: str) -> int:
         """Cheap liveness probe — one request, no availability grid parsing.

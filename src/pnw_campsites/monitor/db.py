@@ -267,6 +267,19 @@ class WatchDB:
                 range_end TEXT,
                 PRIMARY KEY (campground_id, month, source)
             );
+            -- Oregon (ReserveAmerica) availability, one row per fetched
+            -- window: every page of [arrival, departure] for one park. Searches
+            -- look rows up by night, so windows that start on different days
+            -- still answer each other's nights.
+            CREATE TABLE IF NOT EXISTS ra_window_cache (
+                park_id TEXT NOT NULL,
+                arrival TEXT NOT NULL,
+                departure TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                -- When the window's first page was requested: its oldest data.
+                fetched_at TEXT NOT NULL,
+                PRIMARY KEY (park_id, arrival, departure)
+            );
             CREATE TABLE IF NOT EXISTS availability_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 campground_id TEXT NOT NULL,
@@ -621,6 +634,53 @@ class WatchDB:
             "DELETE FROM availability_cache"
             " WHERE datetime(cached_at, '+10 minutes') < datetime(?)",
             (cutoff,),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def get_ra_windows(
+        self,
+        park_id: str,
+        first_night: date,
+        last_night: date,
+        *,
+        max_age_s: float,
+        now: datetime | None = None,
+    ) -> list[tuple[date, date, datetime, str]]:
+        """Fresh windows of a park that hold any night in [first, last], as
+        (arrival, departure, fetched_at, payload)."""
+        cutoff = (now or datetime.now()) - timedelta(seconds=max_age_s)
+        rows = self._conn.execute(
+            "SELECT arrival, departure, fetched_at, payload FROM ra_window_cache"
+            " WHERE park_id=? AND arrival <= ? AND departure >= ? AND fetched_at >= ?",
+            (park_id, last_night.isoformat(), first_night.isoformat(), cutoff.isoformat()),
+        ).fetchall()
+        return [
+            (
+                date.fromisoformat(r["arrival"]), date.fromisoformat(r["departure"]),
+                datetime.fromisoformat(r["fetched_at"]), r["payload"],
+            )
+            for r in rows
+        ]
+
+    def put_ra_window(
+        self, park_id: str, arrival: date, departure: date, payload: str,
+        fetched_at: datetime,
+    ) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO ra_window_cache"
+            " (park_id, arrival, departure, payload, fetched_at) VALUES (?, ?, ?, ?, ?)",
+            (park_id, arrival.isoformat(), departure.isoformat(), payload,
+             fetched_at.isoformat()),
+        )
+        self._conn.commit()
+
+    def prune_ra_windows(self, max_age_s: float, *, now: datetime | None = None) -> int:
+        """Delete windows older than max_age_s. A Fort Stevens window is ~300 KB,
+        so rows for past searches add up fast. Returns rows removed."""
+        cutoff = (now or datetime.now()) - timedelta(seconds=max_age_s)
+        cursor = self._conn.execute(
+            "DELETE FROM ra_window_cache WHERE fetched_at < ?", (cutoff.isoformat(),),
         )
         self._conn.commit()
         return cursor.rowcount

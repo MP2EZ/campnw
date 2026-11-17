@@ -43,7 +43,7 @@ def _oregon(delay_for: dict[str, float], default: float = 0.0):
     """Fake ReserveAmerica client whose parks take the given seconds."""
     state = {"running": 0, "max_running": 0, "cancelled": 0}
 
-    async def get_availability(park_id, *_args, **_kwargs):
+    async def get_window(park_id, *_args, **_kwargs):
         state["running"] += 1
         state["max_running"] = max(state["max_running"], state["running"])
         try:
@@ -56,7 +56,7 @@ def _oregon(delay_for: dict[str, float], default: float = 0.0):
         return make_campground_availability(facility_id=park_id)
 
     client = AsyncMock()
-    client.get_availability = AsyncMock(side_effect=get_availability)
+    client.get_window = AsyncMock(side_effect=get_window)
     return client, state
 
 
@@ -87,12 +87,14 @@ async def test_a_slow_park_times_out_and_the_stream_finishes(
     )
 
     assert time.monotonic() - t0 < 2
+    # The slow park keeps fetching in the background, so it's "still checking".
     errors = {r.campground.facility_id: r.error for r in _results(events)}
-    assert errors == {"or0": None, "or1": "timeout", "or2": None}
+    assert errors == {"or0": None, "or1": "pending", "or2": None}
     warnings = next(ev for ev in events if isinstance(ev, StreamWarningsEvent))
     assert [(w.kind, w.source, w.count) for w in warnings.warnings] == [
-        ("timeout", "or_state", 1),
+        ("pending", "or_state", 1),
     ]
+    await engine.oregon.aclose()
 
 
 async def test_the_search_deadline_ends_the_stream_with_every_park_reported(
@@ -112,16 +114,21 @@ async def test_the_search_deadline_ends_the_stream_with_every_park_reported(
     assert time.monotonic() - t0 < 1.5
     results = _results(events)
     assert len(results) == 12
-    timed_out = [r for r in results if r.error == "timeout"]
-    assert 0 < len(timed_out) < 12
+    cut = [r for r in results if r.error == "pending"]
+    assert 0 < len(cut) < 12
     coverage = next(ev for ev in events if isinstance(ev, StreamCoverageEvent))
     assert coverage.campgrounds_checked == 12
-    await asyncio.sleep(0)
-    assert state["running"] == 0, "timed-out parks were left running"
+    # Cut parks finish in the background, including those never started.
+    await asyncio.wait_for(engine.oregon.idle(), timeout=5)
+    assert state["running"] == 0
+    assert sorted(c.args[0] for c in ra.get_window.await_args_list) == sorted(
+        f"or{i}" for i in range(12)
+    )
 
 
-async def test_closing_the_stream_cancels_unfinished_parks(registry) -> None:
-    """A user who leaves mid-search must not keep spending Oregon's budget."""
+async def test_closing_the_stream_hands_oregon_work_to_the_background(registry) -> None:
+    """A closed tab doesn't throw away Oregon work: the parks keep going at
+    background priority, within the cap, and land in the cache."""
     _seed(registry, 6, BookingSystem.OR_STATE, "or")
     ra, state = _oregon({"or0": 0.0}, default=30)
     engine = SearchEngine(registry, reserveamerica_client=ra)
@@ -134,8 +141,10 @@ async def test_closing_the_stream_cancels_unfinished_parks(registry) -> None:
     await stream.aclose()
     await asyncio.sleep(0)
 
+    assert state["cancelled"] == 0
+    assert all(engine.oregon.is_pending(f"or{i}") for i in range(1, 6))
+    await engine.oregon.aclose()
     assert state["running"] == 0
-    assert state["cancelled"] > 0
 
 
 async def test_oregon_parks_run_two_at_a_time_without_blocking_others(

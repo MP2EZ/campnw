@@ -286,6 +286,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           // frames, which left out every campground with nothing open.
           total_checked: checkedCount,
           oregon_timeouts: timing?.sources.or_state?.timeouts ?? 0,
+          oregon_pending: timing?.sources.or_state?.pending ?? 0,
           // Left out when unknown: a source the search didn't use has no time.
           ...definedOnly({
             first_result_ms: firstResultMs,

@@ -50,7 +50,7 @@ async def test_stream_ends_with_per_source_timing(registry, monkeypatch) -> None
     assert timing.sources["recgov"]["checked"] == 3
     assert timing.sources["or_state"] == {
         "checked": 2, "done_ms": timing.sources["or_state"]["done_ms"],
-        "timeouts": 1, "errors": 0,
+        "timeouts": 0, "pending": 1, "errors": 0,
     }
     assert timing.sources["or_state"]["done_ms"] >= 200
     assert timing.sources["recgov"]["done_ms"] < timing.sources["or_state"]["done_ms"]
@@ -65,7 +65,7 @@ async def test_stream_logs_one_summary_line(registry, monkeypatch, caplog) -> No
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("search_stream")]
     assert len(lines) == 1
     assert "recgov 3 in" in lines[0]
-    assert "or_state 2 in" in lines[0] and "1 timeout" in lines[0]
+    assert "or_state 2 in" in lines[0] and "1 pending" in lines[0]
 
 
 def test_route_sends_timing_and_records_the_real_duration(api_client, monkeypatch, caplog) -> None:

@@ -135,3 +135,20 @@ describe("searchedAgo", () => {
     expect(searchedAgo(t, t + 61 * 60_000)).toMatch(/^searched at 3:42\s?PM$/i);
   });
 });
+
+describe("answerSentence while Oregon parks are still being checked", () => {
+  test("nothing open yet is not a verdict", () => {
+    expect(answerSentence({ params: juneWeekends, open: 0, checked: 20, notReleased: 0, loading: false, pending: 13 }))
+      .toBe("None of the 7 campgrounds checked so far have a June weekend open within 3 hours of Seattle.");
+  });
+
+  test("everything still being checked", () => {
+    expect(answerSentence({ params: juneWeekends, open: 0, checked: 4, notReleased: 0, loading: false, pending: 4 }))
+      .toBe("Still checking for an open June weekend within 3 hours of Seattle.");
+  });
+
+  test("open campgrounds read the same as before", () => {
+    expect(answerSentence({ params: juneWeekends, open: 3, checked: 20, notReleased: 0, loading: false, pending: 13 }))
+      .toBe("3 campgrounds have a June weekend open within 3 hours of Seattle.");
+  });
+});

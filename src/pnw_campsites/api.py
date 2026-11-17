@@ -29,7 +29,7 @@ from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.search.engine import SearchEngine
 
 # App version — surfaced by /healthz so monitors can confirm what's deployed.
-APP_VERSION = "1.48.3"
+APP_VERSION = "1.48.4"
 
 # ---------------------------------------------------------------------------
 # App state — initialized in lifespan
@@ -101,6 +101,7 @@ async def _poll_tranche(
     results = await poll_all(
         _recgov, _goingtocamp, _watch_db, _registry, tranche=tranche,
         reserveamerica=_reserveamerica, tier_filter=tier_filter,
+        oregon=_engine.oregon if _engine else None,
     )
 
     # Enrich notifications with LLM context (fire-and-forget, 3s timeout)
@@ -449,6 +450,10 @@ async def lifespan(app: FastAPI):
 
     if scheduler:
         scheduler.shutdown(wait=False)
+
+    # Background Oregon windows write to the DB and use the RA session.
+    if _engine and _engine.oregon:
+        await _engine.oregon.aclose()
 
     if _watch_db:
         _watch_db.close()
