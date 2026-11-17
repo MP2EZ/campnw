@@ -1,24 +1,19 @@
-"""Availability cache correctness (see .audit-report.md, PERF-16).
+"""Availability cache correctness.
 
-The cache was keyed on the *start* month alone, so the requested end date
-never entered the key. Two consequences, both filed as performance findings
-but the first is a correctness bug:
-
-  1. A narrow cached payload satisfied a later *wider* request, returning
-     incomplete availability. For a product whose entire value is noticing a
-     cancellation, silently short availability is worse than being slow.
-  2. poll_all's per-facility prefetch writes the widest range under its own
-     start month, so any watch whose start_date fell in a different month
-     missed the cache and re-hit the provider — the prefetch silently failed
-     to dedupe exactly the multi-month case it exists for.
-
-The fix stores the range each payload actually covers and only serves a
-cached row when it *covers* the requested range.
+A cached payload is served only when the range it covers includes the
+requested range: a narrow payload must never answer a wider request, and a
+wider payload (the poll_all prefetch) does answer a narrower one.
 """
 
 from __future__ import annotations
 
 from datetime import date
+from unittest.mock import AsyncMock
+
+import pytest
+
+from pnw_campsites.registry.models import BookingSystem, Campground, CampgroundAvailability
+from pnw_campsites.search.engine import SearchEngine, SearchQuery
 
 PAYLOAD_WIDE = '{"campsites": {"wide": true}}'
 PAYLOAD_NARROW = '{"campsites": {"narrow": true}}'
@@ -145,93 +140,39 @@ class TestCacheCoversRequestedRange:
         ) is None
 
 
-# ---------------------------------------------------------------------------
-# PERF-05 — discovery search shares the poller's cache
-# ---------------------------------------------------------------------------
-
-
 class TestSearchUsesTheCache:
-    """_check_campground hit the provider on every request even though the
-    watcher already read and wrote availability_cache around the identical
-    calls. Two users searching the same weekend each re-fetched everything."""
+    """Discovery search shares the poller's availability cache."""
 
-    def _engine(self, watch_db, recgov):
-        from pnw_campsites.search.engine import SearchEngine
-        return SearchEngine(
-            registry=None, recgov_client=recgov, watch_db=watch_db,
-        )
-
-    def test_second_check_is_served_from_cache(self, watch_db):
-        import asyncio
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.registry.models import (
-            BookingSystem,
-            Campground,
-            CampgroundAvailability,
-        )
-        from pnw_campsites.search.engine import SearchQuery
-
-        avail = CampgroundAvailability(facility_id="232465", campsites={})
+    @pytest.fixture
+    def check(self, watch_db):
+        """Returns (recgov mock, async fn that runs _check_campground for a range)."""
         recgov = AsyncMock()
-        recgov.get_availability_range = AsyncMock(return_value=avail)
-
+        recgov.get_availability_range = AsyncMock(
+            return_value=CampgroundAvailability(facility_id="232465", campsites={})
+        )
+        engine = SearchEngine(registry=None, recgov_client=recgov, watch_db=watch_db)
         cg = Campground(
             facility_id="232465", name="Ohanapecosh",
             booking_system=BookingSystem.RECGOV, state="WA",
         )
-        eng = self._engine(watch_db, recgov)
-        query = SearchQuery(
-            start_date=date(2026, 6, 1), end_date=date(2026, 6, 3),
-        )
 
-        async def run():
-            for _ in range(3):
-                await eng._check_campground(
-                    cg, date(2026, 6, 1), date(2026, 6, 3), query,
-                )
-
-        asyncio.run(run())
-
-        assert recgov.get_availability_range.await_count == 1, (
-            f"provider was called "
-            f"{recgov.get_availability_range.await_count} times for three "
-            "identical checks — the cache is not being consulted"
-        )
-
-    def test_wider_request_is_not_served_by_a_narrow_cached_payload(self, watch_db):
-        """The PERF-16 correctness property, exercised through the search path."""
-        import asyncio
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.registry.models import (
-            BookingSystem,
-            Campground,
-            CampgroundAvailability,
-        )
-        from pnw_campsites.search.engine import SearchQuery
-
-        avail = CampgroundAvailability(facility_id="232465", campsites={})
-        recgov = AsyncMock()
-        recgov.get_availability_range = AsyncMock(return_value=avail)
-
-        cg = Campground(
-            facility_id="232465", name="Ohanapecosh",
-            booking_system=BookingSystem.RECGOV, state="WA",
-        )
-        eng = self._engine(watch_db, recgov)
-        query = SearchQuery()
-
-        async def run():
-            await eng._check_campground(
-                cg, date(2026, 6, 1), date(2026, 6, 3), query,
-            )
-            await eng._check_campground(
-                cg, date(2026, 6, 1), date(2026, 6, 30), query,
+        async def run(start: date, end: date) -> None:
+            await engine._check_campground(
+                cg, start, end, SearchQuery(start_date=start, end_date=end),
             )
 
-        asyncio.run(run())
+        return recgov, run
 
-        assert recgov.get_availability_range.await_count == 2, (
-            "the Jun 1-30 request was answered from a Jun 1-3 payload"
-        )
+    async def test_second_check_is_served_from_cache(self, check):
+        recgov, run = check
+        for _ in range(3):
+            await run(date(2026, 6, 1), date(2026, 6, 3))
+
+        assert recgov.get_availability_range.await_count == 1
+
+    async def test_wider_request_is_not_served_by_a_narrow_cached_payload(self, check):
+        recgov, run = check
+        await run(date(2026, 6, 1), date(2026, 6, 3))
+        await run(date(2026, 6, 1), date(2026, 6, 30))
+
+        assert recgov.get_availability_range.await_count == 2
