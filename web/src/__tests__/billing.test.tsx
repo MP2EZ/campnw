@@ -1,22 +1,7 @@
-/**
- * v1.4 frontend billing tests.
- *
- * Covers:
- * - api.ts: WatchLimitError thrown on 402, billing client functions
- * - useBilling hook: status fetch, derived isPro/watchLimit, refresh
- * - UpgradeModal: render variants (auth, billing configured/not, headline)
- * - Pricing page: free + pro card render, CTA wiring
- * - ProBadge: rendered iff isPro
- */
-
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactElement } from "react";
-
-// ---------------------------------------------------------------------------
-// Common mocks
-// ---------------------------------------------------------------------------
 
 vi.mock("../lib/supabase", () => ({
   supabase: {
@@ -26,12 +11,36 @@ vi.mock("../lib/supabase", () => ({
   },
 }));
 
+const proStatus = {
+  subscription_status: "pro",
+  subscription_expires_at: "",
+  has_stripe_customer: true,
+  is_pro: true,
+  watch_limit: null,
+  planner_session_limit: 20,
+  configured: true,
+};
+
+/** Renders isPro and watchLimit from the freshly imported useBilling. */
+const limitProbe = (useBilling: () => { isPro: boolean; watchLimit: number | null; loading: boolean }) =>
+  function Probe() {
+    const { isPro, watchLimit, loading } = useBilling();
+    if (loading) return <span>loading</span>;
+    return (
+      <span data-testid="probe">
+        pro:{String(isPro)} limit:{String(watchLimit)}
+      </span>
+    );
+  };
+
+/** Stubs the hooks the next dynamic import of a component will read. */
+const mockAuthBilling = (user: object | null, billing: object) => {
+  vi.doMock("../hooks/useAuth", () => ({ useAuth: () => ({ user }) }));
+  vi.doMock("../hooks/useBilling", () => ({ useBilling: () => billing }));
+};
+
 const inRouter = (ui: ReactElement) =>
   render(<MemoryRouter>{ui}</MemoryRouter>);
-
-// ---------------------------------------------------------------------------
-// api.ts — billing client + WatchLimitError
-// ---------------------------------------------------------------------------
 
 describe("api: WatchLimitError on 402", () => {
   beforeEach(() => {
@@ -83,42 +92,22 @@ describe("api: WatchLimitError on 402", () => {
       json: () => Promise.resolve({}),
     });
     const { createWatch, WatchLimitError } = await import("../api");
-    await expect(
-      createWatch({
-        facility_id: "x",
-        name: "x",
-        start_date: "2026-07-01",
-        end_date: "2026-07-07",
-        min_nights: 1,
-      }),
-    ).rejects.toThrow();
-    // Not a WatchLimitError — generic
-    try {
-      await createWatch({
-        facility_id: "x",
-        name: "x",
-        start_date: "2026-07-01",
-        end_date: "2026-07-07",
-        min_nights: 1,
-      });
-    } catch (e) {
-      expect(e).not.toBeInstanceOf(WatchLimitError);
-    }
+    const failure = createWatch({
+      facility_id: "x",
+      name: "x",
+      start_date: "2026-07-01",
+      end_date: "2026-07-07",
+      min_nights: 1,
+    });
+    await expect(failure).rejects.toThrow();
+    await expect(failure).rejects.not.toBeInstanceOf(WatchLimitError);
   });
 
   test("getBillingStatus parses BillingStatus shape", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
-        Promise.resolve({
-          subscription_status: "pro",
-          subscription_expires_at: "",
-          has_stripe_customer: true,
-          is_pro: true,
-          watch_limit: null,
-          planner_session_limit: 20,
-          configured: true,
-        }),
+        Promise.resolve(proStatus),
     });
     const { getBillingStatus } = await import("../api");
     const status = await getBillingStatus();
@@ -174,24 +163,12 @@ describe("api: WatchLimitError on 402", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// useBilling — render via BillingProvider + consumer
-// ---------------------------------------------------------------------------
-
 describe("useBilling", () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.unstubAllGlobals();
   });
 
   test("provider falls back to free shape when /api/billing/status fails", async () => {
-    vi.doMock("../lib/supabase", () => ({
-      supabase: {
-        auth: {
-          getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
-        },
-      },
-    }));
     vi.doMock("../hooks/useAuth", () => ({
       useAuth: () => ({ user: null, loading: false }),
     }));
@@ -199,15 +176,7 @@ describe("useBilling", () => {
 
     const { BillingProvider, useBilling } = await import("../hooks/useBilling");
 
-    function Probe() {
-      const { isPro, watchLimit, loading } = useBilling();
-      if (loading) return <span>loading</span>;
-      return (
-        <span data-testid="probe">
-          pro:{String(isPro)} limit:{String(watchLimit)}
-        </span>
-      );
-    }
+    const Probe = limitProbe(useBilling);
 
     render(
       <BillingProvider>
@@ -223,13 +192,6 @@ describe("useBilling", () => {
   });
 
   test("provider reflects Pro status from server", async () => {
-    vi.doMock("../lib/supabase", () => ({
-      supabase: {
-        auth: {
-          getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
-        },
-      },
-    }));
     vi.doMock("../hooks/useAuth", () => ({
       useAuth: () => ({
         user: { id: 1, email: "p@x.com", display_name: "P" },
@@ -239,28 +201,12 @@ describe("useBilling", () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
-        Promise.resolve({
-          subscription_status: "pro",
-          subscription_expires_at: "",
-          has_stripe_customer: true,
-          is_pro: true,
-          watch_limit: null,
-          planner_session_limit: 20,
-          configured: true,
-        }),
+        Promise.resolve(proStatus),
     });
 
     const { BillingProvider, useBilling } = await import("../hooks/useBilling");
 
-    function Probe() {
-      const { isPro, watchLimit, loading } = useBilling();
-      if (loading) return <span>loading</span>;
-      return (
-        <span data-testid="probe">
-          pro:{String(isPro)} limit:{String(watchLimit)}
-        </span>
-      );
-    }
+    const Probe = limitProbe(useBilling);
 
     render(
       <BillingProvider>
@@ -297,13 +243,6 @@ describe("useBilling", () => {
       writable: true,
     });
 
-    vi.doMock("../lib/supabase", () => ({
-      supabase: {
-        auth: {
-          getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
-        },
-      },
-    }));
     vi.doMock("../hooks/useAuth", () => ({
       useAuth: () => ({
         user: { id: 1, email: "u@x.com", display_name: "U" },
@@ -313,15 +252,7 @@ describe("useBilling", () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
-        Promise.resolve({
-          subscription_status: "pro",
-          subscription_expires_at: "",
-          has_stripe_customer: true,
-          is_pro: true,
-          watch_limit: null,
-          planner_session_limit: 20,
-          configured: true,
-        }),
+        Promise.resolve(proStatus),
     });
 
     const { BillingProvider } = await import("../hooks/useBilling");
@@ -365,13 +296,6 @@ describe("useBilling", () => {
       register: vi.fn(),
     };
 
-    vi.doMock("../lib/supabase", () => ({
-      supabase: {
-        auth: {
-          getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
-        },
-      },
-    }));
     vi.doMock("../hooks/useAuth", () => ({
       useAuth: () => ({
         user: { id: 1, email: "u@x.com", display_name: "U" },
@@ -389,14 +313,6 @@ describe("useBilling", () => {
       };
     });
 
-    const base = {
-      subscription_status: "pro",
-      has_stripe_customer: true,
-      is_pro: true,
-      watch_limit: null,
-      planner_session_limit: 20,
-      configured: true,
-    };
     let reads = 0;
     globalThis.fetch = vi.fn().mockImplementation(async () => {
       reads += 1;
@@ -404,7 +320,7 @@ describe("useBilling", () => {
       const expires = reads >= 3 ? "2026-11-28T00:00:00Z" : "";
       return {
         ok: true,
-        json: () => Promise.resolve({ ...base, subscription_expires_at: expires }),
+        json: () => Promise.resolve({ ...proStatus, subscription_expires_at: expires }),
       };
     });
 
@@ -433,10 +349,6 @@ describe("useBilling", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// UpgradeModal
-// ---------------------------------------------------------------------------
-
 describe("UpgradeModal", () => {
   const mockStartCheckout = vi.fn();
 
@@ -449,15 +361,10 @@ describe("UpgradeModal", () => {
   });
 
   test("renders nothing when open=false", async () => {
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: null }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        startCheckout: mockStartCheckout,
-        status: { configured: true },
-      }),
-    }));
+    mockAuthBilling(null, {
+      startCheckout: mockStartCheckout,
+      status: { configured: true },
+    });
     const { UpgradeModal } = await import("../components/UpgradeModal");
     const { container } = render(
       <UpgradeModal open={false} onClose={() => {}} />,
@@ -466,15 +373,10 @@ describe("UpgradeModal", () => {
   });
 
   test("shows watch_limit headline when reason=watch_limit", async () => {
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: { id: 1, email: "x@x.com" } }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        startCheckout: mockStartCheckout,
-        status: { configured: true },
-      }),
-    }));
+    mockAuthBilling({ id: 1, email: "x@x.com" }, {
+      startCheckout: mockStartCheckout,
+      status: { configured: true },
+    });
     const { UpgradeModal } = await import("../components/UpgradeModal");
     render(
       <UpgradeModal open={true} onClose={() => {}} reason="watch_limit" />,
@@ -485,15 +387,10 @@ describe("UpgradeModal", () => {
   });
 
   test("Upgrade button calls startCheckout for logged-in user", async () => {
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: { id: 1, email: "x@x.com" } }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        startCheckout: mockStartCheckout,
-        status: { configured: true },
-      }),
-    }));
+    mockAuthBilling({ id: 1, email: "x@x.com" }, {
+      startCheckout: mockStartCheckout,
+      status: { configured: true },
+    });
     const { UpgradeModal } = await import("../components/UpgradeModal");
     render(<UpgradeModal open={true} onClose={() => {}} />);
     fireEvent.click(
@@ -505,15 +402,10 @@ describe("UpgradeModal", () => {
   });
 
   test("shows sign-in prompt instead of CTA when anonymous", async () => {
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: null }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        startCheckout: mockStartCheckout,
-        status: { configured: true },
-      }),
-    }));
+    mockAuthBilling(null, {
+      startCheckout: mockStartCheckout,
+      status: { configured: true },
+    });
     const { UpgradeModal } = await import("../components/UpgradeModal");
     render(<UpgradeModal open={true} onClose={() => {}} />);
     expect(screen.getByText(/sign in first/i)).toBeInTheDocument();
@@ -523,15 +415,10 @@ describe("UpgradeModal", () => {
   });
 
   test("shows 'not live yet' note when Stripe unconfigured", async () => {
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: { id: 1, email: "x@x.com" } }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        startCheckout: mockStartCheckout,
-        status: { configured: false },
-      }),
-    }));
+    mockAuthBilling({ id: 1, email: "x@x.com" }, {
+      startCheckout: mockStartCheckout,
+      status: { configured: false },
+    });
     const { UpgradeModal } = await import("../components/UpgradeModal");
     render(<UpgradeModal open={true} onClose={() => {}} />);
     expect(screen.getByText(/aren.t live yet/i)).toBeInTheDocument();
@@ -539,25 +426,16 @@ describe("UpgradeModal", () => {
 
   test("ESC key closes the modal", async () => {
     const onClose = vi.fn();
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: null }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        startCheckout: mockStartCheckout,
-        status: { configured: true },
-      }),
-    }));
+    mockAuthBilling(null, {
+      startCheckout: mockStartCheckout,
+      status: { configured: true },
+    });
     const { UpgradeModal } = await import("../components/UpgradeModal");
     render(<UpgradeModal open={true} onClose={onClose} />);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Pricing page
-// ---------------------------------------------------------------------------
 
 describe("Pricing page", () => {
   beforeEach(() => {
@@ -568,18 +446,13 @@ describe("Pricing page", () => {
   });
 
   test("renders Free + Pro cards with prices", async () => {
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: null }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        isPro: false,
-        loading: false,
-        status: { configured: false },
-        startCheckout: vi.fn(),
-        openPortal: vi.fn(),
-      }),
-    }));
+    mockAuthBilling(null, {
+      isPro: false,
+      loading: false,
+      status: { configured: false },
+      startCheckout: vi.fn(),
+      openPortal: vi.fn(),
+    });
     const Pricing = (await import("../pages/Pricing")).default;
     inRouter(<Pricing />);
     expect(screen.getByRole("heading", { name: /pricing that pays/i })).toBeInTheDocument();
@@ -589,36 +462,26 @@ describe("Pricing page", () => {
   });
 
   test("shows 'Sign in to upgrade' for anonymous users", async () => {
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: null }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        isPro: false,
-        loading: false,
-        status: { configured: true },
-        startCheckout: vi.fn(),
-        openPortal: vi.fn(),
-      }),
-    }));
+    mockAuthBilling(null, {
+      isPro: false,
+      loading: false,
+      status: { configured: true },
+      startCheckout: vi.fn(),
+      openPortal: vi.fn(),
+    });
     const Pricing = (await import("../pages/Pricing")).default;
     inRouter(<Pricing />);
     expect(screen.getByText(/sign in to upgrade/i)).toBeInTheDocument();
   });
 
   test("shows 'Manage billing' for Pro users", async () => {
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: { id: 1, email: "p@x.com" } }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        isPro: true,
-        loading: false,
-        status: { configured: true },
-        startCheckout: vi.fn(),
-        openPortal: vi.fn(),
-      }),
-    }));
+    mockAuthBilling({ id: 1, email: "p@x.com" }, {
+      isPro: true,
+      loading: false,
+      status: { configured: true },
+      startCheckout: vi.fn(),
+      openPortal: vi.fn(),
+    });
     const Pricing = (await import("../pages/Pricing")).default;
     inRouter(<Pricing />);
     expect(
@@ -627,18 +490,13 @@ describe("Pricing page", () => {
   });
 
   test("shows 'Upgrade to Pro' button for free user when configured", async () => {
-    vi.doMock("../hooks/useAuth", () => ({
-      useAuth: () => ({ user: { id: 1, email: "f@x.com" } }),
-    }));
-    vi.doMock("../hooks/useBilling", () => ({
-      useBilling: () => ({
-        isPro: false,
-        loading: false,
-        status: { configured: true },
-        startCheckout: vi.fn(),
-        openPortal: vi.fn(),
-      }),
-    }));
+    mockAuthBilling({ id: 1, email: "f@x.com" }, {
+      isPro: false,
+      loading: false,
+      status: { configured: true },
+      startCheckout: vi.fn(),
+      openPortal: vi.fn(),
+    });
     const Pricing = (await import("../pages/Pricing")).default;
     inRouter(<Pricing />);
     expect(
@@ -646,10 +504,6 @@ describe("Pricing page", () => {
     ).toBeInTheDocument();
   });
 });
-
-// ---------------------------------------------------------------------------
-// ProBadge
-// ---------------------------------------------------------------------------
 
 describe("ProBadge", () => {
   beforeEach(() => {
