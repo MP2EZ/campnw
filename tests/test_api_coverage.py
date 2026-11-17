@@ -4,7 +4,6 @@ poll-status, push notifications, data export, admin digest, and SSE streaming.""
 from __future__ import annotations
 
 import json
-from functools import partial
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,9 +12,6 @@ from fastapi.testclient import TestClient
 import pnw_campsites.api as api_module
 from pnw_campsites.search.engine import CampgroundResult
 from tests.conftest import make_campground, save_searches, signup_and_auth
-
-# tests/test_health.py imports this name; remove once it uses conftest.signup_and_auth.
-_signup_and_login = partial(signup_and_auth, display_name=None)
 
 # ---------------------------------------------------------------------------
 # Search History
