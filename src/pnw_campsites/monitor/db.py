@@ -746,6 +746,21 @@ class WatchDB:
 
         self._conn.commit()
 
+    def prune_availability_history(self, before: date) -> int:
+        """Delete history for nights before `before`. Returns rows removed.
+
+        By night, not by observation time, so a night's history is kept or
+        dropped whole.
+        """
+        cutoff = before.isoformat()
+        removed = 0
+        for table in ("status_transitions", "availability_daily"):
+            removed += self._conn.execute(
+                f"DELETE FROM {table} WHERE date < ?", (cutoff,),  # noqa: S608 — fixed names
+            ).rowcount
+        self._conn.commit()
+        return removed
+
     # -------------------------------------------------------------------
     # Notification log
     # -------------------------------------------------------------------
