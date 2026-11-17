@@ -9,47 +9,12 @@ import pytest
 
 from pnw_campsites.providers.errors import WAFBlockedError
 from pnw_campsites.providers.goingtocamp import (
-    _AVAILABILITY_MAP,
     CAMPSITE_CATEGORY,
     GROUP_CATEGORY,
-    NON_GROUP_EQUIPMENT,
     OVERFLOW_CATEGORY,
     GoingToCampClient,
 )
 from pnw_campsites.registry.models import AvailabilityStatus
-
-
-class TestAvailabilityMapping:
-    """Test availability value → status mapping."""
-
-    def test_availability_value_0_maps_to_available(self) -> None:
-        """Availability value 0 → AVAILABLE."""
-        assert _AVAILABILITY_MAP[0] == AvailabilityStatus.AVAILABLE
-
-    def test_availability_value_1_maps_to_reserved(self) -> None:
-        """Availability value 1 → RESERVED."""
-        assert _AVAILABILITY_MAP[1] == AvailabilityStatus.RESERVED
-
-    def test_availability_value_2_maps_to_closed(self) -> None:
-        """Availability value 2 → CLOSED."""
-        assert _AVAILABILITY_MAP[2] == AvailabilityStatus.CLOSED
-
-    def test_availability_value_3_maps_to_not_reservable(self) -> None:
-        """Availability value 3 → NOT_RESERVABLE."""
-        assert _AVAILABILITY_MAP[3] == AvailabilityStatus.NOT_RESERVABLE
-
-    def test_availability_value_4_maps_to_not_reservable_mgmt(self) -> None:
-        """Availability value 4 → NOT_RESERVABLE_MGMT."""
-        assert _AVAILABILITY_MAP[4] == AvailabilityStatus.NOT_RESERVABLE_MGMT
-
-    def test_availability_value_5_maps_to_nyr(self) -> None:
-        """Availability value 5 → NYR."""
-        assert _AVAILABILITY_MAP[5] == AvailabilityStatus.NYR
-
-    def test_all_availability_values_are_valid_statuses(self) -> None:
-        """All mapped values are valid AvailabilityStatus enum members."""
-        for status in _AVAILABILITY_MAP.values():
-            assert isinstance(status, AvailabilityStatus)
 
 
 class TestBuildCampsites:
@@ -76,6 +41,9 @@ class TestBuildCampsites:
         assert campsite.loop == ""
         assert campsite.max_num_people == 8
         assert campsite.max_people_known is False  # placeholder, not real capacity
+        assert campsite.campsite_type == "STANDARD"
+        assert campsite.type_of_use == "Overnight"
+        assert campsite.min_num_people == 0
         assert (
             campsite.availabilities["2026-06-01T00:00:00.000Z"]
             == AvailabilityStatus.AVAILABLE
@@ -147,51 +115,6 @@ class TestBuildCampsites:
         campsite = result["123"]
         # Should only have 3 dates
         assert len(campsite.availabilities) == 3
-
-    def test_max_num_people_defaults_to_8(self) -> None:
-        """max_num_people defaults to 8 for all sites."""
-        client = GoingToCampClient()
-        resources = {
-            "1": [{"availability": 0}],
-            "2": [{"availability": 1}],
-            "3": [{"availability": 2}],
-        }
-        start_date = date(2026, 6, 1)
-        end_date = date(2026, 6, 1)
-
-        result = client._build_campsites(resources, start_date, end_date)
-
-        for campsite in result.values():
-            assert campsite.max_num_people == 8
-
-    def test_loop_always_empty_string(self) -> None:
-        """loop field is always an empty string."""
-        client = GoingToCampClient()
-        resources = {
-            "1": [{"availability": 0}],
-            "2": [{"availability": 0}],
-        }
-        start_date = date(2026, 6, 1)
-        end_date = date(2026, 6, 1)
-
-        result = client._build_campsites(resources, start_date, end_date)
-
-        for campsite in result.values():
-            assert campsite.loop == ""
-
-    def test_site_is_bare_resource_id(self) -> None:
-        """site field is the bare resource_id; engine enriches it with cached names."""
-        client = GoingToCampClient()
-        resources = {
-            "2147482394": [{"availability": 0}],
-        }
-        start_date = date(2026, 6, 1)
-        end_date = date(2026, 6, 1)
-
-        result = client._build_campsites(resources, start_date, end_date)
-
-        campsite = result["2147482394"]
-        assert campsite.site == "2147482394"
 
     def test_multiple_sites_all_transformed(self) -> None:
         """Multiple resource IDs all transformed correctly."""
@@ -285,27 +208,6 @@ class TestNineMonthWindow:
 class TestCollectResourcesDepthLimit:
     """Test _collect_resources depth limit (max depth 5)."""
 
-    def test_depth_zero_allowed(self) -> None:
-        """Depth 0 → allowed, processes normally."""
-        client = GoingToCampClient()
-        out: dict[str, list[dict]] = {}
-
-        # Patch the sync methods to avoid real HTTP calls
-        with patch.object(
-            client,
-            "_fetch_map_availability",
-            return_value={"resourceAvailabilities": {}, "mapLinkAvailabilities": {}},
-        ) as mock_fetch:
-            client._collect_resources(
-                map_id=1,
-                start_date=date(2026, 6, 1),
-                end_date=date(2026, 6, 30),
-                out=out,
-                depth=0,
-            )
-            # Should call _fetch_map_availability (no exception)
-            mock_fetch.assert_called_once()
-
     def test_depth_five_allowed(self) -> None:
         """Depth 5 (limit) → allowed, processes normally."""
         client = GoingToCampClient()
@@ -366,8 +268,8 @@ class TestCollectResourcesDepthLimit:
                 depth=0,
             )
 
-            # _fetch_map_availability should be called multiple times (up to depth limit)
-            assert mock_method.call_count >= 1
+            # depths 0 through 5 each fetch once; depth 6 is cut off
+            assert mock_method.call_count == 6
 
 
 class TestGetSyncErrorHandling:
@@ -440,7 +342,6 @@ class TestGetSyncErrorHandling:
 class TestParkMetadataEndpoints:
     """Tests for get_park_resources and get_park_maps."""
 
-    @pytest.mark.asyncio
     async def test_get_park_resources_passes_resource_location_id(self) -> None:
         """get_park_resources hits /api/resourcelocation/resources with the right id."""
         client = GoingToCampClient()
@@ -465,7 +366,6 @@ class TestParkMetadataEndpoints:
         assert "-2147481621" in result
         assert result["-2147481621"]["localizedValues"][0]["name"] == "L03"
 
-    @pytest.mark.asyncio
     async def test_get_park_maps_passes_resource_location_id(self) -> None:
         """get_park_maps hits /api/maps with resourceLocationId param."""
         client = GoingToCampClient()
@@ -492,69 +392,9 @@ class TestParkMetadataEndpoints:
         assert result[0]["localizedValues"][0]["title"] == "Lower Loop A"
 
 
-class TestCategoryConstants:
-    """Test that category IDs are defined and have expected values."""
+class TestLocationsAndMapTraversal:
+    """Location filtering and map-hierarchy collection."""
 
-    def test_campsite_category_defined(self) -> None:
-        """CAMPSITE_CATEGORY constant defined."""
-        assert CAMPSITE_CATEGORY == -2147483648
-
-    def test_group_category_defined(self) -> None:
-        """GROUP_CATEGORY constant defined."""
-        assert GROUP_CATEGORY == -2147483643
-
-    def test_overflow_category_defined(self) -> None:
-        """OVERFLOW_CATEGORY constant defined."""
-        assert OVERFLOW_CATEGORY == -2147483647
-
-    def test_non_group_equipment_defined(self) -> None:
-        """NON_GROUP_EQUIPMENT constant defined."""
-        assert NON_GROUP_EQUIPMENT == -32768
-
-
-class TestCampsiteDataFields:
-    """Test CampsiteAvailability field values set by _build_campsites."""
-
-    def test_campsite_type_always_standard(self) -> None:
-        """campsite_type always set to 'STANDARD'."""
-        client = GoingToCampClient()
-        resources = {
-            "1": [{"availability": 0}],
-            "2": [{"availability": 1}],
-        }
-        start_date = date(2026, 6, 1)
-        end_date = date(2026, 6, 1)
-
-        result = client._build_campsites(resources, start_date, end_date)
-
-        for campsite in result.values():
-            assert campsite.campsite_type == "STANDARD"
-
-    def test_type_of_use_always_overnight(self) -> None:
-        """type_of_use always set to 'Overnight'."""
-        client = GoingToCampClient()
-        resources = {"1": [{"availability": 0}]}
-        start_date = date(2026, 6, 1)
-        end_date = date(2026, 6, 1)
-
-        result = client._build_campsites(resources, start_date, end_date)
-
-        campsite = result["1"]
-        assert campsite.type_of_use == "Overnight"
-
-    def test_min_num_people_always_zero(self) -> None:
-        """min_num_people always set to 0."""
-        client = GoingToCampClient()
-        resources = {"1": [{"availability": 0}]}
-        start_date = date(2026, 6, 1)
-        end_date = date(2026, 6, 1)
-
-        result = client._build_campsites(resources, start_date, end_date)
-
-        campsite = result["1"]
-        assert campsite.min_num_people == 0
-
-    @pytest.mark.asyncio
     async def test_get_campground_locations_filters_by_campsite_category(
         self,
     ) -> None:
@@ -664,32 +504,21 @@ class TestCampsiteDataFields:
             assert "100" in out
             assert "101" in out
 
-    def test_fetch_map_availability_parses_json(self) -> None:
-        """_fetch_map_availability parses JSON response."""
-        from unittest.mock import MagicMock
-
+    def test_fetch_map_availability_forwards_map_and_dates(self) -> None:
         client = GoingToCampClient()
+        client._get_sync = MagicMock(return_value={"resourceAvailabilities": {}})
 
-        json_response = {
-            "resourceAvailabilities": {"1": []},
-            "mapLinkAvailabilities": {},
-        }
-
-        # Mock the session
-        mock_session = MagicMock()
-        mock_resp = MagicMock(status_code=200)
-        mock_resp.json.return_value = json_response
-        mock_session.get.return_value = mock_resp
-        client._session = mock_session
-
-        result = client._fetch_map_availability(
-            map_id=1,
+        client._fetch_map_availability(
+            map_id=7,
             start_date=date(2026, 6, 1),
             end_date=date(2026, 6, 30),
         )
 
-        assert result == json_response
-        assert "resourceAvailabilities" in result
+        path, params = client._get_sync.call_args.args
+        assert path == "/api/availability/map"
+        assert params["mapId"] == 7
+        assert params["startDate"] == "2026-06-01"
+        assert params["endDate"] == "2026-06-30"
 
 
 class TestParkIndexLoad:

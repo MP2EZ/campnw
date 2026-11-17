@@ -8,28 +8,15 @@ from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
 from pnw_campsites.monitor.expand import expand_template
-from tests.conftest import (
-    auth_headers as _auth_headers,
-)
-from tests.conftest import (
-    make_supabase_jwt as _make_jwt,
-)
+from tests.conftest import make_campground, signup_and_auth
 
-
-def _signup(client: TestClient):
-    """Create user via auto-provisioning and return (user_data, auth_headers)."""
-    token = _make_jwt(email="template@test.com")
-    headers = _auth_headers(token)
-    resp = client.get("/api/auth/me", headers=headers)
-    assert resp.status_code == 200
-    return resp.json(), headers
+EMAIL = "template@test.com"
 
 
 class TestExpandTemplate:
     """Unit tests for expand_template."""
 
     def test_expands_matching_campgrounds(self):
-        from tests.conftest import make_campground
         registry = MagicMock()
         registry.search.return_value = [
             make_campground(facility_id="aaa", drive_minutes_from_base=60),
@@ -39,7 +26,6 @@ class TestExpandTemplate:
         assert [c.facility_id for c in result] == ["aaa", "bbb"]
 
     def test_caps_at_20(self):
-        from tests.conftest import make_campground
         registry = MagicMock()
         registry.search.return_value = [
             make_campground(facility_id=str(i), drive_minutes_from_base=i * 10)
@@ -49,7 +35,6 @@ class TestExpandTemplate:
         assert len(result) == 20
 
     def test_sorts_by_drive_time(self):
-        from tests.conftest import make_campground
         registry = MagicMock()
         registry.search.return_value = [
             make_campground(facility_id="far", drive_minutes_from_base=300),
@@ -64,7 +49,6 @@ class TestExpandTemplate:
         assert expand_template("not json", registry) == []
 
     def test_empty_params_returns_all(self):
-        from tests.conftest import make_campground
         registry = MagicMock()
         registry.search.return_value = [make_campground(facility_id="x")]
         result = expand_template("{}", registry)
@@ -86,7 +70,7 @@ class TestTemplateWatchAPI:
     """Tests for template watch creation via API."""
 
     def test_create_template_watch(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         resp = api_client.post("/api/watches", json={
             "start_date": "2026-07-01",
             "end_date": "2026-07-31",
@@ -100,7 +84,7 @@ class TestTemplateWatchAPI:
         assert data["search_params"]["state"] == "WA"
 
     def test_template_without_search_params_fails(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         resp = api_client.post("/api/watches", json={
             "start_date": "2026-07-01",
             "end_date": "2026-07-31",
@@ -109,7 +93,7 @@ class TestTemplateWatchAPI:
         assert resp.status_code == 422
 
     def test_single_watch_without_facility_id_fails(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         resp = api_client.post("/api/watches", json={
             "start_date": "2026-07-01",
             "end_date": "2026-07-31",
@@ -118,7 +102,7 @@ class TestTemplateWatchAPI:
         assert resp.status_code == 422
 
     def test_template_watch_appears_in_list(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         api_client.post("/api/watches", json={
             "start_date": "2026-07-01",
             "end_date": "2026-07-31",
@@ -131,8 +115,7 @@ class TestTemplateWatchAPI:
         assert any(w["watch_type"] == "template" for w in watches)
 
     def test_single_watch_still_works(self, api_client: TestClient):
-        from tests.conftest import make_campground
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         api_module._registry.get_by_facility_id.return_value = make_campground(
             facility_id="232465",
         )

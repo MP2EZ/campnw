@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from pnw_campsites.enrichment.batch import build_batch_requests
 from pnw_campsites.enrichment.llm_tags import parse_llm_json
 from tests.conftest import make_campground
@@ -63,7 +65,6 @@ class TestBuildBatchRequests:
 
     def test_custom_id_format_valid(self):
         """Custom IDs must match ^[a-zA-Z0-9_-]{1,64}$"""
-        import re
         pattern = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
         cgs = [

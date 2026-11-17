@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from pnw_campsites import api as api_module
+from pnw_campsites.monitor import watcher
 from pnw_campsites.monitor.db import Watch
 from pnw_campsites.monitor.notify import format_poll_result
 from pnw_campsites.monitor.watcher import (
@@ -72,7 +74,6 @@ def test_resolve_booking_system(seeded, fid, stored, want):
 
 
 class TestDispatch:
-    @pytest.mark.asyncio
     async def test_wa_and_or_watches_reach_their_providers(self, watch_db, seeded):
         """Rows saved with the 'recgov' default (prod watches 7 and 9)."""
         wa = watch_db.add_watch(_watch(WA_ID))
@@ -93,7 +94,6 @@ class TestDispatch:
         assert watch_db.get_watch(wa.id).booking_system == "wa_state"
         assert watch_db.get_watch(orw.id).booking_system == "or_state"
 
-    @pytest.mark.asyncio
     async def test_template_expansion_keeps_each_parks_provider(self, watch_db, seeded):
         watch_db.add_watch(_watch(
             "", watch_type="template", search_params='{"state": "OR"}',
@@ -116,7 +116,6 @@ class TestDispatch:
         assert watch_db.get_watch(paused.id).booking_system == "wa_state"
 
     def test_create_route_stores_wa_source(self, api_client):
-        from pnw_campsites import api as api_module
 
         api_module._registry.booking_systems_for.return_value = [
             BookingSystem.WA_STATE,
@@ -131,7 +130,6 @@ class TestDispatch:
 
 
 class TestBookingLinks:
-    @pytest.mark.asyncio
     async def test_notifications_link_to_the_watchs_own_site(self, watch_db, seeded):
         watch_db.add_watch(_watch(WA_ID))
         watch_db.add_watch(_watch(OR_ID))
@@ -148,7 +146,6 @@ class TestBookingLinks:
 
 
 class TestPastDatedWatches:
-    @pytest.mark.asyncio
     async def test_ended_watch_is_skipped_but_kept(self, watch_db, seeded):
         ended = watch_db.add_watch(_watch(RG_ID, "2026-10-01", "2026-11-06"))
         recgov, gtc, ra = _clients()
@@ -160,7 +157,6 @@ class TestPastDatedWatches:
         kept = watch_db.get_watch(ended.id)
         assert kept is not None and kept.enabled
 
-    @pytest.mark.asyncio
     async def test_partly_passed_watch_polls_from_today(self, watch_db, seeded):
         watch_db.add_watch(_watch(RG_ID, "2026-11-01", "2026-11-07"))
         recgov, gtc, ra = _clients()
@@ -171,7 +167,6 @@ class TestPastDatedWatches:
         recgov.get_availability_range.assert_called_once_with(RG_ID, TODAY, TODAY)
 
     def test_api_marks_ended_watch_expired(self, api_client, monkeypatch):
-        from pnw_campsites.monitor import watcher
 
         monkeypatch.setattr(watcher, "pacific_today", lambda: TODAY)
         for start, end in [("2026-10-01", "2026-11-06"), ("2026-11-01", "2026-11-07")]:
@@ -184,7 +179,6 @@ class TestPastDatedWatches:
 
 
 class TestFailureContainment:
-    @pytest.mark.asyncio
     async def test_waf_block_is_one_request_and_one_warning_per_cycle(
         self, watch_db, seeded, caplog,
     ):

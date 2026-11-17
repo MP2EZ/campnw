@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
+from unittest.mock import AsyncMock
 
 from pnw_campsites.monitor.db import Snapshot, Watch, WatchDB
 from pnw_campsites.monitor.stays import new_stay_nights, stay_starts
@@ -75,7 +75,6 @@ def _avail(dates: list[str]):
 
 
 def _client(dates: list[str]) -> RecGovClient:
-    from unittest.mock import AsyncMock
 
     client = AsyncMock(spec=RecGovClient)
     client.get_availability_range.return_value = _avail(dates)
@@ -96,14 +95,12 @@ def _watch(watch_db: WatchDB, **kw) -> Watch:
 
 
 class TestPollWatchMinNights:
-    @pytest.mark.asyncio
     async def test_one_night_leftover_does_not_alert(self, watch_db: WatchDB):
         watch = _watch(watch_db)
         result = await poll_watch(watch, _client(["2027-05-22"]), None, watch_db)
         assert result.changes == []
         assert result.current_available == 0
 
-    @pytest.mark.asyncio
     async def test_full_stay_alerts(self, watch_db: WatchDB):
         watch = _watch(watch_db)
         result = await poll_watch(
@@ -112,7 +109,6 @@ class TestPollWatchMinNights:
         assert [c.new_dates for c in result.changes] == [["2027-05-21", "2027-05-22"]]
         assert result.current_available == 1
 
-    @pytest.mark.asyncio
     async def test_leftover_then_completed_stay_alerts_once(self, watch_db: WatchDB):
         watch = _watch(watch_db)
         await poll_watch(watch, _client(["2027-05-22"]), None, watch_db)
@@ -124,7 +120,6 @@ class TestPollWatchMinNights:
         assert [c.new_dates for c in second.changes] == [both]
         assert third.changes == []
 
-    @pytest.mark.asyncio
     async def test_days_of_week_runs_use_only_those_days(self, watch_db: WatchDB):
         # Fri 21 + Sat 22 with a Fri/Sat filter is a 2-night stay; Sat 22 +
         # Sun 23 isn't, because Sunday is filtered out.
@@ -137,7 +132,6 @@ class TestPollWatchMinNights:
         )
         assert result.changes == []
 
-    @pytest.mark.asyncio
     async def test_snapshot_from_before_deploy_does_not_flood(self, watch_db: WatchDB):
         # A snapshot saved by the old poller holds every available night. The
         # first poll after deploy must treat stays inside it as already seen.
@@ -150,7 +144,6 @@ class TestPollWatchMinNights:
         result = await poll_watch(watch, _client(both), None, watch_db)
         assert result.changes == []
 
-    @pytest.mark.asyncio
     async def test_snapshot_keeps_every_available_night(self, watch_db: WatchDB):
         # The snapshot stays {site_id: [available nights]}, leftovers included,
         # so a later night that completes a stay can be diffed against it.

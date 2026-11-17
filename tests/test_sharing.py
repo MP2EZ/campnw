@@ -5,25 +5,13 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
-from tests.conftest import (
-    auth_headers as _auth_headers,
-)
-from tests.conftest import (
-    make_supabase_jwt as _make_jwt,
-)
+from pnw_campsites.routes import sharing
+from tests.conftest import make_campground, signup_and_auth
 
-
-def _signup(client: TestClient, email: str = "share@test.com"):
-    """Create user via auto-provisioning and return (user_data, auth_headers)."""
-    token = _make_jwt(email=email)
-    headers = _auth_headers(token)
-    resp = client.get("/api/auth/me", headers=headers)
-    assert resp.status_code == 200
-    return resp.json(), headers
+EMAIL = "share@test.com"
 
 
 def _create_watch(client: TestClient, headers: dict) -> dict:
-    from tests.conftest import make_campground
     api_module._registry.get_by_facility_id.return_value = make_campground(
         facility_id="232465", name="Ohanapecosh",
     )
@@ -44,7 +32,7 @@ def _create_trip(client: TestClient, headers: dict) -> dict:
 
 class TestSharing:
     def test_create_share_for_watch(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         watch = _create_watch(api_client, headers)
         resp = api_client.post("/api/shares", json={"watch_id": watch["id"]}, headers=headers)
         assert resp.status_code == 200
@@ -53,7 +41,7 @@ class TestSharing:
         assert "expires_at" in data
 
     def test_create_share_for_trip(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         trip = _create_trip(api_client, headers)
         resp = api_client.post("/api/shares", json={"trip_id": trip["id"]}, headers=headers)
         assert resp.status_code == 200
@@ -64,12 +52,12 @@ class TestSharing:
         assert resp.status_code == 401
 
     def test_create_share_no_target(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         resp = api_client.post("/api/shares", json={}, headers=headers)
         assert resp.status_code == 422
 
     def test_view_shared_watch(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         watch = _create_watch(api_client, headers)
         share = api_client.post("/api/shares", json={"watch_id": watch["id"]}, headers=headers).json()
 
@@ -81,7 +69,7 @@ class TestSharing:
         assert data["watch"]["facility_id"] == "232465"
 
     def test_view_shared_trip(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         trip = _create_trip(api_client, headers)
         api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
@@ -102,7 +90,7 @@ class TestSharing:
         assert resp.status_code == 404
 
     def test_revoke_shared_link(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         watch = _create_watch(api_client, headers)
         share = api_client.post("/api/shares", json={"watch_id": watch["id"]}, headers=headers).json()
 
@@ -115,18 +103,18 @@ class TestSharing:
         assert resp.status_code == 410
 
     def test_revoke_other_users_link_404(self, api_client: TestClient):
-        _, headers1 = _signup(api_client, "user1@test.com")
+        _, headers1 = signup_and_auth(api_client, "user1@test.com", display_name="")
         watch = _create_watch(api_client, headers1)
         share = api_client.post("/api/shares", json={"watch_id": watch["id"]}, headers=headers1).json()
 
-        _, headers2 = _signup(api_client, "user2@test.com")
+        _, headers2 = signup_and_auth(api_client, "user2@test.com", display_name="")
         resp = api_client.delete(f"/api/shares/{share['uuid']}", headers=headers2)
         assert resp.status_code == 404
 
     def test_share_other_users_watch_404(self, api_client: TestClient):
-        _, headers1 = _signup(api_client, "owner@test.com")
+        _, headers1 = signup_and_auth(api_client, "owner@test.com", display_name="")
         watch = _create_watch(api_client, headers1)
-        _, headers2 = _signup(api_client, "attacker@test.com")
+        _, headers2 = signup_and_auth(api_client, "attacker@test.com", display_name="")
         resp = api_client.post("/api/shares", json={"watch_id": watch["id"]}, headers=headers2)
         assert resp.status_code == 404
 
@@ -143,12 +131,11 @@ class TestShareLinkViewedEvent:
     organic loop in the product could not be evaluated."""
 
     def test_viewing_a_share_emits_share_link_viewed(self, api_client, monkeypatch):
-        from pnw_campsites.routes import sharing
 
         events: list[dict] = []
         monkeypatch.setattr(sharing, "capture_event", lambda **kw: events.append(kw))
 
-        _user, headers = _signup(api_client, email="sharer@example.com")
+        _user, headers = signup_and_auth(api_client, "sharer@example.com", display_name="")
         trip = api_client.post(
             "/api/trips", json={"name": "Shared Trip"}, headers=headers,
         ).json()
@@ -167,7 +154,6 @@ class TestShareLinkViewedEvent:
         assert viewed[0]["properties"]["share_type"] == "trip"
 
     def test_a_dead_link_emits_nothing(self, api_client, monkeypatch):
-        from pnw_campsites.routes import sharing
 
         events: list[dict] = []
         monkeypatch.setattr(sharing, "capture_event", lambda **kw: events.append(kw))

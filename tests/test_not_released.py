@@ -9,20 +9,25 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.registry.models import BookingSystem, CampgroundAvailability
+from pnw_campsites.routes import search as search_routes
 from pnw_campsites.search.engine import (
     CampgroundResult,
+    NightRange,
     NotReleasedSummary,
     SearchEngine,
     SearchQuery,
+    SearchResults,
     StreamDiagnosisEvent,
     StreamNotReleasedEvent,
+    StreamProgressEvent,
     _process_availability,
     summarize_not_released,
 )
-from pnw_campsites.search.release import format_release_range
+from pnw_campsites.search.release import NotReleasedRange, format_release_range
 from tests.conftest import (
     make_campground,
     make_campground_availability,
@@ -183,7 +188,6 @@ class TestFormatReleaseRange:
 
 class TestDiagnosisNotReleased:
     def _engine(self):
-        from unittest.mock import MagicMock
 
         return SearchEngine(registry=MagicMock())
 
@@ -236,7 +240,6 @@ class TestDiagnosisNotReleased:
 
 def _nyr_engine(registry):
     """Engine over one rec.gov campground whose whole June 2099 is NYR."""
-    from unittest.mock import AsyncMock
 
     registry.upsert(make_campground(facility_id="233116", state="CA"))
     june = {f"2099-06-{d:02d}": "NYR" for d in range(1, 31)}
@@ -283,13 +286,10 @@ class TestApiCarriesNotReleased:
     )
 
     def _patch_engine(self, monkeypatch, engine) -> None:
-        from pnw_campsites.routes import search as search_routes
 
         monkeypatch.setattr(search_routes, "get_engine", lambda: engine)
 
     def test_search_endpoint(self, api_client, monkeypatch) -> None:
-        from pnw_campsites.search.engine import SearchResults
-        from pnw_campsites.search.release import NotReleasedRange
 
         partly = _result(nights=3, first=date(2026, 12, 25), last=date(2026, 12, 27))
         partly.total_available_sites = 1
@@ -346,7 +346,6 @@ class TestStreamSendsUnavailableCampgrounds:
     campgrounds with nothing to book, so the stream must send them."""
 
     async def test_engine_attaches_the_result_to_its_progress_event(self, registry) -> None:
-        from pnw_campsites.search.engine import StreamProgressEvent
 
         events = [
             e async for e in _nyr_engine(registry).search_stream(
@@ -358,8 +357,6 @@ class TestStreamSendsUnavailableCampgrounds:
         assert progress[0].result.not_released_ranges
 
     def test_stream_emits_an_unavailable_frame(self, api_client, monkeypatch) -> None:
-        from pnw_campsites.search.engine import StreamProgressEvent
-        from pnw_campsites.search.release import NotReleasedRange
 
         full = _result()
         nyr = _result(nights=2, first=date(2026, 12, 4), last=date(2026, 12, 5))
@@ -445,7 +442,6 @@ class TestRangesForCandidateWindows:
         ]
 
     def test_api_sends_closed_ranges(self, api_client, monkeypatch) -> None:
-        from pnw_campsites.search.engine import NightRange, SearchResults
 
         r = _result()
         r.total_available_sites = 1
@@ -456,7 +452,6 @@ class TestRangesForCandidateWindows:
                 return SearchResults(query=query, results=[r], campgrounds_checked=1,
                                      campgrounds_with_availability=1)
 
-        from pnw_campsites.routes import search as search_routes
 
         monkeypatch.setattr(search_routes, "get_engine", lambda: FakeEngine())
         body = api_client.get(

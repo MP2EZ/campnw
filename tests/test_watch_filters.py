@@ -1,18 +1,21 @@
-"""Watch site filters (v1.48 P3c): party, rig and site type, as the search's `who`."""
+"""Watch site filters (party, rig and site type), as the search's `who`."""
 
 from __future__ import annotations
 
+import argparse
+import asyncio
 import sqlite3
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pnw_campsites import __main__ as cli
 from pnw_campsites.monitor.db import Watch, WatchDB
 from pnw_campsites.monitor.watcher import poll_all, poll_watch
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.registry.models import SiteFit
-from tests.conftest import make_campground_availability, make_campsite_availability
+from tests.conftest import make_campground, make_campground_availability, make_campsite_availability
 from tests.test_site_fit import FORT_EBEY_7, FORT_EBEY_MAIN
 
 JUNE_1 = "2027-06-01T00:00:00.000Z"
@@ -104,7 +107,6 @@ async def _alerted(db: WatchDB, watch: Watch, campsites: dict) -> set[str]:
 
 
 class TestPollerFilters:
-    @pytest.mark.asyncio
     async def test_unfiltered_watch_alerts_on_every_site(self, watch_db: WatchDB):
         sites = {
             "small": _site("small", max_people=2),
@@ -112,7 +114,6 @@ class TestPollerFilters:
         }
         assert await _alerted(watch_db, _watch(watch_db), sites) == {"small", "rv"}
 
-    @pytest.mark.asyncio
     async def test_party_size_drops_sites_known_too_small(self, watch_db: WatchDB):
         placeholder = _site("placeholder", max_people=2)
         placeholder.max_people_known = False
@@ -124,7 +125,6 @@ class TestPollerFilters:
         watch = _watch(watch_db, min_people=4)
         assert await _alerted(watch_db, watch, sites) == {"big", "placeholder"}
 
-    @pytest.mark.asyncio
     async def test_equipment_uses_the_search_fit_rules(self, watch_db: WatchDB):
         short_rv = _site("short")
         short_rv.fit = SiteFit(fits_rv=True, max_rv_ft=25)
@@ -137,7 +137,6 @@ class TestPollerFilters:
         watch = _watch(watch_db, equipment="trailer", rig_length=30)
         assert await _alerted(watch_db, watch, sites) == {"rv", "standard"}
 
-    @pytest.mark.asyncio
     async def test_site_types_keep_unknown_hookups(self, watch_db: WatchDB):
         sites = {
             "electric": _site("electric", campsite_type="STANDARD ELECTRIC"),
@@ -147,14 +146,12 @@ class TestPollerFilters:
         watch = _watch(watch_db, site_types=["hookups"])
         assert await _alerted(watch_db, watch, sites) == {"electric", "unknown"}
 
-    @pytest.mark.asyncio
     async def test_misfits_stay_out_of_the_snapshot(self, watch_db: WatchDB):
         """A misfit opening up later must not alert either."""
         watch = _watch(watch_db, min_people=4)
         await _alerted(watch_db, watch, {"small": _site("small", max_people=2)})
         assert watch_db.get_latest_snapshot(watch.id).available_sites == {}
 
-    @pytest.mark.asyncio
     async def test_wa_watch_uses_seeded_site_fit(self, watch_db: WatchDB, registry):
         park = "-2147483616"
         registry.bulk_upsert_wa_loops(
@@ -179,11 +176,9 @@ class TestPollerFilters:
         assert result.error is None
         assert result.changes == []
 
-    @pytest.mark.asyncio
     async def test_template_watch_passes_filters_to_each_park(
         self, watch_db: WatchDB, registry,
     ):
-        from tests.conftest import make_campground
 
         registry.upsert(make_campground(facility_id="232465", name="Camp", state="WA"))
         watch_db.add_watch(Watch(
@@ -237,10 +232,7 @@ class TestWatchApi:
 
 
 def test_cli_watch_add_stores_filters(tmp_path, monkeypatch, capsys):
-    import argparse
-    from unittest.mock import MagicMock
 
-    from pnw_campsites import __main__ as cli
 
     registry = MagicMock()
     registry.booking_systems_for.return_value = []
@@ -249,7 +241,6 @@ def test_cli_watch_add_stores_filters(tmp_path, monkeypatch, capsys):
     db_path = tmp_path / "w.db"
     monkeypatch.setattr(cli, "WatchDB", lambda: WatchDB(db_path))
 
-    import asyncio
     asyncio.run(cli.cmd_watch_add(argparse.Namespace(
         facility_id="232465", dates="2027-06-04:2027-06-05", nights=2, days=None,
         name=None, ntfy_topic=None, people=4, equipment="trailer", rig_length=30,

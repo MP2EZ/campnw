@@ -1,4 +1,4 @@
-"""JWKS negative-cache behaviour (see .audit-report.md, PERF-01 auth).
+"""JWKS negative-cache behaviour.
 
 `get_signing_key_from_jwt` refreshes the whole JWK set whenever it sees an
 unrecognised `kid`, via a *synchronous* urllib fetch on the calling thread, and

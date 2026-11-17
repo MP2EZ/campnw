@@ -4,32 +4,20 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import (
-    auth_headers as _auth_headers,
-)
-from tests.conftest import (
-    make_supabase_jwt as _make_jwt,
-)
+from tests.conftest import signup_and_auth
 
-
-def _signup(client: TestClient):
-    """Create user via auto-provisioning and return (user_data, auth_headers)."""
-    token = _make_jwt(email="onboard@test.com")
-    headers = _auth_headers(token)
-    resp = client.get("/api/auth/me", headers=headers)
-    assert resp.status_code == 200
-    return resp.json(), headers
+EMAIL = "onboard@test.com"
 
 
 class TestOnboarding:
     def test_new_user_has_onboarding_incomplete(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         me = api_client.get("/api/auth/me", headers=headers).json()["user"]
         assert me["onboarding_complete"] is False
         assert me["preferred_tags"] == []
 
     def test_set_preferred_tags(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         resp = api_client.patch(
             "/api/auth/me",
             json={"preferred_tags": ["lakeside", "trails", "pet-friendly"]},
@@ -40,7 +28,7 @@ class TestOnboarding:
         assert user["preferred_tags"] == ["lakeside", "trails", "pet-friendly"]
 
     def test_mark_onboarding_complete(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         resp = api_client.patch(
             "/api/auth/me",
             json={"onboarding_complete": True},
@@ -50,7 +38,7 @@ class TestOnboarding:
         assert resp.json()["user"]["onboarding_complete"] is True
 
     def test_preferred_tags_persists(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         api_client.patch(
             "/api/auth/me",
             json={"preferred_tags": ["alpine", "remote"]},
@@ -61,7 +49,7 @@ class TestOnboarding:
 
     def test_full_onboarding_flow(self, api_client: TestClient):
         """Simulate complete onboarding: set home, tags, mark complete."""
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         # Step 1: home base
         api_client.patch("/api/auth/me", json={"home_base": "Seattle, WA"}, headers=headers)
         # Step 2: tags + complete
@@ -76,7 +64,7 @@ class TestOnboarding:
 
     def test_skip_onboarding(self, api_client: TestClient):
         """Skip both steps — just mark complete."""
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
         resp = api_client.patch(
             "/api/auth/me", json={"onboarding_complete": True},
             headers=headers,

@@ -123,7 +123,7 @@ async def _poll_tranche(
             for change in result.changes:
                 all_dates.extend(change.new_dates)
             try:
-                msg, urgency = await asyncio.wait_for(
+                msg = await asyncio.wait_for(
                     enrich_notification(
                         result.watch.name,
                         len(result.changes),
@@ -136,10 +136,8 @@ async def _poll_tranche(
                     f"{result.watch.name}: "
                     f"{len(result.changes)} site(s) available"
                 )
-                urgency = 2
             for change in result.changes:
                 change.context_message = msg
-                change.urgency = urgency
 
     total_changes = 0
     total_errors = 0

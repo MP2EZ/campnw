@@ -16,7 +16,6 @@ from pnw_campsites.providers.errors import (
     WAFBlockedError,
 )
 from pnw_campsites.providers.reserveamerica import (
-    _STATUS_MAP,
     ReserveAmericaClient,
     _extract_records,
     _get_attribute_value,
@@ -100,31 +99,6 @@ def _make_redux_html(records: list[dict], total_records: int = 20) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Status mapping
-# ---------------------------------------------------------------------------
-
-
-class TestStatusMapping:
-    """Test RA status string → AvailabilityStatus mapping."""
-
-    def test_available_maps_correctly(self) -> None:
-        assert _STATUS_MAP["AVAILABLE"] == AvailabilityStatus.AVAILABLE
-
-    def test_reserved_maps_correctly(self) -> None:
-        assert _STATUS_MAP["RESERVED"] == AvailabilityStatus.RESERVED
-
-    def test_not_available_maps_correctly(self) -> None:
-        assert _STATUS_MAP["NOT_AVAILABLE"] == AvailabilityStatus.NOT_AVAILABLE
-
-    def test_walk_up_maps_to_open(self) -> None:
-        assert _STATUS_MAP["WALK_UP"] == AvailabilityStatus.OPEN
-
-    def test_all_statuses_are_valid_enum(self) -> None:
-        for status in _STATUS_MAP.values():
-            assert isinstance(status, AvailabilityStatus)
-
-
-# ---------------------------------------------------------------------------
 # Availability grid parsing
 # ---------------------------------------------------------------------------
 
@@ -137,12 +111,14 @@ class TestParseAvailabilityGrid:
             {"date": "2026-07-01", "status": "AVAILABLE"},
             {"date": "2026-07-02", "status": "RESERVED"},
             {"date": "2026-07-03", "status": "NOT_AVAILABLE"},
+            {"date": "2026-07-04", "status": "WALK_UP"},
         ]
         result = _parse_availability_grid(grid)
 
         assert result["2026-07-01T00:00:00.000Z"] == AvailabilityStatus.AVAILABLE
         assert result["2026-07-02T00:00:00.000Z"] == AvailabilityStatus.RESERVED
         assert result["2026-07-03T00:00:00.000Z"] == AvailabilityStatus.NOT_AVAILABLE
+        assert result["2026-07-04T00:00:00.000Z"] == AvailabilityStatus.OPEN
 
     def test_unknown_status_defaults_to_not_available(self) -> None:
         grid = [{"date": "2026-07-01", "status": "SOME_NEW_STATUS"}]

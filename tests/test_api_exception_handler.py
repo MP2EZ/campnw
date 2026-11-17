@@ -11,7 +11,6 @@ can never block the response. These tests lock in:
 
 from __future__ import annotations
 
-import asyncio
 import time
 from unittest.mock import MagicMock, patch
 
@@ -110,7 +109,6 @@ def test_handler_uses_create_task_for_isolation(app_with_raising_routes: TestCli
     blocking the response.)
     """
     scheduled = []
-    real_create_task = asyncio.create_task
 
     def fake_create_task(coro, *args, **kwargs):
         scheduled.append(coro)
@@ -126,9 +124,6 @@ def test_handler_uses_create_task_for_isolation(app_with_raising_routes: TestCli
         "Handler must dispatch capture via asyncio.create_task. "
         "Direct await or sync call would re-introduce the prod 502 risk."
     )
-    # Sanity: the scheduled object is a coroutine (the redesign's hallmark)
-    assert asyncio.iscoroutine(scheduled[0]) or hasattr(scheduled[0], "__await__")
-    _ = real_create_task  # silence unused
 
 
 def test_handler_swallows_sdk_errors(app_with_raising_routes: TestClient):

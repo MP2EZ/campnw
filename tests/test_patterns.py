@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from pnw_campsites.analytics.patterns import (
     MIN_OBSERVATION_DAYS,
     extract_booking_tips,
@@ -63,13 +61,11 @@ class TestAvailabilitySummary:
 
 
 class TestExtractBookingTips:
-    @pytest.mark.asyncio
     async def test_returns_empty_for_insufficient_data(self, watch_db):
         _seed_history(watch_db, days=10)
         tips = await extract_booking_tips(watch_db, "232465")
         assert tips == []
 
-    @pytest.mark.asyncio
     async def test_returns_basic_tip_without_api_key(self, watch_db):
         _seed_history(watch_db, days=40)
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}):
@@ -77,7 +73,6 @@ class TestExtractBookingTips:
         assert len(tips) >= 1
         assert any("Weekday" in t or "availability" in t.lower() for t in tips)
 
-    @pytest.mark.asyncio
     async def test_returns_llm_tips_with_api_key(self, watch_db):
         _seed_history(watch_db, days=40)
         mock_content = MagicMock()
@@ -95,7 +90,6 @@ class TestExtractBookingTips:
         assert len(tips) == 2
         assert "midweek" in tips[0]
 
-    @pytest.mark.asyncio
     async def test_truncates_long_tips(self, watch_db):
         _seed_history(watch_db, days=40)
         mock_content = MagicMock()
