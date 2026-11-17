@@ -57,7 +57,7 @@ async def geocode_parks(dry_run: bool = False) -> None:
                     registry._conn.commit()
                     print(f"  {cg.name} -> ({lat:.4f}, {lon:.4f})")
                 success += 1
-            except (ValueError, Exception) as e:
+            except Exception as e:
                 print(f"  FAILED: {cg.name} — {e}")
                 failed.append(cg.name)
 

@@ -17,12 +17,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import re
+import sqlite3
 import sys
 
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import BookingSystem
@@ -73,7 +76,6 @@ TENT_ONLY_TYPES = {"TENT ONLY NONELECTRIC", "TENT ONLY ELECTRIC", "WALK TO"}
 
 async def enrich_recgov(registry: CampgroundRegistry, dry_run: bool = False) -> None:
     """Enrich rec.gov campgrounds with RIDB campsite attributes and metadata."""
-    load_dotenv()
     api_key = os.getenv("RIDB_API_KEY")
     if not api_key:
         print("ERROR: RIDB_API_KEY not set in .env")
@@ -94,14 +96,12 @@ async def enrich_recgov(registry: CampgroundRegistry, dry_run: bool = False) -> 
             if not sites:
                 continue
 
-            # Collect tags from site attributes
             tags = set(cg.tags)  # preserve existing tags
             has_rv = False
             has_tent_only = False
             total_sites = len(sites)
 
             for site in sites:
-                # Check attributes
                 for attr in site.get("ATTRIBUTES", []):
                     attr_name = attr.get("AttributeName", "")
                     attr_value = attr.get("AttributeValue", "")
@@ -110,12 +110,10 @@ async def enrich_recgov(registry: CampgroundRegistry, dry_run: bool = False) -> 
                         if tag:
                             tags.add(tag)
 
-                # Check equipment
                 for eq in site.get("PERMITTEDEQUIPMENT", []):
                     if eq.get("EquipmentName") in RV_EQUIPMENT_NAMES:
                         has_rv = True
 
-                # Check site type
                 site_type = site.get("CampsiteType", "")
                 if site_type in TENT_ONLY_TYPES:
                     has_tent_only = True
@@ -153,8 +151,6 @@ async def enrich_recgov(registry: CampgroundRegistry, dry_run: bool = False) -> 
 # GoingToCamp amenity → tag mapping
 # ---------------------------------------------------------------------------
 
-import re
-
 # Extract tags from park descriptions via keyword matching
 DESCRIPTION_KEYWORD_TAGS: list[tuple[str, str]] = [
     (r"\blake\b", "lakeside"),
@@ -176,8 +172,6 @@ async def enrich_goingtocamp(
     registry: CampgroundRegistry, dry_run: bool = False
 ) -> None:
     """Enrich WA State Parks with data from GoingToCamp resourceLocation."""
-    from pnw_campsites.providers.goingtocamp import GoingToCampClient
-
     campgrounds = registry.search(booking_system=BookingSystem.WA_STATE)
     print(f"Enriching {len(campgrounds)} WA State Parks from GoingToCamp...")
 
@@ -200,13 +194,11 @@ async def enrich_goingtocamp(
 
             tags = set(cg.tags)
 
-            # Extract description
             description = ""
             localized = loc.get("localizedValues", [])
             if localized:
                 description = localized[0].get("description", "")
 
-            # Extract tags from description keywords
             if description:
                 for pattern, tag in DESCRIPTION_KEYWORD_TAGS:
                     if re.search(pattern, description, re.IGNORECASE):
@@ -214,8 +206,7 @@ async def enrich_goingtocamp(
 
             # Extract region from address
             region = ""
-            address = loc.get("localizedValues", [{}])[0]
-            city = address.get("city", "")
+            city = localized[0].get("city", "") if localized else ""
             if city:
                 region = f"{city}, WA"
 
@@ -264,6 +255,7 @@ async def enrich_goingtocamp(
 
 
 async def main(source: str | None, dry_run: bool) -> None:
+    load_dotenv()
     registry = CampgroundRegistry()
 
     if source in (None, "recgov"):
@@ -273,9 +265,6 @@ async def main(source: str | None, dry_run: bool) -> None:
         await enrich_goingtocamp(registry, dry_run)
 
     if not dry_run:
-        # Checkpoint WAL
-        import sqlite3
-
         conn = sqlite3.connect(str(registry._db_path))
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         conn.close()

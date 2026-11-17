@@ -35,12 +35,8 @@ SAMPLE_DAYS = [15, 1, 8, 22]  # Progressive tiers
 def _find_work(
     registry: CampgroundRegistry,
     unique_campgrounds: list,
-) -> list[tuple[int, list]]:
-    """Find the next sample day with incomplete campgrounds.
-
-    Returns list of (sample_day, campgrounds_to_fetch) for the first
-    incomplete tier. Returns empty list if all tiers are complete.
-    """
+) -> tuple[int, list] | None:
+    """Return (sample_day, campgrounds_to_fetch) for the first incomplete tier, or None."""
     for sample_day in SAMPLE_DAYS:
         # Find all fully-cached coordinates for this day in one query
         cached_coords = set()
@@ -57,8 +53,8 @@ def _find_work(
             if (round(cg.latitude, 2), round(cg.longitude, 2)) not in cached_coords
         ]
         if to_fetch:
-            return [(sample_day, to_fetch)]
-    return []
+            return sample_day, to_fetch
+    return None
 
 
 async def warm(
@@ -88,13 +84,13 @@ async def warm(
 
     # Find next incomplete tier
     work = _find_work(registry, unique_campgrounds)
-    if not work:
+    if work is None:
         print(f"Registry: {len(campgrounds)} campgrounds")
         print(f"Unique coordinates: {len(unique_campgrounds)}")
         print(f"All {len(SAMPLE_DAYS)} tiers complete (days {SAMPLE_DAYS}). Nothing to do.")
         return
 
-    sample_day, to_fetch = work[0]
+    sample_day, to_fetch = work
     to_fetch = to_fetch[:limit]
 
     # Report tier status (single query per tier instead of per-campground)
