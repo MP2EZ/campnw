@@ -74,6 +74,19 @@ def _capture_notification(result, channel: str, status: str) -> None:
     )
 
 
+async def _cleanup_expired_links() -> None:
+    """Background job: purge expired share links.
+
+    Runs on the event loop, not an executor thread: the WatchDB sqlite
+    connection is bound to the thread that opened it.
+    """
+    if not _watch_db:
+        return
+    removed = _watch_db.cleanup_expired_links()
+    if removed:
+        _poll_logger.info("Purged %d expired share link(s)", removed)
+
+
 async def _poll_tranche(
     tranche: int | None = None,
     tier_filter: str = "all",
@@ -334,6 +347,17 @@ async def lifespan(app: FastAPI):
             day_of_week="mon",
             hour=8,
             id="weekly_digest",
+            max_instances=1,
+            coalesce=True,
+        )
+
+        scheduler.add_job(
+            _cleanup_expired_links,
+            "cron",
+            hour=3,
+            minute=30,
+            timezone="America/Los_Angeles",
+            id="cleanup_expired_links",
             max_instances=1,
             coalesce=True,
         )
