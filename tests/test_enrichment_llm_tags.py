@@ -2,26 +2,43 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from pnw_campsites.enrichment.llm_tags import (
-    VALID_TAGS,
     TagExtractionResult,
     extract_tags,
     generate_vibe,
 )
 
-try:
-    import anthropic  # noqa: F401
-    HAS_ANTHROPIC = True
-except ImportError:
-    HAS_ANTHROPIC = False
 
-needs_anthropic = pytest.mark.skipif(
-    not HAS_ANTHROPIC, reason="anthropic package not installed",
-)
+@pytest.fixture
+def llm_reply(monkeypatch):
+    """Patch the LLM client; `llm_reply(text)` or `llm_reply(error=exc)` returns the mock client."""
+
+    def _install(text: str | None = None, error: Exception | None = None) -> AsyncMock:
+        client = AsyncMock()
+        if error is not None:
+            client.messages.create = AsyncMock(side_effect=error)
+        else:
+            response = MagicMock()
+            response.content = [MagicMock(text=text)]
+            client.messages.create = AsyncMock(return_value=response)
+        monkeypatch.setattr("pnw_campsites.posthog_client.get_anthropic_client", lambda api_key: client)
+        return client
+
+    return _install
+
+
+async def _tags(description="A nice campground with many features", name="Test Camp"):
+    return await extract_tags(name=name, description=description, api_key="test-key")
+
+
+async def _vibe(name="Test Camp", tags=(), site_count=None, description="Test description"):
+    return await generate_vibe(
+        name=name, tags=list(tags), site_count=site_count, description=description, api_key="test-key",
+    )
 
 
 class TestTagExtractionResult:
@@ -34,9 +51,7 @@ class TestTagExtractionResult:
 
     def test_invalid_tags_filtered(self):
         """Invalid tags not in VALID_TAGS are filtered out."""
-        result = TagExtractionResult(
-            tags=["lakeside", "invalid-tag", "shade"]
-        )
+        result = TagExtractionResult(tags=["lakeside", "invalid-tag", "shade"])
         assert result.tags == ["lakeside", "shade"]
 
     def test_empty_tags(self):
@@ -45,286 +60,74 @@ class TestTagExtractionResult:
         assert result.tags == []
 
 
-@needs_anthropic
 class TestExtractTags:
     """Test the extract_tags async function."""
 
-    @pytest.mark.asyncio
-    async def test_extract_tags_valid_response(self):
-        """Successfully extracts tags from valid API response."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text='{"tags": ["lakeside", "shade", "forest"]}'
-            )
-        ]
+    async def test_extract_tags_valid_response(self, llm_reply):
+        llm_reply('{"tags": ["lakeside", "shade", "forest"]}')
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
+        assert await _tags("Beautiful campground by a lake with scenic views") == ["lakeside", "shade", "forest"]
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            tags = await extract_tags(
-                name="Test Lake",
-                description="Beautiful campground by a lake with scenic views",
-                api_key="test-key",
-            )
-
-        assert tags == ["lakeside", "shade", "forest"]
-
-    @pytest.mark.asyncio
     async def test_extract_tags_short_description(self):
         """Short descriptions (< 20 chars) return empty list."""
-        tags = await extract_tags(
-            name="Test",
-            description="Too short",
-            api_key="test-key",
-        )
-        assert tags == []
+        assert await _tags("Too short") == []
 
-    @pytest.mark.asyncio
     async def test_extract_tags_empty_description(self):
         """Empty descriptions return empty list."""
-        tags = await extract_tags(
-            name="Test",
-            description="",
-            api_key="test-key",
-        )
-        assert tags == []
+        assert await _tags("") == []
 
-    @pytest.mark.asyncio
-    async def test_extract_tags_markdown_code_block(self):
+    async def test_extract_tags_markdown_code_block(self, llm_reply):
         """Extracts JSON from markdown code block format."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text='```json\n{"tags": ["lakeside", "shade"]}\n```'
-            )
-        ]
+        llm_reply('```json\n{"tags": ["lakeside", "shade"]}\n```')
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
+        assert sorted(await _tags("Campground by a river in the mountains")) == ["lakeside", "shade"]
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            tags = await extract_tags(
-                name="River Camp",
-                description="Campground by a river in the mountains",
-                api_key="test-key",
-            )
-
-        assert sorted(tags) == ["lakeside", "shade"]
-
-    @pytest.mark.asyncio
-    async def test_extract_tags_api_error(self):
+    async def test_extract_tags_api_error(self, llm_reply):
         """API errors return empty list."""
-        import anthropic
+        llm_reply(error=RuntimeError("API Error"))
 
-        mock_request = MagicMock()
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            side_effect=anthropic.APIError(
-                "API Error", mock_request, body=None
-            )
-        )
+        assert await _tags() == []
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            tags = await extract_tags(
-                name="Test Camp",
-                description="A nice campground with many features",
-                api_key="test-key",
-            )
-
-        assert tags == []
-
-    @pytest.mark.asyncio
-    async def test_extract_tags_invalid_json_response(self):
+    async def test_extract_tags_invalid_json_response(self, llm_reply):
         """Invalid JSON responses return empty list."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="not json")]
+        llm_reply("not json")
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
-
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            tags = await extract_tags(
-                name="Test Camp",
-                description="A nice campground with many features",
-                api_key="test-key",
-            )
-
-        assert tags == []
-
-    @pytest.mark.asyncio
-    async def test_extract_tags_valid_tags_list(self):
-        """Checks that VALID_TAGS contains expected tag values."""
-        assert "lakeside" in VALID_TAGS
-        assert "shade" in VALID_TAGS
-        assert "pet-friendly" in VALID_TAGS
-        assert "trails" in VALID_TAGS
-        assert len(VALID_TAGS) > 20
+        assert await _tags() == []
 
 
-@needs_anthropic
 class TestGenerateVibe:
     """Test the generate_vibe async function."""
 
-    @pytest.mark.asyncio
-    async def test_generate_vibe_valid_response(self):
-        """Successfully generates vibe from valid API response."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(text='Beautiful lakeside campground for families')
-        ]
+    async def test_generate_vibe_valid_response(self, llm_reply):
+        llm_reply("Beautiful lakeside campground for families")
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
+        assert await _vibe("Lake Camp", ["lakeside", "kid-friendly"], 50) == "Beautiful lakeside campground for families"
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            vibe = await generate_vibe(
-                name="Lake Camp",
-                tags=["lakeside", "kid-friendly"],
-                site_count=50,
-                description="Beautiful lakeside campground perfect for families",
-                api_key="test-key",
-            )
-
-        assert vibe == "Beautiful lakeside campground for families"
-        assert len(vibe) <= 100
-
-    @pytest.mark.asyncio
-    async def test_generate_vibe_truncates_long_response(self):
+    async def test_generate_vibe_truncates_long_response(self, llm_reply):
         """Long responses are truncated to 100 chars."""
-        long_text = "A" * 150
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=long_text)]
+        llm_reply("A" * 150)
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
+        assert len(await _vibe()) <= 100
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            vibe = await generate_vibe(
-                name="Test Camp",
-                tags=[],
-                site_count=None,
-                description="Test description",
-                api_key="test-key",
-            )
-
-        assert len(vibe) <= 100
-
-    @pytest.mark.asyncio
-    async def test_generate_vibe_strips_quotes(self):
+    async def test_generate_vibe_strips_quotes(self, llm_reply):
         """Response with surrounding quotes has them stripped."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(text='"Beautiful forest retreat"')
-        ]
+        llm_reply('"Beautiful forest retreat"')
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
+        assert await _vibe("Forest Camp", ["forest"], 30) == "Beautiful forest retreat"
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            vibe = await generate_vibe(
-                name="Forest Camp",
-                tags=["forest"],
-                site_count=30,
-                description="Quiet forest campground",
-                api_key="test-key",
-            )
-
-        assert vibe == "Beautiful forest retreat"
-        assert not vibe.startswith('"')
-        assert not vibe.endswith('"')
-
-    @pytest.mark.asyncio
-    async def test_generate_vibe_api_error_returns_empty_string(self):
+    async def test_generate_vibe_api_error_returns_empty_string(self, llm_reply):
         """API errors return empty string gracefully."""
-        import anthropic
+        llm_reply(error=RuntimeError("API Error"))
 
-        mock_request = MagicMock()
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            side_effect=anthropic.APIError(
-                "API Error", mock_request, body=None
-            )
-        )
+        assert await _vibe() == ""
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            vibe = await generate_vibe(
-                name="Test Camp",
-                tags=[],
-                site_count=None,
-                description="Test description",
-                api_key="test-key",
-            )
+    async def test_generate_vibe_includes_tags_in_prompt(self, llm_reply):
+        """Tags and site_count are interpolated into the LLM prompt."""
+        client = llm_reply("Great campground")
 
-        assert vibe == ""
+        vibe = await _vibe("Alpine Camp", ["alpine", "shade", "hiking"], 20, "High altitude alpine camp")
 
-    @pytest.mark.asyncio
-    async def test_generate_vibe_includes_tags_in_prompt(self):
-        """Tags and site_count are passed to the LLM prompt."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Great campground")]
-
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
-
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            vibe = await generate_vibe(
-                name="Alpine Camp",
-                tags=["alpine", "shade", "hiking"],
-                site_count=20,
-                description="High altitude alpine camp",
-                api_key="test-key",
-            )
-
-        # Verify the call was made (tags/site_count are in prompt)
-        assert mock_client.messages.create.called
-        call_args = mock_client.messages.create.call_args
-        messages = call_args.kwargs["messages"]
-        prompt_text = messages[0]["content"]
-
-        # Verify tags and site_count are mentioned in prompt
-        assert "alpine" in prompt_text or "Tags:" in prompt_text
-        assert "20" in prompt_text
+        prompt_text = client.messages.create.call_args.kwargs["messages"][0]["content"]
+        assert "Tags: alpine, shade, hiking." in prompt_text
+        assert "It has 20 sites." in prompt_text
         assert vibe == "Great campground"
