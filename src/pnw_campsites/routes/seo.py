@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
+from pnw_campsites.geo import format_drive_time
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import get_registry
 from pnw_campsites.urls import (
@@ -58,12 +59,7 @@ BASE_URL = "https://campable.co"
 def _format_drive_time(minutes: int | None) -> str:
     if minutes is None:
         return ""
-    h, m = divmod(minutes, 60)
-    if h and m:
-        return f"{h}h {m}m"
-    if h:
-        return f"{h}h"
-    return f"{m}m"
+    return format_drive_time(minutes).removeprefix("~")
 
 
 def _booking_url(cg) -> str:
