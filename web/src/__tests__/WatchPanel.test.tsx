@@ -208,4 +208,23 @@ describe("WatchPanel", () => {
       expect(screen.getByTestId("poll-dashboard")).toBeInTheDocument();
     });
   });
+
+  test("moves focus in on open and returns it to the opener on close", async () => {
+    vi.mocked(getWatches).mockResolvedValue([]);
+    const ui = (open: boolean) => (
+      <>
+        <button>Open watchlist</button>
+        <WatchPanel open={open} onClose={vi.fn()} />
+      </>
+    );
+    const { rerender } = render(ui(false));
+    const opener = screen.getByRole("button", { name: "Open watchlist" });
+    opener.focus();
+
+    rerender(ui(true));
+    expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true);
+
+    rerender(ui(false));
+    expect(opener).toHaveFocus();
+  });
 });

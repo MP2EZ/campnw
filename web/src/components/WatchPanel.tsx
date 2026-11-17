@@ -59,11 +59,14 @@ export const WatchPanel = memo(function WatchPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  // Focus trap: move focus into panel on open, return on close
+  // Move focus into the panel on open; give it back to the opener on close.
   useEffect(() => {
-    if (open && closeRef.current) {
-      closeRef.current.focus();
-    }
+    if (!open) return;
+    const opener = document.activeElement;
+    closeRef.current?.focus();
+    return () => {
+      if (opener instanceof HTMLElement && document.contains(opener)) opener.focus();
+    };
   }, [open]);
 
   // Trap focus inside panel
