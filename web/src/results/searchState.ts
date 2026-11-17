@@ -1,5 +1,6 @@
 import type { SearchParams } from "../api";
 import { formatDateRange, parseIsoDate, weekday } from "../lib/dates";
+import { DRIVE_FROM } from "../lib/bases";
 import { plural } from "../lib/plural";
 import { addDays } from "./candidates";
 
@@ -52,13 +53,6 @@ export const DEFAULT_BAR: BarState = {
   rigLength: null,
   maxDrive: null,
 };
-
-export const DRIVE_FROM: ReadonlyArray<[key: string, label: string]> = [
-  ["seattle", "Seattle"], ["bellevue", "Bellevue"], ["portland", "Portland"],
-  ["spokane", "Spokane"], ["bellingham", "Bellingham"], ["bend", "Bend, OR"],
-  ["bozeman", "Bozeman, MT"], ["missoula", "Missoula, MT"], ["jackson", "Jackson, WY"],
-  ["sacramento", "Sacramento, CA"], ["reno", "Reno, NV"], ["moscow", "Moscow, ID"],
-];
 
 const EQUIPMENT: Record<Equipment, string> = { tent: "Tent", van: "Van", trailer: "Trailer" };
 const isEquipment = (v: unknown): v is Equipment => typeof v === "string" && v in EQUIPMENT;

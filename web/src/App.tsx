@@ -31,6 +31,7 @@ const ResultsPage = lazy(() => import("./results/ResultsPage"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 import { Footer } from "./components/Footer";
+import { KNOWN_BASE_KEYS } from "./lib/bases";
 import { toIsoDate } from "./lib/dates";
 import { SIGN_IN_EVENT } from "./lib/signIn";
 
@@ -45,11 +46,6 @@ function formatDate(offset: number): string {
 }
 
 // Map a freetext home_base to a known drive-from key
-const KNOWN_BASE_KEYS = [
-  "seattle", "bellevue", "portland", "spokane", "bellingham",
-  "bend", "bozeman", "missoula", "jackson", "sacramento", "reno", "moscow",
-];
-
 function resolveHomeBase(homeBase: string): string {
   if (!homeBase) return "";
   const lower = homeBase.toLowerCase().replace(/[^a-z]/g, " ").trim();
