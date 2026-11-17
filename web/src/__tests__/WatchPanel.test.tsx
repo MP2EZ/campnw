@@ -1,10 +1,6 @@
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 vi.mock("../hooks/useAuth", () => ({
   useAuth: () => ({
     user: { id: 1, email: "test@example.com", display_name: "Tester" },
@@ -75,10 +71,6 @@ const TEMPLATE_WATCH: WatchData = {
   name: "WA Lakeside",
   watch_type: "template",
 };
-
-// ---------------------------------------------------------------------------
-// WatchPanel
-// ---------------------------------------------------------------------------
 
 describe("WatchPanel", () => {
   beforeEach(() => vi.clearAllMocks());

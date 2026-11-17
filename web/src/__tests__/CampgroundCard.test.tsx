@@ -41,7 +41,7 @@ describe("CampgroundCard", () => {
     expect(card).toHaveTextContent("~48m drive");
     expect(card).toHaveTextContent("Federal Way, WA");
     expect(card).toHaveTextContent("Typical weather: Mid-June 67° / 50°");
-    // Generated pitches read as marketing (UX #16, BRAND voice); cards don't show them.
+    // Generated pitches read as marketing (BRAND voice); cards don't show them.
     expect(card).not.toHaveTextContent("Puget Sound beach park.");
     expect(card).toHaveTextContent("Tent · RV ≤35′");
     expect(card).toHaveTextContent("Book via WA State Parks");

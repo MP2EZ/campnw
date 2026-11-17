@@ -144,7 +144,7 @@ describe("Accessibility: results v2", () => {
   });
 
   test("quick picks render and pass axe", async () => {
-    // Picks need 6 places (UX #13).
+    // Picks need 6 places.
     const { container } = renderV2(["5", "6", "7"].map((id) => v2Place(id, `Park ${id}`, 150 + Number(id))));
     expect(screen.getByRole("heading", { name: "Quick picks" })).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();

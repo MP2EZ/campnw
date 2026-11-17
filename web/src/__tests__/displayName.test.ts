@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { displayName } from "../lib/displayName";
 
-// Recreation.gov (RIDB) names come in ALL CAPS next to title-case ones (UX #17).
+// Recreation.gov (RIDB) names come in ALL CAPS next to title-case ones.
 describe("displayName", () => {
   test.each([
     ["OHANAPECOSH CAMPGROUND", "Ohanapecosh Campground"],
