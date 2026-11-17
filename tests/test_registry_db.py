@@ -191,7 +191,7 @@ class TestUpdateTags:
 
 
 class TestImageUrls:
-    """v1.35 — source-photo URLs on the campground record."""
+    """Source-photo URLs on the campground record."""
 
     def test_schema_migration_adds_image_columns(self, registry):
         cols = {

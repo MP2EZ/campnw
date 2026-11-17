@@ -296,14 +296,14 @@ class TestSecurityHeaders:
         assert "default-src" in resp.headers.get("Content-Security-Policy", "")
 
     def test_csp_img_src_allows_photo_cdns(self, api_client: TestClient):
-        """v1.35: photo hotlinks must not be blocked by the production CSP."""
+        """Photo hotlinks must not be blocked by the production CSP."""
         resp = api_client.get("/api/perf")
         csp = resp.headers.get("Content-Security-Policy", "")
         assert "cdn.recreation.gov" in csp
         assert "reserveamerica.com" in csp
 
     def test_csp_img_src_allows_map_tiles(self, api_client: TestClient):
-        """v1.48: results map tiles (Mapbox raster, OSM fallback) are <img>s."""
+        """Results map tiles (Mapbox raster, OSM fallback) are <img>s."""
         resp = api_client.get("/api/perf")
         img_src = resp.headers["Content-Security-Policy"].split("img-src")[1].split(";")[0]
         assert "https://api.mapbox.com" in img_src
