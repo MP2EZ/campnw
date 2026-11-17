@@ -87,6 +87,18 @@ async def _cleanup_expired_links() -> None:
         _poll_logger.info("Purged %d expired share link(s)", removed)
 
 
+async def _refresh_booking_tips() -> None:
+    """Background job: rewrite the booking tips on campground profile pages.
+
+    Runs on the event loop for the same reason as _cleanup_expired_links.
+    """
+    if not _watch_db or not _registry:
+        return
+    from pnw_campsites.analytics.patterns import refresh_all_tips
+
+    await refresh_all_tips(_watch_db, _registry)
+
+
 async def _poll_tranche(
     tranche: int | None = None,
     tier_filter: str = "all",
@@ -356,6 +368,18 @@ async def lifespan(app: FastAPI):
             minute=30,
             timezone="America/Los_Angeles",
             id="cleanup_expired_links",
+            max_instances=1,
+            coalesce=True,
+        )
+
+        scheduler.add_job(
+            _refresh_booking_tips,
+            "cron",
+            day_of_week="sun",
+            hour=4,
+            minute=15,
+            timezone="America/Los_Angeles",
+            id="booking_tips",
             max_instances=1,
             coalesce=True,
         )
