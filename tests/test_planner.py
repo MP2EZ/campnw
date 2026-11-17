@@ -52,6 +52,11 @@ class TestToolStructure:
             assert "input_schema" in tool
             assert tool["input_schema"]["type"] == "object"
 
+    def test_search_schema_advertises_source(self):
+        search = next(t for t in TOOLS if t["name"] == "search_campgrounds")
+        source = search["input_schema"]["properties"]["source"]
+        assert source["enum"] == ["recgov", "wa_state"]
+
 
 # -------------------------------------------------------------------
 # Tool executors
@@ -167,20 +172,9 @@ class TestUnknownTool:
 
 
 class TestPlanChatApi:
-    """Test plan chat API endpoints."""
+    """Test plan chat stream endpoint."""
 
     def test_missing_api_key_returns_503(self, api_client):
-        import os
-        from unittest.mock import patch
-
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
-            resp = api_client.post(
-                "/api/plan/chat",
-                json={"messages": [{"role": "user", "content": "hi"}]},
-            )
-        assert resp.status_code == 503
-
-    def test_stream_missing_api_key_returns_503(self, api_client):
         import os
         from unittest.mock import patch
 
@@ -394,9 +388,6 @@ class TestCheckAvailabilityTool:
         engine = AsyncMock()
         engine.check_specific = AsyncMock(return_value=result)
 
-        registry = MagicMock()
-        registry.get_by_facility_id.return_value = campground
-
         output = await _check_availability(
             {
                 "facility_id": "232465",
@@ -404,7 +395,6 @@ class TestCheckAvailabilityTool:
                 "end_date": "2026-06-30",
             },
             engine,
-            registry,
         )
 
         data = json.loads(output)
@@ -427,8 +417,6 @@ class TestCheckAvailabilityTool:
         engine = AsyncMock()
         engine.check_specific = AsyncMock(return_value=result)
 
-        registry = MagicMock()
-
         output = await _check_availability(
             {
                 "facility_id": "232465",
@@ -436,7 +424,6 @@ class TestCheckAvailabilityTool:
                 "end_date": "2026-06-30",
             },
             engine,
-            registry,
         )
 
         data = json.loads(output)
@@ -469,8 +456,6 @@ class TestCheckAvailabilityTool:
         engine = AsyncMock()
         engine.check_specific = AsyncMock(return_value=result)
 
-        registry = MagicMock()
-
         output = await _check_availability(
             {
                 "facility_id": "232465",
@@ -478,7 +463,6 @@ class TestCheckAvailabilityTool:
                 "end_date": "2026-06-30",
             },
             engine,
-            registry,
         )
 
         data = json.loads(output)
@@ -650,7 +634,7 @@ class TestGeocodeAddressTool:
     async def test_geocode_unknown_address_mocked(self):
         """Geocoding unknown address uses nominatim."""
         with patch(
-            "pnw_campsites.geo.geocode_address",
+            "pnw_campsites.planner.tools.geocode_address",
             new_callable=AsyncMock,
         ) as mock_geocode:
             mock_geocode.return_value = (47.5, -122.5)

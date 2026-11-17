@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 
 from pydantic import BaseModel, field_validator
+
+from pnw_campsites.registry.db import CampgroundRegistry
+from pnw_campsites.registry.pitch_fixture import export_pitch_fixture
 
 _logger = logging.getLogger(__name__)
 
@@ -15,12 +20,10 @@ def _truncate(text: str, max_len: int) -> str:
     """Truncate text at the last sentence or word boundary within max_len."""
     if len(text) <= max_len:
         return text
-    # Try to cut at last sentence boundary
     truncated = text[:max_len]
     last_period = truncated.rfind(". ")
     if last_period > max_len // 2:
         return truncated[: last_period + 1]
-    # Fall back to last word boundary
     last_space = truncated.rfind(" ")
     if last_space > 0:
         return truncated[:last_space] + "..."
@@ -37,6 +40,47 @@ COPY_RULES = (
     "gem). No audience labels (lovers, enthusiasts, seekers, families "
     "wanting). Never say that information is limited or unavailable."
 )
+
+# Field spec for the three copy fields; shared by the sync and batch prompts.
+COPY_FIELDS_SPEC = (
+    '- "elevator_pitch": One sentence (max 110 chars) for a search result '
+    "card: setting and what is there. Don't repeat the campground name.\n"
+    '- "description_rewrite": 1-3 sentences (max 350 chars) for the '
+    "campground's page. One short sentence when the facts are thin.\n"
+    '- "best_for": What the campground suits, as uses or site types (max '
+    '40 chars), e.g. "tent camping, fishing". Lowercase, only uses the '
+    'tags or description support, empty if none. Never a kind of person.\n'
+)
+
+# Hard clamps applied to model output. They sit above the limits the prompts
+# state, so a slightly long answer is cut at a boundary instead of mid-word.
+VIBE_CLAMP = 100
+COPY_CLAMPS = {"elevator_pitch": 120, "description_rewrite": 350, "best_for": 50}
+
+
+def clamp_copy(data: dict) -> dict[str, str]:
+    """Return elevator_pitch, description_rewrite and best_for clamped to COPY_CLAMPS."""
+    return {
+        field: _truncate(data.get(field, ""), limit)
+        for field, limit in COPY_CLAMPS.items()
+    }
+
+
+def parse_llm_json(text: str) -> dict | None:
+    """Parse a JSON object from a model reply, allowing a markdown code fence."""
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    if "```" in text:
+        body = text.split("```")[1]
+        body = body.removeprefix("json")
+        try:
+            return json.loads(body.strip())
+        except json.JSONDecodeError:
+            pass
+    return None
 
 
 VALID_TAGS = [
@@ -143,20 +187,10 @@ Return ONLY the JSON object, nothing else."""
             posthog_privacy_mode=True,
         )
 
-        text = response.content[0].text.strip()
-        # Parse JSON from response
-        try:
-            result = TagExtractionResult.model_validate_json(text)
-            return result.tags
-        except Exception:
-            # Try extracting JSON from markdown code block
-            if "```" in text:
-                json_str = text.split("```")[1]
-                if json_str.startswith("json"):
-                    json_str = json_str[4:]
-                result = TagExtractionResult.model_validate_json(json_str.strip())
-                return result.tags
+        data = parse_llm_json(response.content[0].text)
+        if data is None:
             return []
+        return TagExtractionResult.model_validate(data).tags
     except Exception as e:
         _logger.warning("Anthropic API error for %s: %s", name, e)
         return []
@@ -194,9 +228,7 @@ async def generate_vibe(
             posthog_privacy_mode=True,
         )
         text = response.content[0].text.strip().strip('"').strip("'")
-        # Truncate at sentence boundary
-        text = _truncate(text, 100)
-        return text
+        return _truncate(text, VIBE_CLAMP)
     except Exception as e:
         _logger.warning("Vibe generation failed for %s: %s", name, e)
         return ""
@@ -229,19 +261,7 @@ async def generate_description(
     prompt = (
         "Write short, plain copy for this campground. Return ONLY a JSON "
         "object with these keys:\n"
-        '- "elevator_pitch": One sentence (max 110 chars) for a search result '
-        "card. Setting and what is there, from the facts below. Don't repeat "
-        "the campground name. With no facts beyond the name and state, just "
-        "say what kind of camp it is and where, e.g. \"Horse camp in "
-        "California.\"\n"
-        '- "description_rewrite": 1-3 sentences (max 350 chars) for the '
-        "campground's page. Only facts from below. When the facts are thin, "
-        "write one short sentence.\n"
-        '- "best_for": What the campground suits, as uses or site types (max '
-        '40 chars). Examples: "tent camping, fishing", "horse camping", "group '
-        'camping", "RVs and tents". Lowercase. Only uses the tags or '
-        'description support; an empty string if none. Never a kind of '
-        "person.\n\n"
+        f"{COPY_FIELDS_SPEC}\n"
         f"Campground: {name}\n"
         f"State: {state}\n"
         f"Tags: {tag_str}\n"
@@ -260,20 +280,11 @@ async def generate_description(
         if usage is not None:
             usage["input_tokens"] += response.usage.input_tokens
             usage["output_tokens"] += response.usage.output_tokens
-        text = response.content[0].text.strip()
-        # Handle markdown code blocks
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        result = json.loads(text)
-        # Enforce length limits — truncate at sentence or word boundary
-        pitch = _truncate(result.get("elevator_pitch", ""), 120)
-        desc = _truncate(result.get("description_rewrite", ""), 350)
-        best = _truncate(result.get("best_for", ""), 50)
-        return {
-            "elevator_pitch": pitch,
-            "description_rewrite": desc,
-            "best_for": best,
-        }
+        result = parse_llm_json(response.content[0].text)
+        if result is None:
+            _logger.warning("Description generation returned unparseable JSON for %s", name)
+            return {}
+        return clamp_copy(result)
     except Exception as e:
         _logger.warning("Description generation failed for %s: %s", name, e)
         return {}
@@ -286,10 +297,6 @@ async def enrich_registry(
     dry_run: bool = False,
 ) -> int:
     """Enrich campgrounds that lack tags. Returns count enriched."""
-    import os
-
-    from pnw_campsites.registry.db import CampgroundRegistry
-
     api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key:
         _logger.error("ANTHROPIC_API_KEY not set")
@@ -299,11 +306,8 @@ async def enrich_registry(
         CampgroundRegistry(registry_path) if registry_path else CampgroundRegistry()
     )
 
-    # Get campgrounds needing enrichment
     all_cgs = registry.search(enabled_only=True)
-    candidates = [cg for cg in all_cgs if not cg.tags or len(cg.tags) == 0][
-        :limit
-    ]
+    candidates = [cg for cg in all_cgs if not cg.tags][:limit]
 
     _logger.info(
         "Found %d campgrounds needing enrichment (limit %d)",
@@ -313,7 +317,6 @@ async def enrich_registry(
 
     enriched = 0
     for cg in candidates:
-        # Use description from notes field or name
         description = cg.notes or cg.name
         tags = await extract_tags(cg.name, description, api_key)
 
@@ -323,13 +326,11 @@ async def enrich_registry(
             continue
 
         if tags:
-            # Merge with existing tags
             merged = list(set(cg.tags + tags))
             registry.update_tags(cg.id, merged)
             _logger.info("Enriched: %s -> %s", cg.name, merged)
             enriched += 1
 
-    # Generate vibes for campgrounds that lack them
     all_cgs = registry.search(enabled_only=True)
     vibe_candidates = [cg for cg in all_cgs if not cg.vibe][:limit]
 
@@ -353,7 +354,6 @@ async def enrich_registry(
             registry.update_vibe(cg.id, vibe)
             _logger.info("Vibe: %s -> %s", cg.name, vibe)
 
-    # Generate descriptions for campgrounds that lack them
     all_cgs = registry.search(enabled_only=True)
     desc_candidates = [cg for cg in all_cgs if not cg.elevator_pitch][:limit]
 
@@ -412,12 +412,6 @@ async def regenerate_descriptions(
 
     Returns (rewritten, cleared, failed, token usage).
     """
-    import asyncio
-    import os
-
-    from pnw_campsites.registry.db import CampgroundRegistry
-    from pnw_campsites.registry.pitch_fixture import export_pitch_fixture
-
     api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
     usage = {"input_tokens": 0, "output_tokens": 0}
     if not api_key:
