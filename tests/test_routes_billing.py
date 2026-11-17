@@ -498,13 +498,15 @@ class TestPlannerSessionEnforcement:
     def test_anonymous_session_also_capped(
         self, api_client, monkeypatch,
     ) -> None:
-        # Anonymous users are capped by session_token. The stream route returns
-        # a StreamingResponse, which drops the cookie get_session_token sets, so
-        # the token is sent explicitly here.
+        # Anonymous users are capped by session_token. The first start must set
+        # the session cookie on the stream response, or every request gets a
+        # fresh token and the cap never applies.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-        api_client.cookies.set("campnw_session", "anon-planner-token")
+        assert "campnw_session" not in api_client.cookies
         with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
-            for _ in range(3):
+            first = _start_chat(api_client)
+            assert "campnw_session" in first.cookies
+            for _ in range(2):
                 _start_chat(api_client)
             resp = _start_chat(api_client)
 

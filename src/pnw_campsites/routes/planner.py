@@ -152,7 +152,14 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request, response: Re
             yield f"data: {event_json}\n\n"
         yield "data: [DONE]\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    stream = StreamingResponse(event_generator(), media_type="text/event-stream")
+    # The cap's session cookie was set on the injected response, which a
+    # returned response replaces. Without it every anonymous request gets a
+    # fresh token and the monthly cap never applies.
+    stream.raw_headers.extend(
+        (k, v) for k, v in response.raw_headers if k == b"set-cookie"
+    )
+    return stream
 
 
 # ---------------------------------------------------------------------------
