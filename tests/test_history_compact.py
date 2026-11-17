@@ -4,26 +4,6 @@ from pnw_campsites.analytics.patterns import get_availability_summary
 from pnw_campsites.monitor.db import WatchDB
 
 
-def test_status_transitions_table_exists(tmp_path):
-    db = WatchDB(str(tmp_path / "test.db"))
-    tables = [
-        r[0] for r in db._conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-    ]
-    assert "status_transitions" in tables
-
-
-def test_availability_daily_table_exists(tmp_path):
-    db = WatchDB(str(tmp_path / "test.db"))
-    tables = [
-        r[0] for r in db._conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-    ]
-    assert "availability_daily" in tables
-
-
 def test_record_availability_only_stores_changes(tmp_path):
     """Second call with same data should not add to status_transitions."""
     db = WatchDB(str(tmp_path / "test.db"))

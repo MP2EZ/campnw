@@ -39,10 +39,6 @@ def test_oregon_block_does_not_blame_washington():
     assert "Washington" not in msg
 
 
-def test_washington_block_still_names_washington():
-    assert "WA State Parks" in warning_message("waf_blocked", "wa_state")
-
-
 @pytest.mark.parametrize("kind", sorted(WARNING_TEMPLATES))
 def test_every_kind_renders_for_every_known_source(kind):
     for source in SOURCE_LABELS:

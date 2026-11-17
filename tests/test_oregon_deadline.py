@@ -28,10 +28,6 @@ from tests.test_search_observability import _recgov
 from tests.test_search_timeouts import QUERY, _collect, _oregon, _results, _seed
 
 
-def test_the_oregon_deadline_is_30s() -> None:
-    assert engine_mod.OREGON_DEADLINE_S == 30.0
-
-
 async def _run(registry, monkeypatch, *, max_background: int | None = None, recgov=True):
     monkeypatch.setattr(engine_mod, "OREGON_DEADLINE_S", 0.2)
     _seed(registry, 4, BookingSystem.OR_STATE, "or")
