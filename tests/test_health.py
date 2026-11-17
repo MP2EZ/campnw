@@ -509,7 +509,7 @@ class TestAdminHealthDeep:
         assert api_client.get("/api/admin/health/deep").status_code == 401
 
     def test_returns_report_for_admin(self, api_client):
-        _, headers = signup_and_auth(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/admin/health/deep", headers=headers)
         assert resp.status_code == 200
         body = resp.json()
@@ -518,7 +518,7 @@ class TestAdminHealthDeep:
         assert {c["name"] for c in body["checks"]} == {"stub-data", "stub-provider"}
 
     def test_only_filter_narrows_the_sweep(self, api_client):
-        _, headers = signup_and_auth(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/admin/health/deep?only=data", headers=headers)
         assert resp.status_code == 200
         assert [c["name"] for c in resp.json()["checks"]] == ["stub-data"]
@@ -530,7 +530,7 @@ class TestAdminHealthDeep:
         monkeypatch.setattr(
             health, "CHECKS", [Check(name="stub", category="data", fn=boom)]
         )
-        _, headers = signup_and_auth(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/admin/health/deep", headers=headers)
         # 503 so an external monitor can alert on the status line alone.
         assert resp.status_code == 503
