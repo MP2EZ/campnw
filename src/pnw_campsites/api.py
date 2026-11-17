@@ -451,6 +451,10 @@ async def lifespan(app: FastAPI):
     if scheduler:
         scheduler.shutdown(wait=False)
 
+    # Background Oregon windows write to the DB and use the RA session.
+    if _engine and _engine.oregon:
+        await _engine.oregon.aclose()
+
     if _watch_db:
         _watch_db.close()
 

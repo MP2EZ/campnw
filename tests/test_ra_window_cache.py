@@ -189,7 +189,7 @@ class FakeClient:
         self.windows: list[tuple[date, date]] = []
         self.fail_on: date | None = None
 
-    async def get_window(self, park_id, slug, state, arrival, departure):
+    async def get_window(self, park_id, slug, state, arrival, departure, **_kw):
         assert (park_id, slug, state) == ("402178", "fort-stevens-state-park", "OR")
         if arrival == self.fail_on:
             raise RuntimeError("boom")
@@ -227,17 +227,19 @@ class TestOregonWindows:
             await OregonWindows(client, watch_db).park(CG, nights(d(5), d(28)), d(28))
         assert len(watch_db.get_ra_windows("402178", d(5), d(18), max_age_s=600)) == 1
 
-    async def test_a_window_cut_mid_fetch_stores_nothing(self, watch_db) -> None:
+    async def test_a_window_cancelled_mid_fetch_stores_nothing(self, watch_db) -> None:
         started = asyncio.Event()
 
         class Slow(FakeClient):
-            async def get_window(self, *args):
+            async def get_window(self, *args, **kwargs):
                 started.set()
                 await asyncio.sleep(10)
 
-        task = asyncio.create_task(OregonWindows(Slow(), watch_db).park(CG, [d(5)], d(5)))
-        await started.wait()
+        windows = OregonWindows(Slow(), watch_db)
+        task = asyncio.create_task(windows.park(CG, [d(5)], d(5)))
+        await asyncio.wait_for(started.wait(), 2)
         task.cancel()
+        await asyncio.wait_for(windows.aclose(), 2)
         with pytest.raises(asyncio.CancelledError):
             await task
         assert watch_db.get_ra_windows("402178", d(5), d(5), max_age_s=600) == []

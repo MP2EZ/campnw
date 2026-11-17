@@ -116,12 +116,14 @@ async def test_the_search_deadline_ends_the_stream_with_every_park_reported(
     assert 0 < len(timed_out) < 12
     coverage = next(ev for ev in events if isinstance(ev, StreamCoverageEvent))
     assert coverage.campgrounds_checked == 12
-    await asyncio.sleep(0)
-    assert state["running"] == 0, "timed-out parks were left running"
+    # Parks cut mid-fetch finish in the background.
+    await asyncio.wait_for(engine.oregon.idle(), timeout=5)
+    assert state["running"] == 0
 
 
-async def test_closing_the_stream_cancels_unfinished_parks(registry) -> None:
-    """A user who leaves mid-search must not keep spending Oregon's budget."""
+async def test_closing_the_stream_hands_oregon_work_to_the_background(registry) -> None:
+    """A closed tab doesn't throw away Oregon work: the parks keep going at
+    background priority, within the cap, and land in the cache."""
     _seed(registry, 6, BookingSystem.OR_STATE, "or")
     ra, state = _oregon({"or0": 0.0}, default=30)
     engine = SearchEngine(registry, reserveamerica_client=ra)
@@ -134,8 +136,10 @@ async def test_closing_the_stream_cancels_unfinished_parks(registry) -> None:
     await stream.aclose()
     await asyncio.sleep(0)
 
+    assert state["cancelled"] == 0
+    assert engine.oregon.is_pending("or1")
+    await engine.oregon.aclose()
     assert state["running"] == 0
-    assert state["cancelled"] > 0
 
 
 async def test_oregon_parks_run_two_at_a_time_without_blocking_others(
