@@ -130,8 +130,7 @@ class SearchWarningResponse(BaseModel):
 
 
 # Human labels for BookingSystem values. A warning must name the source that
-# actually failed — the previous copy hardcoded "WA State Parks" for every
-# waf_blocked warning, so an Oregon outage told users Washington was down.
+# actually failed, not a fixed one.
 SOURCE_LABELS = {
     "recgov": "Recreation.gov",
     "wa_state": "WA State Parks",
@@ -250,63 +249,47 @@ class CampgroundResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def _generate_search_summary(
-    results_data: list[dict],
-    query: SearchQuery,
-    posthog_distinct_id: str | None = None,
-) -> str | None:
-    """Generate a brief AI summary of search results. Returns None on failure.
+def _warning_responses(warnings) -> list[SearchWarningResponse]:
+    return [
+        SearchWarningResponse(
+            kind=w.kind,
+            count=w.count,
+            source=w.source,
+            message=warning_message(w.kind, w.source, w.count),
+        )
+        for w in warnings
+    ]
 
-    Off unless SEARCH_SUMMARY_ENABLED is truthy. Dropped 2026-11-07: it stated
-    upstream data bugs as fact ("only 1 site for June 2027" from a not-yet-
-    released month) and its urgency contradicted docs/BRAND.md. The key gate
-    alone couldn't turn it off: NL search and the planner share the key.
-    """
-    import asyncio
-    import os
 
-    if os.getenv("SEARCH_SUMMARY_ENABLED", "").strip().lower() not in ("1", "true", "yes"):
+def _diagnosis_response(d) -> DiagnosisResponse | None:
+    if not d:
         return None
-
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return None
-
-    from pnw_campsites.posthog_client import HAIKU_MODEL, get_anthropic_client
-
-    client = get_anthropic_client(api_key)
-
-    compact = json.dumps(results_data[:20])  # cap at 20 for token budget
-    state_str = query.state or "all states"
-    date_str = f"{query.start_date} to {query.end_date}"
-
-    prompt = (
-        "Summarize these campsite search results as 2-3 bullet points.\n\n"
-        "Format each as: - **Campground Name** — one key fact or recommendation\n\n"
-        "First bullet: top pick and why (distance, features, availability).\n"
-        "Second bullet: a runner-up or useful alternative.\n"
-        "Optional third: a pattern or tip (e.g. 'weekdays have more openings').\n\n"
-        f"Search: {state_str}, {date_str}, "
-        f"{query.min_consecutive_nights} nights\n"
-        f"Results ({len(results_data)} campgrounds):\n"
-        f"{compact}\n\n"
-        "Voice: declarative, specific, data-forward. No filler, no sign-off."
+    return DiagnosisResponse(
+        registry_matches=d.registry_matches,
+        distance_filtered=d.distance_filtered,
+        checked_for_availability=d.checked_for_availability,
+        binding_constraint=d.binding_constraint,
+        explanation=d.explanation,
     )
 
-    try:
-        response = await asyncio.wait_for(
-            client.messages.create(
-                model=HAIKU_MODEL,
-                max_tokens=150,
-                messages=[{"role": "user", "content": prompt}],
-                posthog_distinct_id=posthog_distinct_id,
-                posthog_privacy_mode=True,
-            ),
-            timeout=3.0,
+
+def _date_suggestion_responses(suggestions) -> list[DateSuggestionResponse]:
+    return [
+        DateSuggestionResponse(
+            start_date=s.start_date,
+            end_date=s.end_date,
+            campgrounds_with_availability=s.campgrounds_with_availability,
+            reason=s.reason,
         )
-        return response.content[0].text.strip()
-    except Exception:
-        return None
+        for s in suggestions
+    ]
+
+
+def _action_chip_responses(chips) -> list[ActionChipResponse]:
+    return [
+        ActionChipResponse(action=c.action, label=c.label, params=c.params)
+        for c in chips
+    ]
 
 
 def _iso(d: date | None) -> str | None:
@@ -462,22 +445,6 @@ def _lookup_weather_single(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/campgrounds/{facility_id}/tips")
-async def get_booking_tips(facility_id: str):
-    """Return cached booking tips for a campground."""
-    import json as _json
-    registry = get_registry()
-    cg = registry.get_by_facility_id(facility_id)
-    if not cg:
-        return {"tips": [], "data_through": None}
-    tips_raw = cg.booking_tips or "[]"
-    try:
-        tips = _json.loads(tips_raw) if isinstance(tips_raw, str) else tips_raw
-    except (ValueError, TypeError):
-        tips = []
-    return {"tips": tips, "facility_id": facility_id}
-
-
 @router.get("/search", response_model=SearchResponse)
 async def search(
     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
@@ -566,43 +533,10 @@ async def search(
             )
             for r in results.results
         ],
-        warnings=[
-            SearchWarningResponse(
-                kind=w.kind,
-                count=w.count,
-                source=w.source,
-                message=warning_message(w.kind, w.source, w.count),
-            )
-            for w in results.warnings
-        ],
-        diagnosis=DiagnosisResponse(
-            registry_matches=results.diagnosis.registry_matches,
-            distance_filtered=results.diagnosis.distance_filtered,
-            checked_for_availability=(
-                results.diagnosis.checked_for_availability
-            ),
-            binding_constraint=results.diagnosis.binding_constraint,
-            explanation=results.diagnosis.explanation,
-        ) if results.diagnosis else None,
-        date_suggestions=[
-            DateSuggestionResponse(
-                start_date=s.start_date,
-                end_date=s.end_date,
-                campgrounds_with_availability=(
-                    s.campgrounds_with_availability
-                ),
-                reason=s.reason,
-            )
-            for s in results.date_suggestions
-        ],
-        action_chips=[
-            ActionChipResponse(
-                action=c.action,
-                label=c.label,
-                params=c.params,
-            )
-            for c in results.action_chips
-        ],
+        warnings=_warning_responses(results.warnings),
+        diagnosis=_diagnosis_response(results.diagnosis),
+        date_suggestions=_date_suggestion_responses(results.date_suggestions),
+        action_chips=_action_chip_responses(results.action_chips),
         not_released_campgrounds=results.not_released.campgrounds,
         releases_on_earliest=results.not_released.releases_on_earliest,
         releases_on_latest=results.not_released.releases_on_latest,
@@ -632,8 +566,6 @@ async def search_stream(
     q: str | None = Query(None, description="Natural language search query"),
 ):
     """SSE streaming search — yields results as each batch completes."""
-    import os
-
     engine = get_engine()
     nl_parsed: dict | None = None
     # Exact dates are arrival and checkout; dates parsed from `q` are nights.
@@ -671,8 +603,6 @@ async def search_stream(
     # Require dates (either from query params or NL parse)
     if not start_date or not end_date:
         # Default: 2 weeks out, 30-day window
-        from datetime import timedelta
-
         start_date = start_date or (date.today() + timedelta(days=14))
         end_date = end_date or (start_date + timedelta(days=30))
 
@@ -725,15 +655,13 @@ async def search_stream(
             }
             yield f"data: {json.dumps(parsed_event)}\n\n"
 
-        available_count = 0
-        summary_data: list[dict] = []
         async for item in engine.search_stream(query):
             # StreamProgressEvent = checked but no availability
             if isinstance(item, StreamProgressEvent):
                 progress = {"type": "progress", "checked": item.checked, "total": item.total}
                 yield f"data: {json.dumps(progress)}\n\n"
-                # The campground itself, for v2's "Full or not released yet"
-                # group (v1.48 D4). A failed check is a warning, not "full".
+                # The campground itself, for the "Full or not released yet"
+                # group. A failed check is a warning, not "full".
                 if item.result is not None and not item.result.error:
                     unavailable = _format_result(
                         item.result, booking_system or BookingSystem.RECGOV,
@@ -750,13 +678,7 @@ async def search_stream(
                     payload = {
                         "type": "warnings",
                         "warnings": [
-                            {
-                                "kind": w.kind,
-                                "count": w.count,
-                                "source": w.source,
-                                "message": warning_message(w.kind, w.source, w.count),
-                            }
-                            for w in item.warnings
+                            w.model_dump() for w in _warning_responses(item.warnings)
                         ],
                     }
                     yield f"data: {json.dumps(payload)}\n\n"
@@ -801,80 +723,33 @@ async def search_stream(
             # StreamDiagnosisEvent = zero results, emit diagnosis
             if isinstance(item, StreamDiagnosisEvent):
                 if item.diagnosis or item.date_suggestions:
+                    diagnosis = _diagnosis_response(item.diagnosis)
                     meta = {
                         "type": "diagnosis",
-                        "diagnosis": (
-                            {
-                                "registry_matches": item.diagnosis.registry_matches,
-                                "distance_filtered": item.diagnosis.distance_filtered,
-                                "checked_for_availability": (
-                                    item.diagnosis.checked_for_availability
-                                ),
-                                "binding_constraint": (
-                                    item.diagnosis.binding_constraint
-                                ),
-                                "explanation": item.diagnosis.explanation,
-                            }
-                            if item.diagnosis
-                            else None
-                        ),
+                        "diagnosis": diagnosis.model_dump() if diagnosis else None,
                         "date_suggestions": [
-                            {
-                                "start_date": s.start_date,
-                                "end_date": s.end_date,
-                                "campgrounds_with_availability": (
-                                    s.campgrounds_with_availability
-                                ),
-                                "reason": s.reason,
-                            }
-                            for s in item.date_suggestions
+                            d.model_dump()
+                            for d in _date_suggestion_responses(item.date_suggestions)
                         ],
                         "action_chips": [
-                            {
-                                "action": c.action,
-                                "label": c.label,
-                                "params": c.params,
-                            }
-                            for c in item.action_chips
+                            c.model_dump()
+                            for c in _action_chip_responses(item.action_chips)
                         ],
                     }
                     yield f"data: {json.dumps(meta)}\n\n"
                 continue
 
-            # CampgroundResult — normal result
-            weather = None
-            if start_date and end_date:
-                weather = _lookup_weather_single(
-                    item.campground.latitude,
-                    item.campground.longitude,
-                    start_date,
-                    end_date,
-                )
+            weather = _lookup_weather_single(
+                item.campground.latitude,
+                item.campground.longitude,
+                start_date,
+                end_date,
+            )
             data = _format_result(
                 item, booking_system or BookingSystem.RECGOV,
                 weather=weather,
             )
             yield f"data: {json.dumps(data.model_dump(mode='json'))}\n\n"
-            if item.total_available_sites > 0:
-                available_count += 1
-                summary_data.append({
-                    "name": item.campground.name,
-                    "sites": item.total_available_sites,
-                    "drive": item.estimated_drive_minutes,
-                    "tags": item.campground.tags[:3],
-                    "state": item.campground.state,
-                })
-
-        # AI summary when enough results to warrant it
-        if available_count > 5:
-            try:
-                summary_text = await _generate_search_summary(
-                    summary_data, query, posthog_distinct_id=ph_distinct_id,
-                )
-                if summary_text:
-                    yield f"data: {json.dumps({'type': 'summary', 'text': summary_text})}\n\n"
-            except Exception:
-                pass  # Silent skip — summary is optional
 
         yield "data: [DONE]\n\n"
 

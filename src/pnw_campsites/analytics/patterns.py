@@ -33,12 +33,10 @@ def get_availability_summary(
     if not rows:
         return None
 
-    # Count unique observation dates
     observed_dates = {r["observed_at"][:10] for r in rows}
     if len(observed_dates) < MIN_OBSERVATION_DAYS:
         return None
 
-    # Day-of-week availability rates
     day_available = Counter()
     day_total = Counter()
     for r in rows:
@@ -58,7 +56,6 @@ def get_availability_summary(
         if total > 0:
             day_rates[dow] = round(day_available.get(dow, 0) / total * 100)
 
-    # Overall fill rate
     total = sum(day_total.values())
     available = sum(day_available.values())
     fill_rate = round((1 - available / total) * 100) if total else 0
@@ -131,7 +128,6 @@ async def refresh_all_tips(db: WatchDB, registry) -> int:
 
     Returns count of campgrounds updated.
     """
-    # Get campgrounds with availability history
     rows = db._conn.execute(
         "SELECT DISTINCT campground_id FROM availability_daily"
     ).fetchall()

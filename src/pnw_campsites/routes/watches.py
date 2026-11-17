@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -41,12 +42,12 @@ class WatchRequest(BaseModel):
     )
     watch_type: str = Field(default="single", pattern=r"^(single|template|release)$")
     search_params: dict | None = None
-    # Site filters (v1.48 P3c), the same bounds as the search's `who` params.
+    # Site filters, the same bounds as the search's `who` params.
     min_people: int | None = Field(default=None, ge=1, le=50)
     equipment: Literal["tent", "van", "trailer"] | None = None
     rig_length: int | None = Field(default=None, ge=1, le=100)  # trailers only
     site_types: list[Literal["hookups", "walk_in"]] | None = Field(default=None, max_length=2)
-    # Release reminders (P3d): the day the stay's first night opens.
+    # Release reminders: the day the stay's first night opens.
     releases_on: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -92,15 +93,13 @@ def _owns_watch(watch: Watch, user_id: int | None, session_token: str) -> bool:
 
 @router.post("", response_model=WatchResponse)
 async def create_watch(body: WatchRequest, request: Request, response: Response):
-    import json as _json
-
     db = get_watch_db()
     registry = get_registry()
     user_id = get_current_user(request)
     user = get_current_user_obj(request) if user_id else None
     token = get_session_token(request, response) if not user_id else ""
 
-    # v1.4 free-tier watch limit. Pro users have no limit (watch_limit
+    # Free-tier watch limit. Pro users have no limit (watch_limit
     # returns None). Anonymous sessions get the free-tier cap, same as
     # signed-in free users — otherwise the cap is trivially bypassed.
     limit = billing.watch_limit(user)
@@ -121,7 +120,6 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
                 },
             )
 
-    # Validate: template needs search_params, single needs facility_id
     if body.watch_type == "template":
         if not body.search_params:
             raise HTTPException(
@@ -146,7 +144,6 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
     booking_system = watcher.resolve_booking_system(
         body.facility_id, BookingSystem.RECGOV.value, registry,
     )
-    # Look up name from registry if not provided
     name = body.name
     if not name and body.facility_id:
         cg = registry.get_by_facility_id(body.facility_id, BookingSystem(booking_system))
@@ -171,7 +168,7 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         user_id=user_id,
         booking_system=booking_system,
         watch_type=body.watch_type,
-        search_params=_json.dumps(body.search_params) if body.search_params else "",
+        search_params=json.dumps(body.search_params) if body.search_params else "",
         min_people=body.min_people,
         equipment=body.equipment,
         rig_length=body.rig_length if body.equipment == "trailer" else None,
@@ -187,7 +184,6 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
 
 
 def _watch_to_response(w: Watch) -> WatchResponse:
-    import json as _json
     return WatchResponse(
         id=w.id,
         facility_id=w.facility_id,
@@ -201,7 +197,7 @@ def _watch_to_response(w: Watch) -> WatchResponse:
         enabled=w.enabled,
         created_at=w.created_at,
         watch_type=w.watch_type,
-        search_params=_json.loads(w.search_params) if w.search_params else None,
+        search_params=json.loads(w.search_params) if w.search_params else None,
         expired=w.end_date < watcher.pacific_today().isoformat(),
         min_people=w.min_people,
         equipment=w.equipment,
@@ -224,7 +220,7 @@ async def list_watches(request: Request, response: Response):
 
 
 @router.delete("/{watch_id}")
-async def delete_watch(watch_id: int, request: Request, response: Response):
+async def delete_watch(watch_id: int, request: Request):
     db = get_watch_db()
     user_id = get_current_user(request)
     token = request.cookies.get(SESSION_COOKIE, "")
@@ -236,7 +232,7 @@ async def delete_watch(watch_id: int, request: Request, response: Response):
 
 
 @router.patch("/{watch_id}/toggle")
-async def toggle_watch(watch_id: int, request: Request, response: Response):
+async def toggle_watch(watch_id: int, request: Request):
     db = get_watch_db()
     user_id = get_current_user(request)
     token = request.cookies.get(SESSION_COOKIE, "")

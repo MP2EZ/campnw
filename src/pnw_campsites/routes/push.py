@@ -6,7 +6,6 @@ import os
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
-from starlette.responses import Response
 
 from pnw_campsites.routes.deps import (
     SESSION_COOKIE,
@@ -44,7 +43,7 @@ async def get_vapid_key():
 
 
 @router.post("/subscribe")
-async def push_subscribe(body: PushSubscribeRequest, request: Request, response: Response):
+async def push_subscribe(body: PushSubscribeRequest, request: Request):
     """Register a web push subscription for the current user or session."""
     db = get_watch_db()
     user_id = get_current_user(request)

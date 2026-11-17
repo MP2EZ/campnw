@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from pnw_campsites.routes.deps import (
@@ -36,9 +38,6 @@ async def _enhance_rec_reasons(
     posthog_distinct_id: str | None = None,
 ) -> list[str] | None:
     """Generate personalized recommendation reasons via Haiku batch call."""
-    import asyncio
-    import os
-
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key:
         return None
@@ -114,7 +113,6 @@ async def recommendations(request: Request):
     if not affinities["tags"] and not affinities["states"]:
         return []
 
-    # Score registry campgrounds against user affinities
     top_states = sorted(
         affinities["states"].items(), key=lambda x: x[1], reverse=True,
     )
@@ -123,7 +121,7 @@ async def recommendations(request: Request):
     # Filter to the user's affinity states in SQL. Passing state=None whenever
     # the top two states tied meant scanning and hydrating the whole 1,368-row
     # registry (~556ms of blocking CPU) on every signed-in app mount.
-    candidates = registry.search(states=target_states or None)
+    candidates = registry.search(states=target_states)
 
     watched = affinities["watched_facility_ids"]
     tag_scores = affinities["tags"]
@@ -134,20 +132,17 @@ async def recommendations(request: Request):
         if cg.facility_id in watched:
             continue
 
-        # Tag overlap score
         tag_overlap = sum(
-            tag_scores.get(t, 0) for t in (cg.tags or [])
+            tag_scores.get(t, 0) for t in cg.tags
         )
-        # State match score
         state_match = state_scores.get(cg.state, 0)
 
         score = tag_overlap * 2 + state_match
         if score <= 0:
             continue
 
-        # Build reason string from strongest signal
         top_tag = max(
-            ((t, tag_scores.get(t, 0)) for t in (cg.tags or []) if t in tag_scores),
+            ((t, tag_scores.get(t, 0)) for t in cg.tags if t in tag_scores),
             key=lambda x: x[1],
             default=None,
         )
@@ -163,25 +158,19 @@ async def recommendations(request: Request):
         scored.append({
             "facility_id": cg.facility_id,
             "name": cg.name,
-            "booking_system": (
-                cg.booking_system.value
-                if hasattr(cg.booking_system, "value")
-                else str(cg.booking_system)
-            ),
+            "booking_system": cg.booking_system.value,
             "state": cg.state,
-            "tags": cg.tags or [],
-            "vibe": cg.vibe or "",
+            "tags": cg.tags,
+            "vibe": cg.vibe,
             "reason": reason,
             "score": score,
         })
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     results = scored[:5]
-    # Strip internal score from response
     for r in results:
         del r["score"]
 
-    # Enhance reasons with LLM if user has enough search history
     if results and len(affinities["tags"]) >= 3:
         try:
             enhanced = await _enhance_rec_reasons(
@@ -202,7 +191,6 @@ async def search_history(request: Request):
     db = get_watch_db()
     user_id = get_current_user(request)
     if not user_id:
-        from fastapi import HTTPException
         raise HTTPException(status_code=401, detail="Not authenticated")
     return db.get_search_history(user_id)
 

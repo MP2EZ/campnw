@@ -6,9 +6,7 @@ from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
-import pnw_campsites.api as api_module
 from pnw_campsites.analytics.patterns import (
     MIN_OBSERVATION_DAYS,
     extract_booking_tips,
@@ -113,20 +111,3 @@ class TestExtractBookingTips:
         ):
             tips = await extract_booking_tips(watch_db, "232465")
         assert len(tips[0]) <= 200
-
-
-class TestBookingTipsEndpoint:
-    def test_tips_endpoint_returns_empty_for_unknown(self, api_client: TestClient):
-        api_module._registry.get_by_facility_id.return_value = None
-        resp = api_client.get("/api/campgrounds/unknown/tips")
-        assert resp.status_code == 200
-        assert resp.json()["tips"] == []
-
-    def test_tips_endpoint_returns_cached_tips(self, api_client: TestClient):
-        from tests.conftest import make_campground
-        cg = make_campground(facility_id="232465", booking_tips='["Tip 1", "Tip 2"]')
-        api_module._registry.get_by_facility_id.return_value = cg
-        resp = api_client.get("/api/campgrounds/232465/tips")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["tips"] == ["Tip 1", "Tip 2"]

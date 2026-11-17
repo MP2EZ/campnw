@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from pnw_campsites.posthog_client import capture_event
-from pnw_campsites.routes.deps import get_current_user, get_watch_db
+from pnw_campsites.routes.deps import get_client_ip, get_current_user, get_watch_db
 
 router = APIRouter(tags=["sharing"])
 
@@ -43,7 +43,6 @@ def _check_share_rate_limit(uuid: str, client_ip: str) -> bool:
     global _share_cleanup_counter
     hour_key = datetime.now().strftime("%Y-%m-%dT%H")
 
-    # Evict stale entries every 100 calls
     _share_cleanup_counter += 1
     if _share_cleanup_counter >= 100:
         stale = [k for k, (h, _) in _share_view_counts.items() if h != hour_key]
@@ -85,7 +84,6 @@ async def create_share(body: CreateShareRequest, request: Request):
         raise HTTPException(status_code=401, detail="Authentication required")
     db = get_watch_db()
 
-    # Verify ownership
     if body.watch_id:
         watch = db.get_watch(body.watch_id)
         if not watch or watch.user_id != user_id:
@@ -109,8 +107,6 @@ async def create_share(body: CreateShareRequest, request: Request):
 @router.get("/api/shared/{uuid}")
 async def view_shared(uuid: str, request: Request):
     """Public endpoint — no auth required."""
-    from pnw_campsites.routes.deps import get_client_ip
-
     if not _check_share_rate_limit(uuid, get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many views")
 
@@ -119,7 +115,6 @@ async def view_shared(uuid: str, request: Request):
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
 
-    # Check expiry and revocation
     if link.revoked:
         raise HTTPException(status_code=410, detail="Link revoked")
     if link.expires_at < datetime.now().isoformat():
@@ -158,11 +153,7 @@ async def view_shared(uuid: str, request: Request):
                 ],
             }
 
-    # The share loop was instrumented on the supply side only —
-    # share_link_created fired when the sharer copied the URL, but the visit
-    # was untracked at both ends, so K-factor (visits and signups per share)
-    # was uncomputable and the cheapest organic loop in the product could not
-    # be evaluated. Keyed on the sharer so a share's reach is attributable.
+    # Keyed on the sharer so a share's reach is attributable.
     capture_event(
         distinct_id=str(link.created_by) if link.created_by else f"share:{uuid}",
         event="share_link_viewed",
