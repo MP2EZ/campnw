@@ -101,6 +101,7 @@ async def _poll_tranche(
     results = await poll_all(
         _recgov, _goingtocamp, _watch_db, _registry, tranche=tranche,
         reserveamerica=_reserveamerica, tier_filter=tier_filter,
+        oregon=_engine.oregon if _engine else None,
     )
 
     # Enrich notifications with LLM context (fire-and-forget, 3s timeout)

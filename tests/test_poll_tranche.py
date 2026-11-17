@@ -10,6 +10,7 @@ import pytest
 from pnw_campsites.monitor.db import Watch
 from pnw_campsites.monitor.watcher import poll_all, poll_watch
 from pnw_campsites.registry.models import BookingSystem, CampgroundAvailability
+from tests.conftest import make_campground
 
 
 def _mock_availability(facility_id: str = "232465"):
@@ -39,8 +40,12 @@ class TestPollWatch:
         mock_recgov.get_availability_range.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_poll_or_state_watch(self, watch_db):
+    async def test_poll_or_state_watch(self, watch_db, registry):
         """poll_watch calls reserveamerica for OR_STATE watches."""
+        registry.upsert(make_campground(
+            facility_id="409402", state="OR", booking_system=BookingSystem.OR_STATE,
+            booking_url_slug="ainsworth",
+        ))
         watch = watch_db.add_watch(Watch(
             facility_id="409402", name="OR Park",
             start_date="2026-06-01", end_date="2026-06-30",
@@ -48,14 +53,14 @@ class TestPollWatch:
         ))
 
         mock_ra = AsyncMock()
-        mock_ra.get_availability = AsyncMock(
+        mock_ra.get_window = AsyncMock(
             return_value=_mock_availability("409402"),
         )
         result = await poll_watch(
-            watch, None, None, watch_db, reserveamerica=mock_ra,
+            watch, None, None, watch_db, registry, reserveamerica=mock_ra,
         )
         assert result.error is None
-        mock_ra.get_availability.assert_called_once()
+        assert mock_ra.get_window.call_args.args[:3] == ("409402", "ainsworth", "OR")
 
     @pytest.mark.asyncio
     async def test_poll_or_state_without_client_raises(self, watch_db):

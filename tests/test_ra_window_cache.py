@@ -8,17 +8,26 @@ now its own row, and a search fetches only the nights no fresh row covers.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock
 
+import pytest
+
 import pnw_campsites.providers.reserveamerica as ra
+from pnw_campsites.monitor.db import Watch
+from pnw_campsites.monitor.watcher import poll_watch
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.models import (
     AvailabilityStatus,
+    BookingSystem,
+    Campground,
     CampgroundAvailability,
     CampsiteAvailability,
 )
-from pnw_campsites.search.oregon_windows import CachedWindow, merge, plan
+from pnw_campsites.search.engine import SearchEngine, SearchQuery
+from pnw_campsites.search.oregon_windows import CachedWindow, OregonWindows, merge, plan
+from tests.conftest import make_campground
 from tests.test_provider_reserveamerica import _make_record, _make_redux_html
 
 A = AvailabilityStatus.AVAILABLE
@@ -165,3 +174,123 @@ class TestProviderWindow:
         assert set(got.campsites) == {"0", "1", "2"}
         sent = client._session.get.call_args_list[0].kwargs["params"]
         assert (sent["arrivalDate"], sent["departureDate"]) == ("2027-02-05", "2027-02-18")
+
+
+CG = Campground(
+    facility_id="402178", name="Fort Stevens", booking_system=BookingSystem.OR_STATE,
+    state="OR", booking_url_slug="fort-stevens-state-park",
+)
+
+
+class FakeClient:
+    """get_window returns a site available every night of the window."""
+
+    def __init__(self) -> None:
+        self.windows: list[tuple[date, date]] = []
+        self.fail_on: date | None = None
+
+    async def get_window(self, park_id, slug, state, arrival, departure):
+        assert (park_id, slug, state) == ("402178", "fort-stevens-state-park", "OR")
+        if arrival == self.fail_on:
+            raise RuntimeError("boom")
+        self.windows.append((arrival, departure))
+        return avail(dict.fromkeys(nights(arrival, departure), A))
+
+
+class TestOregonWindows:
+    async def test_a_park_is_assembled_and_each_window_is_stored(self, watch_db) -> None:
+        client = FakeClient()
+        got = await OregonWindows(client, watch_db).park(CG, nights(d(5), d(28)), d(28))
+        assert client.windows == [(d(5), d(18)), (d(19), d(28))]
+        assert len(got.campsites["1"].availabilities) == 24
+        assert len(watch_db.get_ra_windows("402178", d(5), d(28), max_age_s=600)) == 2
+
+    async def test_a_repeat_fetches_nothing(self, watch_db) -> None:
+        client = FakeClient()
+        windows = OregonWindows(client, watch_db)
+        await windows.park(CG, nights(d(5), d(28)), d(28))
+        await windows.park(CG, nights(d(5), d(28)), d(28))
+        assert len(client.windows) == 2
+
+    async def test_an_overlapping_search_fetches_only_new_nights(self, watch_db) -> None:
+        client = FakeClient()
+        windows = OregonWindows(client, watch_db)
+        await windows.park(CG, nights(d(5), d(18)), d(18))
+        got = await windows.park(CG, nights(d(6), d(20)), d(20))
+        assert client.windows == [(d(5), d(18)), (d(19), d(20))]
+        assert len(got.campsites["1"].availabilities) == 16
+
+    async def test_windows_done_before_a_failure_are_kept(self, watch_db) -> None:
+        client = FakeClient()
+        client.fail_on = d(19)
+        with pytest.raises(RuntimeError):
+            await OregonWindows(client, watch_db).park(CG, nights(d(5), d(28)), d(28))
+        assert len(watch_db.get_ra_windows("402178", d(5), d(18), max_age_s=600)) == 1
+
+    async def test_a_window_cut_mid_fetch_stores_nothing(self, watch_db) -> None:
+        started = asyncio.Event()
+
+        class Slow(FakeClient):
+            async def get_window(self, *args):
+                started.set()
+                await asyncio.sleep(10)
+
+        task = asyncio.create_task(OregonWindows(Slow(), watch_db).park(CG, [d(5)], d(5)))
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert watch_db.get_ra_windows("402178", d(5), d(5), max_age_s=600) == []
+
+
+class TestEngineUsesWindows:
+    def test_oregon_search_fetches_only_requested_windows(self, watch_db) -> None:
+        client = FakeClient()
+        eng = SearchEngine(registry=None, reserveamerica_client=client, watch_db=watch_db)
+        query = SearchQuery(start_date=d(1, 3), end_date=d(31, 3), days_of_week={4, 5, 6})
+
+        async def run():
+            for _ in range(2):
+                r = await eng._check_campground(CG, query.start_date, query.end_date, query)
+                assert r.error is None
+                assert r.total_available_sites == 1
+
+        asyncio.run(run())
+        assert client.windows == [(d(5, 3), d(18, 3)), (d(19, 3), d(31, 3))]
+
+    def test_a_weekend_fetch_never_answers_an_every_night_search(self, watch_db) -> None:
+        client = FakeClient()
+        eng = SearchEngine(registry=None, reserveamerica_client=client, watch_db=watch_db)
+        weekends = SearchQuery(start_date=d(1, 3), end_date=d(31, 3), days_of_week={4, 5, 6})
+        every = SearchQuery(start_date=d(1, 3), end_date=d(31, 3))
+
+        async def run():
+            await eng._check_campground(CG, weekends.start_date, weekends.end_date, weekends)
+            await eng._check_campground(CG, every.start_date, every.end_date, every)
+
+        asyncio.run(run())
+        # Mar 1-4 was never fetched for the weekends: one new window, starting Mar 1.
+        assert client.windows[2:] == [(d(1, 3), d(14, 3))]
+
+
+class TestWatchPoller:
+    async def test_an_oregon_watch_polls_with_slug_and_state(self, watch_db, registry) -> None:
+        """The poller called get_availability(facility_id, start, end), passing the
+        dates as slug and state, so every Oregon watch poll raised TypeError."""
+        registry.upsert(make_campground(
+            facility_id="402178", name="Fort Stevens", state="OR",
+            booking_system=BookingSystem.OR_STATE, booking_url_slug="fort-stevens-state-park",
+        ))
+        watch = watch_db.add_watch(Watch(
+            facility_id="402178", name="Fort Stevens", start_date="2027-02-05",
+            end_date="2027-02-07", booking_system=BookingSystem.OR_STATE.value,
+        ))
+        client = FakeClient()
+
+        result = await poll_watch(
+            watch, None, None, watch_db, registry=registry, reserveamerica=client,
+        )
+
+        assert result.error is None
+        assert client.windows == [(d(5), d(7))]
+        assert result.current_available == 1

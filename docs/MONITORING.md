@@ -210,6 +210,7 @@ Oregon (ReserveAmerica, 1 req/s app-wide). Each search reports which source held
   - `total_checked` is the number of campgrounds checked.
 - **`fly logs`:**
   - One line per search: `search_stream 90.4s: recgov 20 in 0.7s, or_state 20 in 90.0s (4 timeout), … | first result 4.0s`.
-  - One line per Oregon park: `ReserveAmerica 402178: 22 requests in 58.1s (175 sites)`. It ends in `(cancelled)` when the park timed out.
+  - One line per Oregon park: `ReserveAmerica 402178: 2 windows (1 cached, 1 fetched), 11 requests in 23.4s (175 sites)`. It ends in `(cancelled)` when the park timed out.
+    - Oregon is cached per 14-day window for 10 min (`ra_window_cache`), and searches and watch polls share it. A repeat search shows `cached` windows and 0 requests.
   - Per-request timing and limiter wait are logged at DEBUG.
 - **Admin `GET /api/perf`:** percentiles of whole-search durations. For the stream this is the full stream, not the time to start the response.
