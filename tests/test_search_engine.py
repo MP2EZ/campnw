@@ -853,10 +853,9 @@ class TestSearchIntegration:
         self, registry
     ) -> None:
         """Search results sorted by distance when from_coords set."""
-        # Seed registry with two campgrounds
-        # Not at the base itself: a 0-minute drive is falsy in the engine's sort key.
+        # The close campground sits on the base: a 0-minute drive must sort first.
         close_camp = make_campground(
-            facility_id="9", latitude=47.7, longitude=-122.3
+            facility_id="9", latitude=47.6, longitude=-122.3
         )
         far_camp = make_campground(
             facility_id="2", latitude=47.0, longitude=-121.5
