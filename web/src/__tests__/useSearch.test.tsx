@@ -622,3 +622,45 @@ describe("useSearch coverage", () => {
     expect(result.current.maxResults).toBe(46);
   });
 });
+
+describe("useSearch live announcement", () => {
+  const params: SearchParams = { start_date: "2026-06-05", end_date: "2026-06-07" };
+
+  test("silent mid-stream, announces the count once when the stream finishes", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => { await result.current.handleSearch(params, "find"); });
+    expect(result.current.liveAnnouncement).toBe("");
+
+    act(() => { capturedOnResult!(MOCK_RESULT); });
+    act(() => { capturedOnCoverage!(1, 1); });
+    expect(result.current.liveAnnouncement).toBe("");
+
+    act(() => { capturedOnDone!(); });
+    expect(result.current.liveAnnouncement).toBe(
+      "1 campground has a 1-night stay open Jun 5 – 7.",
+    );
+  });
+
+  test("announces the zero state", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => { await result.current.handleSearch(params, "find"); });
+    act(() => { capturedOnResult!({ ...MOCK_RESULT, total_available_sites: 0 }); });
+    act(() => { capturedOnDone!(); });
+    expect(result.current.liveAnnouncement).toMatch(/^The 1 campground checked doesn’t have /);
+  });
+
+  test("clears on a new search so a repeat count is read again", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => { await result.current.handleSearch(params, "find"); });
+    act(() => { capturedOnResult!(MOCK_RESULT); });
+    act(() => { capturedOnDone!(); });
+    const first = result.current.liveAnnouncement;
+    expect(first).not.toBe("");
+
+    await act(async () => { await result.current.handleSearch(params, "find"); });
+    expect(result.current.liveAnnouncement).toBe("");
+    act(() => { capturedOnResult!(MOCK_RESULT); });
+    act(() => { capturedOnDone!(); });
+    expect(result.current.liveAnnouncement).toBe(first);
+  });
+});
