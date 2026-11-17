@@ -1,8 +1,9 @@
 import { useId, type ReactNode } from "react";
 import {
-  DRIVE_FROM, LONG_WEEKEND, WEEKEND, monthName, monthOptions,
+  LONG_WEEKEND, WEEKEND, monthName, monthOptions,
   type BarState, type Equipment, type When,
 } from "./searchState";
+import { DRIVE_FROM } from "../lib/bases";
 import { formatDateRange } from "../lib/dates";
 import { addDays } from "./candidates";
 

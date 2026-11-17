@@ -463,7 +463,7 @@ describe('API: Search History', () => {
   })
 })
 
-describe('API: Search who filter (v1.48 D5)', () => {
+describe('API: Search who filter', () => {
   const emptyStream = () => ({
     ok: true,
     body: new ReadableStream({

@@ -121,7 +121,7 @@ describe("SitePanel", () => {
     expect(within(dialog).getByRole("link", { name: /^Book on/ })).toHaveFocus();
   });
 
-  test("a weekend chip on a 2-night search opens 2-night stays, not the 3-night weekend (#4)", () => {
+  test("a weekend chip on a 2-night search opens 2-night stays, not the 3-night weekend", () => {
     // Prod (2026-11-14): chip "Fri 5 – Sun 7", panel "Fri Feb 5 → Mon Feb 8 · 3 nights".
     const p: SearchParams = { ...weekends, days_of_week: "4,5,6" };
     const place = { ...fortEbey, booking_system: "or_state", windows: [

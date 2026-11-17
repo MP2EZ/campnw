@@ -92,10 +92,9 @@ describe("quickPicks", () => {
     expect(picks.map((p) => p.kicker)).toEqual(["Most open weekends"]);
   });
 
-  test("picks only show when they save scrolling: fewer than 6 places, the list is short enough (UX #13)", () => {
+  test("picks only show when they save scrolling: fewer than 6 places, the list is short enough", () => {
     // Prod, Feb search: 4 results, 3 of them repeated as tiles above the list.
     const four = [place("A", 30, [4]), place("B", 50, [4, 11]), place("C", 70, [18]), place("D", 90, [25])];
-    expect(MIN_PLACES).toBe(6);
     expect(quickPicks([...four, place("E", 95, [4])], juneWeekends)).toEqual([]);
     expect(quickPicks(fill(four), juneWeekends)).not.toEqual([]);
   });

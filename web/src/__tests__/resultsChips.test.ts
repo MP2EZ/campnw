@@ -80,7 +80,7 @@ describe("buildWindowChips: weekend searches", () => {
   });
 });
 
-describe("buildWindowChips: a chip is one stay of the searched length (#4)", () => {
+describe("buildWindowChips: a chip is one stay of the searched length", () => {
   // Prod (2026-11-14): on a 2-night weekend search the chip read "Fri 5 – Sun 7"
   // (the block's nights) while its panel opened "Fri Feb 5 → Mon Feb 8 · 3 nights".
   test("a site open all three nights still makes a 2-night chip, arrival → checkout", () => {
@@ -117,14 +117,6 @@ describe("buildWindowChips: exact dates", () => {
     expect(r.shown).toEqual([
       expect.objectContaining({ start: "2027-06-04", end: "2027-06-05", label: "Fri 4 → Sun 6", open: 2 }),
     ]);
-  });
-});
-
-describe("buildWindowChips: exact dates end at checkout", () => {
-  test("the chip spans the nights, not the checkout day", () => {
-    const r = buildWindowChips(place([win("A", "2027-06-04", "2027-06-05")]),
-      { start_date: "2027-06-04", end_date: "2027-06-06", mode: "exact", nights: 2 });
-    expect(r.shown).toEqual([expect.objectContaining({ start: "2027-06-04", end: "2027-06-05", label: "Fri 4 → Sun 6" })]);
   });
 });
 
@@ -278,7 +270,7 @@ describe("buildWindowChips: weekends that aren't open (D4)", () => {
   });
 });
 
-describe("buildWindowChips: runs of weekends nothing can be reserved (UX #3)", () => {
+describe("buildWindowChips: runs of weekends nothing can be reserved", () => {
   // May 2027: Sat 1 (the search starts that day), then Fridays 7, 14, 21, 28.
   const mayWeekends: SearchParams = { ...juneWeekends, start_date: "2027-05-01", end_date: "2027-05-31" };
 
@@ -328,7 +320,7 @@ describe("buildWindowChips: runs of weekends nothing can be reserved (UX #3)", (
   });
 });
 
-describe("buildWindowChips: summary for flexible ranges open most days (UX #25)", () => {
+describe("buildWindowChips: summary for flexible ranges open most days", () => {
   // April 2027, 2 nights: arrivals Apr 1 – 29.
   const april: SearchParams = { start_date: "2027-04-01", end_date: "2027-04-30", mode: "find", nights: 2 };
   const site = (s: string, start = "2027-04-01", end = "2027-04-30") => win(s, start, end);

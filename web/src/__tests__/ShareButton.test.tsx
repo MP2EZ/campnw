@@ -6,7 +6,6 @@ vi.mock("../api", () => ({
   track: vi.fn(),
 }));
 
-// Mock clipboard
 Object.assign(navigator, {
   clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
 });

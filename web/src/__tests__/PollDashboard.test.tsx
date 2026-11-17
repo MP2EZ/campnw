@@ -115,8 +115,7 @@ describe("PollDashboard", () => {
     vi.mocked(getPollStatus).mockResolvedValue(null);
     const { container } = render(<PollDashboard open={true} />);
 
-    await waitFor(() => {
-      expect(screen.queryByText("Poll status")).not.toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.queryByText("Loading poll status...")).toBeNull());
+    expect(container.innerHTML).toBe("");
   });
 });

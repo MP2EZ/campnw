@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 
@@ -32,38 +32,23 @@ describe("useKeyboardShortcuts", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  test("ignores when focus is in input", () => {
+  test.each([
+    ["input", "j"],
+    ["textarea", "k"],
+  ])("ignores when focus is in %s", (tag, key) => {
     const handler = vi.fn();
     renderHook(() =>
-      useKeyboardShortcuts([{ key: "j", handler, description: "Next" }]),
+      useKeyboardShortcuts([{ key, handler, description: "Shortcut" }]),
     );
 
-    const input = document.createElement("input");
-    document.body.appendChild(input);
-    input.focus();
+    const field = document.createElement(tag);
+    document.body.appendChild(field);
+    field.focus();
 
-    const event = new KeyboardEvent("keydown", { key: "j", bubbles: true });
-    input.dispatchEvent(event);
-
-    expect(handler).not.toHaveBeenCalled();
-    document.body.removeChild(input);
-  });
-
-  test("ignores when focus is in textarea", () => {
-    const handler = vi.fn();
-    renderHook(() =>
-      useKeyboardShortcuts([{ key: "k", handler, description: "Prev" }]),
-    );
-
-    const textarea = document.createElement("textarea");
-    document.body.appendChild(textarea);
-    textarea.focus();
-
-    const event = new KeyboardEvent("keydown", { key: "k", bubbles: true });
-    textarea.dispatchEvent(event);
+    field.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
 
     expect(handler).not.toHaveBeenCalled();
-    document.body.removeChild(textarea);
+    document.body.removeChild(field);
   });
 
   test("ignores when modifier key is held", () => {

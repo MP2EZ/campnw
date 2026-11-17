@@ -94,7 +94,7 @@ describe("results v2 token contrast", () => {
   const PAIRS: [string, string, number][] = [
     ["--chip-open-text", "--chip-open-bg", 4.5],
     ["--chip-full-text", "--chip-full-bg", 4.5],
-    // Watch / Remind chips (UX #2): their solid edge is the affordance, so it
+    // Watch / Remind chips: their solid edge is the affordance, so it
     // must read against the card as well as the chip.
     ["--chip-full-text", "--chip-action-bg", 4.5],
     ["--chip-action-text", "--chip-action-bg", 4.5],
@@ -107,7 +107,7 @@ describe("results v2 token contrast", () => {
     ["--focus-ring", "--notice-info-bg", 3],
     ["--pick-kicker", "--surface-tile", 4.5],
     ["--text", "--surface-tile", 4.5],
-    // The active mode tab's text and underline (UX #15: --accent was 2.8:1 in dark).
+    // The active mode tab's text and underline (--accent was 2.8:1 in dark).
     ["--accent-text", "--bg", 4.5],
     // Map pins (D13): each pin's edge against its own halo, so it reads on any tile.
     ["--pin-open", "--pin-halo", 3],

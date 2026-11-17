@@ -104,7 +104,7 @@ describe("WindowChips", () => {
     expect(screen.getByText("Fri 18 → Sun 20")).toBeInTheDocument();
   });
 
-  test("a watchable chip leads with a bell and an outline; a chip with nothing to do is flat (UX #2)", () => {
+  test("a watchable chip leads with a bell and an outline; a chip with nothing to do is flat", () => {
     const result = {
       ...place(six.map((s) => win(s, "2027-06-04", "2027-06-06"))),
       closed_ranges: [{ start: "2027-06-18", end: "2027-06-30" }],
@@ -120,7 +120,7 @@ describe("WindowChips", () => {
     expect(inert).toHaveTextContent("Not reservable");
   });
 
-  test("a range open most days is one summary that expands to every arrival (UX #25)", async () => {
+  test("a range open most days is one summary that expands to every arrival", async () => {
     const april: SearchParams = { start_date: "2027-04-01", end_date: "2027-04-30", mode: "find", nights: 2 };
     renderChips([win("A", "2027-04-01", "2027-04-11"), win("A", "2027-04-13", "2027-04-30")], april);
     const summary = screen.getByRole("button", { name: "Most arrivals Apr 1 – 29, 1 left · except Apr 11, 12, pick a date" });

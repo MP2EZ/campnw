@@ -3,10 +3,6 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactElement } from "react";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 const mockLogout = vi.fn();
 const mockUpdateProfile = vi.fn().mockResolvedValue(undefined);
 
@@ -45,10 +41,6 @@ import { deleteAccount } from "../api";
 
 const renderInRouter = (ui: ReactElement) =>
   render(<MemoryRouter>{ui}</MemoryRouter>);
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("UserMenu", () => {
   beforeEach(() => {
