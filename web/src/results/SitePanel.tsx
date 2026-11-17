@@ -17,7 +17,7 @@ interface Props {
   /** Gets focus back when the panel closes: the chip that opened it. */
   returnFocus: HTMLElement | null;
   onClose: () => void;
-  onBook: (site: PanelSite, sites: number) => void;
+  onBook: (site: PanelSite) => void;
 }
 
 const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):checked, input:not([type="radio"]):not([disabled])';
@@ -138,7 +138,7 @@ export function SitePanel({ result, chip, params, returnFocus, onClose, onBook }
         <div className="rv2-panel-foot">
           {site?.href ? (
             <a className="rv2-panel-book" href={site.href} target="_blank" rel="noopener"
-              onClick={() => onBook(site, count)}>
+              onClick={() => onBook(site)}>
               Book on {where}<IconExternal className="icon" />
               <span className="sr-only">, site {site.name} (opens in a new tab)</span>
             </a>

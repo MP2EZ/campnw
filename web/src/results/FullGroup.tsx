@@ -5,16 +5,12 @@ import { displayName } from "../lib/displayName";
 import { plural } from "../lib/plural";
 import { SOURCE_NAMES } from "../lib/sources";
 import { IconBell } from "../icons";
-import { fullGroupTitle, unavailability, unavailableText } from "./candidates";
+import { byDrive, fullGroupTitle, unavailability, unavailableText } from "./candidates";
 import { remindStays, watchStays } from "./watch";
 import { useOpenWatch } from "./watchContext";
 
 const ROW_LIMIT = 6;
 export const FULL_GROUP_ID = "rv2-full";
-
-const byDrive = (a: CampgroundResult, b: CampgroundResult) =>
-  Number(!!a.boat_in) - Number(!!b.boat_in)
-  || (a.estimated_drive_minutes ?? Infinity) - (b.estimated_drive_minutes ?? Infinity);
 
 /**
  * "Full or not released yet" (D4): checked places with nothing to book on
@@ -31,12 +27,11 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
   const openWatch = useOpenWatch();
   if (places.length === 0) return null;
   const today = todayIso();
-  // Each row's alert: live Watch or Remind me inside results, a disabled stub
-  // outside them, or none (not reservable, or no release date left).
+  // Each row's alert: live Watch or Remind me, a disabled stub when there is
+  // no stay to alert on, or none (not reservable, or no release date left).
   const rows = [...places].sort(byDrive).map((r) => {
     const { status, action } = unavailableText(unavailability(r, params), params);
-    const live = !openWatch ? null
-      : action === "Watch" ? (watchStays(r, params).length > 0 ? "watch" : null)
+    const live = action === "Watch" ? (watchStays(r, params).length > 0 ? "watch" : null)
       : action === "Remind me" ? (remindStays(r, params, today).length > 0 ? "remind" : "none")
       : null;
     return { r, status, action, live };
@@ -47,9 +42,7 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
   const watch = rows.some((x) => x.live === "watch");
   const remind = rows.some((x) => x.live === "remind");
   // Offer only the alerts the rows actually have.
-  const offer = !openWatch
-    ? rows.some((x) => x.action) && "Alerts for when a site frees up, or when booking opens, are coming soon."
-    : watch && remind ? "Watch a place to hear when a site frees up, or get a reminder the morning booking opens."
+  const offer = watch && remind ? "Watch a place to hear when a site frees up, or get a reminder the morning booking opens."
     : watch ? "Watch a place to hear when a site frees up."
     : remind ? "Get a reminder the morning booking opens."
     : null;
@@ -81,12 +74,12 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
               <span className="rv2-full-status">{status}</span>
               {live === "watch" ? (
                 <button type="button" className="rv2-full-action rv2-full-action--live"
-                  aria-label={`Watch: ${name}`} onClick={() => openWatch?.(r, undefined, "full_group")}>
+                  aria-label={`Watch: ${name}`} onClick={() => openWatch(r, undefined, "full_group")}>
                   <IconBell className="rv2-icon" />Watch
                 </button>
               ) : live === "remind" ? (
                 <button type="button" className="rv2-full-action rv2-full-action--live"
-                  aria-label={`Remind me: ${name}`} onClick={() => openWatch?.(r, undefined, "full_group", "remind")}>
+                  aria-label={`Remind me: ${name}`} onClick={() => openWatch(r, undefined, "full_group", "remind")}>
                   <IconBell className="rv2-icon" />Remind me
                 </button>
               ) : live === null && action && (

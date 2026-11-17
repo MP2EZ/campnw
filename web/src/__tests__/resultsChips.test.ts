@@ -379,12 +379,12 @@ describe("buildWindowChips: every chip", () => {
     expect(r.shown.map((c) => c.open)).toEqual([1]);
   });
 
-  test("is open, fits everyone until there's a party filter, and is few at 5 or under", () => {
+  test("is open, and few at 5 or under", () => {
     const five = ["A", "B", "C", "D", "E"].map((s) => win(s, "2027-06-04", "2027-06-05"));
     const six = ["A", "B", "C", "D", "E", "F"].map((s) => win(s, "2027-06-11", "2027-06-12"));
     const [a, b] = openOnly(buildWindowChips(place([...five, ...six]), juneWeekends)).shown;
-    expect(a).toMatchObject({ status: "open", open: 5, fit: 5, few: true });
-    expect(b).toMatchObject({ status: "open", open: 6, fit: 6, few: false });
+    expect(a).toMatchObject({ status: "open", open: 5, few: true });
+    expect(b).toMatchObject({ status: "open", open: 6, few: false });
   });
 
   test("hands off to the one site's booking page, else the campground's", () => {

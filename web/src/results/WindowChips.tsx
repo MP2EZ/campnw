@@ -10,10 +10,10 @@ interface Props {
   /** An open chip was pressed: show its sites (P3b). `el` gets focus back. */
   onOpen: (chip: WindowChip, el: HTMLElement) => void;
   /** A full chip opens the Watch sheet (P3c); without this it only says "Full". */
-  onWatch?: (chip: WindowChip) => void;
+  onWatch: (chip: WindowChip) => void;
   /** A not-released chip whose start is in `remindStarts` opens a release reminder (P3d). */
-  onRemind?: (chip: WindowChip) => void;
-  remindStarts?: ReadonlySet<string>;
+  onRemind: (chip: WindowChip) => void;
+  remindStarts: ReadonlySet<string>;
 }
 
 function groupLabel(params: SearchParams | null): string {
@@ -52,8 +52,8 @@ export function WindowChips({ chips, name, params, onOpen, onWatch, onRemind, re
   return (
     <div role="group" aria-label={label} className="rv2-chips">
       {list.map((c) => {
-        const watch = c.status === "full" && !!onWatch;
-        const remind = c.status === "not_released" && !!onRemind && !!remindStarts?.has(c.start);
+        const watch = c.status === "full";
+        const remind = c.status === "not_released" && remindStarts.has(c.start);
         const body = (
           <>
             <span className="rv2-chip-dates">{c.label}</span>
@@ -76,7 +76,7 @@ export function WindowChips({ chips, name, params, onOpen, onWatch, onRemind, re
         if (watch || remind) {
           return (
             <button key={key} type="button" className="rv2-chip rv2-chip-full rv2-chip-watch"
-              onClick={() => (watch ? onWatch(c) : onRemind!(c))}>
+              onClick={() => (watch ? onWatch(c) : onRemind(c))}>
               {body}
             </button>
           );

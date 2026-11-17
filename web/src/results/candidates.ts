@@ -235,3 +235,8 @@ export function fullGroupTitle(places: CampgroundResult[], params: SearchParams 
   });
   return closed ? "Nothing to book" : "Full or not released yet";
 }
+
+/** Closest first, boat-in places last. */
+export const byDrive = (a: CampgroundResult, b: CampgroundResult) =>
+  Number(!!a.boat_in) - Number(!!b.boat_in)
+  || (a.estimated_drive_minutes ?? Infinity) - (b.estimated_drive_minutes ?? Infinity);

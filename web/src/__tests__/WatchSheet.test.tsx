@@ -59,7 +59,7 @@ describe("WatchSheet", () => {
       min_people: 4, equipment: "trailer", rig_length: 30, site_types: ["hookups"],
     });
     expect(api.track).toHaveBeenCalledWith("watch_created", expect.objectContaining({
-      from: "full_group", has_filters: 1, ui_version: "v2",
+      from: "full_group", has_filters: 1,
     }));
     expect(await screen.findByText(/Watching Fri Jun 18 – Sun 20/)).toHaveFocus();
     expect(screen.getByRole("button", { name: "Turn on notifications" })).toBeInTheDocument();
@@ -157,7 +157,7 @@ describe("WatchSheet in release mode", () => {
       min_people: 4, equipment: "trailer", rig_length: 30,
     });
     expect(api.track).toHaveBeenCalledWith("release_reminder_created", expect.objectContaining({
-      from: "full_group", releases_on: "2026-12-25", ui_version: "v2", has_filters: 1,
+      from: "full_group", releases_on: "2026-12-25", has_filters: 1,
     }));
     expect(api.track).not.toHaveBeenCalledWith("watch_created", expect.anything());
     expect(await screen.findByText(/We'll remind you at 6:55 am on Fri, Dec 25/)).toHaveFocus();

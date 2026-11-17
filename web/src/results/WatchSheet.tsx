@@ -126,7 +126,6 @@ export function WatchSheet({ place, params, mode = "watch", stays, initial, from
       track(req.releases_on ? "release_reminder_created" : "watch_created", {
         from,
         has_filters: hasFilters(req) ? 1 : 0,
-        ui_version: "v2",
         facility_id: place.facility_id,
         source: place.booking_system,
         start_date: req.start_date,

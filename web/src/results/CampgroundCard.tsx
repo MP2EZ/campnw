@@ -54,7 +54,6 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
     source: result.booking_system,
     sites_in_chip: chip.open,
     nights: nightsIn(chip.stay.start, chip.stay.end),
-    ui_version: "v2",
   });
   const onOpen = (chip: WindowChip, el: HTMLElement) => {
     track("window_chip_opened", { ...event(chip), chip_start: chip.start });
@@ -76,8 +75,8 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
   const { selected, ...selection } = useCardSelection(result.facility_id);
   const openWatch = useOpenWatch();
   const remindStarts = useMemo(
-    () => new Set(openWatch ? remindStays(result, params, todayIso()).map((s) => s.start) : []),
-    [openWatch, result, params],
+    () => new Set(remindStays(result, params, todayIso()).map((s) => s.start)),
+    [result, params],
   );
 
   return (
@@ -116,8 +115,8 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
           name={name}
           params={params}
           onOpen={onOpen}
-          onWatch={openWatch ? (c) => openWatch(result, c.start, "chip") : undefined}
-          onRemind={openWatch ? (c) => openWatch(result, c.start, "chip", "remind") : undefined}
+          onWatch={(c) => openWatch(result, c.start, "chip")}
+          onRemind={(c) => openWatch(result, c.start, "chip", "remind")}
           remindStarts={remindStarts}
         />
         {panel && (
