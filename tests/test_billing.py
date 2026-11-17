@@ -1,15 +1,6 @@
-"""Tests for v1.4 billing foundation.
+"""Tests for billing: schema, WatchDB billing helpers, webhook dispatch, entitlements.
 
-Covers:
-- Schema migration adds the four user billing columns + two new tables
-- WatchDB helpers (get_user_by_stripe_customer_id, stripe_event idempotency,
-  subscription audit trail)
-- billing.handle_webhook_event dispatch + idempotency
-- billing entitlement helpers (is_pro, watch_limit, planner_session_limit)
-
-Stripe SDK calls (checkout/portal session creation, signature verification)
-are integration concerns deferred to slice 2/3 — this slice exercises only
-pure logic that runs without network and without a real Stripe key.
+Stripe calls run against a fake client; nothing here needs network or a real key.
 """
 
 from __future__ import annotations
@@ -19,7 +10,8 @@ import json
 import pytest
 
 from pnw_campsites import billing
-from pnw_campsites.monitor.db import User, WatchDB
+from pnw_campsites.api import _supabase_csp_origin
+from pnw_campsites.monitor.db import User, Watch, WatchDB
 
 # ---------------------------------------------------------------------------
 # Schema migration
@@ -533,50 +525,26 @@ class TestWebhookDispatch:
             e["event_type"] == "customer.subscription.updated" for e in audit
         )
 
-    def test_payment_failed_does_not_change_status(
+    def test_payment_failed_is_audited_without_changing_status(
         self,
         watch_db: WatchDB,
         free_user_with_stripe_customer: User,
     ) -> None:
-        watch_db.update_user(free_user_with_stripe_customer.id, subscription_status="pro")
-        event = {
-            "id": "evt_pf_1",
-            "type": "invoice.payment_failed",
-            "data": {"object": {"customer": "cus_hook_123"}},
-        }
-        billing.handle_webhook_event(event, watch_db)
-        assert (
-            watch_db.get_user_by_id(free_user_with_stripe_customer.id).subscription_status
-            == "pro"
-        )
-        # But the failure is audited
-        audit = watch_db.list_subscription_events(free_user_with_stripe_customer.id)
-        assert any(
-            e["event_type"] == "invoice.payment_failed" for e in audit
-        )
-
-    def test_payment_failed_audit_row_preserves_status(
-        self,
-        watch_db: WatchDB,
-        free_user_with_stripe_customer: User,
-    ) -> None:
-        # Audit row for payment_failed must record both old and new status
-        # as the SAME value (no actual transition happened, just a signal).
-        # Analytics queries depend on this shape to count churn precursors
-        # without confusing them with actual downgrades.
-        watch_db.update_user(
-            free_user_with_stripe_customer.id, subscription_status="pro",
-        )
+        # The audit row records old and new status as the SAME value (no
+        # transition, just a signal). Analytics queries depend on this shape
+        # to count churn precursors without confusing them with downgrades.
+        user_id = free_user_with_stripe_customer.id
+        watch_db.update_user(user_id, subscription_status="pro")
         event = {
             "id": "evt_pf_audit",
             "type": "invoice.payment_failed",
             "data": {"object": {"customer": "cus_hook_123"}},
         }
         billing.handle_webhook_event(event, watch_db)
-        audit = watch_db.list_subscription_events(free_user_with_stripe_customer.id)
+        assert watch_db.get_user_by_id(user_id).subscription_status == "pro"
+        audit = watch_db.list_subscription_events(user_id)
         pf_rows = [e for e in audit if e["event_type"] == "invoice.payment_failed"]
         assert len(pf_rows) == 1
-        # Both old and new are pro — payment_failed doesn't transition state
         assert pf_rows[0]["old_status"] == "pro"
         assert pf_rows[0]["new_status"] == "pro"
 
@@ -606,7 +574,6 @@ class TestWebhookDispatch:
             ("evt_unknown_type",),
         ).fetchone()
         assert row["event_type"] == "customer.discount.created"
-        import json
         parsed = json.loads(row["payload"])
         assert parsed["id"] == "evt_unknown_type"
 
@@ -640,27 +607,6 @@ class TestWebhookDispatch:
             watch_db.get_user_by_id(free_user_with_stripe_customer.id).subscription_status
             == "free"
         )
-
-    def test_event_recorded_in_stripe_events_table(
-        self,
-        watch_db: WatchDB,
-        free_user_with_stripe_customer: User,
-    ) -> None:
-        event = {
-            "id": "evt_recorded",
-            "type": "invoice.payment_failed",
-            "data": {"object": {"customer": "cus_hook_123"}},
-        }
-        billing.handle_webhook_event(event, watch_db)
-        assert watch_db.has_stripe_event("evt_recorded") is True
-        row = watch_db._conn.execute(
-            "SELECT event_type, payload FROM stripe_events WHERE event_id=?",
-            ("evt_recorded",),
-        ).fetchone()
-        assert row["event_type"] == "invoice.payment_failed"
-        # Payload is the full event JSON for forensics
-        parsed = json.loads(row["payload"])
-        assert parsed["id"] == "evt_recorded"
 
 
 # ---------------------------------------------------------------------------
@@ -702,7 +648,7 @@ class TestEntitlements:
 
 
 # ---------------------------------------------------------------------------
-# Planner session tracking (slice 4a)
+# Planner session tracking
 # ---------------------------------------------------------------------------
 
 
@@ -748,7 +694,7 @@ class TestPlannerSessionTracking:
 
 
 # ---------------------------------------------------------------------------
-# Tier-filtered watch listing (slice 4b)
+# Tier-filtered watch listing
 # ---------------------------------------------------------------------------
 
 
@@ -759,7 +705,6 @@ class TestTierFilteredWatches:
         user_id: int | None,
         facility_id: str,
     ) -> None:
-        from pnw_campsites.monitor.db import Watch
         watch_db.add_watch(
             Watch(
                 facility_id=facility_id,
@@ -815,7 +760,6 @@ class TestTierFilteredWatches:
         assert "pro-only" not in facilities
 
     def test_unknown_tier_raises(self, watch_db: WatchDB) -> None:
-        import pytest
         with pytest.raises(ValueError, match="Unknown tier"):
             watch_db.list_watches_for_polling(tier="enterprise")
 
@@ -824,7 +768,6 @@ class TestTierFilteredWatches:
         free_user = watch_db.create_user(
             User(email="d@example.com", supabase_id="sub-d")
         )
-        from pnw_campsites.monitor.db import Watch
         watch_db.add_watch(
             Watch(
                 facility_id="off",
@@ -944,21 +887,17 @@ class TestCSPSupabaseOrigin:
     must always emit a scheme-qualified origin or empty string."""
 
     def test_bare_hostname_gets_https_prepended(self, monkeypatch) -> None:
-        from pnw_campsites.api import _supabase_csp_origin
         monkeypatch.setenv("SUPABASE_URL", "ref.supabase.co")
         assert _supabase_csp_origin() == "https://ref.supabase.co"
 
     def test_https_passthrough(self, monkeypatch) -> None:
-        from pnw_campsites.api import _supabase_csp_origin
         monkeypatch.setenv("SUPABASE_URL", "https://ref.supabase.co")
         assert _supabase_csp_origin() == "https://ref.supabase.co"
 
     def test_unset_returns_empty(self, monkeypatch) -> None:
-        from pnw_campsites.api import _supabase_csp_origin
         monkeypatch.delenv("SUPABASE_URL", raising=False)
         assert _supabase_csp_origin() == ""
 
     def test_whitespace_trimmed(self, monkeypatch) -> None:
-        from pnw_campsites.api import _supabase_csp_origin
         monkeypatch.setenv("SUPABASE_URL", "  https://ref.supabase.co  ")
         assert _supabase_csp_origin() == "https://ref.supabase.co"
