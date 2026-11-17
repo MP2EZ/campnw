@@ -82,7 +82,6 @@ async def _run(results, monkeypatch, *, notify=None):
 
 
 class TestWatchTriggered:
-    @pytest.mark.asyncio
     async def test_a_firing_watch_emits_watch_triggered(self, captured, monkeypatch):
         await _run([_result(changes=3)], monkeypatch)
 
@@ -95,12 +94,10 @@ class TestWatchTriggered:
         assert triggered[0]["properties"]["sites_freed"] == 3
         assert triggered[0]["properties"]["facility_id"] == "232465"
 
-    @pytest.mark.asyncio
     async def test_a_watch_with_no_changes_emits_nothing(self, captured, monkeypatch):
         await _run([_result(changes=0)], monkeypatch)
         assert [e for e in captured if e["event"] == "watch_triggered"] == []
 
-    @pytest.mark.asyncio
     async def test_anonymous_watches_still_get_a_stable_distinct_id(
         self, captured, monkeypatch,
     ):
@@ -113,7 +110,6 @@ class TestWatchTriggered:
 
 
 class TestNotificationDispatch:
-    @pytest.mark.asyncio
     async def test_successful_send_emits_notification_sent(
         self, captured, monkeypatch,
     ):
@@ -124,7 +120,6 @@ class TestNotificationDispatch:
         assert sent[0]["properties"]["channel"] == "ntfy"
         assert sent[0]["properties"]["sites_in_message"] == 2
 
-    @pytest.mark.asyncio
     async def test_a_failed_send_emits_notification_failed(
         self, captured, monkeypatch,
     ):

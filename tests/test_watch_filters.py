@@ -104,7 +104,6 @@ async def _alerted(db: WatchDB, watch: Watch, campsites: dict) -> set[str]:
 
 
 class TestPollerFilters:
-    @pytest.mark.asyncio
     async def test_unfiltered_watch_alerts_on_every_site(self, watch_db: WatchDB):
         sites = {
             "small": _site("small", max_people=2),
@@ -112,7 +111,6 @@ class TestPollerFilters:
         }
         assert await _alerted(watch_db, _watch(watch_db), sites) == {"small", "rv"}
 
-    @pytest.mark.asyncio
     async def test_party_size_drops_sites_known_too_small(self, watch_db: WatchDB):
         placeholder = _site("placeholder", max_people=2)
         placeholder.max_people_known = False
@@ -124,7 +122,6 @@ class TestPollerFilters:
         watch = _watch(watch_db, min_people=4)
         assert await _alerted(watch_db, watch, sites) == {"big", "placeholder"}
 
-    @pytest.mark.asyncio
     async def test_equipment_uses_the_search_fit_rules(self, watch_db: WatchDB):
         short_rv = _site("short")
         short_rv.fit = SiteFit(fits_rv=True, max_rv_ft=25)
@@ -137,7 +134,6 @@ class TestPollerFilters:
         watch = _watch(watch_db, equipment="trailer", rig_length=30)
         assert await _alerted(watch_db, watch, sites) == {"rv", "standard"}
 
-    @pytest.mark.asyncio
     async def test_site_types_keep_unknown_hookups(self, watch_db: WatchDB):
         sites = {
             "electric": _site("electric", campsite_type="STANDARD ELECTRIC"),
@@ -147,14 +143,12 @@ class TestPollerFilters:
         watch = _watch(watch_db, site_types=["hookups"])
         assert await _alerted(watch_db, watch, sites) == {"electric", "unknown"}
 
-    @pytest.mark.asyncio
     async def test_misfits_stay_out_of_the_snapshot(self, watch_db: WatchDB):
         """A misfit opening up later must not alert either."""
         watch = _watch(watch_db, min_people=4)
         await _alerted(watch_db, watch, {"small": _site("small", max_people=2)})
         assert watch_db.get_latest_snapshot(watch.id).available_sites == {}
 
-    @pytest.mark.asyncio
     async def test_wa_watch_uses_seeded_site_fit(self, watch_db: WatchDB, registry):
         park = "-2147483616"
         registry.bulk_upsert_wa_loops(
@@ -179,7 +173,6 @@ class TestPollerFilters:
         assert result.error is None
         assert result.changes == []
 
-    @pytest.mark.asyncio
     async def test_template_watch_passes_filters_to_each_park(
         self, watch_db: WatchDB, registry,
     ):

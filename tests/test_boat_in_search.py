@@ -10,8 +10,6 @@ from __future__ import annotations
 from datetime import date
 from unittest.mock import AsyncMock
 
-import pytest
-
 from pnw_campsites.registry.models import CampgroundAvailability
 from pnw_campsites.routes.search import _format_result
 from pnw_campsites.search.engine import (
@@ -81,7 +79,6 @@ class TestCampgroundResultFlag:
 
 
 class TestEngine:
-    @pytest.mark.asyncio
     async def test_boat_in_result_has_no_drive_time(self, registry):
         _seed(registry)
         results = await _engine(registry).search(_query())
@@ -89,14 +86,12 @@ class TestEngine:
         assert by_name["Island Boat-in"].estimated_drive_minutes is None
         assert by_name["Drive-in 45"].estimated_drive_minutes is not None
 
-    @pytest.mark.asyncio
     async def test_boat_in_sorts_after_every_drive_in(self, registry):
         _seed(registry)
         results = await _engine(registry).search(_query())
         names = [r.campground.name for r in results.results]
         assert names == ["Drive-in 45", "Drive-in far", "Island Boat-in"]
 
-    @pytest.mark.asyncio
     async def test_boat_in_stays_in_results_under_a_drive_limit(self, registry):
         _seed(registry)
         results = await _engine(registry).search(_query(max_drive_minutes=120))
@@ -104,7 +99,6 @@ class TestEngine:
         assert "Island Boat-in" in names
         assert "Drive-in far" not in names
 
-    @pytest.mark.asyncio
     async def test_far_boat_in_still_excluded_by_drive_limit(self, registry):
         """The shoreline drive still bounds how far you travel to reach the water."""
         registry.upsert(make_campground(
@@ -114,7 +108,6 @@ class TestEngine:
         results = await _engine(registry).search(_query(max_drive_minutes=120))
         assert results.results == []
 
-    @pytest.mark.asyncio
     async def test_stream_results_also_drop_drive_time(self, registry):
         _seed(registry)
         seen = {}
