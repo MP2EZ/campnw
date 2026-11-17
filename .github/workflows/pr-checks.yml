@@ -83,9 +83,16 @@ jobs:
           # which folds react-router-dom into react-router (an import migration).
           # Revisit when that migration is scheduled.
           #
+          # GHSA-fc5q-39xc-vjpf (picomatch <=4.0.7): ReDoS on attacker-supplied
+          # extglob patterns. picomatch is build/test tooling only (vite, vitest,
+          # tinyglobby, rollup-plugin-visualizer, @types/jest); it is not in the
+          # shipped bundle or the server, and only ever sees our own config
+          # globs. No patched release exists yet. Remove once picomatch >=4.0.8
+          # ships and the tree updates to it.
+          #
           # Pipe-separate to allowlist more advisories. Anything high/critical
           # that is NOT listed here still fails the build.
-          ALLOWED='GHSA-qwww-vcr4-c8h2'
+          ALLOWED='GHSA-qwww-vcr4-c8h2|GHSA-fc5q-39xc-vjpf'
 
           npm audit --json > "$RUNNER_TEMP/audit.json" || true
           UNEXPECTED=$(jq -r '
