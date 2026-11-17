@@ -4,9 +4,9 @@ import { plural } from "../lib/plural";
 import { candidateStatus, candidateWindows, searchedDays } from "./candidates";
 
 /**
- * Quick picks: three ways into the results, each chosen from the data alone
- * (D6 dropped the AI summary). Closest, most open, and a setting worth
- * naming, each a different place. No urgency wording.
+ * Quick picks: three ways into the results, each chosen from the data alone.
+ * Closest, most open, and a setting worth naming, each a different place.
+ * No urgency wording.
  */
 export interface QuickPick {
   kicker: string;
@@ -16,7 +16,7 @@ export interface QuickPick {
 
 /**
  * Fewer open places than this and the list is short enough to scan: picks
- * would only repeat it above itself (UX #13).
+ * would only repeat it above itself.
  */
 export const MIN_PLACES = 6;
 

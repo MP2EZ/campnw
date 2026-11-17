@@ -21,7 +21,7 @@ const opensLabel = (iso: string) =>
   parseIsoDate(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 /**
- * Nothing open (design: Zero.dc.html). Says whether places are full or not
+ * Nothing open. Says whether places are full or not
  * released yet, when booking opens, other searches worth one tap, and which
  * booking systems couldn't be checked.
  */

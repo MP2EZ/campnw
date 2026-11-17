@@ -7,7 +7,7 @@ import {
 } from "./candidates";
 import { hours } from "./searchState";
 
-/** The zero-results page (design: Zero.dc.html), from the checked places with nothing to book. */
+/** The zero-results page, from the checked places with nothing to book. */
 
 export interface TimelineItem {
   /** "Jun 4 – 6", or "Arrive Tue Jun 1" for a flexible search. */

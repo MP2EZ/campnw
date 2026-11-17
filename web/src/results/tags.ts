@@ -1,5 +1,5 @@
 /**
- * Registry tags as words on a card (UX #16). Tags the fit line already
+ * Registry tags as words on a card. Tags the fit line already
  * covers (RV, tent-only, walk-in) or the drive line does (boat-in) are left
  * out.
  */

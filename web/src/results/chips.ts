@@ -6,7 +6,7 @@ import {
 } from "./candidates";
 
 /**
- * Window chips (v1.48 D3): the stays a card offers, one chip per weekend (or
+ * Window chips: the stays a card offers, one chip per weekend (or
  * per block of the searched days), one for exact dates, or one per arrival
  * date for a flexible range ("stay chips": the searched number of nights from
  * that arrival). Dates are nights, like a window's start/end. Every chip is
@@ -41,8 +41,8 @@ export interface WindowChip {
    */
   minNights: number | null;
   /**
-   * Weekend and day-filter searches also list the blocks with nothing open
-   * (D4): "full", or "not_released" with when booking opens.
+   * Weekend and day-filter searches also list the blocks with nothing open:
+   * "full", or "not_released" with when booking opens.
    */
   status: ChipStatus;
   /** When a not-released chip opens for booking; null if unknown or not that status. */

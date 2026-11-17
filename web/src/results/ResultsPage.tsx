@@ -66,7 +66,7 @@ function CardPlaceholders() {
 }
 
 /**
- * Results v2 (v1.48): the answer, then the notices that qualify it, then
+ * Results v2: the answer, then the notices that qualify it, then
  * places. App mounts it once a search has results.
  */
 export default function ResultsPage({ maxResults, onCheckRest, completedAt, onSearch, searchId, failed, onSignIn }: Props) {

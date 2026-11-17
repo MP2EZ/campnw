@@ -1,5 +1,5 @@
 /**
- * Names as people write them (UX #17). Recreation.gov sends many names in
+ * Names as people write them. Recreation.gov sends many names in
  * ALL CAPS ("OHANAPECOSH CAMPGROUND", "Loop ELEC"); those are title-cased for
  * display. Names with any lower case are left as their source wrote them.
  */

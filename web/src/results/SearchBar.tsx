@@ -140,7 +140,7 @@ function CompactBar({ bar, panelProps, open, onOpen, close }: {
   );
 }
 
-/** The plain-language box. It sits under the header, apart from the bar (P4b). */
+/** The plain-language box. It sits under the header, apart from the bar. */
 export function AskForm({ onAsk }: { onAsk: (q: string) => void }) {
   const [value, setValue] = useState("");
   const id = useId();
@@ -162,7 +162,7 @@ export function AskForm({ onAsk }: { onAsk: (q: string) => void }) {
 }
 
 /**
- * The v2 search bar (v1.48 P3a): Where / When / Who / Drive segments over a
+ * The v2 search bar: Where / When / Who / Drive segments over a
  * draft of the search, with a popover each on desktop and one sheet on
  * mobile. It shows the current search, and follows it when a new one runs
  * (Back, a shared link, or what a plain-language question was parsed into).

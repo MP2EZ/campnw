@@ -23,7 +23,7 @@ interface Props {
 const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):checked, input:not([type="radio"]):not([disabled])';
 
 /**
- * The open sites behind one chip (v1.48 P3b): a modal dialog, a side panel
+ * The open sites behind one chip: a modal dialog, a side panel
  * on wide screens and a bottom sheet on phones. Pick a site, then "Book on
  * <booking site>" opens that site's page in a new tab; the copy under the
  * button says what that site fills in.

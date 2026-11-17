@@ -1,4 +1,4 @@
-/* v2 search bar (v1.48 P3a), in the sticky header since P4b. Desktop: a
+/* v2 search bar, in the sticky header. Desktop: a
    pill of four segments, each with a popover. Under 640px: one compact
    button that opens a sheet. */
 
@@ -17,7 +17,7 @@
 }
 
 /* Sized by content, so a long When or Who takes the room a short Where or
-   Drive doesn't need (UX #21). */
+   Drive doesn't need. */
 .sb-seg-slot {
   display: flex;
   align-items: center;
@@ -176,7 +176,7 @@
 }
 .sb-go:hover,
 .sb-ask-go:hover:not(:disabled) { background: var(--accent-hover); }
-/* Empty: an outline, not a half-faded green block that reads as a stray shape (UX #12). */
+/* Empty: an outline, not a half-faded green block that reads as a stray shape. */
 .sb-ask-go:disabled {
   border-color: var(--border);
   background: transparent;

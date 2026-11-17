@@ -9,7 +9,7 @@ interface Props {
 }
 
 /**
- * One-tap date changes under the answer (P4a, phones only): this weekend,
+ * One-tap date changes under the answer (phones only): this weekend,
  * next weekend, a month, or "Pick dates" to open the search bar's sheet.
  * Everything else about the search stays as it was.
  */

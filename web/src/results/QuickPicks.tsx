@@ -3,7 +3,7 @@ import { displayName } from "../lib/displayName";
 import { quickPicks } from "./picks";
 
 /**
- * Three ways into the results (design: Main.dc.html "Quick picks"). Each
+ * Three ways into the results. Each
  * jumps to its card, opening its drive band if the card was folded away.
  * Hidden with fewer than two picks: one pick isn't a choice.
  */

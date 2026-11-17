@@ -4,7 +4,7 @@ import { plural } from "../lib/plural";
 import { addDays } from "./candidates";
 
 /**
- * The v2 search bar's state (v1.48 P3a) and its two pure mappings: to the
+ * The v2 search bar's state and its two pure mappings: to the
  * SearchParams that `handleSearch` runs and writes to the URL, and back from
  * them (a shared link, Back, or what the plain-language parser understood).
  */
@@ -121,7 +121,7 @@ function dates(when: When, today: string): Range {
  * `q` isn't kept, since the bar's own fields now say what to search.
  *
  * A campground name drops the drive cap: someone who names a place wants that
- * place, however far it is (plan P3a).
+ * place, however far it is.
  */
 export function barToParams(bar: BarState, today: string, keep?: SearchParams | null): SearchParams {
   const { start, end } = dates(bar.when, today);
@@ -210,7 +210,7 @@ export interface QuickDate {
 const sameWhen = (a: When, b: When) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * The results page's date chips (P4a, mobile): this weekend, next weekend and
+ * The results page's date chips (mobile): this weekend, next weekend and
  * a month. The month is the searched one, else the current month, unless the
  * two weekend chips already cover what's left of it.
  */

@@ -13,10 +13,10 @@ const ROW_LIMIT = 6;
 export const FULL_GROUP_ID = "rv2-full";
 
 /**
- * "Full or not released yet" (D4): checked places with nothing to book on
+ * "Full or not released yet": checked places with nothing to book on
  * the searched dates, closest first, each with what's in the way and the
- * alert that would help. Watch opens the Watch sheet (P3c), Remind me its
- * release-reminder mode (P3d). Outside results both are disabled stubs.
+ * alert that would help. Watch opens the Watch sheet, Remind me its
+ * release-reminder mode; a row with no stay to alert on gets a disabled stub.
  */
 export function FullGroup({ places, params, title = fullGroupTitle(places, params) }: {
   places: CampgroundResult[];

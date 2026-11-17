@@ -1,4 +1,4 @@
-/* Site panel (v1.48 P3b): a modal side panel on wide screens, a bottom
+/* Site panel: a modal side panel on wide screens, a bottom
    sheet on phones. Head and foot stay put; the site list scrolls. */
 .rv2-panel-scrim {
   position: fixed;
@@ -133,7 +133,7 @@
 .rv2-site {
   min-height: 44px;
   display: grid;
-  /* The badge widens for a word longer than 3.25rem rather than breaking it (UX #6). */
+  /* The badge widens for a word longer than 3.25rem rather than breaking it. */
   grid-template-columns: auto minmax(3.25rem, min-content) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);

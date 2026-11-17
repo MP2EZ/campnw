@@ -16,12 +16,12 @@ const RIGS: Record<string, string> = { tent: "tent", van: "van", trailer: "trail
 
 /**
  * "Tent · Van · RV ≤30′ · Hookups at 4 sites": what the open sites take, from
- * the per-window fit fields (P1a). Only what some site is known to take is
+ * the per-window fit fields. Only what some site is known to take is
  * listed: `null` is unknown, never "doesn't fit". An RV site with no length
  * stated has no upper limit, so any such site drops the "≤".
  *
  * With a rig searched, it leads with how many sites are known to take it
- * instead (UX #18): "12 sites fit your 30′ trailer". Sites known not to take
+ * instead: "12 sites fit your 30′ trailer". Sites known not to take
  * it never reach here (the backend's `who` filter).
  */
 export function fitLine(windows: Window[], who?: Pick<SearchParams, "equipment" | "rig_length"> | null): string {

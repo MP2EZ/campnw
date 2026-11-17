@@ -1,4 +1,4 @@
-/* Results v2 (v1.48). Bricolage is headings-only (docs/BRAND.md); body text
+/* Results v2. Bricolage is headings-only (docs/BRAND.md); body text
    keeps the system stack. */
 .results-v2 {
   display: flex;
@@ -77,7 +77,7 @@
   }
 }
 
-/* ── Cards (P2b) ─────────────────────────────────────────────────── */
+/* ── Cards ─────────────────────────────────────────────────── */
 .rv2-list {
   display: flex;
   flex-direction: column;
@@ -125,7 +125,7 @@
   opacity: 0.85;
 }
 
-/* The drawn tiles keep their daylight palette: dim them further (UX #26). */
+/* The drawn tiles keep their daylight palette: dim them further. */
 [data-theme="dark"] .rv2-thumb svg {
   opacity: 0.6;
   filter: saturate(0.8);
@@ -254,7 +254,7 @@
   justify-content: center;
   align-items: flex-start;
   padding: 0.35rem var(--space-3);
-  /* Every state has a 1px edge, transparent or not, so mixed rows line up (UX #20). */
+  /* Every state has a 1px edge, transparent or not, so mixed rows line up. */
   border: 1px solid transparent;
   border-radius: var(--radius-xl);
   background: var(--chip-open-bg);
@@ -263,7 +263,7 @@
   transition: box-shadow var(--transition-fast);
 }
 
-/* Open chips open the site panel (P3b); Watch and Remind chips open their sheet. */
+/* Open chips open the site panel; Watch and Remind chips open their sheet. */
 button.rv2-chip {
   font: inherit;
   text-align: left;
@@ -395,9 +395,9 @@ button.rv2-chip:not(.rv2-chip-full):hover {
   }
 }
 
-/* ── Full or not released yet (P2c, D4) ──────────────────────────── */
+/* ── Full or not released yet ──────────────────────────── */
 /*
- * Two looks, told apart by more than colour (UX #2): a chip that opens the
+ * Two looks, told apart by more than colour: a chip that opens the
  * Watch or Remind sheet is outlined with a solid edge and leads its action
  * with a bell; a chip with nothing to do is flat, with no edge, and its dates
  * step down a weight.
@@ -509,7 +509,7 @@ button.rv2-chip-watch:hover {
   transition: opacity var(--transition-fast);
 }
 
-/* ── Quick picks (P2c) ───────────────────────────────────────────── */
+/* ── Quick picks ───────────────────────────────────────────── */
 .rv2-picks {
   display: flex;
   flex-direction: column;
@@ -528,7 +528,7 @@ button.rv2-chip-watch:hover {
 
 .rv2-picks-grid {
   display: grid;
-  /* Two picks fill the row rather than leaving a third column empty (UX #13). */
+  /* Two picks fill the row rather than leaving a third column empty. */
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: var(--space-3);
   margin: 0;
@@ -575,7 +575,7 @@ button.rv2-chip-watch:hover {
   color: var(--text-muted);
 }
 
-/* Phones: one row that scrolls sideways, so the first card is nearer the fold (UX #11). */
+/* Phones: one row that scrolls sideways, so the first card is nearer the fold. */
 @media (max-width: 640px) {
   .rv2-picks-grid {
     grid-template-columns: none;
@@ -606,7 +606,7 @@ button.rv2-chip-watch:hover {
   }
 }
 
-/* ── Zero results (P2c) ──────────────────────────────────────────── */
+/* ── Zero results ──────────────────────────────────────────── */
 .rv2-zero {
   display: flex;
   flex-direction: column;
@@ -747,7 +747,7 @@ button.rv2-chip-watch:hover {
   }
 }
 
-/* ── Split layout (P2d): list left, sticky map right, desktop only ── */
+/* ── Split layout: list left, sticky map right, desktop only ── */
 .rv2-split--map {
   --rv2-split-w: min(1360px, calc(100vw - 2 * var(--space-7)));
   width: var(--rv2-split-w);
@@ -774,7 +774,7 @@ button.rv2-chip-watch:hover {
   background: var(--map-surface);
 }
 
-/* ── Date chips (P4a): one-tap dates under the answer, phones only ── */
+/* ── Date chips: one-tap dates under the answer, phones only ── */
 .rv2-dates { display: none; }
 
 @media (max-width: 640px) {
@@ -786,7 +786,7 @@ button.rv2-chip-watch:hover {
     margin-inline: calc(-1 * var(--space-3));
     padding: 0.3rem var(--space-7) 0.3rem var(--space-3);
     scrollbar-width: none;
-    /* The right edge fades so a cut-off chip reads as "scrolls", not as clipped (UX #30). */
+    /* The right edge fades so a cut-off chip reads as "scrolls", not as clipped. */
     mask-image: linear-gradient(to right, #000 calc(100% - var(--space-7)), transparent);
   }
   .rv2-dates::-webkit-scrollbar { display: none; }

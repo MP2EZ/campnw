@@ -3,7 +3,7 @@ import { formatDateRange, parseIsoDate, toIsoDate, weekday } from "../lib/dates"
 import { plural } from "../lib/plural";
 
 /**
- * Candidate windows (v1.48 D4): the stays a search asked for, derived from
+ * Candidate windows: the stays a search asked for, derived from
  * the search alone, so a campground can be shown as Full or Not released for
  * the windows it *didn't* return. Dates are nights, like a window's.
  */

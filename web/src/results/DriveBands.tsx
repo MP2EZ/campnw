@@ -57,7 +57,7 @@ function Band({ band, params, firstRank, reveal }: {
 }
 
 /**
- * Open places by drive time (D13's bands): under 1 hour, 1–2 hours, …, then
+ * Open places by drive time: under 1 hour, 1–2 hours, …, then
  * boat-in places, which have no drive time to the site. Ranks for analytics
  * follow the order on screen.
  */
