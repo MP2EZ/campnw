@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from "react";
 import { track, type CampgroundResult, type SearchParams } from "../api";
-import { formatDriveTime, parseIsoDate } from "../lib/dates";
+import { formatDriveTime, parseIsoDate, todayIso } from "../lib/dates";
 import { displayName } from "../lib/displayName";
+import { plural } from "../lib/plural";
 import { SOURCE_NAMES } from "../lib/sources";
 import { IconBoat, IconClock, IconSun, IconTent } from "../icons";
 import { nightsIn } from "./candidates";
@@ -12,7 +13,7 @@ import { useCardSelection } from "./selection";
 import { SitePanel } from "./SitePanel";
 import type { PanelSite } from "./siteGroups";
 import { WindowChips } from "./WindowChips";
-import { remindStays, todayIso } from "./watch";
+import { remindStays } from "./watch";
 import { tagLabels } from "./tags";
 import { useOpenWatch } from "./watchContext";
 
@@ -107,7 +108,7 @@ export const CampgroundCard = memo(function CampgroundCard({ result, params, ran
           </span>
           <span className="rv2-card-muted">Book via {source}</span>
           {result.fcfs_sites > 0 && (
-            <span className="rv2-card-muted">+ {result.fcfs_sites} first-come, first-served site{result.fcfs_sites === 1 ? "" : "s"}</span>
+            <span className="rv2-card-muted">+ {plural(result.fcfs_sites, "first-come, first-served site")}</span>
           )}
         </p>
         <WindowChips

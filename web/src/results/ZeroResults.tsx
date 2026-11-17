@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { track, type CampgroundResult, type SearchParams, type SearchResponse } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
-import { parseIsoDate } from "../lib/dates";
+import { parseIsoDate, todayIso } from "../lib/dates";
 import { IconBell } from "../icons";
 import { searchedDays } from "./candidates";
 import { FullGroup } from "./FullGroup";
@@ -15,11 +15,6 @@ interface Props {
   searchId?: string;
 }
 
-const isoToday = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
 const opensLabel = (iso: string) =>
   parseIsoDate(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -30,7 +25,7 @@ const opensLabel = (iso: string) =>
  */
 export function ZeroResults({ results, places, params, onSearch, searchId }: Props) {
   const timeline = releaseTimeline(places, params);
-  const options = soonerOptions(results, places, params, isoToday());
+  const options = soonerOptions(results, places, params, todayIso());
   const lede = zeroLede(results, places, params);
   // Recreation.gov releases at 7 am PT (search/release.py); WA's time is unverified.
   const at = places.length > 0 && places.every((r) => r.booking_system === "recgov") ? "7:00 am PT" : null;

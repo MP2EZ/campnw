@@ -1,11 +1,12 @@
 import { useState } from "react";
 import type { CampgroundResult, SearchParams } from "../api";
-import { formatDriveTime } from "../lib/dates";
+import { formatDriveTime, todayIso } from "../lib/dates";
 import { displayName } from "../lib/displayName";
+import { plural } from "../lib/plural";
 import { SOURCE_NAMES } from "../lib/sources";
 import { IconBell } from "../icons";
 import { fullGroupTitle, unavailability, unavailableText } from "./candidates";
-import { remindStays, todayIso, watchStays } from "./watch";
+import { remindStays, watchStays } from "./watch";
 import { useOpenWatch } from "./watchContext";
 
 const ROW_LIMIT = 6;
@@ -57,7 +58,7 @@ export function FullGroup({ places, params, title = fullGroupTitle(places, param
     <section id={FULL_GROUP_ID} className="rv2-band" aria-labelledby={`${FULL_GROUP_ID}-h`}>
       <div className="rv2-band-head">
         <h2 id={`${FULL_GROUP_ID}-h`} className="rv2-band-title">{title}</h2>
-        <span className="rv2-band-count">{places.length} place{places.length === 1 ? "" : "s"}</span>
+        <span className="rv2-band-count">{plural(places.length, "place")}</span>
         <span className="rv2-band-rule" aria-hidden="true" />
       </div>
       <p id={noteId} className="rv2-band-note">

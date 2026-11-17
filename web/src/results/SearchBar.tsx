@@ -4,8 +4,9 @@ import { track, type SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
 import { IconSearch } from "../icons";
+import { todayIso } from "../lib/dates";
 import {
-  barToParams, compactLabel, DEFAULT_BAR, driveLabel, EDIT_DATES_EVENT, localToday, paramsToBar, whenLabel, whereLabel, whoLabel,
+  barToParams, compactLabel, DEFAULT_BAR, driveLabel, EDIT_DATES_EVENT, paramsToBar, whenLabel, whereLabel, whoLabel,
   type BarState,
 } from "./searchState";
 import { DrivePanel, WhenPanel, WhoPanel, type PanelProps } from "./SearchPanels";
@@ -168,7 +169,7 @@ export function AskForm({ onAsk }: { onAsk: (q: string) => void }) {
  */
 export default function SearchBar({ onSearch, userDefaults }: Props) {
   const { searchParams } = useSearchContext();
-  const today = localToday();
+  const today = todayIso();
   const fromSearch = useCallback(
     (p: SearchParams | null): BarState => p ? paramsToBar(p, today) : {
       ...DEFAULT_BAR,

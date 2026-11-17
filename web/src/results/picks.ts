@@ -1,5 +1,6 @@
 import type { CampgroundResult, SearchParams } from "../api";
 import { formatDateRange, formatDriveTime, parseIsoDate } from "../lib/dates";
+import { plural } from "../lib/plural";
 import { candidateStatus, candidateWindows, searchedDays } from "./candidates";
 
 /**
@@ -38,7 +39,7 @@ function openBlocks(r: CampgroundResult, p: SearchParams | null): { open: number
   return { open: open.length, of: candidates.length, only: open.length === 1 ? formatDateRange(open[0].start, open[0].end) : null };
 }
 
-const sitesOpen = (n: number) => `${n} site${n === 1 ? "" : "s"} open`;
+const sitesOpen = (n: number) => `${plural(n, "site")} open`;
 
 function openSummary(r: CampgroundResult, p: SearchParams | null, weekends: boolean): string {
   if (p?.mode === "exact") return sitesOpen(r.total_available_sites);

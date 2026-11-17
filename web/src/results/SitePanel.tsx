@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import type { CampgroundResult, SearchParams } from "../api";
 import { formatDriveTime } from "../lib/dates";
 import { displayName } from "../lib/displayName";
+import { plural } from "../lib/plural";
 import { IconClose, IconExternal } from "../icons";
 import { FEW_LEFT, type WindowChip } from "./chips";
 import { BOOKING_SITES, handoffCopy, stayLabel } from "./handoff";
@@ -95,7 +96,7 @@ export function SitePanel({ result, chip, params, returnFocus, onClose, onBook }
         <div className="rv2-panel-body">
           <p className={few ? "rv2-panel-count is-few" : "rv2-panel-count"}>
             {few && <span className="rv2-chip-dot" aria-hidden="true" />}
-            <span><strong>{count} site{count === 1 ? "" : "s"} {few ? "left" : "open"}</strong> for these nights. Pick one to book.</span>
+            <span><strong>{plural(count, "site")} {few ? "left" : "open"}</strong> for these nights. Pick one to book.</span>
           </p>
           {groups.map((g) => (
             <fieldset key={g.kind} className="rv2-panel-group">

@@ -1,6 +1,7 @@
 import { track, type SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
-import { barToParams, EDIT_DATES_EVENT, localToday, paramsToBar, quickDates } from "./searchState";
+import { todayIso } from "../lib/dates";
+import { barToParams, EDIT_DATES_EVENT, paramsToBar, quickDates } from "./searchState";
 
 interface Props {
   params: SearchParams | null;
@@ -14,7 +15,7 @@ interface Props {
  */
 export function DateChips({ params, onSearch }: Props) {
   if (!params?.start_date) return null;
-  const today = localToday();
+  const today = todayIso();
   const bar = paramsToBar(params, today);
   return (
     <div className="rv2-dates" role="group" aria-label="Dates">

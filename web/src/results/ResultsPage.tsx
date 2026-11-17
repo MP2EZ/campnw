@@ -7,6 +7,7 @@ import { AnswerHeader } from "./AnswerHeader";
 import { DateChips } from "./DateChips";
 import { DriveBands } from "./DriveBands";
 import { FullGroup } from "./FullGroup";
+import { todayIso } from "../lib/dates";
 import { fullGroupTitle } from "./candidates";
 import { QuickPicks } from "./QuickPicks";
 import { ZeroResults } from "./ZeroResults";
@@ -18,7 +19,7 @@ import { useMediaQuery } from "./media";
 import { createSelectionStore, SelectionContext } from "./selection";
 import { WatchSheet, type WatchFrom } from "./WatchSheet";
 import { WatchContext, type OpenWatch, type SheetMode } from "./watchContext";
-import { remindStays, todayIso, watchStays } from "./watch";
+import { remindStays, watchStays } from "./watch";
 import type { CampgroundResult } from "../api";
 
 // Leaflet comes with this chunk: beside the list when it's wide enough, else

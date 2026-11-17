@@ -1,5 +1,6 @@
 import type { SearchParams } from "../api";
-import { formatDateRange, parseIsoDate } from "../lib/dates";
+import { formatDateRange, parseIsoDate, weekday } from "../lib/dates";
+import { plural } from "../lib/plural";
 import { addDays } from "./candidates";
 
 /**
@@ -63,9 +64,6 @@ const EQUIPMENT: Record<Equipment, string> = { tent: "Tent", van: "Van", trailer
 const isEquipment = (v: unknown): v is Equipment => typeof v === "string" && v in EQUIPMENT;
 
 type Range = { start: string; end: string };
-
-/** Python weekday, 0 = Monday. */
-const weekday = (iso: string) => (parseIsoDate(iso).getDay() + 6) % 7;
 
 /** The Fri–Sun nights of this weekend, from today if it has started. */
 export function thisWeekend(today: string): Range {
@@ -179,8 +177,6 @@ export function paramsToBar(p: SearchParams | null, today: string): BarState {
 
 // ─── Segment labels ──────────────────────────────────────────────────
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
 export function fromLabel(from: string): string {
   const known = DRIVE_FROM.find(([k]) => k === from.toLowerCase());
   if (known) return known[1].split(",")[0];
@@ -234,12 +230,6 @@ export function quickDates(bar: BarState, today: string): QuickDate[] {
 
 /** Ask the v2 search bar to open on its dates (the results page's "Pick dates"). */
 export const EDIT_DATES_EVENT = "campable:edit-dates";
-
-/** Today as YYYY-MM-DD in the device's time zone. */
-export function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 /** The When segment without nights: "Weekends in June", "This weekend", "Jul 2 – 5". */
 export function whenTitle(bar: BarState): string {

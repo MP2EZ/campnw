@@ -1,8 +1,8 @@
 import type { SearchParams, Window } from "../api";
+import { plural } from "../lib/plural";
 
 export const NOT_LISTED = "Site types not listed yet";
 
-const sites = (n: number) => `${n} site${n === 1 ? "" : "s"}`;
 
 /** Takes the searched rig, as far as the booking system says. */
 function takes(w: Window, { equipment, rig_length }: Pick<SearchParams, "equipment" | "rig_length">): boolean {
@@ -33,7 +33,7 @@ export function fitLine(windows: Window[], who?: Pick<SearchParams, "equipment" 
   const fit = rig ? count((w) => takes(w, who)) : 0;
   if (rig && fit) {
     const length = who.equipment === "trailer" && who.rig_length ? `${who.rig_length}′ ` : "";
-    parts.push(`${sites(fit)} fit${fit === 1 ? "s" : ""} your ${length}${rig}`);
+    parts.push(`${plural(fit, "site")} fit${fit === 1 ? "s" : ""} your ${length}${rig}`);
   } else {
     if (open.some((w) => w.fits_tent)) parts.push("Tent");
     if (open.some((w) => w.fits_van)) parts.push("Van");
@@ -46,8 +46,8 @@ export function fitLine(windows: Window[], who?: Pick<SearchParams, "equipment" 
     if (!parts.length) parts.push(NOT_LISTED);
   }
   const hookups = count((w) => w.hookups);
-  if (hookups) parts.push(`Hookups at ${sites(hookups)}`);
+  if (hookups) parts.push(`Hookups at ${plural(hookups, "site")}`);
   const walkIn = count((w) => w.walk_in);
-  if (walkIn) parts.push(`${walkIn} walk-in site${walkIn === 1 ? "" : "s"}`);
+  if (walkIn) parts.push(`${plural(walkIn, "walk-in site")}`);
   return parts.join(" · ");
 }
