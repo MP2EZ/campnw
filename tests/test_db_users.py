@@ -8,6 +8,14 @@ import pytest
 from pnw_campsites.monitor.db import User, Watch, WatchDB
 
 
+def _user(db: WatchDB, name: str, **kw) -> User:
+    """Create a user whose email and display name derive from `name`."""
+    kw = {"email": f"{name}@example.com", "password_hash": "hashed_pwd", "display_name": name.capitalize(), **kw}
+    created = db.create_user(User(**kw))
+    assert created.id is not None
+    return created
+
+
 class TestUserCRUD:
     """Test user creation, reading, updating, and deletion."""
 
@@ -45,15 +53,7 @@ class TestUserCRUD:
 
     def test_update_user_single_field(self, watch_db: WatchDB) -> None:
         """update_user updates a single field."""
-        user = User(
-            email="charlie@example.com",
-            password_hash="hashed_pwd",
-            display_name="Charlie",
-            home_base="Seattle, WA",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "charlie", home_base="Seattle, WA").id
 
         updated = watch_db.update_user(user_id, display_name="Charles")
         assert updated is not None
@@ -67,16 +67,7 @@ class TestUserCRUD:
 
     def test_update_user_multiple_fields(self, watch_db: WatchDB) -> None:
         """update_user updates multiple fields at once."""
-        user = User(
-            email="diana@example.com",
-            password_hash="hashed_pwd",
-            display_name="Diana",
-            default_state="WA",
-            default_nights=2,
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "diana", default_state="WA", default_nights=2).id
 
         updated = watch_db.update_user(
             user_id,
@@ -91,14 +82,7 @@ class TestUserCRUD:
 
     def test_update_user_last_login(self, watch_db: WatchDB) -> None:
         """update_user can set last_login_at."""
-        user = User(
-            email="eve@example.com",
-            password_hash="hashed_pwd",
-            display_name="Eve",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "eve").id
 
         login_time = "2026-03-22T14:30:00"
         updated = watch_db.update_user(user_id, last_login_at=login_time)
@@ -112,14 +96,7 @@ class TestUserCRUD:
 
     def test_update_user_ignores_disallowed_fields(self, watch_db: WatchDB) -> None:
         """update_user ignores fields not in allowed list."""
-        user = User(
-            email="frank@example.com",
-            password_hash="original_hash",
-            display_name="Frank",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "frank", password_hash="original_hash").id
 
         # Try to update password_hash (not allowed) and email (not allowed)
         updated = watch_db.update_user(
@@ -136,14 +113,7 @@ class TestUserCRUD:
 
     def test_delete_user(self, watch_db: WatchDB) -> None:
         """delete_user removes a user."""
-        user = User(
-            email="grace@example.com",
-            password_hash="hashed_pwd",
-            display_name="Grace",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "grace").id
 
         # Verify user exists
         assert watch_db.get_user_by_id(user_id) is not None
@@ -162,14 +132,7 @@ class TestUserCRUD:
 
     def test_delete_user_cascades_watches(self, watch_db: WatchDB) -> None:
         """delete_user cascades and removes associated watches."""
-        user = User(
-            email="hank@example.com",
-            password_hash="hashed_pwd",
-            display_name="Hank",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "hank").id
 
         # Create a watch owned by this user
         watch = Watch(
@@ -195,14 +158,7 @@ class TestUserCRUD:
 
     def test_delete_user_cascades_search_history(self, watch_db: WatchDB) -> None:
         """delete_user cascades and removes associated search history."""
-        user = User(
-            email="iris@example.com",
-            password_hash="hashed_pwd",
-            display_name="Iris",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "iris").id
 
         # Save a search
         params = json.dumps({"state": "WA", "nights": 2})
@@ -254,14 +210,7 @@ class TestSearchHistory:
 
     def test_save_search_and_get_history(self, watch_db: WatchDB) -> None:
         """save_search + get_search_history round-trip."""
-        user = User(
-            email="jack@example.com",
-            password_hash="hashed_pwd",
-            display_name="Jack",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "jack").id
 
         params = json.dumps({"state": "WA", "nights": 2, "days": "fri,sat,sun"})
         watch_db.save_search(user_id, params, result_count=12)
@@ -278,14 +227,7 @@ class TestSearchHistory:
 
     def test_get_search_history_multiple_entries(self, watch_db: WatchDB) -> None:
         """get_search_history returns multiple entries in DESC order."""
-        user = User(
-            email="kate@example.com",
-            password_hash="hashed_pwd",
-            display_name="Kate",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "kate").id
 
         # Save multiple searches
         watch_db.save_search(user_id, json.dumps({"state": "WA"}), result_count=5)
@@ -301,14 +243,7 @@ class TestSearchHistory:
 
     def test_get_search_history_respects_limit(self, watch_db: WatchDB) -> None:
         """get_search_history respects the limit parameter."""
-        user = User(
-            email="leo@example.com",
-            password_hash="hashed_pwd",
-            display_name="Leo",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "leo").id
 
         # Save 5 searches
         for i in range(5):
@@ -324,28 +259,14 @@ class TestSearchHistory:
 
     def test_get_search_history_empty_for_new_user(self, watch_db: WatchDB) -> None:
         """get_search_history returns empty list for user with no searches."""
-        user = User(
-            email="mona@example.com",
-            password_hash="hashed_pwd",
-            display_name="Mona",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "mona").id
 
         history = watch_db.get_search_history(user_id)
         assert history == []
 
     def test_save_search_with_zero_result_count(self, watch_db: WatchDB) -> None:
         """save_search defaults result_count to 0."""
-        user = User(
-            email="nick@example.com",
-            password_hash="hashed_pwd",
-            display_name="Nick",
-        )
-        created = watch_db.create_user(user)
-        user_id = created.id
-        assert user_id is not None
+        user_id = _user(watch_db, "nick").id
 
         params = json.dumps({"state": "WA"})
         watch_db.save_search(user_id, params)  # No result_count provided
@@ -356,22 +277,8 @@ class TestSearchHistory:
 
     def test_save_search_isolation_per_user(self, watch_db: WatchDB) -> None:
         """Each user's search history is isolated."""
-        user1 = User(
-            email="olive@example.com",
-            password_hash="hashed_pwd",
-            display_name="Olive",
-        )
-        user2 = User(
-            email="percy@example.com",
-            password_hash="hashed_pwd",
-            display_name="Percy",
-        )
-        created1 = watch_db.create_user(user1)
-        created2 = watch_db.create_user(user2)
-        user1_id = created1.id
-        user2_id = created2.id
-        assert user1_id is not None
-        assert user2_id is not None
+        user1_id = _user(watch_db, "olive").id
+        user2_id = _user(watch_db, "percy").id
 
         watch_db.save_search(user1_id, json.dumps({"state": "WA"}), result_count=5)
         watch_db.save_search(user2_id, json.dumps({"state": "OR"}), result_count=3)
@@ -402,14 +309,7 @@ class TestWatchMigration:
         watch_db.add_watch(watch)
 
         # Create a user to migrate to
-        user = User(
-            email="quinn@example.com",
-            password_hash="hashed_pwd",
-            display_name="Quinn",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(watch_db, "quinn").id
 
         # Migrate the watch
         count = watch_db.migrate_watches_to_user("abc123", user_id)
@@ -437,14 +337,7 @@ class TestWatchMigration:
             watch_db.add_watch(watch)
 
         # Create user
-        user = User(
-            email="rosa@example.com",
-            password_hash="hashed_pwd",
-            display_name="Rosa",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(watch_db, "rosa").id
 
         # Migrate all watches
         count = watch_db.migrate_watches_to_user(token, user_id)
@@ -459,36 +352,15 @@ class TestWatchMigration:
 
     def test_migrate_watches_nonexistent_token(self, watch_db: WatchDB) -> None:
         """migrate_watches_to_user returns 0 for nonexistent token."""
-        user = User(
-            email="sam@example.com",
-            password_hash="hashed_pwd",
-            display_name="Sam",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(watch_db, "sam").id
 
         count = watch_db.migrate_watches_to_user("nonexistent_token", user_id)
         assert count == 0
 
     def test_list_watches_by_user(self, watch_db: WatchDB) -> None:
         """list_watches_by_user returns only that user's watches."""
-        user1 = User(
-            email="tina@example.com",
-            password_hash="hashed_pwd",
-            display_name="Tina",
-        )
-        user2 = User(
-            email="uma@example.com",
-            password_hash="hashed_pwd",
-            display_name="Uma",
-        )
-        created1 = watch_db.create_user(user1)
-        created2 = watch_db.create_user(user2)
-        user1_id = created1.id
-        user2_id = created2.id
-        assert user1_id is not None
-        assert user2_id is not None
+        user1_id = _user(watch_db, "tina").id
+        user2_id = _user(watch_db, "uma").id
 
         # Add watches to user1
         for i in range(2):
@@ -522,14 +394,7 @@ class TestWatchMigration:
 
     def test_list_watches_by_user_empty(self, watch_db: WatchDB) -> None:
         """list_watches_by_user returns empty list if user has no watches."""
-        user = User(
-            email="victor@example.com",
-            password_hash="hashed_pwd",
-            display_name="Victor",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(watch_db, "victor").id
 
         watches = watch_db.list_watches_by_user(user_id)
         assert watches == []
@@ -538,14 +403,7 @@ class TestWatchMigration:
         self, watch_db: WatchDB
     ) -> None:
         """list_watches_by_user returns watches in DESC created_at order."""
-        user = User(
-            email="wilma@example.com",
-            password_hash="hashed_pwd",
-            display_name="Wilma",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(watch_db, "wilma").id
 
         # Add watches (will have ascending created_at)
         watch_ids = []
@@ -572,18 +430,10 @@ class TestUserExport:
 
     def test_get_user_export_basic(self, watch_db: WatchDB) -> None:
         """get_user_export returns dict with user info, watches, and history."""
-        user = User(
-            email="xavier@example.com",
-            password_hash="hashed_pwd",
-            display_name="Xavier",
-            home_base="Portland, OR",
-            default_state="OR",
-            default_nights=3,
-            default_from="home",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(
+            watch_db, "xavier", home_base="Portland, OR", default_state="OR",
+            default_nights=3, default_from="home",
+        ).id
 
         export = watch_db.get_user_export(user_id)
 
@@ -601,14 +451,7 @@ class TestUserExport:
 
     def test_get_user_export_with_watches(self, watch_db: WatchDB) -> None:
         """get_user_export includes user's watches."""
-        user = User(
-            email="yara@example.com",
-            password_hash="hashed_pwd",
-            display_name="Yara",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(watch_db, "yara").id
 
         # Add a watch
         watch = Watch(
@@ -635,14 +478,7 @@ class TestUserExport:
 
     def test_get_user_export_with_search_history(self, watch_db: WatchDB) -> None:
         """get_user_export includes user's search history."""
-        user = User(
-            email="zara@example.com",
-            password_hash="hashed_pwd",
-            display_name="Zara",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(watch_db, "zara").id
 
         # Save searches
         watch_db.save_search(
@@ -667,14 +503,7 @@ class TestUserExport:
 
     def test_get_user_export_limits_history(self, watch_db: WatchDB) -> None:
         """get_user_export limits search history to 100 entries."""
-        user = User(
-            email="alpha@example.com",
-            password_hash="hashed_pwd",
-            display_name="Alpha",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(watch_db, "alpha").id
 
         # Save 120 searches
         for i in range(120):
@@ -687,14 +516,7 @@ class TestUserExport:
 
     def test_save_push_subscription_round_trip(self, watch_db: WatchDB) -> None:
         """save_push_subscription and get_push_subscriptions_for_user."""
-        user = User(
-            email="push@example.com",
-            password_hash="hash",
-            display_name="Push User",
-        )
-        created_user = watch_db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
+        user_id = _user(watch_db, "push").id
 
         subscription = {
             "endpoint": "https://push.example.com/sub1",
@@ -770,11 +592,7 @@ class TestUserExport:
 
         notifications = watch_db.get_recent_notifications(limit=10)
 
-        assert isinstance(notifications, list)
-        # Should have at least some notification
         assert len(notifications) > 0
-        # Check structure
-        if notifications:
-            assert "channel" in notifications[0]
-            assert "status" in notifications[0]
+        assert notifications[0]["channel"] == "pushover"
+        assert notifications[0]["status"] == "sent"
 
