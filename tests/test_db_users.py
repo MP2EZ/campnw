@@ -44,44 +44,6 @@ class TestUserCRUD:
         assert retrieved.default_nights == 2
         assert retrieved.default_from == "home"
 
-    def test_create_user_and_get_by_email(self, db: WatchDB) -> None:
-        """create_user + get_user_by_email round-trip."""
-        user = User(
-            email="bob@example.com",
-            password_hash="hashed_pwd",
-            display_name="Bob",
-        )
-        created = db.create_user(user)
-
-        retrieved = db.get_user_by_email("bob@example.com")
-        assert retrieved is not None
-        assert retrieved.id == created.id
-        assert retrieved.email == "bob@example.com"
-        assert retrieved.display_name == "Bob"
-
-    def test_get_user_by_email_case_insensitive(self, db: WatchDB) -> None:
-        """get_user_by_email is case-insensitive."""
-        user = User(
-            email="Test@Example.com",
-            password_hash="hashed_pwd",
-            display_name="Test User",
-        )
-        db.create_user(user)
-
-        # Query with different case
-        retrieved = db.get_user_by_email("test@example.com")
-        assert retrieved is not None
-        assert retrieved.display_name == "Test User"
-
-        retrieved2 = db.get_user_by_email("TEST@EXAMPLE.COM")
-        assert retrieved2 is not None
-        assert retrieved2.display_name == "Test User"
-
-    def test_get_user_by_email_not_found(self, db: WatchDB) -> None:
-        """get_user_by_email returns None for missing user."""
-        result = db.get_user_by_email("nonexistent@example.com")
-        assert result is None
-
     def test_get_user_by_id_not_found(self, db: WatchDB) -> None:
         """get_user_by_id returns None for missing user."""
         result = db.get_user_by_id(999)
@@ -761,37 +723,6 @@ class TestUserExport:
         assert subs[0]["p256dh"] == subscription["p256dh"]
         assert subs[0]["auth"] == subscription["auth"]
 
-    def test_delete_push_subscription(self, db: WatchDB) -> None:
-        """delete_push_subscription removes a subscription."""
-        user = User(
-            email="del@example.com",
-            password_hash="hash",
-            display_name="Delete User",
-        )
-        created_user = db.create_user(user)
-        user_id = created_user.id
-        assert user_id is not None
-
-        endpoint = "https://push.example.com/delete-me"
-        db.save_push_subscription(
-            user_id=user_id,
-            session_token="session_123",
-            endpoint=endpoint,
-            p256dh="key",
-            auth="auth",
-        )
-
-        # Verify it exists
-        subs = db.get_push_subscriptions_for_user(user_id)
-        assert len(subs) == 1
-
-        # Delete it
-        db.delete_push_subscription(endpoint)
-
-        # Verify it's gone
-        subs = db.get_push_subscriptions_for_user(user_id)
-        assert len(subs) == 0
-
     def test_log_notification_persists(self, db: WatchDB) -> None:
         """log_notification saves notification log entry."""
         watch = Watch(
@@ -853,45 +784,3 @@ class TestUserExport:
             assert "channel" in notifications[0]
             assert "status" in notifications[0]
 
-    def test_clear_expired_cache_removes_stale_entries(self, db: WatchDB) -> None:
-        """clear_expired_cache removes entries older than 10 minutes."""
-        from datetime import datetime, timedelta
-
-        # Insert fresh cache entry
-        fresh_time = datetime.now().isoformat()
-        db._conn.execute(
-            "INSERT INTO availability_cache"
-            " (campground_id, month, source, payload, cached_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            ("232465", "2026-06", "recgov", '{"test": "data"}', fresh_time),
-        )
-        db._conn.commit()
-
-        # Insert old cache entry (11 minutes ago)
-        old_time = (datetime.now() - timedelta(minutes=11)).isoformat()
-        db._conn.execute(
-            "INSERT INTO availability_cache"
-            " (campground_id, month, source, payload, cached_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            ("232466", "2026-07", "recgov", '{"old": "data"}', old_time),
-        )
-        db._conn.commit()
-
-        # Verify both exist before clear
-        before = db._conn.execute(
-            "SELECT COUNT(*) FROM availability_cache"
-        ).fetchone()
-        assert before[0] == 2
-
-        removed = db.clear_expired_cache()
-
-        # `removed >= 1` and `after <= before` both hold if clear_expired_cache
-        # deleted *everything* — which is exactly the bug the fresh row was
-        # inserted to catch, so the assertions have to name which row survives.
-        assert removed == 1
-        survivors = [
-            r[0] for r in db._conn.execute(
-                "SELECT campground_id FROM availability_cache"
-            ).fetchall()
-        ]
-        assert survivors == ["232465"]

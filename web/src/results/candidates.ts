@@ -1,8 +1,9 @@
 import type { CampgroundResult, SearchParams } from "../api";
-import { formatDateRange, parseIsoDate } from "../lib/dates";
+import { formatDateRange, parseIsoDate, toIsoDate, weekday } from "../lib/dates";
+import { plural } from "../lib/plural";
 
 /**
- * Candidate windows (v1.48 D4): the stays a search asked for, derived from
+ * Candidate windows: the stays a search asked for, derived from
  * the search alone, so a campground can be shown as Full or Not released for
  * the windows it *didn't* return. Dates are nights, like a window's.
  */
@@ -13,13 +14,10 @@ export interface Candidate {
   stay: boolean;
 }
 
-/** Python's weekday (0 = Monday), which `days_of_week` uses. */
-const weekday = (iso: string) => (parseIsoDate(iso).getDay() + 6) % 7;
-
 export function addDays(iso: string, n: number): string {
   const d = parseIsoDate(iso);
   d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return toIsoDate(d);
 }
 
 /** Nights from `start` to `end`, both included. */
@@ -221,7 +219,7 @@ export function unavailableText(u: Unavailability, p: SearchParams | null): {
   }
   const [[n, what], ...rest] = parts;
   return {
-    status: [`${n} weekend${n === 1 ? "" : "s"} ${what}`, ...rest.map(([k, w]) => `${k} ${w}`)].join(" · "),
+    status: [`${plural(n, "weekend")} ${what}`, ...rest.map(([k, w]) => `${k} ${w}`)].join(" · "),
     action,
   };
 }
@@ -237,3 +235,8 @@ export function fullGroupTitle(places: CampgroundResult[], params: SearchParams 
   });
   return closed ? "Nothing to book" : "Full or not released yet";
 }
+
+/** Closest first, boat-in places last. */
+export const byDrive = (a: CampgroundResult, b: CampgroundResult) =>
+  Number(!!a.boat_in) - Number(!!b.boat_in)
+  || (a.estimated_drive_minutes ?? Infinity) - (b.estimated_drive_minutes ?? Infinity);

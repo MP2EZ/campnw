@@ -63,7 +63,7 @@ interface Props {
 }
 
 /**
- * The results map beside the list (D13, desktop only). Lazy: Leaflet loads
+ * The results map beside the list (desktop only). Lazy: Leaflet loads
  * with this chunk. The list on the left has the same places, so the map adds
  * where, not what.
  */

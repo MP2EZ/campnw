@@ -1,22 +1,27 @@
 /**
- * Date and duration formatting.
- *
- * These were implemented four times across the app and had already diverged in
- * ways users could see: three range formatters used an en dash and
- * SmartZeroState used a hyphen, and formatDrive rendered "~2h 15m" on the map
- * but "2h 15m" in itineraries. Same data, different chrome, depending on which
- * screen you were looking at.
- */
-
-/**
  * Parse a YYYY-MM-DD string at local noon.
  *
  * Noon, not midnight: `new Date("2026-06-05")` is parsed as UTC, so anywhere
  * west of Greenwich it renders as June 4. The noon offset makes the date
- * survive every timezone. This trick was hand-rolled in three files.
+ * survive every timezone.
  */
 export function parseIsoDate(iso: string): Date {
   return new Date(iso + "T12:00:00");
+}
+
+/** YYYY-MM-DD in the device's time zone (not UTC, which flips the day in the evening west of Greenwich). */
+export function toIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Today on this device, YYYY-MM-DD. */
+export function todayIso(now = new Date()): string {
+  return toIsoDate(now);
+}
+
+/** Python weekday of a YYYY-MM-DD, 0 = Monday (what `days_of_week` uses). */
+export function weekday(iso: string): number {
+  return (parseIsoDate(iso).getDay() + 6) % 7;
 }
 
 /** "Jun 5" */
@@ -27,12 +32,7 @@ export function formatDay(iso: string): string {
   });
 }
 
-/**
- * "Jun 5 – 7" within a month, "Jun 28 – Jul 2" across one.
- *
- * The en dash is the majority convention; SmartZeroState's hyphen was the
- * outlier.
- */
+/** "Jun 5 – 7" within a month, "Jun 28 – Jul 2" across one. */
 export function formatDateRange(startIso: string, endIso: string): string {
   const s = parseIsoDate(startIso);
   const e = parseIsoDate(endIso);
@@ -44,10 +44,7 @@ export function formatDateRange(startIso: string, endIso: string): string {
   return `${sMonth} ${s.getDate()} – ${eMonth} ${e.getDate()}`;
 }
 
-/**
- * "~2h 30m". The tilde is deliberate — these are estimates, and dropping it
- * (as ItineraryCard did) implies a precision the number does not have.
- */
+/** "~2h 30m". The tilde is deliberate: these are estimates. */
 export function formatDriveTime(minutes: number | null | undefined): string {
   if (minutes === null || minutes === undefined) return "";
   const h = Math.floor(minutes / 60);

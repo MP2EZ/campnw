@@ -319,10 +319,6 @@ class ReserveAmericaClient:
 
             return _extract_records(resp.text)
 
-        # Final attempt already raised
-        resp.raise_for_status()
-        return [], 0
-
 
 def _extract_records(html: str) -> tuple[list[dict], int]:
     """Parse Redux state from HTML and return (records, totalRecords)."""

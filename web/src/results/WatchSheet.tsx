@@ -21,7 +21,7 @@ export type WatchFrom = "chip" | "full_group";
 interface Props {
   place: CampgroundResult;
   params: SearchParams | null;
-  /** "remind": a release reminder (P3d, D9) for not-released stays. */
+  /** "remind": a release reminder for not-released stays. */
   mode?: "watch" | "remind";
   /** What can be watched here (watchStays), or reminded (remindStays); at least one. */
   stays: WatchStay[] | RemindStay[];
@@ -55,9 +55,9 @@ const releaseDay = (iso: string) =>
   parseIsoDate(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 /**
- * The Watch sheet (v1.48 P3c, D8): one watch for one full stay, with the
+ * The Watch sheet: one watch for one full stay, with the
  * search's party and rig as site filters. A centred dialog on desktop, a
- * bottom sheet on phones (watchSheet.css). In "remind" mode (P3d, D9) it
+ * bottom sheet on phones (watchSheet.css). In "remind" mode it
  * sets a release reminder instead: a push at 6:55 am PT on release day, after
  * which the server turns it into a watch with the same filters.
  */
@@ -126,7 +126,6 @@ export function WatchSheet({ place, params, mode = "watch", stays, initial, from
       track(req.releases_on ? "release_reminder_created" : "watch_created", {
         from,
         has_filters: hasFilters(req) ? 1 : 0,
-        ui_version: "v2",
         facility_id: place.facility_id,
         source: place.booking_system,
         start_date: req.start_date,

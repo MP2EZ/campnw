@@ -12,7 +12,11 @@ export type OpenWatch = (
   place: CampgroundResult, initial: string | undefined, from: WatchFrom, mode?: SheetMode,
 ) => void;
 
+/** Provided by ResultsPage; everything that opens the sheet renders inside it. */
 export const WatchContext = createContext<OpenWatch | null>(null);
 
-/** Null outside ResultsPage: callers render the stub instead. */
-export const useOpenWatch = () => useContext(WatchContext);
+export function useOpenWatch(): OpenWatch {
+  const open = useContext(WatchContext);
+  if (!open) throw new Error("useOpenWatch needs a WatchContext.Provider");
+  return open;
+}

@@ -58,9 +58,6 @@ def capture_event(
 # Anthropic clients
 # ---------------------------------------------------------------------------
 
-# Model ids were bare literals at 16 call sites. Named here so a model bump is
-# one edit rather than sixteen, and so a typo fails at import rather than at
-# request time.
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
 SONNET_MODEL = "claude-sonnet-4-20250514"
 
@@ -71,11 +68,6 @@ def get_anthropic_client(api_key: str):
     Falls back to the plain SDK when the PostHog integration is unavailable —
     `posthog.ai` is an optional extra, and PostHog raises ValueError when it is
     installed but not configured.
-
-    This block was copy-pasted at 16 call sites across 12 modules, and the
-    except clause had already drifted: most caught (ImportError, ValueError),
-    three caught ImportError alone and so raised on an unconfigured PostHog
-    instead of degrading to the plain client.
     """
     try:
         from posthog.ai.anthropic import AsyncAnthropic

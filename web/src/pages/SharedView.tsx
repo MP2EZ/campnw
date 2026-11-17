@@ -11,15 +11,7 @@ import {
 import { formatDateRange } from "../lib/dates";
 import { SOURCE_LABELS } from "../lib/sources";
 
-/**
- * Landing page for a shared watch or trip.
- *
- * ShareButton has always copied `${origin}/shared/${uuid}`, and the server has
- * always served that payload — but no client route matched it, so the SPA
- * booted and rendered an empty content area. Recipients got a blank page with
- * no error and no redirect, which made the share feature look like it worked
- * for the sharer and do nothing for everyone else.
- */
+/** Landing page for a shared watch or trip (`/shared/:uuid`). */
 export default function SharedView() {
   const { uuid = "" } = useParams();
   const [payload, setPayload] = useState<SharedLinkPayload | null>(null);

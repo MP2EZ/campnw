@@ -7,7 +7,7 @@ import { NOT_LISTED } from "./fit";
 import { stayUrl, type HandoffSite } from "./handoff";
 
 /**
- * The site panel (v1.48 P3b, D7): the open sites behind one chip, grouped by
+ * The site panel: the open sites behind one chip, grouped by
  * type, from the windows already in the search payload. Dates are nights,
  * like a window's.
  */
@@ -41,7 +41,7 @@ const TITLES: Record<SiteKind, string> = {
   cabin: "Cabins and yurts",
   unlisted: NOT_LISTED,
 };
-/** "Tent and van sites" only when both are there (UX #18). */
+/** "Tent and van sites" only when both are there. */
 function title(kind: SiteKind, takes: { tent: boolean; van: boolean }): string {
   if (kind !== "tent" || (takes.tent && takes.van)) return TITLES[kind];
   return takes.tent ? "Tent sites" : "Van sites";
