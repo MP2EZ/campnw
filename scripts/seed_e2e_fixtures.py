@@ -32,7 +32,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib import request as urlrequest
 from urllib.error import HTTPError
 
@@ -44,7 +44,7 @@ PASSWORD = os.environ["E2E_FIXTURE_PASSWORD"]
 DB_PATH = os.environ.get("CAMPABLE_DB_PATH", "/app/data/watches.db")
 PREFIX = os.environ.get("E2E_FIXTURE_PREFIX", "e2e-fixture-")
 
-NOW = datetime.now(timezone.utc)
+NOW = datetime.now(UTC)
 NOW_ISO = NOW.isoformat()
 PRO_EXPIRES = (NOW + timedelta(days=30)).isoformat()
 
@@ -98,7 +98,7 @@ def admin_create_user(email: str) -> str:
             if len(users) < 200:
                 break
             page += 1
-        raise RuntimeError(f"User {email} exists per 422 but not found across pages")
+        raise RuntimeError(f"User {email} exists per 422 but not found across pages") from None
 
 
 def insert_user(
