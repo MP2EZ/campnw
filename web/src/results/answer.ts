@@ -18,6 +18,8 @@ export interface AnswerInput {
   loading: boolean;
   /** The search ended in an error (stalled, cut off, failed) before finishing. */
   failed?: boolean;
+  /** Campgrounds cut by the deadline that are still being checked. */
+  pending?: number;
 }
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -122,7 +124,7 @@ function campgrounds(n: number, p: SearchParams | null): string {
   return p?.name ? `${noun} matching “${p.name}”` : noun;
 }
 
-export function answerSentence({ params, open, checked, notReleased, loading, failed }: AnswerInput): string {
+export function answerSentence({ params, open, checked, notReleased, loading, failed, pending = 0 }: AnswerInput): string {
   const where = within(params);
   if (loading) return `Looking for ${lookingFor(params)}${where}…`;
   const what = whatOpen(params);
@@ -136,6 +138,12 @@ export function answerSentence({ params, open, checked, notReleased, loading, fa
     return `The search stopped after checking ${n} have ${what}.`;
   }
   if (checked === 0) return "No campgrounds matched this search.";
+  if (pending > 0) {
+    // Not a verdict yet: the rest are still being checked (the notice says how many).
+    const soFar = checked - pending;
+    if (soFar <= 0) return `Still checking for ${lookingFor(params)}${where}.`;
+    return `None of the ${soFar} ${campgrounds(soFar, params)} checked so far ${soFar === 1 ? "has" : "have"} ${what}${where}.`;
+  }
   if (notReleased >= checked) {
     return "Nothing to book yet. These dates haven’t been released for booking.";
   }
