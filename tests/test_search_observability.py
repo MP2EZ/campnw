@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 from pnw_campsites import api as api_module
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.models import BookingSystem
+from pnw_campsites.routes import search as search_routes
 from pnw_campsites.search import engine as engine_mod
 from pnw_campsites.search.engine import SearchEngine, SearchQuery, StreamTimingEvent
 from tests.conftest import make_campground_availability, make_campsite_availability
@@ -69,8 +70,6 @@ async def test_stream_logs_one_summary_line(registry, monkeypatch, caplog) -> No
 
 
 def test_route_sends_timing_and_records_the_real_duration(api_client, monkeypatch, caplog) -> None:
-    from pnw_campsites.routes import search as search_routes
-
     class Engine:
         async def search_stream(self, query):
             yield StreamTimingEvent(

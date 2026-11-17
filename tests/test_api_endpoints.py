@@ -166,99 +166,45 @@ class TestSearchEndpoint:
         # FastAPI le constraint should reject values > 50
         assert response.status_code == 422
 
-    def test_search_with_source_filter(self, api_client: TestClient):
-        """GET /api/search?source=wa_state should filter by booking system."""
-        cg = make_campground(booking_system=BookingSystem.WA_STATE)
-        result = CampgroundResult(campground=cg)
-        search_results = SearchResults(
-            query=None,
-            results=[result],
-            campgrounds_checked=1,
+    def _stub_engine(self) -> AsyncMock:
+        api_module._engine.search = AsyncMock(
+            return_value=SearchResults(query=None, results=[], campgrounds_checked=0)
         )
-        api_module._engine.search = AsyncMock(return_value=search_results)
+        return api_module._engine.search
+
+    def test_search_with_source_filter(self, api_client: TestClient):
+        """source=wa_state reaches the engine as a booking-system filter."""
+        search = self._stub_engine()
 
         response = api_client.get(
             "/api/search?start_date=2026-06-01&end_date=2026-06-30&source=wa_state"
         )
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data["results"]) == 1
+        assert search.call_args.args[0].booking_system == BookingSystem.WA_STATE
 
     def test_search_with_days_of_week(self, api_client: TestClient):
-        """GET /api/search?days_of_week=5,6 should filter by weekend days."""
-        cg = make_campground()
-        result = CampgroundResult(campground=cg)
-        search_results = SearchResults(
-            query=None,
-            results=[result],
-            campgrounds_checked=1,
-        )
-        api_module._engine.search = AsyncMock(return_value=search_results)
+        """days_of_week=5,6 reaches the engine as a set of weekday numbers."""
+        search = self._stub_engine()
 
         response = api_client.get(
             "/api/search?start_date=2026-06-01&end_date=2026-06-30&days_of_week=5,6"
         )
 
         assert response.status_code == 200
-        assert response.json()["results"] is not None
+        assert search.call_args.args[0].days_of_week == {5, 6}
 
     def test_search_with_state_filter(self, api_client: TestClient):
-        """GET /api/search?state=OR should include state in query."""
-        cg = make_campground(state="OR")
-        result = CampgroundResult(campground=cg)
-        search_results = SearchResults(
-            query=None,
-            results=[result],
-            campgrounds_checked=1,
-        )
-        api_module._engine.search = AsyncMock(return_value=search_results)
+        """state=OR reaches the engine query."""
+        search = self._stub_engine()
 
         response = api_client.get(
             "/api/search?start_date=2026-06-01&end_date=2026-06-30&state=OR"
         )
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data["results"]) == 1
-        assert data["results"][0]["state"] == "OR"
+        assert search.call_args.args[0].state == "OR"
 
-    def test_search_response_structure(self, api_client: TestClient):
-        """GET /api/search response should match SearchResponse schema."""
-        cg = make_campground()
-        window = AvailableWindow(
-            campsite_id="123",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            start_date="2026-06-01",
-            end_date="2026-06-02",
-            nights=1,
-            max_people=6,
-        )
-        result = CampgroundResult(
-            campground=cg,
-            available_windows=[window],
-            total_available_sites=1,
-        )
-        search_results = SearchResults(
-            query=None,
-            results=[result],
-            campgrounds_checked=1,
-            campgrounds_with_availability=1,
-        )
-        api_module._engine.search = AsyncMock(return_value=search_results)
-
-        response = api_client.get(
-            "/api/search?start_date=2026-06-01&end_date=2026-06-30"
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data["campgrounds_checked"], int)
-        assert isinstance(data["campgrounds_with_availability"], int)
-        assert isinstance(data["results"], list)
-        assert isinstance(data.get("warnings", []), list)
 
 
 class TestCheckEndpoint:

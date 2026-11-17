@@ -80,6 +80,31 @@ def signup_and_auth(
         user_data = resp2.json()["user"]
     return user_data, headers
 
+
+def save_searches(
+    client,
+    headers: dict[str, str],
+    count: int = 3,
+    tags: str = "lakeside",
+    states: tuple[str, ...] = ("WA",),
+) -> None:
+    """Save several search-history entries for the authenticated user."""
+    for i in range(count):
+        client.post(
+            "/api/search-history",
+            json={
+                "params": {
+                    "start_date": "2026-06-01",
+                    "end_date": "2026-06-30",
+                    "state": states[i % len(states)],
+                    "tags": tags,
+                },
+                "result_count": i * 3,
+            },
+            headers=headers,
+        )
+
+
 # -------------------------------------------------------------------
 # Database fixtures
 # -------------------------------------------------------------------
@@ -109,8 +134,6 @@ def registry(tmp_path: Path) -> CampgroundRegistry:
 @pytest.fixture(autouse=True)
 def _patch_jwks_client():
     """Mock the JWKS client so tests validate JWTs with the test HS256 secret."""
-    from unittest.mock import MagicMock
-
     # Mock signing key: .key returns the raw secret for HS256 verification
     mock_signing_key = MagicMock()
     mock_signing_key.key = FAKE_SUPABASE_JWT_SECRET

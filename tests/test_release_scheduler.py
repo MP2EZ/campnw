@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from pnw_campsites.monitor.db import Watch, WatchDB
+from pnw_campsites.monitor.db import User, Watch, WatchDB
 from pnw_campsites.monitor.reminders import (
     PACIFIC,
     reminder_push,
@@ -31,8 +31,6 @@ class Sender:
 
 @pytest.fixture
 def user_id(watch_db: WatchDB) -> int:
-    from pnw_campsites.monitor.db import User
-
     user = watch_db.create_user(User(email="a@example.com"))
     watch_db.save_push_subscription(user.id, "", "https://push/1", "p", "a")
     return user.id
@@ -50,7 +48,6 @@ def _reminder(watch_db: WatchDB, user_id: int, **kw) -> Watch:
 
 
 class TestRunReleaseReminders:
-    @pytest.mark.asyncio
     async def test_nothing_before_six_fifty_five(self, watch_db, user_id):
         watch = _reminder(watch_db, user_id)
         send = Sender()
@@ -58,7 +55,6 @@ class TestRunReleaseReminders:
         assert send.sent == []
         assert watch_db.get_watch(watch.id).watch_type == "release"
 
-    @pytest.mark.asyncio
     async def test_pushes_once_and_converts_keeping_filters(self, watch_db, user_id):
         watch = _reminder(watch_db, user_id)
         send = Sender()
@@ -72,7 +68,6 @@ class TestRunReleaseReminders:
             "2027-05-21", "2027-05-22", 2,
         )
 
-    @pytest.mark.asyncio
     async def test_missed_release_day_converts_without_push(self, watch_db, user_id):
         watch = _reminder(watch_db, user_id)
         send = Sender()
@@ -80,13 +75,11 @@ class TestRunReleaseReminders:
         assert send.sent == []
         assert watch_db.get_watch(watch.id).watch_type == "single"
 
-    @pytest.mark.asyncio
     async def test_failed_push_still_converts(self, watch_db, user_id):
         watch = _reminder(watch_db, user_id)
         await run_release_reminders(watch_db, now=_pt(21, 6, 55), send=Sender(fail=True))
         assert watch_db.get_watch(watch.id).watch_type == "single"
 
-    @pytest.mark.asyncio
     async def test_paused_reminder_is_left_alone(self, watch_db, user_id):
         watch = _reminder(watch_db, user_id)
         watch_db.toggle_enabled(watch.id)
@@ -95,13 +88,11 @@ class TestRunReleaseReminders:
         assert send.sent == []
         assert watch_db.get_watch(watch.id).watch_type == "release"
 
-    @pytest.mark.asyncio
     async def test_bad_release_date_converts(self, watch_db, user_id):
         watch = _reminder(watch_db, user_id, releases_on="not-a-date")
         await run_release_reminders(watch_db, now=_pt(21, 6, 55), send=Sender())
         assert watch_db.get_watch(watch.id).watch_type == "single"
 
-    @pytest.mark.asyncio
     async def test_other_watches_are_untouched(self, watch_db, user_id):
         watch = _reminder(watch_db, user_id, watch_type="single", releases_on=None)
         send = Sender()
@@ -109,7 +100,6 @@ class TestRunReleaseReminders:
         assert send.sent == []
         assert watch_db.get_watch(watch.id).watch_type == "single"
 
-    @pytest.mark.asyncio
     async def test_push_is_logged(self, watch_db, user_id):
         watch = _reminder(watch_db, user_id)
         await run_release_reminders(watch_db, now=_pt(21, 6, 55), send=Sender())

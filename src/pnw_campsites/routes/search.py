@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from pnw_campsites.geo import is_known_base
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import (
     _FACILITY_ID_RE,
@@ -503,9 +504,8 @@ async def search(
     )
 
     # Redact custom addresses in logs — only log known base names
-    _known_bases = {"seattle", "bellevue", "portland", "spokane", "bellingham", "moscow"}
     logged_from = (
-        from_location if from_location in _known_bases
+        from_location if from_location and is_known_base(from_location)
         else "[custom]" if from_location else None
     )
     _search_logger.info(

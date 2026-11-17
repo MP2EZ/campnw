@@ -116,13 +116,7 @@ def _format_results(results) -> None:
             )
             print(f"  Book: {wa_state_availability_url(cg.facility_id, start, end)}")
         elif cg.booking_system == BookingSystem.OR_STATE:
-            end = (
-                date.fromisoformat(reservable_windows[-1].end_date)
-                if reservable_windows else None
-            )
-            book = or_state_availability_url(
-                cg.facility_id, cg.booking_url_slug, start, end,
-            )
+            book = or_state_availability_url(cg.facility_id, cg.booking_url_slug, start)
             print(f"  Book: {book}")
         else:
             print(f"  Book: {recgov_availability_url(cg.facility_id, start)}")
@@ -286,9 +280,7 @@ async def cmd_check(args: argparse.Namespace) -> None:
     if is_wa_state:
         print(f"Book: {wa_state_availability_url(cg.facility_id, start_date, end_date)}")
     elif is_or_state:
-        book = or_state_availability_url(
-            cg.facility_id, cg.booking_url_slug, start_date, end_date,
-        )
+        book = or_state_availability_url(cg.facility_id, cg.booking_url_slug, start_date)
         print(f"Book: {book}")
     else:
         print(f"Book: {recgov_availability_url(cg.facility_id, start_date)}")
