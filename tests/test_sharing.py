@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
+from pnw_campsites.routes import sharing
 from tests.conftest import make_campground, signup_and_auth
 
 EMAIL = "share@test.com"
@@ -130,7 +131,6 @@ class TestShareLinkViewedEvent:
     organic loop in the product could not be evaluated."""
 
     def test_viewing_a_share_emits_share_link_viewed(self, api_client, monkeypatch):
-        from pnw_campsites.routes import sharing
 
         events: list[dict] = []
         monkeypatch.setattr(sharing, "capture_event", lambda **kw: events.append(kw))
@@ -154,7 +154,6 @@ class TestShareLinkViewedEvent:
         assert viewed[0]["properties"]["share_type"] == "trip"
 
     def test_a_dead_link_emits_nothing(self, api_client, monkeypatch):
-        from pnw_campsites.routes import sharing
 
         events: list[dict] = []
         monkeypatch.setattr(sharing, "capture_event", lambda **kw: events.append(kw))

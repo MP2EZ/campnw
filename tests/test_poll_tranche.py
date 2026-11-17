@@ -85,7 +85,6 @@ class TestPollAllWithTemplateWatches:
             search_params='{"state": "WA", "tags": ["lakeside"]}',
         ))
 
-        from tests.conftest import make_campground
         cg_a = make_campground(facility_id="aaa", drive_minutes_from_base=60)
         cg_b = make_campground(facility_id="bbb", drive_minutes_from_base=120)
         registry = MagicMock()

@@ -15,6 +15,8 @@ from __future__ import annotations
 import pytest
 
 from pnw_campsites import api as api_module
+from pnw_campsites.monitor import notify as notify_mod
+from pnw_campsites.monitor import watcher as watcher_mod
 from pnw_campsites.monitor.db import Watch
 from pnw_campsites.monitor.watcher import AvailabilityChange, PollResult
 
@@ -67,8 +69,6 @@ async def _run(results, monkeypatch, *, notify=None):
     the bindings to patch live in their defining modules — patching
     pnw_campsites.api would create attributes the loop never reads.
     """
-    from pnw_campsites.monitor import notify as notify_mod
-    from pnw_campsites.monitor import watcher as watcher_mod
 
     async def fake_poll_all(*a, **k):
         return results

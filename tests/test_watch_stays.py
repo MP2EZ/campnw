@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 from pnw_campsites.monitor.db import Snapshot, Watch, WatchDB
 from pnw_campsites.monitor.stays import new_stay_nights, stay_starts
 from pnw_campsites.monitor.watcher import poll_watch
@@ -73,7 +75,6 @@ def _avail(dates: list[str]):
 
 
 def _client(dates: list[str]) -> RecGovClient:
-    from unittest.mock import AsyncMock
 
     client = AsyncMock(spec=RecGovClient)
     client.get_availability_range.return_value = _avail(dates)

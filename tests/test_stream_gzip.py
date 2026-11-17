@@ -9,6 +9,7 @@ import zlib
 
 import pytest
 
+from pnw_campsites.routes import search as search_routes
 from pnw_campsites.routes.search import _gzip_events
 
 
@@ -31,7 +32,6 @@ async def test_whole_body_is_valid_gzip() -> None:
 
 @pytest.fixture
 def stream_engine(monkeypatch):
-    from pnw_campsites.routes import search as search_routes
 
     class Engine:
         async def search_stream(self, query):

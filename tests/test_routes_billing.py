@@ -19,6 +19,7 @@ from unittest.mock import patch
 import pytest
 
 import pnw_campsites.api as api_module
+import pnw_campsites.routes.planner as planner_mod
 from tests.conftest import signup_and_auth
 
 # ---------------------------------------------------------------------------
@@ -409,7 +410,6 @@ class TestPlannerSessionEnforcement:
         402. Depends on api_client so the watch_db reset hits the
         current (not torn-down) DB instance.
         """
-        import pnw_campsites.routes.planner as planner_mod
 
         monkeypatch.setattr(planner_mod, "_PLAN_DAILY_LIMIT", 10_000)
         planner_mod._plan_rate_limit.clear()

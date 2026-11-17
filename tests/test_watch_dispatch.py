@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from pnw_campsites import api as api_module
+from pnw_campsites.monitor import watcher
 from pnw_campsites.monitor.db import Watch
 from pnw_campsites.monitor.notify import format_poll_result
 from pnw_campsites.monitor.watcher import (
@@ -114,7 +116,6 @@ class TestDispatch:
         assert watch_db.get_watch(paused.id).booking_system == "wa_state"
 
     def test_create_route_stores_wa_source(self, api_client):
-        from pnw_campsites import api as api_module
 
         api_module._registry.booking_systems_for.return_value = [
             BookingSystem.WA_STATE,
@@ -166,7 +167,6 @@ class TestPastDatedWatches:
         recgov.get_availability_range.assert_called_once_with(RG_ID, TODAY, TODAY)
 
     def test_api_marks_ended_watch_expired(self, api_client, monkeypatch):
-        from pnw_campsites.monitor import watcher
 
         monkeypatch.setattr(watcher, "pacific_today", lambda: TODAY)
         for start, end in [("2026-10-01", "2026-11-06"), ("2026-11-01", "2026-11-07")]:

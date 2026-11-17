@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import argparse
+import asyncio
 import sqlite3
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pnw_campsites import __main__ as cli
 from pnw_campsites.monitor.db import Watch, WatchDB
 from pnw_campsites.monitor.watcher import poll_all, poll_watch
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.registry.models import SiteFit
-from tests.conftest import make_campground_availability, make_campsite_availability
+from tests.conftest import make_campground, make_campground_availability, make_campsite_availability
 from tests.test_site_fit import FORT_EBEY_7, FORT_EBEY_MAIN
 
 JUNE_1 = "2027-06-01T00:00:00.000Z"
@@ -176,7 +179,6 @@ class TestPollerFilters:
     async def test_template_watch_passes_filters_to_each_park(
         self, watch_db: WatchDB, registry,
     ):
-        from tests.conftest import make_campground
 
         registry.upsert(make_campground(facility_id="232465", name="Camp", state="WA"))
         watch_db.add_watch(Watch(
@@ -230,10 +232,7 @@ class TestWatchApi:
 
 
 def test_cli_watch_add_stores_filters(tmp_path, monkeypatch, capsys):
-    import argparse
-    from unittest.mock import MagicMock
 
-    from pnw_campsites import __main__ as cli
 
     registry = MagicMock()
     registry.booking_systems_for.return_value = []
@@ -242,7 +241,6 @@ def test_cli_watch_add_stores_filters(tmp_path, monkeypatch, capsys):
     db_path = tmp_path / "w.db"
     monkeypatch.setattr(cli, "WatchDB", lambda: WatchDB(db_path))
 
-    import asyncio
     asyncio.run(cli.cmd_watch_add(argparse.Namespace(
         facility_id="232465", dates="2027-06-04:2027-06-05", nights=2, days=None,
         name=None, ntfy_topic=None, people=4, equipment="trailer", rig_length=30,

@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pnw_campsites.providers import goingtocamp
 from pnw_campsites.providers.errors import RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.registry.models import BookingSystem, Campground
@@ -118,7 +119,6 @@ class TestBlockedAtStartup:
         return session
 
     def test_enter_survives_a_blocked_index_load(self, monkeypatch) -> None:
-        from pnw_campsites.providers import goingtocamp
 
         session = self._blocked_session()
         monkeypatch.setattr(

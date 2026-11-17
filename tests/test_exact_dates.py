@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from pnw_campsites.routes import search as search_routes
 from pnw_campsites.search.engine import SearchQuery, _process_availability, _requested_nights
 from tests.conftest import make_campground, make_campground_availability, make_campsite_availability
 
@@ -66,7 +67,6 @@ class TestRangesKeepTheirLastNight:
 
 class TestRoutesPassTheContract:
     def _capture(self, monkeypatch):
-        from pnw_campsites.routes import search as search_routes
 
         seen: list[SearchQuery] = []
 
