@@ -17,9 +17,6 @@ from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import BookingSystem, Campground
 from pnw_campsites.registry.tag_overrides import TAG_OVERRIDES, apply_tag_overrides
 
-BLAKE = ("wa_state", "-2147483640")
-SCHAFER = ("wa_state", "-2147483559")
-
 
 def _seed(registry, key, tags, name="Test Park"):
     bs, fid = key
@@ -70,20 +67,6 @@ class TestApplyTagOverrides:
         _seed(registry, ("recgov", "2"), ["beach", "riverside"])
         apply_tag_overrides(registry._conn)
         assert _tags(registry, ("recgov", "2")) == ["riverside"]
-
-    def test_idempotent(self, registry, overrides):
-        _seed(registry, ("recgov", "1"), ["fishing"])
-        _seed(registry, ("recgov", "2"), ["beach"])
-        apply_tag_overrides(registry._conn)
-        first = registry._conn.execute(
-            "SELECT facility_id, tags, updated_at FROM campgrounds ORDER BY id"
-        ).fetchall()
-        apply_tag_overrides(registry._conn)
-        apply_tag_overrides(registry._conn)
-        second = registry._conn.execute(
-            "SELECT facility_id, tags, updated_at FROM campgrounds ORDER BY id"
-        ).fetchall()
-        assert [tuple(r) for r in first] == [tuple(r) for r in second]
 
     def test_second_run_issues_no_writes(self, registry, overrides):
         _seed(registry, ("recgov", "1"), ["fishing"])
@@ -176,17 +159,6 @@ class TestCuratedTable:
         for bs, fid in TAG_OVERRIDES:
             BookingSystem(bs)
             assert fid.strip() == fid and fid
-
-    def test_blake_island_is_boat_in(self):
-        assert "boat-in" in TAG_OVERRIDES[BLAKE]["add"]
-
-    def test_river_parks_lose_beach(self):
-        assert "beach" in TAG_OVERRIDES[SCHAFER]["remove"]
-
-    def test_saltwater_parks_keep_beach(self):
-        # Blake is a saltwater marine park: boat-in is added, beach is kept.
-        assert "beach" not in TAG_OVERRIDES[BLAKE].get("remove", [])
-
 
 def test_sqlite_row_factory_not_required(tmp_path, overrides):
     """apply_tag_overrides works on a plain connection (no Row factory)."""

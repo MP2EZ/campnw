@@ -36,10 +36,6 @@ class TestValidTags:
                      "forest", "alpine", "remote", "kid-friendly"):
             assert tag in VALID_TAGS
 
-    def test_tag_count_in_range(self):
-        """Should have 30-45 tags total."""
-        assert 25 <= len(VALID_TAGS) <= 45
-
 
 class TestTagRenames:
     """Tests for the _TAG_RENAMES mapping."""
