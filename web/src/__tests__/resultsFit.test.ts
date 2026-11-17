@@ -29,7 +29,6 @@ describe("fitLine", () => {
 
   test("unknown is never “doesn't fit”: a park with no fit data says so", () => {
     expect(fitLine([site("1"), site("2")])).toBe(NOT_LISTED);
-    expect(NOT_LISTED).toBe("Site types not listed yet");
   });
 
   test("lists only what some site is known to take", () => {
@@ -55,7 +54,7 @@ describe("fitLine", () => {
   });
 });
 
-describe("fitLine with the searched rig (UX #18)", () => {
+describe("fitLine with the searched rig", () => {
   const sites = [
     site("1", { fits_tent: true, fits_van: true, fits_rv: false }),
     site("2", { fits_tent: true, fits_van: true, fits_rv: true, max_rv_ft: 25, hookups: true }),

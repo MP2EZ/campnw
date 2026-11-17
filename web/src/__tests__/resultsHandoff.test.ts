@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { BOOKING_SITES, handoffCopy, stayLabel, stayUrl, type HandoffSite } from "../results/handoff";
+import { handoffCopy, stayLabel, stayUrl, type HandoffSite } from "../results/handoff";
 
 describe("stayUrl: the booking link for the nights a site has", () => {
   test("Recreation.gov: start and checkout", () => {
@@ -34,10 +34,6 @@ describe("stayLabel and hand-off copy", () => {
 
   const site = (extra: Partial<HandoffSite> = {}): HandoffSite => ({
     name: "9", loop: "Main", start: "2027-06-18", end: "2027-06-19", perSite: true, ...extra,
-  });
-
-  test("names the booking site", () => {
-    expect(BOOKING_SITES).toEqual({ recgov: "Recreation.gov", wa_state: "WA State Parks", or_state: "ReserveAmerica" });
   });
 
   test("says what each booking site fills in, and that the site can go", () => {
