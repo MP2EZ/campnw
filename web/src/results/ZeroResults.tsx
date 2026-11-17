@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { track, type CampgroundResult, type SearchParams, type SearchResponse } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { parseIsoDate, todayIso } from "../lib/dates";
+import { displayName } from "../lib/displayName";
 import { IconBell } from "../icons";
 import { byDrive, searchedDays } from "./candidates";
 import { FullGroup } from "./FullGroup";
@@ -69,7 +70,8 @@ export function ZeroResults({ results, places, params, onSearch, searchId }: Pro
             <div className="rv2-zero-remind">
               <button type="button" className="rv2-zero-remind-btn"
                 onClick={() => openWatch(remindPlace, undefined, "full_group", "remind")}>
-                <IconBell className="rv2-icon" />Remind me on release mornings
+                <IconBell className="rv2-icon" />
+                <span className="rv2-zero-remind-label">Remind me when {displayName(remindPlace.name)} opens</span>
               </button>
             </div>
           )}

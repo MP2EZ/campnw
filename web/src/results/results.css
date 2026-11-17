@@ -688,7 +688,14 @@ button.rv2-chip-watch:hover {
   gap: var(--space-3);
 }
 
+.rv2-zero-remind-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .rv2-zero-remind-btn {
+  max-width: 100%;
   min-height: 3rem;
   display: inline-flex;
   align-items: center;

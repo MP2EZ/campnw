@@ -36,7 +36,7 @@ describe("ZeroResults", () => {
     const items = within(timeline).getAllByRole("listitem");
     expect(items[0]).toHaveTextContent("Jun 4 – 6");
     expect(items[0]).toHaveTextContent("7:00 am PT");
-    expect(within(timeline).getByRole("button", { name: /Remind me on release mornings/ }))
+    expect(within(timeline).getByRole("button", { name: /Remind me when Kachess opens/ }))
       .not.toHaveAttribute("aria-disabled");
     expect(screen.queryByText(/coming soon/)).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Not released yet" })).toHaveTextContent("Kachess");
@@ -50,12 +50,12 @@ describe("ZeroResults", () => {
     expect(onSearch).toHaveBeenCalledWith(expect.objectContaining({ from_location: "seattle", days_of_week: "4,5,6" }), "find");
   });
 
-  test("Remind me on release mornings opens the Watch sheet in remind mode for the closest place", async () => {
+  test("the remind button names the closest place and opens the Watch sheet in remind mode for the closest place", async () => {
     const openWatch = vi.fn();
     const kachess = place("Kachess", 77);
     renderZero(<ZeroResults results={results} places={[place("Turlo", 88), kachess]} params={params}
       onSearch={() => {}} />, openWatch);
-    await userEvent.click(screen.getByRole("button", { name: /Remind me on release mornings/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Remind me when Kachess opens" }));
     expect(openWatch).toHaveBeenCalledWith(kachess, undefined, "full_group", "remind");
   });
 });

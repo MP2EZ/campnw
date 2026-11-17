@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { getPosthog, searchCampsitesStream, saveSearchHistory, track } from "../api";
+import { answerSentence } from "../results/answer";
 import type {
   CampgroundResult, SearchParams, SearchResponse, SearchWarning,
   DiagnosisEvent, SearchTiming, UserData,
@@ -97,6 +98,8 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   const [loading, setLoading] = useState(false);
   const [completedAt, setCompletedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set once per search, when the stream finishes; cleared when the next starts.
+  const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const [searchDates, setSearchDates] = useState<{ start: string; end: string } | null>(null);
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
   // Seeded from the URL so the search bar's first render already reflects a
@@ -165,6 +168,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     setLoading(true);
     setCompletedAt(null);
     setError(null);
+    setLiveAnnouncement("");
     if (params.start_date && params.end_date) {
       setSearchDates({ start: params.start_date, end: params.end_date });
     }
@@ -203,6 +207,9 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     let plannedCount: number | undefined;
     // Known only once the stream finishes; undefined until then.
     let matchedCount: number | undefined;
+    // What the results page words its headline from: the request, or the dates
+    // and filters the server parsed out of a natural-language one.
+    let announcedParams: SearchParams = params;
     const snapshot = (): SearchResponse => ({
       campgrounds_checked: checkedCount,
       campgrounds_matched: matchedCount,
@@ -251,6 +258,13 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         const final = snapshot();
         const withAvail = final.campgrounds_with_availability;
         setResults(final);
+        setLiveAnnouncement(answerSentence({
+          params: announcedParams,
+          open: withAvail,
+          checked: final.campgrounds_checked,
+          notReleased: final.not_released_campgrounds ?? 0,
+          loading: false,
+        }));
         track("search_executed", {
           search_id: searchId,
           state: params.state || "all",
@@ -309,6 +323,17 @@ export function useSearch(user: UserData | null): UseSearchReturn {
         if (parsed.start_date && parsed.end_date) {
           setSearchDates({ start: parsed.start_date, end: parsed.end_date });
         }
+        announcedParams = {
+          ...params,
+          start_date: parsed.start_date,
+          end_date: parsed.end_date,
+          state: parsed.state || undefined,
+          nights: parsed.nights,
+          from_location: parsed.from_location || undefined,
+          max_drive: parsed.max_drive || undefined,
+          name: parsed.name || undefined,
+          days_of_week: parsed.days_of_week || undefined,
+        };
         setActiveSearchParams({
           ...params,
           start_date: parsed.start_date,
@@ -394,8 +419,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     sourceFilter,
     filteredResults,
     activeSearchParams,
-    // Never announced anything; App still renders the aria-live region.
-    liveAnnouncement: "",
+    liveAnnouncement,
     maxResults,
     completedAt,
     handleSearch,
@@ -408,6 +432,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       searchIdRef.current = "";
       setLoading(false);
       setResults(null);
+      setLiveAnnouncement("");
     }, []),
   };
 }
