@@ -920,9 +920,13 @@ class SearchEngine:
 
         # Sort by distance if filtering by location, otherwise by availability
         if from_coords:
-            # Boat-in campgrounds sort after every drive-in campground
+            # Boat-in campgrounds sort after every drive-in campground; unknown
+            # drive time sorts last (a 0-minute drive is known, not unknown).
             results.results.sort(
-                key=lambda r: (r.boat_in, r.estimated_drive_minutes or 9999)
+                key=lambda r: (
+                    r.boat_in,
+                    9999 if r.estimated_drive_minutes is None else r.estimated_drive_minutes,
+                )
             )
         else:
             results.results.sort(
