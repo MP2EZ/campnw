@@ -147,6 +147,21 @@ def add_planner_sessions(
         )
 
 
+def cleanup_fixture_users(conn: sqlite3.Connection) -> None:
+    """Delete prior fixture users and everything they own. Idempotent.
+
+    watches.user_id has no FOREIGN KEY, so cascade never reaches it: delete
+    those rows explicitly. Other dependents (planner_sessions, watch child
+    rows, ...) cascade, which needs foreign_keys=ON on this connection.
+    """
+    conn.execute("PRAGMA foreign_keys=ON")
+    like = f"{PREFIX}%"
+    conn.execute(
+        "DELETE FROM watches WHERE user_id IN "
+        "(SELECT id FROM users WHERE email LIKE ?)", (like,))
+    conn.execute("DELETE FROM users WHERE email LIKE ?", (like,))
+
+
 def main() -> int:
     # Bootstrap schema + run migrations by instantiating WatchDB once.
     # On a fresh staging volume the users/watches/planner_sessions tables
@@ -162,11 +177,7 @@ def main() -> int:
     ]
     conn = sqlite3.connect(DB_PATH)
 
-    # Clean up any pre-existing fixture rows. ON DELETE CASCADE clears
-    # their watches and planner_sessions. Idempotent: no-op on a fresh
-    # volume. Necessary on volumes that ran a buggy pre-2026-05-30
-    # version of this script that wrote rows with wrong supabase_ids.
-    conn.execute(f"DELETE FROM users WHERE email LIKE '{PREFIX}%'")
+    cleanup_fixture_users(conn)
     conn.commit()
     try:
         for slug, status, watch_count, planner_count in fixtures:
