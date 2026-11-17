@@ -179,7 +179,6 @@ class TestPollWatchChangeDetection:
         client.get_availability_range.return_value = availability2
 
         # Clear cache so second poll hits the mock client
-        watch_db.clear_expired_cache()
         watch_db._conn.execute("DELETE FROM availability_cache")
         watch_db._conn.commit()
 

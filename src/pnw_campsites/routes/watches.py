@@ -243,5 +243,5 @@ async def toggle_watch(watch_id: int, request: Request, response: Response):
     watch = db.get_watch(watch_id)
     if not watch or not _owns_watch(watch, user_id, token):
         return {"ok": False, "error": "Not found"}
-    new_state = db.toggle_enabled(watch_id, token)
+    new_state = db.toggle_enabled(watch_id)
     return {"ok": True, "enabled": new_state}

@@ -7,6 +7,7 @@ import os
 from datetime import date
 
 import httpx
+from pywebpush import webpush
 
 from pnw_campsites.monitor.watcher import AvailabilityChange, PollResult
 from pnw_campsites.urls import availability_url
@@ -33,11 +34,6 @@ def format_change(change: AvailabilityChange) -> str:
     )
 
 
-def _urgency_prefix(urgency: int) -> str:
-    """Return a prefix based on urgency level. No emoji — data speaks."""
-    return ""
-
-
 def format_poll_result(result: PollResult) -> str:
     """Format a poll result with changes into a notification message."""
     watch = result.watch
@@ -45,15 +41,12 @@ def format_poll_result(result: PollResult) -> str:
 
     # Use LLM-enriched context message if available
     context_msg = ""
-    urgency = 2
     if result.changes and result.changes[0].context_message:
         context_msg = result.changes[0].context_message
-        urgency = result.changes[0].urgency
 
     if context_msg:
-        prefix = _urgency_prefix(urgency)
         lines = [
-            f"{prefix}{context_msg}",
+            context_msg,
             "",
             f"{len(result.changes)} site(s) with new dates:",
             "",
@@ -144,22 +137,14 @@ async def send_web_push(
     payload: dict,  # {title, body, url}, read by web/public/sw.js
 ) -> None:
     """Send one web push. A no-op when VAPID isn't configured."""
-    from pywebpush import WebPushException, webpush
-
     vapid_private_key = os.getenv("VAPID_PRIVATE_KEY", "")
     vapid_claims_email = os.getenv("VAPID_CLAIMS_EMAIL", "")
     if not vapid_private_key:
         return
 
-    try:
-        webpush(
-            subscription_info=subscription,
-            data=json.dumps(payload),
-            vapid_private_key=vapid_private_key,
-            vapid_claims={"sub": f"mailto:{vapid_claims_email}"},
-        )
-    except WebPushException as e:
-        if hasattr(e, "response") and e.response and e.response.status_code in (404, 410):
-            # Subscription expired — caller should clean up
-            raise
-        raise
+    webpush(
+        subscription_info=subscription,
+        data=json.dumps(payload),
+        vapid_private_key=vapid_private_key,
+        vapid_claims={"sub": f"mailto:{vapid_claims_email}"},
+    )

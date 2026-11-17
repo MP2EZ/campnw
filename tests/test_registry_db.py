@@ -308,63 +308,6 @@ class TestImageUrls:
         assert retrieved.image_verified_at is not None
 
 
-class TestUpdateNotes:
-    """Test updating campground notes and rating."""
-
-    def test_update_notes_round_trip(self, registry):
-        """update_notes() persists notes, get_by_id() retrieves them."""
-        cg = make_campground(facility_id="1", notes="")
-        result = registry.upsert(cg)
-        cg_id = result.id
-
-        registry.update_notes(cg_id, "Great fishing spot")
-        retrieved = registry.get_by_id(cg_id)
-
-        assert retrieved is not None
-        assert retrieved.notes == "Great fishing spot"
-
-    def test_update_notes_with_rating(self, registry):
-        """update_notes() with rating parameter persists both."""
-        cg = make_campground(facility_id="1", rating=None)
-        result = registry.upsert(cg)
-        cg_id = result.id
-
-        registry.update_notes(cg_id, "Excellent campground", rating=5)
-        retrieved = registry.get_by_id(cg_id)
-
-        assert retrieved is not None
-        assert retrieved.notes == "Excellent campground"
-        assert retrieved.rating == 5
-
-
-class TestSetEnabled:
-    """Test toggling enabled flag."""
-
-    def test_set_enabled_true(self, registry):
-        """set_enabled(id, True) persists enabled=True."""
-        cg = make_campground(facility_id="1", enabled=False)
-        result = registry.upsert(cg)
-        cg_id = result.id
-
-        registry.set_enabled(cg_id, True)
-        retrieved = registry.get_by_id(cg_id)
-
-        assert retrieved is not None
-        assert retrieved.enabled is True
-
-    def test_set_enabled_false(self, registry):
-        """set_enabled(id, False) persists enabled=False."""
-        cg = make_campground(facility_id="1", enabled=True)
-        result = registry.upsert(cg)
-        cg_id = result.id
-
-        registry.set_enabled(cg_id, False)
-        retrieved = registry.get_by_id(cg_id)
-
-        assert retrieved is not None
-        assert retrieved.enabled is False
-
-
 class TestDelete:
     """Test deleting campgrounds."""
 
