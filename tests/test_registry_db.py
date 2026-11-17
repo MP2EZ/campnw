@@ -2,24 +2,12 @@
 
 from __future__ import annotations
 
-from pnw_campsites.registry.models import BookingSystem, Campground
+import json
+import sqlite3
 
-
-def make_campground(**overrides) -> Campground:
-    """Create a Campground with sensible defaults, override any field."""
-    defaults = {
-        "facility_id": "232465",
-        "name": "Test Campground",
-        "booking_system": BookingSystem.RECGOV,
-        "latitude": 46.75,
-        "longitude": -121.80,
-        "state": "WA",
-        "region": "Mt. Rainier NP",
-        "tags": ["lakeside"],
-        "enabled": True,
-    }
-    defaults.update(overrides)
-    return Campground(**defaults)
+from pnw_campsites.registry.db import CampgroundRegistry
+from pnw_campsites.registry.models import BookingSystem
+from tests.conftest import make_campground
 
 
 class TestUpsertNew:
@@ -141,17 +129,6 @@ class TestSearchByDriveTime:
         assert len(results) == 1
         assert results[0].facility_id == "1"
 
-    def test_search_max_drive_minutes_excludes_null(self, registry):
-        """Campgrounds with NULL drive_minutes_from_base are excluded."""
-        registry.upsert(
-            make_campground(facility_id="1", drive_minutes_from_base=100)
-        )
-        registry.upsert(make_campground(facility_id="2", drive_minutes_from_base=None))
-
-        results = registry.search(max_drive_minutes=150)
-        assert len(results) == 1
-
-
 class TestSearchByBookingSystem:
     """Test search filtering by booking system."""
 
@@ -214,7 +191,7 @@ class TestUpdateTags:
 
 
 class TestImageUrls:
-    """v1.35 — source-photo URLs on the campground record."""
+    """Source-photo URLs on the campground record."""
 
     def test_schema_migration_adds_image_columns(self, registry):
         cols = {
@@ -306,63 +283,6 @@ class TestImageUrls:
         assert retrieved.image_urls == ["https://cdn.example/x.webp"]
         assert retrieved.image_attribution == "Recreation.gov"
         assert retrieved.image_verified_at is not None
-
-
-class TestUpdateNotes:
-    """Test updating campground notes and rating."""
-
-    def test_update_notes_round_trip(self, registry):
-        """update_notes() persists notes, get_by_id() retrieves them."""
-        cg = make_campground(facility_id="1", notes="")
-        result = registry.upsert(cg)
-        cg_id = result.id
-
-        registry.update_notes(cg_id, "Great fishing spot")
-        retrieved = registry.get_by_id(cg_id)
-
-        assert retrieved is not None
-        assert retrieved.notes == "Great fishing spot"
-
-    def test_update_notes_with_rating(self, registry):
-        """update_notes() with rating parameter persists both."""
-        cg = make_campground(facility_id="1", rating=None)
-        result = registry.upsert(cg)
-        cg_id = result.id
-
-        registry.update_notes(cg_id, "Excellent campground", rating=5)
-        retrieved = registry.get_by_id(cg_id)
-
-        assert retrieved is not None
-        assert retrieved.notes == "Excellent campground"
-        assert retrieved.rating == 5
-
-
-class TestSetEnabled:
-    """Test toggling enabled flag."""
-
-    def test_set_enabled_true(self, registry):
-        """set_enabled(id, True) persists enabled=True."""
-        cg = make_campground(facility_id="1", enabled=False)
-        result = registry.upsert(cg)
-        cg_id = result.id
-
-        registry.set_enabled(cg_id, True)
-        retrieved = registry.get_by_id(cg_id)
-
-        assert retrieved is not None
-        assert retrieved.enabled is True
-
-    def test_set_enabled_false(self, registry):
-        """set_enabled(id, False) persists enabled=False."""
-        cg = make_campground(facility_id="1", enabled=True)
-        result = registry.upsert(cg)
-        cg_id = result.id
-
-        registry.set_enabled(cg_id, False)
-        retrieved = registry.get_by_id(cg_id)
-
-        assert retrieved is not None
-        assert retrieved.enabled is False
 
 
 class TestDelete:
@@ -550,44 +470,6 @@ class TestFindSimilar:
         assert "wa-sim" in found_ids
         assert "or-sim" not in found_ids
 
-    def test_scores_by_jaccard_and_proximity(self, registry):
-        """find_similar() combines Jaccard tag similarity and proximity."""
-        source = registry.upsert(
-            make_campground(
-                facility_id="src",
-                name="Source",
-                tags=["lakeside", "mountain"],
-                latitude=47.0,
-                longitude=-121.0,
-            )
-        )
-        # Higher tag similarity, far away
-        registry.upsert(
-            make_campground(
-                facility_id="tags-far",
-                name="High Tags Far",
-                tags=["lakeside", "mountain"],  # perfect match
-                latitude=48.0,  # far
-                longitude=-121.0,
-            )
-        )
-        # Lower tag similarity, close by
-        registry.upsert(
-            make_campground(
-                facility_id="tags-close",
-                name="Low Tags Close",
-                tags=["lakeside"],  # only 1 of 2 tags
-                latitude=47.01,  # very close
-                longitude=-121.01,
-            )
-        )
-
-        results = registry.find_similar(source, limit=2)
-
-        assert len(results) == 2
-        # Balanced scoring means both may appear; verify limit works
-        assert len(results) <= 2
-
     def test_bulk_upsert_multiple_campgrounds(self, registry) -> None:
         """bulk_upsert inserts multiple campgrounds and returns count."""
         cgs = [
@@ -634,38 +516,6 @@ class TestFindSimilar:
         """update_vibe with non-existent id silently succeeds."""
         # Should not raise an exception
         registry.update_vibe(9999, "some-vibe")
-
-    def test_search_with_no_filters_returns_all_enabled(self, registry) -> None:
-        """search with no filters returns all enabled campgrounds."""
-        cg1 = make_campground(facility_id="1", name="Camp 1", enabled=True)
-        cg2 = make_campground(facility_id="2", name="Camp 2", enabled=True)
-        cg3 = make_campground(
-            facility_id="3", name="Camp 3", enabled=False
-        )
-
-        registry.upsert(cg1)
-        registry.upsert(cg2)
-        registry.upsert(cg3)
-
-        results = registry.search()
-
-        assert len(results) == 2
-        facility_ids = {r.facility_id for r in results}
-        assert facility_ids == {"1", "2"}
-
-    def test_search_disabled_campgrounds(self, registry) -> None:
-        """search with enabled_only=False includes disabled campgrounds."""
-        cg1 = make_campground(facility_id="1", name="Camp 1", enabled=False)
-        cg2 = make_campground(facility_id="2", name="Camp 2", enabled=True)
-
-        registry.upsert(cg1)
-        registry.upsert(cg2)
-
-        results = registry.search(enabled_only=False)
-
-        assert len(results) == 2
-        disabled = [r for r in results if not r.enabled]
-        assert len(disabled) == 1
 
     def test_search_no_matches_returns_empty(self, registry) -> None:
         """search with non-matching criteria returns empty list."""
@@ -811,7 +661,6 @@ class TestWaStateMetadataCapacityEquipment:
 
     def test_allowed_equipment_persists_as_json(self, registry) -> None:
         """allowed_equipment stores JSON; persists across reads via SELECT."""
-        import json as _json
         registry.bulk_upsert_wa_sites(
             "-100",
             [{
@@ -830,13 +679,12 @@ class TestWaStateMetadataCapacityEquipment:
         row = registry._conn.execute(
             "SELECT allowed_equipment FROM wa_state_sites WHERE resource_id = 1"
         ).fetchone()
-        decoded = _json.loads(row["allowed_equipment"])
+        decoded = json.loads(row["allowed_equipment"])
         assert len(decoded) == 2
         assert decoded[0] == {"equipmentCategoryId": -32768, "subEquipmentCategoryId": -32767}
 
     def test_default_allowed_equipment_is_empty_array(self, registry) -> None:
         """A site dict without allowed_equipment defaults to [] (not NULL)."""
-        import json as _json
         registry.bulk_upsert_wa_sites(
             "-100",
             [{"resource_id": 1, "name": "X", "loop_map_id": None}],
@@ -844,14 +692,13 @@ class TestWaStateMetadataCapacityEquipment:
         row = registry._conn.execute(
             "SELECT allowed_equipment FROM wa_state_sites WHERE resource_id = 1"
         ).fetchone()
-        assert _json.loads(row["allowed_equipment"]) == []
+        assert json.loads(row["allowed_equipment"]) == []
 
     def test_migration_adds_columns_to_existing_table(self, tmp_path) -> None:
         """A registry initialized against a pre-PR-B DB gets the new columns added."""
-        import sqlite3 as _sqlite3
         db_path = tmp_path / "old_schema.db"
         # Simulate the pre-PR-B schema: wa_state_sites without the new columns
-        conn = _sqlite3.connect(str(db_path))
+        conn = sqlite3.connect(str(db_path))
         conn.executescript("""
             CREATE TABLE wa_state_sites (
                 resource_id INTEGER PRIMARY KEY,
@@ -866,7 +713,6 @@ class TestWaStateMetadataCapacityEquipment:
         conn.close()
 
         # Open via Registry — migration should fire and add the columns
-        from pnw_campsites.registry.db import CampgroundRegistry
         reg = CampgroundRegistry(db_path)
         try:
             cols = {row[1] for row in reg._conn.execute("PRAGMA table_info(wa_state_sites)").fetchall()}

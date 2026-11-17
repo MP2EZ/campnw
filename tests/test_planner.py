@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -32,9 +33,6 @@ from tests.conftest import make_campground
 class TestToolStructure:
     """Validate tool definitions."""
 
-    def test_tools_list_has_five_tools(self):
-        assert len(TOOLS) == 5
-
     def test_expected_tool_names(self):
         names = {t["name"] for t in TOOLS}
         assert names == {
@@ -52,113 +50,10 @@ class TestToolStructure:
             assert "input_schema" in tool
             assert tool["input_schema"]["type"] == "object"
 
-
-# -------------------------------------------------------------------
-# Tool executors
-# -------------------------------------------------------------------
-
-
-class TestSearchTool:
-    """Test search_campgrounds executor."""
-
-    @pytest.mark.asyncio
-    async def test_search_returns_json(self):
-        engine = AsyncMock()
-        engine.search = AsyncMock(
-            return_value=SearchResults(
-                query=MagicMock(),
-                results=[],
-                campgrounds_checked=5,
-                campgrounds_with_availability=0,
-            ),
-        )
-
-        result = await execute_tool(
-            "search_campgrounds",
-            {"start_date": "2026-06-01", "end_date": "2026-06-07"},
-            engine,
-            MagicMock(),
-        )
-
-        data = json.loads(result)
-        assert "campgrounds" in data
-        assert isinstance(data["campgrounds"], list)
-
-
-class TestDriveTimeTool:
-    """Test get_drive_time executor."""
-
-    @pytest.mark.asyncio
-    async def test_returns_minutes(self):
-        result = await execute_tool(
-            "get_drive_time",
-            {
-                "from_lat": 47.6,
-                "from_lon": -122.3,
-                "to_lat": 46.75,
-                "to_lon": -121.8,
-            },
-            None,
-            None,
-        )
-
-        data = json.loads(result)
-        assert "drive_minutes" in data
-        assert isinstance(data["drive_minutes"], int)
-        assert data["drive_minutes"] > 0
-
-
-class TestDetailTool:
-    """Test get_campground_detail executor."""
-
-    @pytest.mark.asyncio
-    async def test_not_found_returns_error(self):
-        registry = MagicMock()
-        registry.get_by_facility_id.return_value = None
-
-        result = await execute_tool(
-            "get_campground_detail",
-            {"facility_id": "999999"},
-            None,
-            registry,
-        )
-
-        data = json.loads(result)
-        assert "error" in data
-
-
-class TestGeocodeTool:
-    """Test geocode_address executor."""
-
-    @pytest.mark.asyncio
-    async def test_known_base_no_network(self):
-        result = await execute_tool(
-            "geocode_address",
-            {"address": "seattle"},
-            None,
-            None,
-        )
-
-        data = json.loads(result)
-        assert "lat" in data
-        assert "lon" in data
-        assert abs(data["lat"] - 47.6) < 0.5
-
-
-class TestUnknownTool:
-    """Test unknown tool name."""
-
-    @pytest.mark.asyncio
-    async def test_returns_error(self):
-        result = await execute_tool(
-            "nonexistent_tool",
-            {},
-            None,
-            None,
-        )
-
-        data = json.loads(result)
-        assert "error" in data
+    def test_search_schema_advertises_source(self):
+        search = next(t for t in TOOLS if t["name"] == "search_campgrounds")
+        source = search["input_schema"]["properties"]["source"]
+        assert source["enum"] == ["recgov", "wa_state"]
 
 
 # -------------------------------------------------------------------
@@ -167,23 +62,9 @@ class TestUnknownTool:
 
 
 class TestPlanChatApi:
-    """Test plan chat API endpoints."""
+    """Test plan chat stream endpoint."""
 
     def test_missing_api_key_returns_503(self, api_client):
-        import os
-        from unittest.mock import patch
-
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
-            resp = api_client.post(
-                "/api/plan/chat",
-                json={"messages": [{"role": "user", "content": "hi"}]},
-            )
-        assert resp.status_code == 503
-
-    def test_stream_missing_api_key_returns_503(self, api_client):
-        import os
-        from unittest.mock import patch
-
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
             resp = api_client.post(
                 "/api/plan/chat/stream",
@@ -200,7 +81,6 @@ class TestPlanChatApi:
 class TestSearchCampgroundsTool:
     """Test _search_campgrounds() formatting logic."""
 
-    @pytest.mark.asyncio
     async def test_search_with_results_formats_json(self):
         """Search with results returns proper JSON structure."""
         campground = make_campground(
@@ -260,7 +140,6 @@ class TestSearchCampgroundsTool:
         assert "booking_url" in camp
         assert len(camp["earliest_windows"]) == 1
 
-    @pytest.mark.asyncio
     async def test_search_zero_results_returns_empty_list(self):
         """Search with no results returns empty campgrounds list."""
         engine = AsyncMock()
@@ -285,7 +164,6 @@ class TestSearchCampgroundsTool:
         assert data["found"] == 0
         assert data["campgrounds"] == []
 
-    @pytest.mark.asyncio
     async def test_search_caps_at_five_results(self):
         """Search returns only top 5 results."""
         campgrounds = [
@@ -322,7 +200,6 @@ class TestSearchCampgroundsTool:
         assert data["found"] == 5
         assert len(data["campgrounds"]) == 5
 
-    @pytest.mark.asyncio
     async def test_search_with_wa_state_booking_system(self):
         """Search correctly formats WA State booking system URL."""
         campground = make_campground(
@@ -366,7 +243,6 @@ class TestSearchCampgroundsTool:
 class TestCheckAvailabilityTool:
     """Test _check_availability() formatting logic."""
 
-    @pytest.mark.asyncio
     async def test_check_availability_with_windows(self):
         """Check with windows returns proper JSON."""
         campground = make_campground(
@@ -394,9 +270,6 @@ class TestCheckAvailabilityTool:
         engine = AsyncMock()
         engine.check_specific = AsyncMock(return_value=result)
 
-        registry = MagicMock()
-        registry.get_by_facility_id.return_value = campground
-
         output = await _check_availability(
             {
                 "facility_id": "232465",
@@ -404,7 +277,6 @@ class TestCheckAvailabilityTool:
                 "end_date": "2026-06-30",
             },
             engine,
-            registry,
         )
 
         data = json.loads(output)
@@ -415,7 +287,6 @@ class TestCheckAvailabilityTool:
         assert "booking_url" in data
         assert "site_windows" in data
 
-    @pytest.mark.asyncio
     async def test_check_availability_with_error(self):
         """Check with error returns error in JSON."""
         campground = make_campground(facility_id="232465")
@@ -427,8 +298,6 @@ class TestCheckAvailabilityTool:
         engine = AsyncMock()
         engine.check_specific = AsyncMock(return_value=result)
 
-        registry = MagicMock()
-
         output = await _check_availability(
             {
                 "facility_id": "232465",
@@ -436,14 +305,12 @@ class TestCheckAvailabilityTool:
                 "end_date": "2026-06-30",
             },
             engine,
-            registry,
         )
 
         data = json.loads(output)
         assert "error" in data
         assert data["error"] == "rate_limited"
 
-    @pytest.mark.asyncio
     async def test_check_availability_caps_site_windows_at_five(self):
         """Check caps site_windows at 5 sites."""
         campground = make_campground()
@@ -469,8 +336,6 @@ class TestCheckAvailabilityTool:
         engine = AsyncMock()
         engine.check_specific = AsyncMock(return_value=result)
 
-        registry = MagicMock()
-
         output = await _check_availability(
             {
                 "facility_id": "232465",
@@ -478,7 +343,6 @@ class TestCheckAvailabilityTool:
                 "end_date": "2026-06-30",
             },
             engine,
-            registry,
         )
 
         data = json.loads(output)
@@ -524,8 +388,8 @@ class TestGetDriveTimeTool:
         )
 
         data = json.loads(result_json)
-        if data["drive_minutes"] >= 60:
-            assert "h" in data["readable"]
+        assert data["drive_minutes"] >= 60
+        assert data["readable"].startswith(f"{data['drive_minutes'] // 60}h")
 
     async def test_drive_time_readable_format_minutes_only(self, monkeypatch):
         """Readable format is minutes only for short drives."""
@@ -540,9 +404,8 @@ class TestGetDriveTimeTool:
         )
 
         data = json.loads(result_json)
-        if data["drive_minutes"] < 60:
-            assert "m" in data["readable"]
-            assert "h" not in data["readable"]
+        assert data["drive_minutes"] < 60
+        assert data["readable"] == f"{data['drive_minutes']}m"
 
 
 # -------------------------------------------------------------------
@@ -634,7 +497,6 @@ class TestGetCampgroundDetailTool:
 class TestGeocodeAddressTool:
     """Test _geocode_address() logic."""
 
-    @pytest.mark.asyncio
     async def test_geocode_known_base_no_network(self):
         """Geocoding known base uses resolved coords."""
         result_json = await _geocode_address({"address": "seattle"})
@@ -646,11 +508,10 @@ class TestGeocodeAddressTool:
         # Seattle should be roughly at 47.6°N
         assert abs(data["lat"] - 47.6) < 1.0
 
-    @pytest.mark.asyncio
     async def test_geocode_unknown_address_mocked(self):
         """Geocoding unknown address uses nominatim."""
         with patch(
-            "pnw_campsites.geo.geocode_address",
+            "pnw_campsites.planner.tools.geocode_address",
             new_callable=AsyncMock,
         ) as mock_geocode:
             mock_geocode.return_value = (47.5, -122.5)
@@ -665,7 +526,6 @@ class TestGeocodeAddressTool:
             assert data["source"] == "nominatim"
             mock_geocode.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_geocode_bellevue_known_base(self):
         """Geocoding 'bellevue' returns known base coords."""
         result_json = await _geocode_address({"address": "bellevue"})
@@ -680,7 +540,6 @@ class TestGeocodeAddressTool:
 class TestExecuteTool:
     """Tests for execute_tool dispatcher."""
 
-    @pytest.mark.asyncio
     async def test_execute_tool_handles_exception(self):
         """execute_tool catches exceptions and returns error JSON."""
         # Create mocks that will raise
@@ -703,7 +562,23 @@ class TestExecuteTool:
         assert "error" in data
         assert "Intentional error" in data["error"]
 
-    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("name", "tool_input", "expected_key"),
+        [
+            ("get_drive_time", {"from_lat": 47.6, "from_lon": -122.3, "to_lat": 46.75, "to_lon": -121.8}, "drive_minutes"),
+            ("get_campground_detail", {"facility_id": "999999"}, "error"),
+            ("geocode_address", {"address": "seattle"}, "lat"),
+        ],
+    )
+    async def test_execute_tool_routes_to_executor(self, name, tool_input, expected_key):
+        """Each non-search tool name dispatches to its own executor."""
+        registry = MagicMock()
+        registry.get_by_facility_id.return_value = None
+
+        data = json.loads(await execute_tool(name, tool_input, None, registry))
+
+        assert expected_key in data
+
     async def test_execute_tool_unknown_tool(self):
         """execute_tool returns error for unknown tool name."""
         mock_engine = MagicMock()

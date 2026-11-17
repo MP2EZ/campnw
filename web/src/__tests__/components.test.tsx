@@ -1,10 +1,6 @@
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-// ---------------------------------------------------------------------------
-// Mocks — must come before component imports
-// ---------------------------------------------------------------------------
-
 vi.mock("../api", () => ({
   track: vi.fn(),
 }));
@@ -25,10 +21,6 @@ vi.mock("../hooks/useAuth", () => ({
 import { OnboardingModal } from "../components/OnboardingModal";
 import { AuthModal } from "../components/AuthModal";
 import { track } from "../api";
-
-// ---------------------------------------------------------------------------
-// OnboardingModal
-// ---------------------------------------------------------------------------
 
 describe("OnboardingModal", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -81,10 +73,6 @@ describe("OnboardingModal", () => {
     expect(screen.getByText("5/5 selected")).toBeInTheDocument();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Auth funnel interiors (audit ANLT-13)
-// ---------------------------------------------------------------------------
 
 describe("AuthModal funnel events", () => {
   beforeEach(() => vi.clearAllMocks());

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { tagLabels } from "../results/tags";
 
-describe("tagLabels (UX #16)", () => {
+describe("tagLabels", () => {
   test("slugs read as words", () => {
     expect(tagLabels(["pet-friendly", "pull-through", "shade", "campfire", "old-growth"]))
       .toEqual(["Pets allowed", "Pull-through sites", "Shaded sites", "Campfires", "Old-growth forest"]);

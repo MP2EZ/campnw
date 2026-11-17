@@ -47,8 +47,7 @@ export default function TripsPage() {
     try {
       await deleteTrip(tripId);
     } catch {
-      // Previously the row was removed optimistically with no catch, so a
-      // failed delete left the user believing it had succeeded.
+      // Keep the row until the delete succeeds.
       setDeleteError("Couldn't delete that trip. Please try again.");
       return;
     }

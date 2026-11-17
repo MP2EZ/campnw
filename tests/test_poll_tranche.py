@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from pnw_campsites.monitor.db import Watch
 from pnw_campsites.monitor.watcher import poll_all, poll_watch
 from pnw_campsites.registry.models import BookingSystem, CampgroundAvailability
@@ -22,7 +20,6 @@ def _mock_availability(facility_id: str = "232465"):
 
 
 class TestPollWatch:
-    @pytest.mark.asyncio
     async def test_poll_recgov_watch(self, watch_db):
         """poll_watch calls recgov provider for RECGOV watches."""
         watch = watch_db.add_watch(Watch(
@@ -39,7 +36,6 @@ class TestPollWatch:
         assert result.error is None
         mock_recgov.get_availability_range.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_poll_or_state_watch(self, watch_db, registry):
         """poll_watch calls reserveamerica for OR_STATE watches."""
         registry.upsert(make_campground(
@@ -62,7 +58,6 @@ class TestPollWatch:
         assert result.error is None
         assert mock_ra.get_window.call_args.args[:3] == ("409402", "ainsworth", "OR")
 
-    @pytest.mark.asyncio
     async def test_poll_or_state_without_client_raises(self, watch_db):
         """poll_watch returns error if OR_STATE watch but no RA client."""
         watch = watch_db.add_watch(Watch(
@@ -79,7 +74,6 @@ class TestPollWatch:
 
 
 class TestPollAllWithTemplateWatches:
-    @pytest.mark.asyncio
     async def test_template_watch_expands(self, watch_db):
         """poll_all expands template watches into virtual single watches."""
         watch_db.add_watch(Watch(
@@ -91,7 +85,6 @@ class TestPollAllWithTemplateWatches:
             search_params='{"state": "WA", "tags": ["lakeside"]}',
         ))
 
-        from tests.conftest import make_campground
         cg_a = make_campground(facility_id="aaa", drive_minutes_from_base=60)
         cg_b = make_campground(facility_id="bbb", drive_minutes_from_base=120)
         registry = MagicMock()
@@ -108,7 +101,6 @@ class TestPollAllWithTemplateWatches:
         # Should have polled 2 expanded campgrounds
         assert mock_recgov.get_availability_range.call_count == 2
 
-    @pytest.mark.asyncio
     async def test_single_watch_not_expanded(self, watch_db):
         """poll_all doesn't expand single watches."""
         watch_db.add_watch(Watch(

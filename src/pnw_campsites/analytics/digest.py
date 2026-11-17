@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 
 _logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ def get_search_analytics(watch_db, since_days: int = 7) -> dict:
         "period_days": since_days,
         "total_searches": total,
         "zero_result_searches": zero_results,
-        "zero_result_rate": round(zero_results / total * 100, 1) if total else 0,
+        "zero_result_rate": round(zero_results / total * 100, 1),
         "states": dict(sorted(state_counts.items(), key=lambda x: -x[1])),
         "tags": dict(sorted(tag_counts.items(), key=lambda x: -x[1])[:10]),
         "locations": dict(sorted(location_counts.items(), key=lambda x: -x[1])),
@@ -115,8 +116,6 @@ async def generate_weekly_digest(watch_db) -> str:
 
     # Optionally enhance with Haiku narrative
     try:
-        import os
-
         api_key = os.getenv("ANTHROPIC_API_KEY", "")
         if api_key:
             from pnw_campsites.posthog_client import HAIKU_MODEL, get_anthropic_client

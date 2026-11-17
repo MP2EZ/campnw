@@ -1,19 +1,20 @@
-"""LLM-enriched notification messages with urgency scoring."""
+"""LLM-enriched notification messages."""
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from datetime import date
 
+from pnw_campsites.enrichment.llm_tags import parse_llm_json
+
 _logger = logging.getLogger(__name__)
 
 
-def _fallback_message(campground_name: str, site_count: int) -> tuple[str, int]:
+def _fallback_message(campground_name: str, site_count: int) -> str:
     """Simple fallback when LLM enrichment is unavailable."""
     sites = "site" if site_count == 1 else "sites"
-    return f"{site_count} {sites} open at {campground_name}", 2
+    return f"{site_count} {sites} open at {campground_name}"
 
 
 async def enrich_notification(
@@ -21,13 +22,8 @@ async def enrich_notification(
     site_count: int,
     dates: list[str],
     api_key: str | None = None,
-) -> tuple[str, int]:
-    """Generate contextual notification message + urgency score.
-
-    Returns (message, urgency) where urgency is 1-3:
-    - 3: high demand (weekend/holiday, rare opening)
-    - 2: standard availability
-    - 1: low demand (midweek, off-season)
+) -> str:
+    """Generate a contextual notification message.
 
     Falls back to simple message on any failure.
     """
@@ -54,9 +50,7 @@ async def enrich_notification(
         f"Sites available: {site_count}\n"
         f"Dates: {dates_str}\n"
         f"Today's date: {today}\n\n"
-        "Rate urgency 1-3 (1=low demand/midweek/off-season, "
-        "2=normal, 3=high demand/weekend/holiday/rare).\n"
-        'Return ONLY a JSON object: {"message": "...", "urgency": N}'
+        'Return ONLY a JSON object: {"message": "..."}'
     )
 
     try:
@@ -71,31 +65,16 @@ async def enrich_notification(
         )
 
         text = response.content[0].text.strip()
-
-        # Try parsing JSON directly
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError:
-            # Try extracting from markdown code block
-            if "```" in text:
-                json_str = text.split("```")[1]
-                if json_str.startswith("json"):
-                    json_str = json_str[4:]
-                data = json.loads(json_str.strip())
-            else:
-                _logger.warning("Could not parse LLM response: %s", text[:200])
-                return _fallback_message(campground_name, site_count)
+        data = parse_llm_json(text)
+        if data is None:
+            _logger.warning("Could not parse LLM response: %s", text[:200])
+            return _fallback_message(campground_name, site_count)
 
         message = data.get("message", "")
-        urgency = data.get("urgency", 2)
-
         if not message or not isinstance(message, str):
             return _fallback_message(campground_name, site_count)
 
-        # Clamp urgency to valid range
-        urgency = max(1, min(3, int(urgency)))
-
-        return message, urgency
+        return message
 
     except Exception as e:
         _logger.warning(

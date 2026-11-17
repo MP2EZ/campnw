@@ -1,4 +1,5 @@
 import type { SearchParams } from "../api";
+import { KNOWN_BASE_KEYS } from "../lib/bases";
 import { formatDateRange, parseIsoDate } from "../lib/dates";
 import { SOURCE_NAMES } from "../lib/sources";
 
@@ -26,12 +27,6 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const STATES: Record<string, string> = {
   WA: "Washington", OR: "Oregon", ID: "Idaho", MT: "Montana", WY: "Wyoming", CA: "California",
 };
-// SearchForm's drive-from keys; anything else came from the NL parser or a
-// profile and is shown as typed.
-const BASES = new Set([
-  "seattle", "bellevue", "portland", "spokane", "bellingham", "bend",
-  "bozeman", "missoula", "jackson", "sacramento", "reno", "moscow",
-]);
 
 /** "June" when the range is exactly one calendar month, else null. */
 function wholeMonth(start: string, end: string): string | null {
@@ -114,7 +109,7 @@ function within(p: SearchParams | null): string {
   const span = hoursLabel(p.max_drive);
   if (!p.from_location) return ` within ${span}${span.endsWith("hour") ? "’s" : "’"} drive`;
   const key = p.from_location.toLowerCase();
-  const place = BASES.has(key) ? key[0].toUpperCase() + key.slice(1) : p.from_location;
+  const place = KNOWN_BASE_KEYS.includes(key) ? key[0].toUpperCase() + key.slice(1) : p.from_location;
   return ` within ${span} of ${place}`;
 }
 

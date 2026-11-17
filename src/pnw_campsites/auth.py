@@ -111,6 +111,6 @@ def decode_supabase_jwt(token: str) -> tuple[str, str] | None:
         if not isinstance(sub, str):
             return None
         return sub, payload.get("email", "")
-    except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, ValueError, Exception) as exc:
+    except Exception as exc:
         log.debug("JWT validation failed: %s", exc)
         return None

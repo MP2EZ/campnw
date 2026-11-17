@@ -2,29 +2,17 @@
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 from fastapi.testclient import TestClient
 
 from pnw_campsites.monitor.db import User
-from tests.conftest import (
-    auth_headers as _auth_headers,
-)
-from tests.conftest import (
-    make_supabase_jwt as _make_jwt,
-)
+from tests.conftest import signup_and_auth
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _signup(client: TestClient, email: str = "trips@example.com"):
-    """Create user via auto-provisioning and return (user_data, auth_headers)."""
-    token = _make_jwt(email=email)
-    headers = _auth_headers(token)
-    resp = client.get("/api/auth/me", headers=headers)
-    assert resp.status_code == 200
-    return resp.json(), headers
 
 
 def _create_trip(client: TestClient, name: str = "Summer Trip", headers: dict | None = None, **kwargs) -> dict:
@@ -42,20 +30,27 @@ def _create_trip(client: TestClient, name: str = "Summer Trip", headers: dict | 
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def user(watch_db):
+    return watch_db.create_user(User(email="u@test.com", password_hash="hash"))
+
+
+@pytest.fixture
+def trip(watch_db, user):
+    return watch_db.create_trip(user.id, "Test")
+
+
 class TestTripDB:
     """Tests for WatchDB trip methods."""
 
-    def test_create_trip(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
+    def test_create_trip(self, watch_db, user):
         trip = watch_db.create_trip(user.id, "Test Trip", start_date="2026-06-01")
         assert trip.id is not None
         assert trip.name == "Test Trip"
         assert trip.start_date == "2026-06-01"
         assert trip.user_id == user.id
 
-    def test_get_trip(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
-        trip = watch_db.create_trip(user.id, "Test")
+    def test_get_trip(self, watch_db, trip):
         fetched = watch_db.get_trip(trip.id)
         assert fetched is not None
         assert fetched.name == "Test"
@@ -63,8 +58,7 @@ class TestTripDB:
     def test_get_trip_not_found(self, watch_db):
         assert watch_db.get_trip(9999) is None
 
-    def test_list_trips_by_user(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
+    def test_list_trips_by_user(self, watch_db, user):
         watch_db.create_trip(user.id, "Trip A")
         watch_db.create_trip(user.id, "Trip B")
         trips = watch_db.list_trips_by_user(user.id)
@@ -72,15 +66,13 @@ class TestTripDB:
         # Ordered by updated_at DESC
         assert trips[0].name == "Trip B"
 
-    def test_update_trip(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
+    def test_update_trip(self, watch_db, user):
         trip = watch_db.create_trip(user.id, "Old Name")
         updated = watch_db.update_trip(trip.id, name="New Name")
         assert updated.name == "New Name"
         assert updated.updated_at > trip.updated_at
 
-    def test_delete_trip(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
+    def test_delete_trip(self, watch_db, user):
         trip = watch_db.create_trip(user.id, "Doomed")
         assert watch_db.delete_trip(trip.id) is True
         assert watch_db.get_trip(trip.id) is None
@@ -88,52 +80,38 @@ class TestTripDB:
     def test_delete_trip_not_found(self, watch_db):
         assert watch_db.delete_trip(9999) is False
 
-    def test_max_trips_enforced(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
+    def test_max_trips_enforced(self, watch_db, user):
         for i in range(10):
             watch_db.create_trip(user.id, f"Trip {i}")
         with pytest.raises(ValueError, match="Maximum"):
             watch_db.create_trip(user.id, "One too many")
 
-    def test_add_campground_to_trip(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
-        trip = watch_db.create_trip(user.id, "Test")
+    def test_add_campground_to_trip(self, watch_db, trip):
         cg = watch_db.add_campground_to_trip(
             trip.id, "232465", "recgov", name="Ohanapecosh",
         )
         assert cg.facility_id == "232465"
         assert cg.sort_order == 0
 
-    def test_add_duplicate_campground_fails(self, watch_db):
-        import sqlite3
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
-        trip = watch_db.create_trip(user.id, "Test")
+    def test_add_duplicate_campground_fails(self, watch_db, trip):
         watch_db.add_campground_to_trip(trip.id, "232465", "recgov")
         with pytest.raises(sqlite3.IntegrityError):
             watch_db.add_campground_to_trip(trip.id, "232465", "recgov")
 
-    def test_same_facility_different_source_ok(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
-        trip = watch_db.create_trip(user.id, "Test")
+    def test_same_facility_different_source_ok(self, watch_db, trip):
         watch_db.add_campground_to_trip(trip.id, "123", "recgov")
         cg2 = watch_db.add_campground_to_trip(trip.id, "123", "wa_state")
         assert cg2.source == "wa_state"
 
-    def test_remove_campground_from_trip(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
-        trip = watch_db.create_trip(user.id, "Test")
+    def test_remove_campground_from_trip(self, watch_db, trip):
         watch_db.add_campground_to_trip(trip.id, "232465", "recgov")
         assert watch_db.remove_campground_from_trip(trip.id, "232465", "recgov")
         assert len(watch_db.get_trip_campgrounds(trip.id)) == 0
 
-    def test_remove_nonexistent_campground(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
-        trip = watch_db.create_trip(user.id, "Test")
+    def test_remove_nonexistent_campground(self, watch_db, trip):
         assert watch_db.remove_campground_from_trip(trip.id, "nope") is False
 
-    def test_get_trip_campgrounds_ordered(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
-        trip = watch_db.create_trip(user.id, "Test")
+    def test_get_trip_campgrounds_ordered(self, watch_db, trip):
         watch_db.add_campground_to_trip(trip.id, "aaa", name="First")
         watch_db.add_campground_to_trip(trip.id, "bbb", name="Second")
         watch_db.add_campground_to_trip(trip.id, "ccc", name="Third")
@@ -141,9 +119,7 @@ class TestTripDB:
         assert [cg.facility_id for cg in cgs] == ["aaa", "bbb", "ccc"]
         assert [cg.sort_order for cg in cgs] == [0, 1, 2]
 
-    def test_cascade_delete_trip_removes_campgrounds(self, watch_db):
-        user = watch_db.create_user(User(email="u@test.com", password_hash="hash"))
-        trip = watch_db.create_trip(user.id, "Test")
+    def test_cascade_delete_trip_removes_campgrounds(self, watch_db, trip):
         watch_db.add_campground_to_trip(trip.id, "232465")
         watch_db.delete_trip(trip.id)
         assert len(watch_db.get_trip_campgrounds(trip.id)) == 0
@@ -158,7 +134,7 @@ class TestTripAPI:
     """Tests for /api/trips endpoints."""
 
     def test_create_trip_authenticated(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         trip = _create_trip(api_client, "Beach Trip", headers=headers, start_date="2026-07-01")
         assert trip["name"] == "Beach Trip"
         assert trip["id"] is not None
@@ -171,7 +147,7 @@ class TestTripAPI:
         assert resp.status_code == 401
 
     def test_list_trips(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         _create_trip(api_client, "Trip A", headers=headers)
         _create_trip(api_client, "Trip B", headers=headers)
         resp = api_client.get("/api/trips", headers=headers)
@@ -180,7 +156,7 @@ class TestTripAPI:
         assert len(trips) == 2
 
     def test_get_trip_detail(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         trip = _create_trip(api_client, "Detail Trip", headers=headers)
         resp = api_client.get(f"/api/trips/{trip['id']}", headers=headers)
         assert resp.status_code == 200
@@ -189,15 +165,15 @@ class TestTripAPI:
         assert "campgrounds" in data
 
     def test_get_other_users_trip_404(self, api_client: TestClient):
-        _, headers1 = _signup(api_client, "user1@test.com")
+        _, headers1 = signup_and_auth(api_client, "user1@test.com", display_name="")
         trip = _create_trip(api_client, "Private Trip", headers=headers1)
         # Create a second user with a different JWT
-        _, headers2 = _signup(api_client, "user2@test.com")
+        _, headers2 = signup_and_auth(api_client, "user2@test.com", display_name="")
         resp = api_client.get(f"/api/trips/{trip['id']}", headers=headers2)
         assert resp.status_code == 404
 
     def test_update_trip(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         trip = _create_trip(api_client, "Old Name", headers=headers)
         resp = api_client.patch(
             f"/api/trips/{trip['id']}",
@@ -208,7 +184,7 @@ class TestTripAPI:
         assert resp.json()["name"] == "New Name"
 
     def test_delete_trip(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         trip = _create_trip(api_client, "Temp", headers=headers)
         resp = api_client.delete(f"/api/trips/{trip['id']}", headers=headers)
         assert resp.status_code == 200
@@ -217,7 +193,7 @@ class TestTripAPI:
         assert resp.status_code == 404
 
     def test_add_campground_to_trip(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         trip = _create_trip(api_client, headers=headers)
         resp = api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
@@ -228,7 +204,7 @@ class TestTripAPI:
         assert resp.json()["facility_id"] == "232465"
 
     def test_add_duplicate_campground_409(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         trip = _create_trip(api_client, headers=headers)
         api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
@@ -243,7 +219,7 @@ class TestTripAPI:
         assert resp.status_code == 409
 
     def test_remove_campground(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         trip = _create_trip(api_client, headers=headers)
         api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",
@@ -257,7 +233,7 @@ class TestTripAPI:
         assert resp.status_code == 200
 
     def test_max_trips_returns_409(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         for i in range(10):
             _create_trip(api_client, f"Trip {i}", headers=headers)
         resp = api_client.post(
@@ -267,12 +243,12 @@ class TestTripAPI:
         assert resp.status_code == 409
 
     def test_trip_name_required(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         resp = api_client.post("/api/trips", json={"name": ""}, headers=headers)
         assert resp.status_code == 422
 
     def test_list_shows_campground_count(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, "trips@example.com", display_name="")
         trip = _create_trip(api_client, headers=headers)
         api_client.post(
             f"/api/trips/{trip['id']}/campgrounds",

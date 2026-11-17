@@ -21,7 +21,8 @@ const place = (windows: Window[], url: string | null = "https://wa.example/dash"
 function renderChips(windows: Window[], params: SearchParams = juneWeekends, url?: string | null) {
   const onOpen = vi.fn();
   const result = place(windows, url);
-  render(<WindowChips chips={buildWindowChips(result, params)} name="Dash Point" params={params} onOpen={onOpen} />);
+  render(<WindowChips chips={buildWindowChips(result, params)} name="Dash Point" params={params} onOpen={onOpen}
+    onWatch={vi.fn()} onRemind={vi.fn()} remindStarts={new Set()} />);
   return onOpen;
 }
 
@@ -81,7 +82,7 @@ describe("WindowChips", () => {
       not_released_ranges: [{ start: "2027-06-25", end: "2027-06-27", releases_on: "2026-12-25" }],
     } as CampgroundResult;
     render(<WindowChips chips={buildWindowChips(result, juneWeekends)} name="Dash Point" params={juneWeekends}
-      source="WA State Parks" onBook={vi.fn()} onWatch={onWatch} />);
+      source="WA State Parks" onBook={vi.fn()} onOpen={vi.fn()} onWatch={onWatch} onRemind={vi.fn()} remindStarts={new Set()} />);
     const watch = screen.getByRole("button", { name: "Fri 11 → Sun 13, Full · Watch" });
     await userEvent.click(watch);
     expect(onWatch).toHaveBeenCalledWith(expect.objectContaining({ start: "2027-06-11", status: "full" }));
@@ -95,7 +96,7 @@ describe("WindowChips", () => {
       not_released_ranges: [{ start: "2027-06-18", end: "2027-06-27", releases_on: "2026-12-18" }],
     } as CampgroundResult;
     render(<WindowChips chips={buildWindowChips(result, juneWeekends)} name="Dash Point" params={juneWeekends}
-      source="WA State Parks" onBook={vi.fn()} onRemind={onRemind} remindStarts={new Set(["2027-06-25"])} />);
+      source="WA State Parks" onBook={vi.fn()} onOpen={vi.fn()} onWatch={vi.fn()} onRemind={onRemind} remindStarts={new Set(["2027-06-25"])} />);
     await userEvent.click(screen.getByRole("button", { name: "Fri 25 → Sun 27, Opens Dec 25 · Remind me" }));
     expect(onRemind).toHaveBeenCalledWith(expect.objectContaining({ start: "2027-06-25", status: "not_released" }));
     // Not in remindStarts (e.g. its release date has passed): text only.
@@ -103,13 +104,13 @@ describe("WindowChips", () => {
     expect(screen.getByText("Fri 18 → Sun 20")).toBeInTheDocument();
   });
 
-  test("a watchable chip leads with a bell and an outline; a chip with nothing to do is flat (UX #2)", () => {
+  test("a watchable chip leads with a bell and an outline; a chip with nothing to do is flat", () => {
     const result = {
       ...place(six.map((s) => win(s, "2027-06-04", "2027-06-06"))),
       closed_ranges: [{ start: "2027-06-18", end: "2027-06-30" }],
     } as CampgroundResult;
     render(<WindowChips chips={buildWindowChips(result, juneWeekends)} name="Dash Point" params={juneWeekends}
-      onOpen={vi.fn()} onWatch={vi.fn()} />);
+      onOpen={vi.fn()} onWatch={vi.fn()} onRemind={vi.fn()} remindStarts={new Set()} />);
     const watch = screen.getByRole("button", { name: "Fri 11 → Sun 13, Full · Watch" });
     expect(watch).toHaveClass("rv2-chip-watch");
     expect(watch.querySelector(".rv2-chip-cta svg")).toHaveAttribute("aria-hidden", "true");
@@ -119,7 +120,7 @@ describe("WindowChips", () => {
     expect(inert).toHaveTextContent("Not reservable");
   });
 
-  test("a range open most days is one summary that expands to every arrival (UX #25)", async () => {
+  test("a range open most days is one summary that expands to every arrival", async () => {
     const april: SearchParams = { start_date: "2027-04-01", end_date: "2027-04-30", mode: "find", nights: 2 };
     renderChips([win("A", "2027-04-01", "2027-04-11"), win("A", "2027-04-13", "2027-04-30")], april);
     const summary = screen.getByRole("button", { name: "Most arrivals Apr 1 – 29, 1 left · except Apr 11, 12, pick a date" });

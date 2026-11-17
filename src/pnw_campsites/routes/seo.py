@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
+from pnw_campsites.geo import format_drive_time
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import get_registry
 from pnw_campsites.urls import (
@@ -58,12 +59,7 @@ BASE_URL = "https://campable.co"
 def _format_drive_time(minutes: int | None) -> str:
     if minutes is None:
         return ""
-    h, m = divmod(minutes, 60)
-    if h and m:
-        return f"{h}h {m}m"
-    if h:
-        return f"{h}h"
-    return f"{m}m"
+    return format_drive_time(minutes).removeprefix("~")
 
 
 def _booking_url(cg) -> str:
@@ -119,13 +115,11 @@ async def campground_profile(request: Request, state: str, slug: str):
     if not cg:
         raise HTTPException(404)
 
-    # Parse booking tips from JSON
     booking_tips = []
     if cg.booking_tips:
         with contextlib.suppress(json.JSONDecodeError, TypeError):
             booking_tips = json.loads(cg.booking_tips)
 
-    # Nearby campgrounds
     nearby = []
     if cg.latitude and cg.longitude:
         nearby = registry.get_nearby(
@@ -167,7 +161,6 @@ async def state_index(request: Request, state: str, tag: str | None = None):
     else:
         campgrounds = registry.search(state=state_upper)
 
-    # Group by region
     campgrounds.sort(key=lambda c: (c.region or "zzz", c.name))
     groups = []
     for region, cgs in groupby(campgrounds, key=lambda c: c.region):
@@ -241,7 +234,6 @@ async def tag_index(request: Request, tag: str):
     if not campgrounds:
         raise HTTPException(404)
 
-    # Group by state
     campgrounds.sort(key=lambda c: (c.state, c.name))
     groups = []
     for state_code, cgs in groupby(campgrounds, key=lambda c: c.state):
@@ -313,21 +305,17 @@ async def sitemap_xml():
     lines = ['<?xml version="1.0" encoding="UTF-8"?>']
     lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
 
-    # Static pages
     for path in ["/campgrounds", "/this-weekend", "/", "/map"]:
         lines.append(f"  <url><loc>{BASE_URL}{path}</loc></url>")
 
-    # State index pages
     for state in sorted(VALID_STATES):
         lines.append(
             f"  <url><loc>{BASE_URL}/campgrounds/{state.lower()}</loc></url>"
         )
 
-    # Tag pages
     for tag, _ in registry.get_all_tags():
         lines.append(f"  <url><loc>{BASE_URL}/tags/{tag}</loc></url>")
 
-    # Campground profiles
     for state, slug in slug_rows:
         if slug and state:
             lines.append(
@@ -339,8 +327,7 @@ async def sitemap_xml():
     return Response(
         content="\n".join(lines),
         media_type="application/xml",
-        # The only SEO route that bypassed _cached_template, so it was fully
-        # recomputed on every crawler hit. The registry only changes on re-seed.
+        # The registry only changes on re-seed.
         headers={"Cache-Control": "public, max-age=86400"},
     )
 

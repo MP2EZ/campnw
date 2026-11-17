@@ -31,6 +31,8 @@ const ResultsPage = lazy(() => import("./results/ResultsPage"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 import { Footer } from "./components/Footer";
+import { KNOWN_BASE_KEYS } from "./lib/bases";
+import { toIsoDate } from "./lib/dates";
 import { SIGN_IN_EVENT } from "./lib/signIn";
 
 import "./tokens.css";
@@ -40,20 +42,15 @@ import "./App.css";
 function formatDate(offset: number): string {
   const d = new Date();
   d.setDate(d.getDate() + offset);
-  return d.toISOString().split("T")[0];
+  return toIsoDate(d);
 }
 
 // Map a freetext home_base to a known drive-from key
-const KNOWN_BASE_KEYS = [
-  "seattle", "bellevue", "portland", "spokane", "bellingham",
-  "bend", "bozeman", "missoula", "jackson", "sacramento", "reno", "moscow",
-];
-
 function resolveHomeBase(homeBase: string): string {
   if (!homeBase) return "";
   const lower = homeBase.toLowerCase().replace(/[^a-z]/g, " ").trim();
   for (const key of KNOWN_BASE_KEYS) {
-    if (lower.startsWith(key) || lower === key) return key;
+    if (lower.startsWith(key)) return key;
   }
   return "";
 }
@@ -170,16 +167,9 @@ export default function App() {
     );
   }, [handleSearch]);
 
-  // v1.48 shipped behind the `results_v2` flag. Every page is v2 now; the
-  // property stays so funnels split by ui_version read across the flip, and
-  // the old per-browser ?ui= override is forgotten.
+  // Kept so funnels split by ui_version read across the v1 -> v2 flip.
   useEffect(() => {
     getPosthog()?.register({ ui_version: "v2" });
-    try {
-      localStorage.removeItem("campable-ui");
-    } catch {
-      // Blocked storage: nothing was saved there either.
-    }
   }, []);
 
   useEffect(() => {
@@ -352,10 +342,7 @@ export default function App() {
           />
         )}
         {user && !user.onboarding_complete && (
-          <OnboardingModal onClose={() => {
-            // Refresh user data so onboarding_complete reflects
-            // (updateProfile already sets it in context)
-          }} />
+          <OnboardingModal onClose={() => {}} />
         )}
         {helpModalOpen && (
           <ShortcutHelpModal

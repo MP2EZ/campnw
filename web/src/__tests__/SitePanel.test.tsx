@@ -88,7 +88,7 @@ describe("SitePanel", () => {
     expect(dialog).toHaveTextContent("Opens WA State Parks in a new tab at Loop Main with Jun 18–20 filled in. Find site 27 there");
     expect(dialog).toHaveTextContent("Someone else can book the site before you finish.");
     await userEvent.click(book);
-    expect(onBook).toHaveBeenCalledWith(expect.objectContaining({ id: "27", hookups: true }), 4);
+    expect(onBook).toHaveBeenCalledWith(expect.objectContaining({ id: "27", hookups: true }));
   });
 
   test("Escape closes and focus goes back to the chip", async () => {
@@ -121,7 +121,7 @@ describe("SitePanel", () => {
     expect(within(dialog).getByRole("link", { name: /^Book on/ })).toHaveFocus();
   });
 
-  test("a weekend chip on a 2-night search opens 2-night stays, not the 3-night weekend (#4)", () => {
+  test("a weekend chip on a 2-night search opens 2-night stays, not the 3-night weekend", () => {
     // Prod (2026-11-14): chip "Fri 5 – Sun 7", panel "Fri Feb 5 → Mon Feb 8 · 3 nights".
     const p: SearchParams = { ...weekends, days_of_week: "4,5,6" };
     const place = { ...fortEbey, booking_system: "or_state", windows: [

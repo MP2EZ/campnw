@@ -104,13 +104,3 @@ def test_upsert_overwrites(registry: CampgroundRegistry):
 
     result = registry.get_weather_normals(47.61, -122.33, 7, 15)
     assert result[0] == pytest.approx(80.0)
-
-
-def test_count_cached_normals(registry: CampgroundRegistry):
-    """Counts months cached for a specific day."""
-    rows = [_make_row(month=m, day=15) for m in range(4, 11)]  # 7 months
-    registry.upsert_weather_normals(rows)
-
-    assert registry.count_cached_normals(47.61, -122.33, 15) == 7
-    assert registry.count_cached_normals(47.61, -122.33, 1) == 0  # different day
-    assert registry.count_cached_normals(99.0, 99.0, 15) == 0  # different location

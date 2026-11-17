@@ -1,10 +1,6 @@
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 vi.mock("../hooks/useAuth", () => ({
   useAuth: () => ({
     user: { id: 1, email: "test@example.com", display_name: "Tester" },
@@ -75,10 +71,6 @@ const TEMPLATE_WATCH: WatchData = {
   name: "WA Lakeside",
   watch_type: "template",
 };
-
-// ---------------------------------------------------------------------------
-// WatchPanel
-// ---------------------------------------------------------------------------
 
 describe("WatchPanel", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -207,5 +199,24 @@ describe("WatchPanel", () => {
     await waitFor(() => {
       expect(screen.getByTestId("poll-dashboard")).toBeInTheDocument();
     });
+  });
+
+  test("moves focus in on open and returns it to the opener on close", async () => {
+    vi.mocked(getWatches).mockResolvedValue([]);
+    const ui = (open: boolean) => (
+      <>
+        <button>Open watchlist</button>
+        <WatchPanel open={open} onClose={vi.fn()} />
+      </>
+    );
+    const { rerender } = render(ui(false));
+    const opener = screen.getByRole("button", { name: "Open watchlist" });
+    opener.focus();
+
+    rerender(ui(true));
+    expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true);
+
+    rerender(ui(false));
+    expect(opener).toHaveFocus();
   });
 });

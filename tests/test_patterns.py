@@ -1,132 +1,223 @@
-"""Tests for historical pattern extraction and booking tips."""
+"""Tests for cancellation stats and booking tips."""
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
-import pnw_campsites.api as api_module
 from pnw_campsites.analytics.patterns import (
-    MIN_OBSERVATION_DAYS,
     extract_booking_tips,
     get_availability_summary,
+    refresh_all_tips,
 )
+from pnw_campsites.registry.models import BookingSystem
+from tests.conftest import make_campground
+
+TODAY = date(2026, 8, 1)
+FIRST_SEEN = datetime(2026, 5, 1, 8)
+LAST_SEEN = datetime(2026, 7, 31, 23)
+NIGHTS = [date(2026, 6, 1) + timedelta(days=i) for i in range(61)]  # Jun-Jul
 
 
-def _seed_history(watch_db, campground_id: str = "232465", days: int = 40):
-    """Seed synthetic availability_daily data."""
-    base = date(2026, 1, 1)
-    records = []
-    for d in range(days):
-        dt = base + timedelta(days=d)
-        observed = (datetime(2026, 1, 1) + timedelta(days=d)).isoformat()
-        # Weekdays more available, weekends mostly reserved
-        status = "Available" if dt.weekday() < 5 else "Reserved"
-        records.append((campground_id, "site-1", dt.isoformat(), status, "recgov", observed, observed, 1))
-    watch_db._conn.executemany(
-        "INSERT INTO availability_daily"
+def _daily(db, cg, site, night, status, source="recgov", first=FIRST_SEEN):
+    db._conn.execute(
+        "INSERT OR REPLACE INTO availability_daily"
         " (campground_id, site_id, date, status, source,"
         "  first_seen, last_seen, observation_count)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        records,
+        " VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+        (cg, site, night.isoformat(), status, source,
+         first.isoformat(), LAST_SEEN.isoformat()),
     )
-    watch_db._conn.commit()
+
+
+def _transition(db, cg, site, night, old, new, at: datetime):
+    db._conn.execute(
+        "INSERT INTO status_transitions"
+        " (campground_id, site_id, date, old_status, new_status, source,"
+        "  observed_at) VALUES (?, ?, ?, ?, ?, 'recgov', ?)",
+        (cg, site, night.isoformat(), old, new, at.isoformat()),
+    )
+
+
+def _seed_season(db, cg="CG1", sites=20, source="recgov", first=FIRST_SEEN):
+    """Every site booked every night; site s0 cancels Mon-Thu nights.
+
+    Each cancellation comes 5 days out and is rebooked 2 hours later.
+    """
+    for night in NIGHTS:
+        for s in range(sites):
+            _daily(db, cg, f"s{s}", night, "Reserved", source, first)
+            _transition(db, cg, f"s{s}", night, "", "Reserved", first)
+        if night.weekday() <= 3:
+            at = datetime.combine(night - timedelta(days=5), datetime.min.time())
+            _transition(db, cg, "s0", night, "Reserved", "Available", at)
+            _transition(db, cg, "s0", night, "Available", "Reserved",
+                        at + timedelta(hours=2))
+    db._conn.commit()
+
+
+def _mock_client(text: str | None = None, error: Exception | None = None):
+    response = MagicMock()
+    response.content = [MagicMock(text=text)]
+    client = MagicMock()
+    client.messages.create = AsyncMock(return_value=response, side_effect=error)
+    return client
 
 
 class TestAvailabilitySummary:
-    def test_returns_none_for_insufficient_data(self, watch_db):
-        _seed_history(watch_db, days=10)
-        result = get_availability_summary(watch_db, "232465")
-        assert result is None
+    def test_none_when_checked_for_under_30_days(self, watch_db):
+        _seed_season(watch_db, first=LAST_SEEN - timedelta(days=10))
+        assert get_availability_summary(watch_db, "CG1", TODAY) is None
 
-    def test_returns_summary_with_enough_data(self, watch_db):
-        _seed_history(watch_db, days=40)
-        result = get_availability_summary(watch_db, "232465")
-        assert result is not None
-        assert result["observation_days"] >= MIN_OBSERVATION_DAYS
-        assert "day_of_week_availability" in result
-        assert result["fill_rate_pct"] >= 0
+    def test_none_when_history_is_stale(self, watch_db):
+        _seed_season(watch_db)
+        assert get_availability_summary(watch_db, "CG1", date(2026, 10, 1)) is None
 
-    def test_weekday_rates_higher_than_weekend(self, watch_db):
-        _seed_history(watch_db, days=40)
-        result = get_availability_summary(watch_db, "232465")
-        assert result is not None
-        rates = result["day_of_week_availability"]
-        # Weekdays should have higher availability than weekends
-        weekday_avg = sum(rates.get(d, 0) for d in ["Monday", "Tuesday", "Wednesday"]) / 3
-        weekend_avg = sum(rates.get(d, 0) for d in ["Saturday", "Sunday"]) / 2
-        assert weekday_avg > weekend_avg
+    def test_none_when_too_few_booked_nights(self, watch_db):
+        _seed_season(watch_db, sites=1)
+        assert get_availability_summary(watch_db, "CG1", TODAY) is None
 
-    def test_returns_none_for_unknown_campground(self, watch_db):
-        assert get_availability_summary(watch_db, "nonexistent") is None
+    def test_none_for_unknown_campground(self, watch_db):
+        assert get_availability_summary(watch_db, "nope", TODAY) is None
+
+    def test_cancellation_timing_and_weekday_rates(self, watch_db):
+        _seed_season(watch_db)
+        s = get_availability_summary(watch_db, "CG1", TODAY)
+        assert s["months"] == "June to July 2026"
+        assert s["booked_site_nights"] == 20 * 61
+        assert s["pct_of_cancellations_by_days_before_arrival"]["3-7"] == 100.0
+        rates = s["pct_of_booked_site_nights_that_reopened_by_night_of_week"]
+        assert rates["Monday"] == 5.0  # 1 of 20 sites
+        assert rates["Friday"] == rates["Saturday"] == 0.0
+        assert s["median_time_a_reopened_site_stayed_open"] == "2 hours"
+
+    def test_statuses_that_are_not_bookings_are_excluded(self, watch_db):
+        _seed_season(watch_db)
+        night = NIGHTS[0]
+        for site, status in [("x1", "NYR"), ("x2", "Closed"), ("x3", "Open"),
+                             ("x4", "Not Reservable")]:
+            _daily(watch_db, "CG1", site, night, status)
+        s = get_availability_summary(watch_db, "CG1", TODAY)
+        assert s["booked_site_nights"] == 20 * 61
+        assert s["excluded_site_nights_not_booked_online"] == {
+            "not_yet_released": 1, "closed": 1,
+            "first_come_first_served": 1, "not_reservable": 1,
+        }
+
+    def test_cart_hold_is_not_a_cancellation(self, watch_db):
+        _seed_season(watch_db)
+        before = get_availability_summary(watch_db, "CG1", TODAY)["cancellations"]
+        night, at = NIGHTS[4], datetime(2026, 6, 1, 9)
+        _transition(watch_db, "CG1", "hold", night, "", "Available", FIRST_SEEN)
+        _transition(watch_db, "CG1", "hold", night, "Available", "Reserved", at)
+        _transition(watch_db, "CG1", "hold", night, "Reserved", "Available",
+                    at + timedelta(minutes=15))
+        s = get_availability_summary(watch_db, "CG1", TODAY)
+        assert s["cancellations"] == before
+
+    def test_nights_after_last_check_are_left_out(self, watch_db):
+        _seed_season(watch_db)
+        before = get_availability_summary(watch_db, "CG1", TODAY)
+        late = date(2026, 8, 20)
+        _transition(watch_db, "CG1", "s1", late, "", "Reserved", FIRST_SEEN)
+        _transition(watch_db, "CG1", "s1", late, "Reserved", "Available",
+                    datetime(2026, 7, 30))
+        after = get_availability_summary(watch_db, "CG1", TODAY)
+        assert after["cancellations"] == before["cancellations"]
+        assert after["booked_site_nights"] == before["booked_site_nights"]
+
+    def test_reopened_night_that_ends_unreservable_stays_under_100(self, watch_db):
+        _seed_season(watch_db)
+        for night in NIGHTS:
+            if night.weekday() == 0:
+                _daily(watch_db, "CG1", "s0", night, "Not Reservable")
+        s = get_availability_summary(watch_db, "CG1", TODAY)
+        rates = s["pct_of_booked_site_nights_that_reopened_by_night_of_week"]
+        assert all(r <= 100 for r in rates.values())
 
 
 class TestExtractBookingTips:
-    @pytest.mark.asyncio
-    async def test_returns_empty_for_insufficient_data(self, watch_db):
-        _seed_history(watch_db, days=10)
-        tips = await extract_booking_tips(watch_db, "232465")
-        assert tips == []
-
-    @pytest.mark.asyncio
-    async def test_returns_basic_tip_without_api_key(self, watch_db):
-        _seed_history(watch_db, days=40)
+    async def test_no_tips_without_api_key(self, watch_db):
+        _seed_season(watch_db)
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}):
-            tips = await extract_booking_tips(watch_db, "232465")
-        assert len(tips) >= 1
-        assert any("Weekday" in t or "availability" in t.lower() for t in tips)
+            assert await extract_booking_tips(watch_db, "CG1", today=TODAY) == []
 
-    @pytest.mark.asyncio
-    async def test_returns_llm_tips_with_api_key(self, watch_db):
-        _seed_history(watch_db, days=40)
-        mock_content = MagicMock()
-        mock_content.text = '["Book midweek for best selection", "Weekends fill fast"]'
-        mock_response = MagicMock()
-        mock_response.content = [mock_content]
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
+    async def test_no_tips_without_enough_history(self, watch_db):
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "k"}):
+            assert await extract_booking_tips(watch_db, "CG1", today=TODAY) == []
 
+    async def test_keeps_only_tips_the_numbers_back(self, watch_db):
+        _seed_season(watch_db)
+        good = ("In June to July 2026, 100.0% of cancellations came 3 to 7 days"
+                " before arrival.")
+        llm = json.dumps([
+            good,
+            "In June to July 2026, sites sell out fast, book immediately.",
+            "In June to July 2026, 42% of Monday nights reopened.",
+            "In June to July 2026, Mondays saw the most reopenings.",
+            123,
+        ])
+        client = _mock_client(f"```json\n{llm}\n```")
         with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "k"}),
+            patch("pnw_campsites.posthog_client.get_anthropic_client",
+                  return_value=client),
         ):
-            tips = await extract_booking_tips(watch_db, "232465", "Ohanapecosh")
-        assert len(tips) == 2
-        assert "midweek" in tips[0]
+            tips = await extract_booking_tips(watch_db, "CG1", "Lake", TODAY)
+        assert tips == [good]
+        prompt = client.messages.create.call_args.kwargs["messages"][0]["content"]
+        assert "June to July 2026" in prompt
+        assert "not bookings" in prompt
 
-    @pytest.mark.asyncio
-    async def test_truncates_long_tips(self, watch_db):
-        _seed_history(watch_db, days=40)
-        mock_content = MagicMock()
-        mock_content.text = f'["{"A" * 300}"]'
-        mock_response = MagicMock()
-        mock_response.content = [mock_content]
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-
+    @pytest.mark.parametrize("text,error", [
+        ("not json", None), ('{"tip": "x"}', None), (None, TimeoutError()),
+    ])
+    async def test_bad_llm_reply_gives_no_tips(self, watch_db, text, error):
+        _seed_season(watch_db)
         with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "k"}),
+            patch("pnw_campsites.posthog_client.get_anthropic_client",
+                  return_value=_mock_client(text, error)),
         ):
-            tips = await extract_booking_tips(watch_db, "232465")
-        assert len(tips[0]) <= 200
+            assert await extract_booking_tips(watch_db, "CG1", today=TODAY) == []
 
 
-class TestBookingTipsEndpoint:
-    def test_tips_endpoint_returns_empty_for_unknown(self, api_client: TestClient):
-        api_module._registry.get_by_facility_id.return_value = None
-        resp = api_client.get("/api/campgrounds/unknown/tips")
-        assert resp.status_code == 200
-        assert resp.json()["tips"] == []
+class TestRefreshAllTips:
+    TIP = "In June to July 2026, 5.0% of Monday nights reopened."
 
-    def test_tips_endpoint_returns_cached_tips(self, api_client: TestClient):
-        from tests.conftest import make_campground
-        cg = make_campground(facility_id="232465", booking_tips='["Tip 1", "Tip 2"]')
-        api_module._registry.get_by_facility_id.return_value = cg
-        resp = api_client.get("/api/campgrounds/232465/tips")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["tips"] == ["Tip 1", "Tip 2"]
+    async def _refresh(self, watch_db, registry, client, today=TODAY):
+        with (
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "k"}),
+            patch("pnw_campsites.posthog_client.get_anthropic_client",
+                  return_value=client),
+        ):
+            return await refresh_all_tips(watch_db, registry, today)
+
+    async def test_writes_tips_for_wa_state_campground(self, watch_db, registry):
+        cg = registry.upsert(make_campground(
+            facility_id="-2147483624", booking_system=BookingSystem.WA_STATE,
+        ))
+        _seed_season(watch_db, cg="-2147483624", source="wa_state")
+        client = _mock_client(json.dumps([self.TIP]))
+        assert await self._refresh(watch_db, registry, client) == 1
+        assert json.loads(registry.get_by_id(cg.id).booking_tips) == [self.TIP]
+
+    async def test_clears_tips_once_history_is_stale(self, watch_db, registry):
+        cg = registry.upsert(make_campground(facility_id="CG1"))
+        registry.update_booking_tips(cg.id, json.dumps(["old"]))
+        _seed_season(watch_db)
+        client = _mock_client(json.dumps([self.TIP]))
+        assert await self._refresh(watch_db, registry, client, date(2026, 11, 1)) == 0
+        assert registry.get_by_id(cg.id).booking_tips == ""
+        client.messages.create.assert_not_called()
+
+    async def test_failed_llm_call_keeps_previous_tips(self, watch_db, registry):
+        cg = registry.upsert(make_campground(facility_id="CG1"))
+        registry.update_booking_tips(cg.id, json.dumps(["old"]))
+        _seed_season(watch_db)
+        client = _mock_client(error=TimeoutError())
+        assert await self._refresh(watch_db, registry, client) == 0
+        assert json.loads(registry.get_by_id(cg.id).booking_tips) == ["old"]

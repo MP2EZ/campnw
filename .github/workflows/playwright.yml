@@ -69,7 +69,8 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl deploy --remote-only --app "$STAGING_APP"
+          # Staging needs no booking-tips history (monitor/history.py).
+          flyctl deploy --remote-only --app "$STAGING_APP" -e HISTORY_POLLER=0
           for i in $(seq 1 30); do
             if curl -sf -o /dev/null "$STAGING_URL/healthz"; then
               echo "Staging ready"
@@ -151,7 +152,8 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl deploy --remote-only --app "$STAGING_APP"
+          # Staging needs no booking-tips history (monitor/history.py).
+          flyctl deploy --remote-only --app "$STAGING_APP" -e HISTORY_POLLER=0
           for i in $(seq 1 30); do
             if curl -sf -o /dev/null "$STAGING_URL/healthz"; then
               exit 0

@@ -7,8 +7,6 @@ import sqlite3
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from pnw_campsites.analytics.digest import (
     format_digest,
     generate_weekly_digest,
@@ -234,7 +232,6 @@ class TestFormatDigest:
 class TestGenerateWeeklyDigest:
     """Tests for the full digest generation pipeline."""
 
-    @pytest.mark.asyncio
     async def test_skips_when_too_few_searches(self):
         """Should skip AI enhancement when <10 searches."""
         db = _create_mock_db([
@@ -245,7 +242,6 @@ class TestGenerateWeeklyDigest:
         assert "2" in result  # Should still format basic stats
         # No AI insights since < 10 searches
 
-    @pytest.mark.asyncio
     async def test_includes_ai_insights_when_enough_data(self):
         """Should include AI insights when ≥10 searches."""
         searches = [
@@ -270,7 +266,6 @@ class TestGenerateWeeklyDigest:
         assert "AI Insights" in result
         assert "Users mostly search WA" in result
 
-    @pytest.mark.asyncio
     async def test_graceful_degradation_on_api_failure(self):
         """Should return basic report if AI enhancement fails."""
         searches = [
@@ -289,7 +284,6 @@ class TestGenerateWeeklyDigest:
         assert "12" in result  # Basic stats still present
         assert "AI Insights" not in result
 
-    @pytest.mark.asyncio
     async def test_empty_db_returns_message(self):
         db = _create_mock_db()
         result = await generate_weekly_digest(db)

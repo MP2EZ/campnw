@@ -1,52 +1,15 @@
-"""Regression tests for the audited hot paths (see .audit-report.md, batch 2a).
-
-Each test here pins a property that was measured to be wrong, not merely slow:
-a query that reads more rows than it needs, an aggregation done in Python that
-SQL can do, and a fan-out whose own cap was silently discarded. They are
-written so they fail on the pre-fix code for the *reason stated*, not
-incidentally.
-"""
+"""Regression tests for hot paths: bounded reads, SQL aggregation, honoured probe caps."""
 
 from __future__ import annotations
 
 from datetime import date, timedelta
 
-import pytest
-
-from pnw_campsites.registry.models import BookingSystem, Campground
-
-
-def make_campground(**overrides) -> Campground:
-    defaults = {
-        "facility_id": "232465",
-        "name": "Test Campground",
-        "booking_system": BookingSystem.RECGOV,
-        "latitude": 46.75,
-        "longitude": -121.80,
-        "state": "WA",
-        "region": "Mt. Rainier NP",
-        "tags": ["lakeside"],
-        "enabled": True,
-    }
-    defaults.update(overrides)
-    return Campground(**defaults)
-
-
-# ---------------------------------------------------------------------------
-# PERF-02 — record_availability_history must not read the whole partition
-# ---------------------------------------------------------------------------
+from pnw_campsites.search import engine as engine_mod
+from tests.conftest import make_campground
 
 
 class TestAvailabilityHistoryReadIsBounded:
-    """The transition-detection read must be scoped to the dates being written.
-
-    Measured on a copy of the production watches.db, facility 232464: the
-    unbounded read materialized all 18,705 accumulated rows to diff a single
-    month's 4,350; bounding it plus the (campground_id, date) index took the
-    read from ~20ms to ~4ms. The absolute numbers are machine-dependent — the
-    structural point is that the old read is O(total history) and the new one
-    is O(polled window), so the gap widens permanently.
-    """
+    """The transition-detection read must be scoped to the dates being written."""
 
     def _seed(self, watch_db, campground_id: str, dates: list[str], status: str):
         watch_db.record_availability_history(
@@ -140,15 +103,8 @@ class TestAvailabilityHistoryReadIsBounded:
         assert rows == 1  # only the initial "" -> Available
 
 
-# ---------------------------------------------------------------------------
-# PERF-19 — get_all_tags aggregated in SQL, same result
-# ---------------------------------------------------------------------------
-
-
 class TestGetAllTags:
-    """Rewriting the Python Counter loop as a json_each aggregate must be a
-    no-op behaviourally. Measured ~2.6x faster on the 1,368-row registry, with
-    byte-identical output."""
+    """get_all_tags counts per tag, ordered by count desc then name asc."""
 
     def test_counts_and_ordering_match_expected(self, registry):
         registry.upsert(make_campground(facility_id="1", tags=["lakeside", "pets"]))
@@ -178,15 +134,8 @@ class TestGetAllTags:
         assert registry.get_all_tags() == []
 
 
-# ---------------------------------------------------------------------------
-# PERF-03 — narrow projection for the sitemap
-# ---------------------------------------------------------------------------
-
-
 class TestListSlugs:
-    """/sitemap.xml needs (state, slug) and nothing else. Hydrating 1,368 full
-    pydantic models to reach two columns measured ~26x slower than the narrow
-    query on the production registry."""
+    """/sitemap.xml needs (state, slug) and nothing else."""
 
     def test_returns_state_and_slug_only(self, registry):
         registry.upsert(
@@ -217,23 +166,11 @@ class TestListSlugs:
         )
 
 
-# ---------------------------------------------------------------------------
-# PERF-04 — zero-result date probes must honour their own campground cap
-# ---------------------------------------------------------------------------
-
-
 class TestDateSuggestionProbeCap:
-    """`_suggest_alternative_dates` builds probe queries with
-    max_campgrounds=5, but passed a _PreparedSearch carrying the *full*
-    campground list; search() does `prep = _prep or await self._prepare_search()`
-    so the cap was silently discarded. Three gathered probes then re-checked
-    every campground — up to 180 extra provider fetches on exactly the searches
-    that already returned nothing."""
+    """`_suggest_alternative_dates` probes carry max_campgrounds=5; the shared
+    _PreparedSearch must not hand them the full campground list."""
 
-    @pytest.mark.asyncio
     async def test_probes_are_capped_to_their_query_limit(self, monkeypatch):
-        from pnw_campsites.search import engine as engine_mod
-
         registry_rows = [
             make_campground(facility_id=str(i), name=f"CG {i}") for i in range(60)
         ]

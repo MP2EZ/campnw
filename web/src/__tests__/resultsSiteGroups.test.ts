@@ -123,7 +123,7 @@ describe("panelGroups: which sites a chip has", () => {
   });
 });
 
-describe("panelGroups: each site books the chip's stay, not a longer one (#4)", () => {
+describe("panelGroups: each site books the chip's stay, not a longer one", () => {
   const weekend: SearchParams = { ...juneWeekends, days_of_week: "4,5,6" };
   const chipFor = (windows: Window[]) =>
     buildWindowChips(place(windows), weekend).shown.find((c) => c.status === "open")!;
@@ -153,7 +153,7 @@ describe("panelGroups: each site books the chip's stay, not a longer one (#4)", 
   });
 });
 
-describe("panelGroups: group titles say what the sites take (UX #18)", () => {
+describe("panelGroups: group titles say what the sites take", () => {
   test("tent-only sites are \"Tent sites\", not \"Tent and van sites\"", () => {
     const tentOnly = { ...tent, fits_van: false };
     expect(panelGroups(place([win("9", "2027-06-18", "2027-06-19", tentOnly)]), fri18, juneWeekends)[0].title)
@@ -164,7 +164,7 @@ describe("panelGroups: group titles say what the sites take (UX #18)", () => {
       fri18, juneWeekends)[0].title).toBe("Tent and van sites");
   });
 
-  test("all-caps loop and site names read as names (UX #17)", () => {
+  test("all-caps loop and site names read as names", () => {
     const [site] = panelGroups(place([win("034 GROUP", "2027-06-18", "2027-06-19", { loop: "DAIRY CREEK WEST" })]),
       fri18, juneWeekends)[0].sites;
     expect([site.name, site.loop]).toEqual(["034 Group", "Loop Dairy Creek West"]);

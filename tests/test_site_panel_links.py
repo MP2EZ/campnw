@@ -1,4 +1,4 @@
-"""Per-window booking links and capacity for the v1.48 site panel (P3b).
+"""Per-window booking links and capacity for the site panel.
 
 A window's end_date is its last night. Booking sites want the checkout day,
 so every per-site link sends end_date + 1.
@@ -13,9 +13,9 @@ from pnw_campsites.routes.search import _format_result
 from pnw_campsites.search.engine import (
     AvailableWindow,
     CampgroundResult,
-    SearchEngine,
     SearchQuery,
     _process_availability,
+    enrich_wa_availability,
 )
 from pnw_campsites.urls import wa_state_site_booking_url
 from tests.conftest import (
@@ -101,7 +101,7 @@ class TestEngineCarriesSiteFacts:
         campsite.max_people_known = False
         availability = make_campground_availability("-5", {"-27": campsite})
 
-        SearchEngine(registry=registry)._enrich_wa_availability("-5", availability)
+        enrich_wa_availability(registry, "-5", availability)
 
         wa = make_campground(facility_id="-5", booking_system=BookingSystem.WA_STATE)
         [window] = _process_availability(wa, availability, self.QUERY).available_windows

@@ -67,7 +67,7 @@ class CampsiteAvailability(BaseModel):
         """Open nights bookable only as the tail of a stay that arrives earlier.
 
         Rec.gov marks the nights just past a campground's arrival window Open
-        until they're released, then NYR beyond. Kirk Creek on 2026-11-07:
+        until they're released, then NYR beyond. For example Kirk Creek:
         Reserved/Available to May 7, Open to May 19 (Reserved where a stay
         runs on), NYR from May 20. So an Open night is continuation when the
         site's later nights, skipping Open and Reserved, reach NYR. Open that
@@ -180,7 +180,7 @@ class Campground(BaseModel):
     notes: str = ""  # personal notes
     rating: int | None = None  # 1-5 personal rating
     total_sites: int | None = None
-    image_urls: list[str] = Field(default_factory=list)  # source-CDN photo URLs (v1.35)
+    image_urls: list[str] = Field(default_factory=list)  # source-CDN photo URLs
     image_attribution: str = ""  # e.g. "Recreation.gov", "Oregon State Parks"
     image_verified_at: datetime | None = None
     enabled: bool = True  # include in searches

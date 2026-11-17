@@ -13,6 +13,7 @@ from datetime import date
 from unittest.mock import AsyncMock
 
 from pnw_campsites.registry.models import BookingSystem
+from pnw_campsites.routes import search as search_routes
 from pnw_campsites.search import engine as engine_mod
 from pnw_campsites.search.engine import SearchEngine, SearchQuery, StreamDiagnosisEvent
 from tests.conftest import (
@@ -87,7 +88,6 @@ async def test_probes_skip_oregon(registry) -> None:
 
 
 def test_stream_sends_a_byte_before_any_park_finishes(api_client, monkeypatch) -> None:
-    from pnw_campsites.routes import search as search_routes
 
     class Engine:
         async def search_stream(self, query):

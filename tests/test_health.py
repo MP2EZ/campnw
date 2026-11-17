@@ -8,10 +8,15 @@ services would make the suite fail for reasons unrelated to the code.
 from __future__ import annotations
 
 import asyncio
+import importlib
+import json
+import sqlite3
+import time
 
 import httpx
 import pytest
 
+from pnw_campsites import __main__ as cli
 from pnw_campsites import health
 from pnw_campsites.health import (
     CHECKS,
@@ -22,6 +27,9 @@ from pnw_campsites.health import (
     run_check,
     summarize,
 )
+from pnw_campsites.providers.errors import WAFBlockedError
+from pnw_campsites.registry.models import CampgroundAvailability
+from tests.conftest import signup_and_auth
 
 
 def _check(fn, **kwargs) -> Check:
@@ -215,8 +223,6 @@ def test_fail_dominates_slow():
 
 
 def test_report_is_json_serializable():
-    import json
-
     report = summarize(_results("ok", "fail"))
     assert json.loads(json.dumps(report))["checks"][0]["name"] == "c0"
 
@@ -265,8 +271,6 @@ async def test_preload_loads_only_the_selected_checks_modules(monkeypatch):
 
 def test_every_declared_module_is_importable():
     """A typo in a check's `modules` would silently disable its warmup."""
-    import importlib
-
     for check in CHECKS:
         for name in check.modules:
             if name == "anthropic":
@@ -285,8 +289,6 @@ def test_every_check_is_a_coroutine_function():
 
 
 def _make_registry_db(tmp_path):
-    import sqlite3
-
     db = tmp_path / "registry.db"
     conn = sqlite3.connect(db)
     conn.executescript(
@@ -307,8 +309,6 @@ def _make_registry_db(tmp_path):
 
 def test_readonly_conn_rejects_writes(tmp_path):
     """The sweep must never mutate a live database."""
-    import sqlite3
-
     db = _make_registry_db(tmp_path)
     conn = health._readonly_conn(db)
     try:
@@ -333,8 +333,6 @@ async def test_registry_check_counts_only_enabled(tmp_path, monkeypatch):
 
 
 async def test_registry_check_fails_when_all_disabled(tmp_path, monkeypatch):
-    import sqlite3
-
     db = _make_registry_db(tmp_path)
     conn = sqlite3.connect(db)
     conn.execute("UPDATE campgrounds SET enabled=0")
@@ -346,8 +344,6 @@ async def test_registry_check_fails_when_all_disabled(tmp_path, monkeypatch):
 
 
 def _make_wa_registry_db(tmp_path, seeded_fids):
-    import sqlite3
-
     db = _make_registry_db(tmp_path)
     conn = sqlite3.connect(db)
     conn.executescript(
@@ -413,16 +409,12 @@ def _patch_goingtocamp(monkeypatch, fake):
 async def test_goingtocamp_check_probes_the_availability_endpoint(monkeypatch):
     """Nov 2026: prod's WA searches all failed while this check said ok — it
     only probed the metadata endpoints, never /api/availability/map."""
-    from pnw_campsites.providers.errors import WAFBlockedError
-
     _patch_goingtocamp(monkeypatch, _FakeGoingToCamp(WAFBlockedError("blocked")))
     with pytest.raises(WAFBlockedError):
         await health._check_goingtocamp()
 
 
 async def test_goingtocamp_check_skips_a_park_with_no_sites(monkeypatch):
-    from pnw_campsites.registry.models import CampgroundAvailability
-
     def avail(park_id):
         sites = {} if park_id == -1 else {"9": object()}
         return CampgroundAvailability.model_construct(
@@ -437,8 +429,6 @@ async def test_goingtocamp_check_skips_a_park_with_no_sites(monkeypatch):
 
 
 async def test_goingtocamp_check_fails_when_no_park_has_sites(monkeypatch):
-    from pnw_campsites.registry.models import CampgroundAvailability
-
     fake = _FakeGoingToCamp(
         lambda park_id: CampgroundAvailability.model_construct(
             facility_id=str(park_id), campsites={},
@@ -468,14 +458,12 @@ async def test_timeout_returns_even_when_the_work_is_a_blocking_thread():
     `wait_for` cannot cancel a thread, so `run_check` must still return on time
     rather than waiting for the worker to notice.
     """
-    import time as _time
-
     started = asyncio.Event()
 
     async def fn() -> str:
         def _block() -> str:
             started.set()
-            _time.sleep(3)
+            time.sleep(3)
             return "eventually"
 
         return await asyncio.to_thread(_block)
@@ -487,8 +475,6 @@ async def test_timeout_returns_even_when_the_work_is_a_blocking_thread():
 
 def test_exit_now_skips_the_executor_join(monkeypatch):
     """_exit_now must use os._exit, not sys.exit, or the join re-hangs the CLI."""
-    from pnw_campsites import __main__ as cli
-
     called = {}
     monkeypatch.setattr(cli.os, "_exit", lambda code: called.setdefault("code", code))
     cli._exit_now(3)
@@ -523,9 +509,7 @@ class TestAdminHealthDeep:
         assert api_client.get("/api/admin/health/deep").status_code == 401
 
     def test_returns_report_for_admin(self, api_client):
-        from tests.test_api_coverage import _signup_and_login
-
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/admin/health/deep", headers=headers)
         assert resp.status_code == 200
         body = resp.json()
@@ -534,23 +518,19 @@ class TestAdminHealthDeep:
         assert {c["name"] for c in body["checks"]} == {"stub-data", "stub-provider"}
 
     def test_only_filter_narrows_the_sweep(self, api_client):
-        from tests.test_api_coverage import _signup_and_login
-
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/admin/health/deep?only=data", headers=headers)
         assert resp.status_code == 200
         assert [c["name"] for c in resp.json()["checks"]] == ["stub-data"]
 
     def test_failure_returns_503(self, api_client, monkeypatch):
-        from tests.test_api_coverage import _signup_and_login
-
         async def boom() -> str:
             raise RuntimeError("provider down")
 
         monkeypatch.setattr(
             health, "CHECKS", [Check(name="stub", category="data", fn=boom)]
         )
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/admin/health/deep", headers=headers)
         # 503 so an external monitor can alert on the status line alone.
         assert resp.status_code == 503

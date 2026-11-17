@@ -2,343 +2,106 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from pnw_campsites.enrichment.notifications import enrich_notification
 
-try:
-    import anthropic  # noqa: F401
-    HAS_ANTHROPIC = True
-except ImportError:
-    HAS_ANTHROPIC = False
 
-needs_anthropic = pytest.mark.skipif(
-    not HAS_ANTHROPIC, reason="anthropic package not installed",
-)
+@pytest.fixture
+def llm_reply(monkeypatch):
+    """Patch the LLM client; `llm_reply(text)` or `llm_reply(error=exc)` returns the mock client."""
+
+    def _install(text: str | None = None, error: Exception | None = None) -> AsyncMock:
+        client = AsyncMock()
+        if error is not None:
+            client.messages.create = AsyncMock(side_effect=error)
+        else:
+            response = MagicMock()
+            response.content = [MagicMock(text=text)]
+            client.messages.create = AsyncMock(return_value=response)
+        monkeypatch.setattr("pnw_campsites.posthog_client.get_anthropic_client", lambda api_key: client)
+        return client
+
+    return _install
 
 
-@needs_anthropic
+async def _enrich(name="Test Camp", site_count=1, dates=("2026-06-10",)):
+    return await enrich_notification(
+        campground_name=name, site_count=site_count, dates=list(dates), api_key="test-key",
+    )
+
+
+def _prompt(client: AsyncMock) -> str:
+    return client.messages.create.call_args.kwargs["messages"][0]["content"]
+
+
 class TestEnrichNotification:
     """Test the enrich_notification async function."""
 
-    @pytest.mark.asyncio
-    async def test_enrich_notification_valid_response(self):
-        """Successfully returns (message, urgency) from valid API response."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text='{"message": "Popular weekend spot just opened!", "urgency": 3}'
-            )
-        ]
+    async def test_valid_response(self, llm_reply):
+        llm_reply('{"message": "Popular weekend spot just opened!"}')
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
-
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            message, urgency = await enrich_notification(
-                campground_name="Lake Sammamish",
-                site_count=3,
-                dates=["2026-06-13", "2026-06-14"],
-                api_key="test-key",
-            )
+        message = await _enrich("Lake Sammamish", 3, ["2026-06-13", "2026-06-14"])
 
         assert message == "Popular weekend spot just opened!"
-        assert urgency == 3
 
-    @pytest.mark.asyncio
-    async def test_enrich_notification_urgency_clamped_to_range(self):
-        """Urgency is clamped to 1-3 range."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(text='{"message": "Sites available", "urgency": 10}')
-        ]
+    async def test_no_api_key_returns_fallback(self, monkeypatch):
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
-
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            message, urgency = await enrich_notification(
-                campground_name="Test Camp",
-                site_count=1,
-                dates=["2026-06-10"],
-                api_key="test-key",
-            )
-
-        assert urgency == 3  # Clamped from 10
-
-    @pytest.mark.asyncio
-    async def test_enrich_notification_low_urgency_clamped(self):
-        """Urgency below 1 is clamped to 1."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(text='{"message": "Midweek availability", "urgency": -5}')
-        ]
-
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
-
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            message, urgency = await enrich_notification(
-                campground_name="Test Camp",
-                site_count=1,
-                dates=["2026-06-10"],
-                api_key="test-key",
-            )
-
-        assert urgency == 1  # Clamped from -5
-
-    @pytest.mark.asyncio
-    async def test_enrich_notification_no_api_key_returns_fallback(self):
-        """Missing API key returns fallback message with urgency 2."""
-        message, urgency = await enrich_notification(
-            campground_name="Lake Camp",
-            site_count=2,
-            dates=["2026-06-15"],
-            api_key="",
+        message = await enrich_notification(
+            campground_name="Lake Camp", site_count=2, dates=["2026-06-15"], api_key="",
         )
 
         assert message == "2 sites open at Lake Camp"
-        assert urgency == 2
 
-    @pytest.mark.asyncio
-    async def test_enrich_notification_api_error_returns_fallback(self):
-        """API errors return fallback message."""
-        import anthropic
+    async def test_api_error_returns_fallback(self, llm_reply):
+        llm_reply(error=RuntimeError("API Error"))
 
-        mock_request = MagicMock()
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            side_effect=anthropic.APIError(
-                "API Error", mock_request, body=None
-            )
-        )
+        assert await _enrich("River Camp", 1, ["2026-07-01"]) == "1 site open at River Camp"
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            message, urgency = await enrich_notification(
-                campground_name="River Camp",
-                site_count=1,
-                dates=["2026-07-01"],
-                api_key="test-key",
-            )
+    async def test_invalid_json_returns_fallback(self, llm_reply):
+        llm_reply("not valid json")
 
-        assert message == "1 site open at River Camp"
-        assert urgency == 2
+        assert await _enrich("Test Camp", 5, ["2026-06-20"]) == "5 sites open at Test Camp"
 
-    @pytest.mark.asyncio
-    async def test_enrich_notification_invalid_json_returns_fallback(self):
-        """Invalid JSON response falls back to simple message."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="not valid json")]
+    async def test_json_in_markdown_block(self, llm_reply):
+        llm_reply('```json\n{"message": "Peak weekend availability!"}\n```')
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
+        assert await _enrich("Popular Park", 4) == "Peak weekend availability!"
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            message, urgency = await enrich_notification(
-                campground_name="Test Camp",
-                site_count=5,
-                dates=["2026-06-20"],
-                api_key="test-key",
-            )
+    async def test_missing_message_returns_fallback(self, llm_reply):
+        llm_reply('{"other": 2}')
 
-        assert message == "5 sites open at Test Camp"
-        assert urgency == 2
+        assert await _enrich() == "1 site open at Test Camp"
 
-    @pytest.mark.asyncio
-    async def test_enrich_notification_json_in_markdown_block(self):
-        """Extracts JSON from markdown code block format."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text='```json\n{"message": "Peak weekend availability!", '
-                '"urgency": 3}\n```'
-            )
-        ]
+    async def test_date_formatting_in_prompt(self, llm_reply):
+        client = llm_reply('{"message": "Sites available"}')
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
+        message = await _enrich(site_count=5, dates=[f"2026-06-{d:02d}" for d in range(10, 15)])
 
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            message, urgency = await enrich_notification(
-                campground_name="Popular Park",
-                site_count=4,
-                dates=["2026-06-13", "2026-06-14"],
-                api_key="test-key",
-            )
-
-        assert message == "Peak weekend availability!"
-        assert urgency == 3
-
-    @pytest.mark.asyncio
-    async def test_enrich_notification_missing_message_returns_fallback(self):
-        """Response without message field returns fallback."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(text='{"urgency": 2}')  # No message
-        ]
-
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
-
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            message, urgency = await enrich_notification(
-                campground_name="Test Camp",
-                site_count=1,
-                dates=["2026-06-10"],
-                api_key="test-key",
-            )
-
-        assert message == "1 site open at Test Camp"
-        assert urgency == 2
-
-    @pytest.mark.asyncio
-    async def test_enrich_notification_date_formatting_in_prompt(self):
-        """Dates are formatted and passed to the LLM."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text='{"message": "Sites available", "urgency": 2}'
-            )
-        ]
-
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
-
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            dates = [f"2026-06-{d:02d}" for d in range(10, 15)]
-            message, urgency = await enrich_notification(
-                campground_name="Test Camp",
-                site_count=5,
-                dates=dates,
-                api_key="test-key",
-            )
-
-        # Verify dates were in the prompt
-        call_args = mock_client.messages.create.call_args
-        messages = call_args.kwargs["messages"]
-        prompt_text = messages[0]["content"]
-
-        assert "2026-06-10" in prompt_text
-        assert "2026-06-14" in prompt_text
+        prompt = _prompt(client)
+        assert "2026-06-10" in prompt
+        assert "2026-06-14" in prompt
         assert message == "Sites available"
-        assert urgency == 2
 
-    @pytest.mark.asyncio
-    async def test_prompt_includes_brand_voice_rules(self):
-        """Prompt should include all brand voice rules."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(text='{"message": "Test", "urgency": 2}')
-        ]
+    async def test_prompt_includes_brand_voice_rules(self, llm_reply):
+        client = llm_reply('{"message": "Test"}')
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        await _enrich("Test")
 
-        with patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client):
-            await enrich_notification(
-                campground_name="Test",
-                site_count=1,
-                dates=["2026-06-10"],
-                api_key="test-key",
-            )
-
-        prompt = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
-        # Brand voice rules
+        prompt = _prompt(client)
         assert "No emoji" in prompt
         assert "exclamation marks" in prompt.lower()
         assert "snag" in prompt
         assert "grab" in prompt
         assert "Declarative" in prompt
 
-    @pytest.mark.asyncio
-    async def test_fallback_message_follows_brand_voice(self):
-        """Fallback message should be declarative and data-forward."""
-        message, urgency = await enrich_notification(
-            campground_name="Ohanapecosh",
-            site_count=3,
-            dates=["2026-06-13", "2026-06-14"],
-            api_key="",
-        )
+    async def test_many_dates_truncated(self, llm_reply):
+        client = llm_reply('{"message": "Many dates open"}')
 
-        assert message == "3 sites open at Ohanapecosh"
-        # No banned patterns
-        assert "!" not in message
-        assert "Great" not in message
-        assert "Alert" not in message
+        message = await _enrich("Busy Camp", 10, [f"2026-06-{d:02d}" for d in range(1, 21)])
 
-    @pytest.mark.asyncio
-    async def test_enrich_notification_many_dates_truncated(self):
-        """More than 14 dates shows "+N more" in the prompt."""
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text='{"message": "Many dates open", "urgency": 3}'
-            )
-        ]
-
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=mock_response
-        )
-
-        with patch(
-            "anthropic.AsyncAnthropic",
-            return_value=mock_client,
-        ):
-            # Create 20 dates
-            dates = [f"2026-06-{d:02d}" for d in range(1, 21)]
-            message, urgency = await enrich_notification(
-                campground_name="Busy Camp",
-                site_count=10,
-                dates=dates,
-                api_key="test-key",
-            )
-
-        # Verify prompt includes date truncation notice
-        call_args = mock_client.messages.create.call_args
-        messages = call_args.kwargs["messages"]
-        prompt_text = messages[0]["content"]
-
-        assert "(+6 more)" in prompt_text
+        assert "(+6 more)" in _prompt(client)
         assert message == "Many dates open"
-        assert urgency == 3

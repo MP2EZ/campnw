@@ -1,6 +1,7 @@
 """Tests for weather enrichment in search responses."""
 
 from datetime import date
+from unittest.mock import patch
 
 from pnw_campsites.routes.search import _lookup_weather_single, _weather_date
 
@@ -29,38 +30,24 @@ def test_lookup_weather_single_zero_coords():
     assert result is None
 
 
-def test_lookup_weather_single_uncached(tmp_path):
+def test_lookup_weather_single_uncached(registry):
     """Uncached location returns None gracefully."""
-    from unittest.mock import MagicMock, patch
-
-    from pnw_campsites.registry.db import CampgroundRegistry
-
-    reg = CampgroundRegistry(tmp_path / "registry.db")
-    mock_get_registry = MagicMock(return_value=reg)
-
-    with patch("pnw_campsites.routes.search.get_registry", mock_get_registry):
+    with patch("pnw_campsites.routes.search.get_registry", lambda: registry):
         result = _lookup_weather_single(
             47.61, -122.33, date(2026, 7, 1), date(2026, 7, 7)
         )
     assert result is None
-    reg.close()
 
 
-def test_lookup_weather_single_cached(tmp_path):
+def test_lookup_weather_single_cached(registry):
     """Cached weather is returned correctly."""
-    from unittest.mock import MagicMock, patch
-
-    from pnw_campsites.registry.db import CampgroundRegistry
-
-    reg = CampgroundRegistry(tmp_path / "registry.db")
-    reg.upsert_weather_normals([{
+    registry.upsert_weather_normals([{
         "lat_2dp": 47.61, "lon_2dp": -122.33, "month": 7, "day": 15,
         "temp_high_f": 75.0, "temp_low_f": 55.0, "precip_pct": 10.0,
         "fetched_at": "2026-04-15T00:00:00Z",
     }])
-    mock_get_registry = MagicMock(return_value=reg)
 
-    with patch("pnw_campsites.routes.search.get_registry", mock_get_registry):
+    with patch("pnw_campsites.routes.search.get_registry", lambda: registry):
         # Search midpoint July 4 → closest cached is July 15
         result = _lookup_weather_single(
             47.61, -122.33, date(2026, 7, 1), date(2026, 7, 7)
@@ -69,4 +56,3 @@ def test_lookup_weather_single_cached(tmp_path):
     high, low, precip = result
     assert high == 75.0
     assert low == 55.0
-    reg.close()

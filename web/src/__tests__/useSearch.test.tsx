@@ -4,10 +4,6 @@ import { useSearch, parseSearchParamsFromUrl } from "../hooks/useSearch";
 import { searchCampsitesStream, track, getPosthog } from "../api";
 import type { CampgroundResult, SearchParams } from "../api";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 let capturedOnResult: ((r: CampgroundResult) => void) | null = null;
 let capturedOnDone: (() => void) | null = null;
 let capturedOnError: ((err: Error) => void) | null = null;
@@ -49,9 +45,6 @@ vi.mock("../api", () => ({
   getPosthog: vi.fn(() => ({ register: vi.fn(), capture: vi.fn() })),
 }));
 
-// Stub window methods used by useSearch
-Object.defineProperty(window, "scrollTo", { value: vi.fn() });
-
 // Make requestAnimationFrame synchronous so RAF-throttled state updates flush immediately
 vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 0; });
 vi.stubGlobal("cancelAnimationFrame", vi.fn());
@@ -81,39 +74,22 @@ const MOCK_OR_RESULT: CampgroundResult = {
   booking_system: "or_state",
 } as any;
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+beforeEach(() => {
+  window.history.replaceState(null, "", "/");
+  vi.clearAllMocks();
+  capturedOnResult = null;
+  capturedOnDone = null;
+  capturedOnError = null;
+  capturedOnWarnings = null;
+});
 
 describe("useSearch", () => {
-  beforeEach(() => {
-    window.history.replaceState(null, "", "/");
-    vi.clearAllMocks();
-    capturedOnResult = null;
-    capturedOnDone = null;
-    capturedOnError = null;
-  });
-
   test("initial state: null results, not loading, no error", () => {
     const { result } = renderHook(() => useSearch(null));
 
     expect(result.current.results).toBeNull();
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
-  });
-
-  test("handleSearch sets loading and calls searchCampsitesStream", async () => {
-    const { searchCampsitesStream } = await import("../api");
-    const { result } = renderHook(() => useSearch(null));
-
-    await act(async () => {
-      result.current.handleSearch(
-        { start_date: "2026-06-01", end_date: "2026-06-30" },
-        "find",
-      );
-    });
-
-    expect(searchCampsitesStream).toHaveBeenCalled();
   });
 
   test("streaming results accumulate via onResult callback", async () => {
@@ -256,20 +232,7 @@ describe("useSearch", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Provider degradation must reach state, not be hardcoded away (audit ANLT-06)
-// ---------------------------------------------------------------------------
-
 describe("useSearch provider warnings", () => {
-  beforeEach(() => {
-    window.history.replaceState(null, "", "/");
-    vi.clearAllMocks();
-    capturedOnResult = null;
-    capturedOnDone = null;
-    capturedOnError = null;
-    capturedOnWarnings = null;
-  });
-
   // Every setResults call passed `warnings: []`, so even once the stream
   // carried them they had nowhere to land. During the ReserveAmerica outage
   // (#131) an Oregon search just returned fewer results, with no explanation.
@@ -326,11 +289,6 @@ describe("useSearch provider warnings", () => {
 })
 
 describe("useSearch end-of-stream frames", () => {
-  beforeEach(() => {
-    window.history.replaceState(null, "", "/");
-    vi.clearAllMocks();
-  });
-
   async function startSearch() {
     const hook = renderHook(() => useSearch(null));
     await act(async () => {
@@ -384,20 +342,7 @@ describe("useSearch end-of-stream frames", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Regression: sourceFilter must bail out when the source set is unchanged
-// (audit PERF-07)
-// ---------------------------------------------------------------------------
-
 describe("useSearch sourceFilter identity", () => {
-  beforeEach(() => {
-    window.history.replaceState(null, "", "/");
-    vi.clearAllMocks();
-    capturedOnResult = null;
-    capturedOnDone = null;
-    capturedOnError = null;
-  });
-
   // `resultSources` is a useMemo returning `new Set(...)` — a fresh reference
   // every time it recomputes. An unconditional setSourceFilter(resultSources)
   // therefore never bails out, so each streamed result produced a second full
@@ -456,10 +401,6 @@ describe("useSearch sourceFilter identity", () => {
   });
 })
 
-// ---------------------------------------------------------------------------
-// URL round-trip: params were written but never read back (audit UX-03)
-// ---------------------------------------------------------------------------
-
 describe("parseSearchParamsFromUrl", () => {
   test("returns null without a usable date range", () => {
     expect(parseSearchParamsFromUrl("")).toBeNull();
@@ -505,14 +446,6 @@ describe("parseSearchParamsFromUrl", () => {
 });
 
 describe("useSearch URL restore", () => {
-  beforeEach(() => {
-    window.history.replaceState(null, "", "/");
-    vi.clearAllMocks();
-    capturedOnResult = null;
-    capturedOnDone = null;
-    capturedOnError = null;
-  });
-
   test("a shared link runs its search on mount", async () => {
     window.history.replaceState(
       null, "", "/?start_date=2026-06-01&end_date=2026-06-30&state=WA",
@@ -555,19 +488,7 @@ describe("useSearch URL restore", () => {
   });
 })
 
-// ---------------------------------------------------------------------------
-// Search funnel instrumentation (audit ANLT-06 remainder, ANLT-07)
-// ---------------------------------------------------------------------------
-
 describe("useSearch funnel events", () => {
-  beforeEach(() => {
-    window.history.replaceState(null, "", "/");
-    vi.clearAllMocks();
-    capturedOnResult = null;
-    capturedOnDone = null;
-    capturedOnError = null;
-  });
-
   async function runSearch(hook: {
     result: { current: { handleSearch: (p: SearchParams, m: "find" | "exact") => void } };
   }) {
@@ -663,11 +584,6 @@ describe("useSearch funnel events", () => {
 })
 
 describe("useSearch coverage", () => {
-  beforeEach(() => {
-    window.history.replaceState(null, "", "/");
-    vi.clearAllMocks();
-  });
-
   const PARAMS = { start_date: "2026-06-01", end_date: "2026-06-30" } as SearchParams;
 
   test("a coverage frame lands in results and survives later flushes", async () => {
@@ -692,7 +608,6 @@ describe("useSearch coverage", () => {
   });
 
   test("checkRest re-runs the same search with the higher limit", async () => {
-    const { searchCampsitesStream } = await import("../api");
     const { result } = renderHook(() => useSearch(null));
     await act(async () => {
       result.current.handleSearch({ ...PARAMS, state: "WA", limit: 20 }, "exact");
@@ -705,5 +620,47 @@ describe("useSearch coverage", () => {
     expect(calls).toHaveLength(2);
     expect(calls[1][0]).toMatchObject({ ...PARAMS, state: "WA", limit: 46 });
     expect(result.current.maxResults).toBe(46);
+  });
+});
+
+describe("useSearch live announcement", () => {
+  const params: SearchParams = { start_date: "2026-06-05", end_date: "2026-06-07" };
+
+  test("silent mid-stream, announces the count once when the stream finishes", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => { await result.current.handleSearch(params, "find"); });
+    expect(result.current.liveAnnouncement).toBe("");
+
+    act(() => { capturedOnResult!(MOCK_RESULT); });
+    act(() => { capturedOnCoverage!(1, 1); });
+    expect(result.current.liveAnnouncement).toBe("");
+
+    act(() => { capturedOnDone!(); });
+    expect(result.current.liveAnnouncement).toBe(
+      "1 campground has a 1-night stay open Jun 5 – 7.",
+    );
+  });
+
+  test("announces the zero state", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => { await result.current.handleSearch(params, "find"); });
+    act(() => { capturedOnResult!({ ...MOCK_RESULT, total_available_sites: 0 }); });
+    act(() => { capturedOnDone!(); });
+    expect(result.current.liveAnnouncement).toMatch(/^The 1 campground checked doesn’t have /);
+  });
+
+  test("clears on a new search so a repeat count is read again", async () => {
+    const { result } = renderHook(() => useSearch(null));
+    await act(async () => { await result.current.handleSearch(params, "find"); });
+    act(() => { capturedOnResult!(MOCK_RESULT); });
+    act(() => { capturedOnDone!(); });
+    const first = result.current.liveAnnouncement;
+    expect(first).not.toBe("");
+
+    await act(async () => { await result.current.handleSearch(params, "find"); });
+    expect(result.current.liveAnnouncement).toBe("");
+    act(() => { capturedOnResult!(MOCK_RESULT); });
+    act(() => { capturedOnDone!(); });
+    expect(result.current.liveAnnouncement).toBe(first);
   });
 });

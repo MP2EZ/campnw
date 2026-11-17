@@ -1,4 +1,4 @@
-"""Performance and admin routes. Event tracking moved to PostHog (client-side)."""
+"""Performance and admin routes."""
 
 from __future__ import annotations
 

@@ -1,12 +1,4 @@
-/**
- * Display labels for BookingSystem values.
- *
- * Lives in lib/ rather than beside ResultCard so pages can import it without
- * pulling ResultCard (and everything it imports) into their chunk. It was
- * previously exported from ResultCard and re-declared inline twice in MapView
- * plus expressed as a nested ternary in ItineraryCard — and that ternary had
- * already drifted, silently labelling id_state campgrounds "Rec.gov".
- */
+/** Display labels for BookingSystem values. In lib/ so pages can import it without pulling in ResultCard. */
 export const SOURCE_LABELS: Record<string, string> = {
   recgov: "Rec.gov",
   wa_state: "WA Parks",

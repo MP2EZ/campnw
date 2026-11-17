@@ -31,7 +31,7 @@ const EDGES: Array<[file: string, selector: string, inset: string, prop: RegExp]
   ["../App.css", ".app", "bottom", /padding:[^;]*/],
 ];
 
-describe("safe areas (v1.48 P4a)", () => {
+describe("safe areas", () => {
   test.each(EDGES)("%s %s clears the %s inset", (file, selector, inset, prop) => {
     const decl = rule(file, selector).match(prop)?.[0] ?? "";
     expect(decl, `${selector}: ${prop}`).toContain(`env(safe-area-inset-${inset})`);
@@ -39,7 +39,7 @@ describe("safe areas (v1.48 P4a)", () => {
     if (!decl.startsWith("padding")) expect(decl).toMatch(/max\(/);
   });
 
-  // The sticky header (P4b) clears the status bar, so things that stop
+  // The sticky header clears the status bar, so things that stop
   // below it offset by its measured height instead of the inset.
   test.each([
     ["results.css", ".rv2-map-aside", /--aside-top:[^;]*/],

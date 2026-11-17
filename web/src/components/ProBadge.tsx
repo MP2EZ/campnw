@@ -1,8 +1,4 @@
-/**
- * ProBadge — small "PRO" pill rendered next to the user menu when the
- * authenticated user is on Pro. Hidden for free users and anonymous
- * sessions. Linked to /pricing so clicking it lands on plan details.
- */
+/** "PRO" pill next to the user menu; hidden unless the user is on Pro. */
 
 import { Link } from "react-router-dom";
 import { useBilling } from "../hooks/useBilling";

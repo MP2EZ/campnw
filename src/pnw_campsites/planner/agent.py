@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
+from datetime import date
 
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.search.engine import SearchEngine
@@ -79,109 +80,6 @@ Decline all other requests with a one-line redirect to camping topics."""
 _MAX_TOOL_ITERATIONS = 5
 
 
-async def chat(
-    messages: list[dict],
-    engine: SearchEngine,
-    registry: CampgroundRegistry,
-    api_key: str,
-    posthog_distinct_id: str | None = None,
-) -> dict:
-    """Process one conversation turn.
-
-    Args:
-        messages: Full conversation history in Anthropic message format.
-        engine: Initialized SearchEngine with provider clients.
-        registry: CampgroundRegistry for detail lookups.
-        api_key: Anthropic API key.
-
-    Returns:
-        dict with keys: role, content, tool_calls (list of call summaries for UI).
-    """
-    from datetime import date as _date
-
-    from pnw_campsites.posthog_client import SONNET_MODEL, get_anthropic_client
-
-    today = _date.today()
-    system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
-        today=today.isoformat(),
-        weekday=today.strftime("%A"),
-    )
-
-    client = get_anthropic_client(api_key)
-    tool_call_log: list[dict] = []
-    current_messages = list(messages)
-
-    for _iteration in range(_MAX_TOOL_ITERATIONS):
-        response = await client.messages.create(
-            model=SONNET_MODEL,
-            system=system_prompt,
-            messages=current_messages,
-            tools=TOOLS,  # type: ignore[arg-type]
-            max_tokens=4096,
-            posthog_distinct_id=posthog_distinct_id,
-            posthog_privacy_mode=True,
-        )
-
-        # Final text response — no more tool calls
-        if response.stop_reason != "tool_use":
-            return {
-                "role": "assistant",
-                "content": _extract_text(response.content),
-                "tool_calls": tool_call_log,
-            }
-
-        # Collect tool_use blocks
-        tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
-        if not tool_use_blocks:
-            return {
-                "role": "assistant",
-                "content": _extract_text(response.content),
-                "tool_calls": tool_call_log,
-            }
-
-        # Append assistant turn with tool_use blocks
-        current_messages.append({
-            "role": "assistant",
-            "content": response.content,
-        })
-
-        # Execute tools and collect results
-        tool_results = []
-        for block in tool_use_blocks:
-            logger.info("Tool call: %s  input=%s", block.name, block.input)
-            result_str = await execute_tool(block.name, block.input, engine, registry)
-
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": result_str,
-            })
-            tool_call_log.append({
-                "name": block.name,
-                "input": block.input,
-                "result_summary": _summarize_result(block.name, result_str),
-            })
-
-        # Return results to Claude
-        current_messages.append({"role": "user", "content": tool_results})
-
-    # Exceeded iteration cap — get a final response without tools
-    logger.warning("Trip planner hit max tool iterations (%d)", _MAX_TOOL_ITERATIONS)
-    final = await client.messages.create(
-        model=SONNET_MODEL,
-        system=system_prompt,
-        messages=current_messages,
-        max_tokens=1024,
-        posthog_distinct_id=posthog_distinct_id,
-        posthog_privacy_mode=True,
-    )
-    return {
-        "role": "assistant",
-        "content": _extract_text(final.content),
-        "tool_calls": tool_call_log,
-    }
-
-
 async def _open_stream(client, **kwargs) -> AsyncIterator:
     """Open a streaming API call compatible with both native and PostHog-wrapped clients.
 
@@ -228,11 +126,9 @@ async def chat_stream(
       {"type": "done", "content": "...", "tool_calls": [...]}
       {"type": "error", "message": "..."}
     """
-    from datetime import date as _date
-
     from pnw_campsites.posthog_client import SONNET_MODEL, get_anthropic_client
 
-    today = _date.today()
+    today = date.today()
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
         today=today.isoformat(),
         weekday=today.strftime("%A"),
@@ -241,12 +137,9 @@ async def chat_stream(
     client = get_anthropic_client(api_key)
     tool_call_log: list[dict] = []
     current_messages = list(messages)
-    final_text = ""
 
     for _iteration in range(_MAX_TOOL_ITERATIONS):
-        # Accumulate the full text response for this iteration
         iter_text_parts: list[str] = []
-        # Track tool_use blocks being assembled (id -> {name, input_json})
         active_tool_blocks: dict[int, dict] = {}
         stop_reason: str | None = None
 
@@ -265,7 +158,6 @@ async def chat_stream(
                 if event.type == "content_block_start":
                     block = event.content_block
                     if block.type == "tool_use":
-                        # Signal that a tool call is starting
                         active_tool_blocks[event.index] = {
                             "id": block.id,
                             "name": block.name,
@@ -295,10 +187,8 @@ async def chat_stream(
 
         final_text = "".join(iter_text_parts)
 
-        # Build tool_use content blocks from accumulated JSON
         tool_use_blocks = _build_tool_use_blocks(active_tool_blocks)
 
-        # No tool calls — we're done
         if stop_reason != "tool_use" or not tool_use_blocks:
             yield json.dumps({
                 "type": "done",
@@ -307,30 +197,19 @@ async def chat_stream(
             })
             return
 
-        # Build content list for conversation history (text + tool_use blocks)
         content: list = []
         if final_text:
             content.append({"type": "text", "text": final_text})
         content.extend(tool_use_blocks)
 
-        # Append assistant turn to conversation
         current_messages.append({"role": "assistant", "content": content})
 
-        # Execute tools and yield results
         tool_results = []
         for block in tool_use_blocks:
             logger.info("Tool call (stream): %s  input=%s", block["name"], block.get("input"))
-            try:
-                result_str = await execute_tool(
-                    block["name"], block.get("input", {}), engine, registry
-                )
-            except Exception as exc:
-                logger.warning("Tool %s failed during stream: %s", block["name"], exc)
-                result_str = json.dumps({"error": str(exc)})
-                yield json.dumps({
-                    "type": "error",
-                    "message": "A search tool encountered an error. Results may be incomplete.",
-                })
+            result_str = await execute_tool(
+                block["name"], block.get("input", {}), engine, registry
+            )
 
             summary = _summarize_result(block["name"], result_str)
             tool_results.append({
@@ -345,7 +224,6 @@ async def chat_stream(
             })
             yield json.dumps({"type": "tool_result", "name": block["name"], "summary": summary})
 
-        # Return results to Claude and loop
         current_messages.append({"role": "user", "content": tool_results})
 
     # Exceeded iteration cap — get a final response without tools
@@ -373,16 +251,8 @@ async def chat_stream(
         yield json.dumps({"type": "error", "message": "Something went wrong. Please try again."})
 
 
-def _extract_text(content: list) -> str:
-    """Extract concatenated text from a content block list."""
-    parts = [block.text for block in content if hasattr(block, "type") and block.type == "text"]
-    return "\n".join(parts).strip()
-
-
 def _summarize_result(tool_name: str, result_str: str) -> str:
     """Short human-readable summary of a tool result for UI display."""
-    import json
-
     try:
         data = json.loads(result_str)
     except Exception:

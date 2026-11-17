@@ -1,10 +1,6 @@
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 vi.mock("../hooks/useAuth", () => ({
   useAuth: () => ({
     user: { id: 1, email: "test@example.com", display_name: "Tester" },
@@ -23,10 +19,6 @@ vi.mock("../api", () => ({
 
 import { SaveToTripButton } from "../components/SaveToTripButton";
 import { addCampgroundToTrip, createTrip } from "../api";
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("SaveToTripButton", () => {
   beforeEach(() => vi.clearAllMocks());

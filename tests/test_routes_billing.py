@@ -1,6 +1,6 @@
-"""Tests for v1.4 billing routes + watch limit enforcement.
+"""Tests for billing routes + watch limit enforcement.
 
-Covers the HTTP surface added by slice 2 of v1.4 monetization:
+Covers the HTTP surface:
 - GET /api/billing/status (anonymous + authenticated, free + pro)
 - POST /api/billing/checkout (configured/unconfigured, auth, already-pro)
 - POST /api/billing/portal (configured/unconfigured, auth, no customer)
@@ -18,6 +18,8 @@ from unittest.mock import patch
 
 import pytest
 
+import pnw_campsites.api as api_module
+import pnw_campsites.routes.planner as planner_mod
 from tests.conftest import signup_and_auth
 
 # ---------------------------------------------------------------------------
@@ -48,7 +50,6 @@ class TestStatusEndpoint:
     def test_pro_user_status(self, api_client) -> None:
         user_data, headers = signup_and_auth(api_client, email="pro@example.com")
         # Manually upgrade to Pro via DB
-        import pnw_campsites.api as api_module
         api_module._watch_db.update_user(
             user_data["id"],
             subscription_status="pro",
@@ -102,7 +103,6 @@ class TestCheckoutEndpoint:
         monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
         monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_x")
         user_data, headers = signup_and_auth(api_client, email="pro@example.com")
-        import pnw_campsites.api as api_module
         api_module._watch_db.update_user(
             user_data["id"], subscription_status="pro",
         )
@@ -123,7 +123,6 @@ class TestCheckoutEndpoint:
         assert resp.status_code == 200
         assert resp.json()["url"] == "https://checkout.stripe.com/abc"
         # Customer id stored so subsequent webhook events resolve to the user
-        import pnw_campsites.api as api_module
         refreshed = api_module._watch_db.get_user_by_id(user_data["id"])
         assert refreshed.stripe_customer_id == "cus_newcust"
 
@@ -172,7 +171,6 @@ class TestPortalEndpoint:
         user_data, headers = signup_and_auth(
             api_client, email="portal@example.com",
         )
-        import pnw_campsites.api as api_module
         api_module._watch_db.update_user(
             user_data["id"], stripe_customer_id="cus_p",
         )
@@ -200,15 +198,12 @@ class TestWebhookEndpoint:
         )
         assert resp.status_code == 400
 
-    def test_valid_event_dispatches_handler(
-        self, api_client, monkeypatch,
-    ) -> None:
+    def test_valid_event_dispatches_handler(self, api_client) -> None:
         # Mock signature verification to return a constructed event;
         # exercise the real dispatch path through billing.handle_webhook_event.
         user_data, headers = signup_and_auth(
             api_client, email="hook@example.com",
         )
-        import pnw_campsites.api as api_module
         api_module._watch_db.update_user(
             user_data["id"], stripe_customer_id="cus_webhook",
         )
@@ -236,9 +231,7 @@ class TestWebhookEndpoint:
         refreshed = api_module._watch_db.get_user_by_id(user_data["id"])
         assert refreshed.subscription_status == "pro"
 
-    def test_handler_crash_returns_500(
-        self, api_client, monkeypatch,
-    ) -> None:
+    def test_handler_crash_returns_500(self, api_client) -> None:
         # If handle_webhook_event raises (e.g., DB connection blip), the
         # route must surface 500 so Stripe retries.
         with patch(
@@ -255,9 +248,7 @@ class TestWebhookEndpoint:
             )
         assert resp.status_code == 500
 
-    def test_handler_crash_preserves_claim_row_for_operator_runbook(
-        self, api_client, monkeypatch,
-    ) -> None:
+    def test_handler_crash_preserves_claim_row_for_operator_runbook(self, api_client) -> None:
         # When a handler crashes AFTER save_stripe_event has claimed the
         # event_id, the claim row remains in stripe_events even though the
         # route returns 500. Stripe's retry will be skipped as a duplicate.
@@ -269,7 +260,6 @@ class TestWebhookEndpoint:
         user_data, headers = signup_and_auth(
             api_client, email="crashtest@example.com",
         )
-        import pnw_campsites.api as api_module
         api_module._watch_db.update_user(
             user_data["id"], stripe_customer_id="cus_crash",
         )
@@ -349,7 +339,6 @@ class TestWatchLimitEnforcement:
         user_data, headers = signup_and_auth(
             api_client, email="prowatch@example.com",
         )
-        import pnw_campsites.api as api_module
         api_module._watch_db.update_user(
             user_data["id"], subscription_status="pro",
         )
@@ -394,13 +383,17 @@ class TestWatchLimitEnforcement:
 
 
 # ---------------------------------------------------------------------------
-# Planner session enforcement (slice 4a)
+# Planner session enforcement
 # ---------------------------------------------------------------------------
+
+
+async def _fake_stream(*args, **kwargs):
+    yield '{"type":"done","content":"ok","tool_calls":[]}'
 
 
 def _start_chat(client, headers=None, content="plan me a trip"):
     return client.post(
-        "/api/plan/chat",
+        "/api/plan/chat/stream",
         json={"messages": [{"role": "user", "content": content}]},
         headers=headers or {},
     )
@@ -414,10 +407,9 @@ class TestPlannerSessionEnforcement:
         The route-level _PLAN_DAILY_LIMIT (5/day per IP) is an anti-abuse
         limit independent of the tier cap we're testing; TestClient reuses
         the same IP across calls, so without this we'd hit 429 before the
-        v1.4 402. Depends on api_client so the watch_db reset hits the
+        402. Depends on api_client so the watch_db reset hits the
         current (not torn-down) DB instance.
         """
-        import pnw_campsites.routes.planner as planner_mod
 
         monkeypatch.setattr(planner_mod, "_PLAN_DAILY_LIMIT", 10_000)
         planner_mod._plan_rate_limit.clear()
@@ -426,10 +418,7 @@ class TestPlannerSessionEnforcement:
     def test_free_user_first_three_succeed(self, api_client, monkeypatch) -> None:
         # Skip the actual LLM call — we're testing gating, not chat behaviour.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             _, headers = signup_and_auth(
                 api_client, email="planner1@example.com",
             )
@@ -441,10 +430,7 @@ class TestPlannerSessionEnforcement:
         self, api_client, monkeypatch,
     ) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             _, headers = signup_and_auth(
                 api_client, email="planner4@example.com",
             )
@@ -465,15 +451,11 @@ class TestPlannerSessionEnforcement:
         user_data, headers = signup_and_auth(
             api_client, email="proplan@example.com",
         )
-        import pnw_campsites.api as api_module
         api_module._watch_db.update_user(
             user_data["id"], subscription_status="pro",
         )
 
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             # 5 sessions — well past free cap, well under Pro cap of 20
             for i in range(5):
                 resp = _start_chat(api_client, headers=headers)
@@ -489,16 +471,13 @@ class TestPlannerSessionEnforcement:
         user_data, headers = signup_and_auth(
             api_client, email="multi@example.com",
         )
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             # 1 session starter
             assert _start_chat(api_client, headers=headers).status_code == 200
             # Continuation: 3 messages — should not count as new sessions
             for _ in range(10):
                 resp = api_client.post(
-                    "/api/plan/chat",
+                    "/api/plan/chat/stream",
                     json={
                         "messages": [
                             {"role": "user", "content": "hi"},
@@ -511,7 +490,6 @@ class TestPlannerSessionEnforcement:
                 assert resp.status_code == 200
 
         # Only 1 session logged → user still has 2 starters left
-        import pnw_campsites.api as api_module
         count = api_module._watch_db.count_planner_sessions_this_month(
             user_id=user_data["id"],
         )
@@ -520,15 +498,15 @@ class TestPlannerSessionEnforcement:
     def test_anonymous_session_also_capped(
         self, api_client, monkeypatch,
     ) -> None:
-        # Anonymous users must be capped by session_token so the limit
-        # can't be bypassed by signing out / clearing cookies repeatedly.
+        # Anonymous users are capped by session_token. The first start must set
+        # the session cookie on the stream response, or every request gets a
+        # fresh token and the cap never applies.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
-            # Use TestClient cookies (sticky across calls)
-            for _ in range(3):
+        assert "campnw_session" not in api_client.cookies
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
+            first = _start_chat(api_client)
+            assert "campnw_session" in first.cookies
+            for _ in range(2):
                 _start_chat(api_client)
             resp = _start_chat(api_client)
 

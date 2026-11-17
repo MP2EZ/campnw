@@ -59,11 +59,14 @@ export const WatchPanel = memo(function WatchPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  // Focus trap: move focus into panel on open, return on close
+  // Move focus into the panel on open; give it back to the opener on close.
   useEffect(() => {
-    if (open && closeRef.current) {
-      closeRef.current.focus();
-    }
+    if (!open) return;
+    const opener = document.activeElement;
+    closeRef.current?.focus();
+    return () => {
+      if (opener instanceof HTMLElement && document.contains(opener)) opener.focus();
+    };
   }, [open]);
 
   // Trap focus inside panel
@@ -136,7 +139,7 @@ export const WatchPanel = memo(function WatchPanel({
 
         <div className="watch-list">
           {watches.map((w) => {
-            // A release reminder (v1.48 P3d) becomes a plain watch on release day.
+            // A release reminder becomes a plain watch on release day.
             const reminder = w.watch_type === "release" && !!w.releases_on;
             const kind = reminder ? "reminder" : "watch";
             return (

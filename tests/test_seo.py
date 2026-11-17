@@ -1,32 +1,19 @@
-"""Tests for v1.3 SEO & Discoverability features."""
+"""Tests for SEO helpers and server-rendered SEO pages."""
 
 from __future__ import annotations
 
-from pnw_campsites.registry.db import CampgroundRegistry, slugify
+from pnw_campsites import api as api_module
+from pnw_campsites.registry.db import slugify
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.seo import _format_drive_time
 from tests.conftest import make_campground
-
-# -------------------------------------------------------------------
-# Fixtures
-# -------------------------------------------------------------------
-
-
-# ===================================================================
-# 1. slugify()
-# ===================================================================
 
 
 class TestSlugify:
     def test_normal_name(self):
         assert slugify("Deception Pass State Park") == "deception-pass-state-park"
 
-    def test_unicode(self):
-        assert slugify("Andre's Camp-Site #5") == "andre-s-camp-site-5"
-
     def test_unicode_accents(self):
-        assert slugify("Cafe Rene") == "cafe-rene"
-        # e with accent
         assert slugify("Caf\u00e9 Ren\u00e9") == "cafe-rene"
 
     def test_special_chars(self):
@@ -45,11 +32,6 @@ class TestSlugify:
         assert slugify("Site 42 Loop B") == "site-42-loop-b"
 
 
-# ===================================================================
-# 2. _format_drive_time()
-# ===================================================================
-
-
 class TestFormatDriveTime:
     def test_none(self):
         assert _format_drive_time(None) == ""
@@ -65,11 +47,6 @@ class TestFormatDriveTime:
 
     def test_zero(self):
         assert _format_drive_time(0) == "0m"
-
-
-# ===================================================================
-# 3. DB queries: get_by_slug, get_nearby, get_all_tags, count_by_state
-# ===================================================================
 
 
 def _seed_registry(registry):
@@ -170,28 +147,20 @@ class TestCountByState:
         assert counts["OR"] == 1
 
 
-# ===================================================================
-# 4. Slug disambiguation
-# ===================================================================
-
-
 class TestSlugDisambiguation:
-    def test_backfill_disambiguates_same_name_same_state(self, tmp_path):
+    def test_backfill_disambiguates_same_name_same_state(self, registry):
         """_backfill_slugs appends facility_id when two campgrounds share name+state."""
-        reg = CampgroundRegistry(tmp_path / "disambig.db")
-        # Insert two campgrounds with same name in same state
-        reg.upsert(make_campground(facility_id="AAA", name="Lakeview", state="WA"))
-        reg.upsert(make_campground(facility_id="BBB", name="Lakeview", state="WA"))
+        registry.upsert(make_campground(facility_id="AAA", name="Lakeview", state="WA"))
+        registry.upsert(make_campground(facility_id="BBB", name="Lakeview", state="WA"))
         # Clear slugs to simulate pre-migration state, then run backfill
-        reg._conn.execute("UPDATE campgrounds SET slug = ''")
-        reg._conn.commit()
-        reg._backfill_slugs()
-        r1 = reg.get_by_facility_id("AAA")
-        r2 = reg.get_by_facility_id("BBB")
+        registry._conn.execute("UPDATE campgrounds SET slug = ''")
+        registry._conn.commit()
+        registry._backfill_slugs()
+        r1 = registry.get_by_facility_id("AAA")
+        r2 = registry.get_by_facility_id("BBB")
         assert r1.slug != r2.slug
         assert "lakeview" in r1.slug
         assert "lakeview" in r2.slug
-        reg.close()
 
     def test_same_name_different_state_ok(self, registry):
         """Same name in different states can share the base slug."""
@@ -203,25 +172,16 @@ class TestSlugDisambiguation:
         assert r2.slug == "lakeview"
 
 
-# ===================================================================
-# 5. SEO route handlers
-# ===================================================================
-
-
 class TestCampgroundProfile:
     def test_200_with_jsonld(self, seo_client):
-        # Get the slug for Ohanapecosh
         resp = seo_client.get("/campgrounds/wa/ohanapecosh")
         assert resp.status_code == 200
         assert "application/ld+json" in resp.text
-        assert "Cache-Control" in resp.headers
         assert "max-age=3600" in resp.headers["Cache-Control"]
 
     def test_empty_pitch_leaves_out_pitch_and_vibe(self, seo_client):
         # The regen clears copy for campgrounds with no facts. The page must not
         # print an empty pitch line or fall back to the old LLM vibe for SEO.
-        from pnw_campsites import api as api_module
-
         reg = api_module._registry
         cg = reg.get_by_facility_id("300", BookingSystem.RECGOV)
         reg.update_description(cg.id, "", "", "")

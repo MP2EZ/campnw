@@ -8,9 +8,10 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
 
 from pnw_campsites.monitor.db import Snapshot, Watch, WatchDB
+from pnw_campsites.monitor.expand import expand_template
+from pnw_campsites.monitor.pacific import pacific_today
 from pnw_campsites.monitor.stays import new_stay_nights, stay_starts
 from pnw_campsites.providers.errors import RateLimitedError, WAFBlockedError
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
@@ -29,16 +30,9 @@ from pnw_campsites.urls import availability_url
 
 _logger = logging.getLogger(__name__)
 
-_PACIFIC = ZoneInfo("America/Los_Angeles")
-
 # A provider that answers with one of these is refusing us, not failing on one
 # park. Stop asking it for the rest of the cycle; the next cycle tries again.
 _BLOCK_ERRORS = (WAFBlockedError, RateLimitedError)
-
-
-def pacific_today() -> date:
-    """Today where the campgrounds are. A watch's dates are local nights."""
-    return datetime.now(_PACIFIC).date()
 
 
 def resolve_booking_system(
@@ -46,11 +40,9 @@ def resolve_booking_system(
 ) -> str:
     """The provider a watch's facility belongs to.
 
-    Watches used to be saved with the column default 'recgov' whatever the
-    park, so a stored 'recgov' is a default, not a fact; any other value was
+    A stored 'recgov' is the column default, not a fact; any other value was
     set on purpose. GoingToCamp resourceLocationIds are negative and no rec.gov
-    or ReserveAmerica id is (checked against the registry 2026-11-07), which
-    settles WA parks the registry doesn't list.
+    or ReserveAmerica id is, which settles WA parks the registry doesn't list.
     """
     if stored != BookingSystem.RECGOV:
         return stored
@@ -101,7 +93,6 @@ class AvailabilityChange:
     new_dates: list[str]  # ISO date strings that just became available
     max_people: int
     context_message: str = ""  # LLM-enriched message
-    urgency: int = 2  # 1=low, 2=medium, 3=high
 
 
 @dataclass
@@ -285,11 +276,9 @@ async def poll_watch(
         )
 
         # Record availability history (silent, for predictions)
-        if history_records:
-            source = booking_system.value
-            watch_db.record_availability_history(
-                watch.facility_id, history_records, source,
-            )
+        watch_db.record_availability_history(
+            watch.facility_id, history_records, booking_system.value,
+        )
 
         # Diff against previous snapshot
         prev_snapshot = watch_db.get_latest_snapshot(watch.id)
@@ -302,18 +291,16 @@ async def poll_watch(
                 dates, prev.get(site_id, []), watch.min_nights,
             )
             if new_dates:
-                meta = site_meta.get(site_id, {})
+                meta = site_meta[site_id]
                 result.changes.append(
                     AvailabilityChange(
                         watch=watch,
                         site_id=site_id,
-                        site_name=meta.get("site_name", site_id),
-                        loop=meta.get("loop", ""),
-                        campsite_type=meta.get(
-                            "campsite_type", "",
-                        ),
+                        site_name=meta["site_name"],
+                        loop=meta["loop"],
+                        campsite_type=meta["campsite_type"],
                         new_dates=new_dates,
-                        max_people=meta.get("max_people", 0),
+                        max_people=meta["max_people"],
                     )
                 )
 
@@ -376,12 +363,10 @@ async def poll_all(
     Args:
         tranche: If set (0 or 1), only poll watches where id % 2 == tranche.
                  Used to split polling into two offset cycles.
-        tier_filter: "all" (default), "pro", or "free". v1.4 uses "pro" for
-                 the 5-min Pro-only tranche and "free" for the existing
-                 15-min tranches so Pro watches aren't double-polled.
+        tier_filter: "all" (default), "pro", or "free". "pro" is the 5-min
+                 Pro-only tranche and "free" the 15-min tranches, so Pro
+                 watches aren't double-polled.
     """
-    from pnw_campsites.monitor.expand import expand_template
-
     today = today or pacific_today()
     watches = watch_db.list_watches_for_polling(tier=tier_filter)
     # Release reminders wait for their release day (monitor/reminders.py);

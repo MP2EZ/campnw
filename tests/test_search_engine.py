@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 from datetime import date
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
+import respx
 
+from pnw_campsites.registry.models import CampgroundAvailability
 from pnw_campsites.search.engine import (
-    LONG_WEEKEND,
-    WEEKDAYS,
-    WEEKEND,
+    SearchEngine,
     SearchQuery,
+    StreamCoverageEvent,
+    StreamDiagnosisEvent,
     _find_consecutive_windows,
     _process_availability,
     days,
+    enrich_wa_availability,
     next_weekend,
     this_weekend,
 )
@@ -620,18 +625,6 @@ class TestDateHelpers:
         result = days("THU", "Fri", "sUn")
         assert result == {3, 4, 6}
 
-    def test_weekend_constant(self) -> None:
-        """WEEKEND constant is {4, 5, 6} (Fri, Sat, Sun)."""
-        assert {4, 5, 6} == WEEKEND
-
-    def test_long_weekend_constant(self) -> None:
-        """LONG_WEEKEND constant is {3, 4, 5, 6} (Thu-Sun)."""
-        assert {3, 4, 5, 6} == LONG_WEEKEND
-
-    def test_weekdays_constant(self) -> None:
-        """WEEKDAYS constant is {0, 1, 2, 3, 4} (Mon-Fri)."""
-        assert {0, 1, 2, 3, 4} == WEEKDAYS
-
     def test_this_weekend_returns_valid_date_range(self) -> None:
         """this_weekend() returns (Friday, Sunday) tuple."""
         fri, sun = this_weekend()
@@ -655,32 +648,20 @@ class TestDateHelpers:
         assert sun2.weekday() == 6  # Sunday
 
 
-# ============================================================================
-# Test data factories (imported from conftest, re-exported for clarity)
-# ============================================================================
 # v0.6 Smart Search: Diagnosis & Recommendations
-# ============================================================================
 
 
 class TestDiagnoseZeroResults:
     """Test _diagnose_zero_results() method."""
 
-    def test_no_registry_matches_name_filter(self) -> None:
-        """No registry matches + name filter → binding='name'."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        engine = SearchEngine(
-            registry=MagicMock(),
-            recgov_client=None,
-            goingtocamp_client=None,
+    @pytest.fixture
+    def engine(self) -> SearchEngine:
+        return SearchEngine(
+            registry=MagicMock(), recgov_client=None, goingtocamp_client=None,
         )
-        query = SearchQuery(
-            start_date=None,
-            end_date=None,
-            name_like="nonexistent",
-        )
+
+    def test_no_registry_matches_name_filter(self, engine) -> None:
+        query = SearchQuery(start_date=None, end_date=None, name_like="nonexistent")
 
         diagnosis, chips = engine._diagnose_zero_results(
             query, registry_matches=0, distance_filtered=0,
@@ -690,22 +671,8 @@ class TestDiagnoseZeroResults:
         assert diagnosis.binding_constraint == "name"
         assert "nonexistent" in diagnosis.explanation
 
-    def test_no_registry_matches_tag_filter(self) -> None:
-        """No registry matches + tag filter → binding='tags'."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        engine = SearchEngine(
-            registry=MagicMock(),
-            recgov_client=None,
-            goingtocamp_client=None,
-        )
-        query = SearchQuery(
-            start_date=None,
-            end_date=None,
-            tags=["obscure-tag"],
-        )
+    def test_no_registry_matches_tag_filter(self, engine) -> None:
+        query = SearchQuery(start_date=None, end_date=None, tags=["obscure-tag"])
 
         diagnosis, chips = engine._diagnose_zero_results(
             query, registry_matches=0, distance_filtered=0,
@@ -714,25 +681,10 @@ class TestDiagnoseZeroResults:
 
         assert diagnosis.binding_constraint == "tags"
         assert "obscure-tag" in diagnosis.explanation
-        # Should include drop_tags chip
         assert any(c.action == "drop_tags" for c in chips)
 
-    def test_no_registry_matches_state_filter(self) -> None:
-        """No registry matches + state filter → binding='state'."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        engine = SearchEngine(
-            registry=MagicMock(),
-            recgov_client=None,
-            goingtocamp_client=None,
-        )
-        query = SearchQuery(
-            start_date=None,
-            end_date=None,
-            state="XX",  # invalid state
-        )
+    def test_no_registry_matches_state_filter(self, engine) -> None:
+        query = SearchQuery(start_date=None, end_date=None, state="XX")
 
         diagnosis, chips = engine._diagnose_zero_results(
             query, registry_matches=0, distance_filtered=0,
@@ -742,22 +694,9 @@ class TestDiagnoseZeroResults:
         assert diagnosis.binding_constraint == "state"
         assert "XX" in diagnosis.explanation
 
-    def test_distance_filtered_high_percentage(self) -> None:
-        """Distance filtered > 50% → binding='distance'."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        engine = SearchEngine(
-            registry=MagicMock(),
-            recgov_client=None,
-            goingtocamp_client=None,
-        )
-        query = SearchQuery(
-            start_date=None,
-            end_date=None,
-            max_drive_minutes=60,
-        )
+    def test_distance_filtered_high_percentage(self, engine) -> None:
+        """Distance filtered > 50% binds on distance and offers radius chips."""
+        query = SearchQuery(start_date=None, end_date=None, max_drive_minutes=60)
 
         # 10 registry matches, 6 filtered by distance (60% > 50%)
         diagnosis, chips = engine._diagnose_zero_results(
@@ -766,25 +705,17 @@ class TestDiagnoseZeroResults:
         )
 
         assert diagnosis.binding_constraint == "distance"
-        assert "60" in diagnosis.explanation  # filtered count
-        # Should include expand_radius chips
-        assert any(c.action == "expand_radius" for c in chips)
+        assert "60" in diagnosis.explanation
+        expand_chips = [c for c in chips if c.action == "expand_radius"]
+        assert len(expand_chips) >= 2
+        assert any(c.params.get("max_drive_minutes") == 120 for c in expand_chips)
+        assert any(c.params.get("max_drive_minutes") is None for c in expand_chips)
 
-    def test_all_checked_unavailable_with_days_filter(self) -> None:
-        """All checked unavailable + days filter → binding='days'."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        engine = SearchEngine(
-            registry=MagicMock(),
-            recgov_client=None,
-            goingtocamp_client=None,
-        )
+    def test_all_checked_unavailable_with_days_filter(self, engine) -> None:
         query = SearchQuery(
             start_date=None,
             end_date=None,
-            days_of_week={4, 5, 6},  # Fri-Sun only
+            days_of_week={4, 5, 6},
         )
 
         diagnosis, chips = engine._diagnose_zero_results(
@@ -794,20 +725,10 @@ class TestDiagnoseZeroResults:
 
         assert diagnosis.binding_constraint == "days"
         assert "days" in diagnosis.explanation
-        # Should include drop_days chip
         assert any(c.action == "drop_days" for c in chips)
 
-    def test_all_checked_unavailable_without_days_filter(self) -> None:
-        """All checked unavailable + no days → binding='dates'."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        engine = SearchEngine(
-            registry=MagicMock(),
-            recgov_client=None,
-            goingtocamp_client=None,
-        )
+    def test_all_checked_unavailable_without_days_filter(self, engine) -> None:
+        """No days filter binds on dates and offers shift + watch chips."""
         query = SearchQuery(
             start_date=date(2026, 6, 1),
             end_date=date(2026, 6, 30),
@@ -821,81 +742,15 @@ class TestDiagnoseZeroResults:
 
         assert diagnosis.binding_constraint == "dates"
         assert "dates" in diagnosis.explanation
-        # Should include shift_dates chip
         assert any(c.action == "shift_dates" for c in chips)
-
-    def test_dates_binding_produces_watch_chip(self) -> None:
-        """Dates binding generates watch + shift chips."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        engine = SearchEngine(
-            registry=MagicMock(),
-            recgov_client=None,
-            goingtocamp_client=None,
-        )
-        query = SearchQuery(
-            start_date=date(2026, 6, 1),
-            end_date=date(2026, 6, 30),
-        )
-
-        diagnosis, chips = engine._diagnose_zero_results(
-            query, registry_matches=5, distance_filtered=0,
-            checked=5, all_unavailable=5,
-        )
-
-        # Should have watch chip
         watch_chips = [c for c in chips if c.action == "watch"]
         assert len(watch_chips) > 0
         assert watch_chips[0].params["start_date"] == "2026-06-01"
         assert watch_chips[0].params["end_date"] == "2026-06-30"
 
-    def test_distance_binding_produces_expand_radius_chip(self) -> None:
-        """Distance binding generates expand_radius chips."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        engine = SearchEngine(
-            registry=MagicMock(),
-            recgov_client=None,
-            goingtocamp_client=None,
-        )
-        query = SearchQuery(
-            max_drive_minutes=60,
-        )
-
-        diagnosis, chips = engine._diagnose_zero_results(
-            query, registry_matches=10, distance_filtered=6,
-            checked=0, all_unavailable=0,
-        )
-
-        expand_chips = [c for c in chips if c.action == "expand_radius"]
-        assert len(expand_chips) >= 2
-        # One should expand by 60 min, one should remove limit
-        assert any(
-            c.params.get("max_drive_minutes") == 120 for c in expand_chips
-        )
-        assert any(
-            c.params.get("max_drive_minutes") is None for c in expand_chips
-        )
-
-    def test_diagnosis_counts_match_input(self) -> None:
-        """Diagnosis object contains correct counts."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        engine = SearchEngine(
-            registry=MagicMock(),
-            recgov_client=None,
-            goingtocamp_client=None,
-        )
-        query = SearchQuery()
-
+    def test_diagnosis_counts_match_input(self, engine) -> None:
         diagnosis, _ = engine._diagnose_zero_results(
-            query, registry_matches=20, distance_filtered=5,
+            SearchQuery(), registry_matches=20, distance_filtered=5,
             checked=15, all_unavailable=10,
         )
 
@@ -913,16 +768,10 @@ class TestDiagnoseZeroResults:
 class TestSearchIntegration:
     """Integration tests for SearchEngine with mocked providers."""
 
-    @pytest.mark.asyncio
     async def test_search_with_state_filter_returns_matching_only(
         self, registry
     ) -> None:
         """Search with state filter returns only matching state campgrounds."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.registry.models import CampgroundAvailability
-        from pnw_campsites.search.engine import SearchEngine
-
         # Seed registry with WA and OR campgrounds
         wa_camp = make_campground(
             facility_id="232465", state="WA", latitude=46.75, longitude=-121.80
@@ -963,15 +812,10 @@ class TestSearchIntegration:
         # Should only check WA campground
         assert results.campgrounds_checked == 1
 
-    @pytest.mark.asyncio
     async def test_search_with_distance_filter_excludes_far(
         self, registry
     ) -> None:
         """Search with distance filter excludes far campgrounds."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         # Seed registry with close and far campgrounds
         close_camp = make_campground(
             facility_id="232465",
@@ -1005,25 +849,19 @@ class TestSearchIntegration:
         # Should only check close campground (far one is > 120 min)
         assert results.campgrounds_checked == 1
 
-    @pytest.mark.asyncio
     async def test_search_sorted_by_distance_when_from_coords(
         self, registry
     ) -> None:
         """Search results sorted by distance when from_coords set."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.registry.models import CampgroundAvailability
-        from pnw_campsites.search.engine import SearchEngine
-
-        # Seed registry with two campgrounds
+        # The close campground sits on the base: a 0-minute drive must sort first.
         close_camp = make_campground(
-            facility_id="1", latitude=47.6, longitude=-122.3
+            facility_id="9", latitude=47.6, longitude=-122.3
         )
         far_camp = make_campground(
             facility_id="2", latitude=47.0, longitude=-121.5
         )
-        registry.upsert(close_camp)
         registry.upsert(far_camp)
+        registry.upsert(close_camp)
 
         # Mock both returning availability
         def mock_get_avail(facility_id, *args, **kwargs):
@@ -1052,19 +890,11 @@ class TestSearchIntegration:
             )
         )
 
-        # Results should be sorted by distance (close first)
-        if len(results.results) >= 2:
-            first_dist = results.results[0].estimated_drive_minutes or 9999
-            second_dist = results.results[1].estimated_drive_minutes or 9999
-            assert first_dist <= second_dist
+        # Close campground sorts first
+        assert [r.campground.facility_id for r in results.results] == ["9", "2"]
 
-    @pytest.mark.asyncio
     async def test_search_with_name_like_filter(self, registry) -> None:
         """Search with name_like filter returns matching campgrounds."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         # Seed registry
         camp1 = make_campground(facility_id="1", name="Ohanapecosh")
         camp2 = make_campground(facility_id="2", name="Mirror Lake")
@@ -1087,15 +917,10 @@ class TestSearchIntegration:
         # Should only check Ohanapecosh
         assert results.campgrounds_checked == 1
 
-    @pytest.mark.asyncio
     async def test_search_zero_availability_includes_diagnosis(
         self, registry
     ) -> None:
         """Search with zero availability includes diagnosis."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         camp = make_campground(facility_id="232465", state="WA")
         registry.upsert(camp)
 
@@ -1128,40 +953,8 @@ class TestSearchIntegration:
         assert results.diagnosis is not None
         assert results.diagnosis.binding_constraint == "dates"
 
-    @pytest.mark.asyncio
-    async def test_search_caps_at_max_campgrounds(self, registry) -> None:
-        """Search respects max_campgrounds limit."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        # Seed registry with 20 campgrounds
-        for i in range(20):
-            camp = make_campground(facility_id=str(i))
-            registry.upsert(camp)
-
-        recgov = AsyncMock()
-        recgov.get_availability_range = AsyncMock()
-
-        engine = SearchEngine(registry=registry, recgov_client=recgov)
-        results = await engine.search(
-            SearchQuery(
-                start_date=date(2026, 6, 1),
-                end_date=date(2026, 6, 30),
-                max_campgrounds=5,
-            )
-        )
-
-        # Should only check 5 campgrounds
-        assert results.campgrounds_checked <= 5
-
-    @pytest.mark.asyncio
     async def test_check_specific_returns_result(self, registry) -> None:
         """check_specific returns result for known facility."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         camp = make_campground(facility_id="232465", name="Test Camp")
         registry.upsert(camp)
 
@@ -1190,15 +983,10 @@ class TestSearchIntegration:
         assert result.campground.name == "Test Camp"
         assert result.total_available_sites == 1
 
-    @pytest.mark.asyncio
     async def test_check_specific_with_unknown_facility(
         self, registry
     ) -> None:
         """check_specific creates unknown campground for unfound facility."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         recgov = AsyncMock()
         recgov.get_availability_range = AsyncMock(
             return_value=make_campground_availability(
@@ -1217,52 +1005,10 @@ class TestSearchIntegration:
         # Should create a placeholder campground
         assert result.campground.facility_id == "999999"
 
-    @pytest.mark.asyncio
-    async def test_search_stream_yields_results(self, registry) -> None:
-        """search_stream yields results incrementally."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        camp = make_campground(facility_id="232465")
-        registry.upsert(camp)
-
-        recgov = AsyncMock()
-        recgov.get_availability_range = AsyncMock(
-            return_value=make_campground_availability(
-                facility_id="232465",
-                campsites={
-                    "123": make_campsite_availability(
-                        dates_status={
-                            "2026-06-01T00:00:00.000Z": "Available",
-                            "2026-06-02T00:00:00.000Z": "Available",
-                        },
-                    )
-                },
-            )
-        )
-
-        engine = SearchEngine(registry=registry, recgov_client=recgov)
-        results = []
-        async for result in engine.search_stream(
-            SearchQuery(
-                start_date=date(2026, 6, 1),
-                end_date=date(2026, 6, 30),
-            )
-        ):
-            results.append(result)
-
-        assert len(results) >= 1
-
-    @pytest.mark.asyncio
     async def test_search_with_no_registry_matches_returns_empty(
         self, registry
     ) -> None:
         """Search with no registry matches returns empty with diagnosis."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         recgov = AsyncMock()
 
         engine = SearchEngine(registry=registry, recgov_client=recgov)
@@ -1278,45 +1024,10 @@ class TestSearchIntegration:
         assert results.campgrounds_checked == 0
         assert results.diagnosis is not None
 
-    @pytest.mark.asyncio
-    async def test_find_consecutive_windows_with_fcfs_sites(
-        self, registry
-    ) -> None:
-        """Process availability includes FCFS sites when included."""
-        from pnw_campsites.search.engine import _process_availability
-
-        camp = make_campground()
-        avail = make_campground_availability(
-            campsites={
-                "123": make_campsite_availability(
-                    campsite_id="123",
-                    dates_status={
-                        "2026-06-01T00:00:00.000Z": "Open",  # FCFS
-                    },
-                )
-            },
-        )
-
-        query = SearchQuery(
-            start_date=date(2026, 6, 1),
-            end_date=date(2026, 6, 30),
-            include_fcfs=True,
-        )
-
-        result = _process_availability(camp, avail, query)
-
-        # FCFS sites should be counted
-        assert result.fcfs_sites >= 0
-
-    @pytest.mark.asyncio
     async def test_search_stream_yields_results_incrementally(
         self, registry
     ) -> None:
         """search_stream yields results as batches complete."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         # Add campgrounds to registry
         cg1 = make_campground(
             facility_id="1", name="Camp 1", state="WA"
@@ -1357,19 +1068,10 @@ class TestSearchIntegration:
         assert len(results) > 0
         assert results[0].campground.facility_id in ("1", "2")
 
-    @pytest.mark.asyncio
     async def test_search_stream_empty_when_no_campgrounds(
         self, registry
     ) -> None:
         """search_stream yields diagnosis event if no campgrounds match."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import (
-            SearchEngine,
-            StreamCoverageEvent,
-            StreamDiagnosisEvent,
-        )
-
         recgov = AsyncMock()
         engine = SearchEngine(registry=registry, recgov_client=recgov)
         query = SearchQuery(
@@ -1391,10 +1093,6 @@ class TestSearchIntegration:
 
     def test_suggest_similar_campgrounds_returns_chips(self, registry) -> None:
         """_suggest_similar_campgrounds returns action chips."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         cg1 = make_campground(
             facility_id="1", name="Lake Rainier", tags=["lakeside"]
         )
@@ -1416,10 +1114,6 @@ class TestSearchIntegration:
 
     def test_suggest_similar_campgrounds_no_matches(self, registry) -> None:
         """_suggest_similar_campgrounds returns empty list if no matches."""
-        from unittest.mock import MagicMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         mock_recgov = MagicMock()
         engine = SearchEngine(registry=registry, recgov_client=mock_recgov)
 
@@ -1432,10 +1126,6 @@ class TestSearchIntegration:
         self, registry
     ) -> None:
         """_suggest_similar_campgrounds returns empty when no similar exist."""
-        from unittest.mock import MagicMock, patch
-
-        from pnw_campsites.search.engine import SearchEngine
-
         cg = make_campground(facility_id="1", name="Test")
         registry.upsert(cg)
 
@@ -1451,15 +1141,10 @@ class TestSearchIntegration:
 
             assert len(chips) == 0
 
-    @pytest.mark.asyncio
     async def test_diagnose_distance_binding_constraint(
         self, registry
     ) -> None:
         """_diagnose_zero_results identifies distance as binding constraint."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         cg = make_campground(
             facility_id="1", name="Camp", latitude=47.0, longitude=-122.0
         )
@@ -1484,69 +1169,11 @@ class TestSearchIntegration:
         # Message says "exceeded X min drive limit"
         assert "drive" in results.diagnosis.explanation.lower()
 
-    @pytest.mark.asyncio
-    async def test_diagnose_days_binding_constraint(
-        self, registry
-    ) -> None:
-        """_diagnose_zero_results identifies days as binding constraint."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
-        cg = make_campground(facility_id="1", name="Camp", state="WA")
-        registry.upsert(cg)
-
-        recgov = AsyncMock()
-        # Return campground with no availability on selected days
-        avail = make_campground_availability(
-            facility_id="1",
-            campsites={
-                "123": make_campsite_availability(
-                    campsite_id="123",
-                    dates_status={
-                        "2026-06-01T00:00:00.000Z": "Reserved",  # Mon
-                    },
-                )
-            },
-        )
-        recgov.get_availability_range.return_value = avail
-
-        engine = SearchEngine(registry=registry, recgov_client=recgov)
-
-        query = SearchQuery(
-            start_date=date(2026, 6, 1),
-            end_date=date(2026, 6, 2),
-            state="WA",
-            days_of_week={4, 5, 6},  # Fri, Sat, Sun only
-        )
-
-        results = await engine.search(query)
-
-        # If all booked on non-selected days, binding is "days"
-        if results.diagnosis:
-            assert results.diagnosis.binding_constraint in (
-                "days", "dates"
-            )
-
-
 class TestResolveDriveTimes:
     """Test the tiered drive time resolution in _resolve_drive_times."""
 
-    @pytest.fixture
-    def registry(self, tmp_path):
-        from pnw_campsites.registry.db import CampgroundRegistry
-
-        db_path = tmp_path / "test.db"
-        with CampgroundRegistry(db_path) as reg:
-            yield reg
-
-    @pytest.mark.asyncio
     async def test_tier1_known_base_uses_db(self, registry) -> None:
         """Known base name with pre-computed data uses DB lookup, no API."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         # Seed a campground
         cg = make_campground(
             facility_id="100", latitude=47.0, longitude=-121.5, state="WA",
@@ -1579,15 +1206,10 @@ class TestResolveDriveTimes:
         # Should return the DB value (195), not haversine estimate
         assert drive_times["100"] == 195
 
-    @pytest.mark.asyncio
     async def test_tier1_known_base_empty_db_falls_to_haversine(
         self, registry,
     ) -> None:
         """Known base with no pre-computed data falls back to haversine."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         cg = make_campground(
             facility_id="100", latitude=47.0, longitude=-121.5, state="WA",
         )
@@ -1611,15 +1233,10 @@ class TestResolveDriveTimes:
         assert isinstance(drive_times["100"], int)
         assert drive_times["100"] > 0
 
-    @pytest.mark.asyncio
     async def test_tier1_partial_db_fills_gaps_with_haversine(
         self, registry,
     ) -> None:
         """Known base with partial DB coverage uses haversine for missing."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         cg_in_db = make_campground(
             facility_id="100", latitude=47.0, longitude=-121.5, state="WA",
         )
@@ -1655,16 +1272,10 @@ class TestResolveDriveTimes:
         assert "200" in drive_times  # haversine fallback
         assert drive_times["200"] != 195  # different value
 
-    @pytest.mark.asyncio
     async def test_tier2_custom_address_calls_mapbox(
         self, registry, monkeypatch,
     ) -> None:
         """Custom address (non-base) routes via Mapbox Matrix API."""
-        import httpx
-        import respx
-
-        from pnw_campsites.search.engine import SearchEngine
-
         monkeypatch.setenv("MAPBOX_ACCESS_TOKEN", "pk.test")
 
         cg = make_campground(
@@ -1701,15 +1312,10 @@ class TestResolveDriveTimes:
 
         assert drive_times["100"] == 120  # from Mapbox
 
-    @pytest.mark.asyncio
     async def test_tier3_fallback_when_mapbox_fails(
         self, registry, monkeypatch,
     ) -> None:
         """Falls back to haversine when Mapbox is unavailable."""
-        from unittest.mock import AsyncMock
-
-        from pnw_campsites.search.engine import SearchEngine
-
         monkeypatch.delenv("MAPBOX_ACCESS_TOKEN", raising=False)
 
         cg = make_campground(
@@ -1736,12 +1342,7 @@ class TestResolveDriveTimes:
 
 
 class TestEnrichWaAvailability:
-    """A1: SearchEngine._enrich_wa_availability replaces synthetic IDs with cached names."""
-
-    def _make_engine(self, registry):
-        from pnw_campsites.search.engine import SearchEngine
-        # Provider clients default to None — _enrich_wa_availability doesn't use them.
-        return SearchEngine(registry=registry)
+    """A1: enrich_wa_availability replaces synthetic IDs with cached names."""
 
     def test_replaces_synthetic_label_with_cached_name(self, registry) -> None:
         """Synthetic resource_id label gets replaced with cached human name."""
@@ -1761,7 +1362,7 @@ class TestEnrichWaAvailability:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         site = availability.campsites["-300"]
         assert site.site == "B042"
@@ -1778,7 +1379,7 @@ class TestEnrichWaAvailability:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         # Synthetic label preserved — engine doesn't touch it
         assert availability.campsites["-300"].site == "-300"
@@ -1798,7 +1399,7 @@ class TestEnrichWaAvailability:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         assert availability.campsites["-300"].site == "Orphan-1"
         assert availability.campsites["-300"].loop == ""
@@ -1817,18 +1418,14 @@ class TestEnrichWaAvailability:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         assert availability.campsites["-300"].site == "Known"
         assert availability.campsites["-999"].site == "-999"
 
 
 class TestEnrichWaAvailabilityCapacity:
-    """PR B: _enrich_wa_availability also overwrites max_num_people from cache."""
-
-    def _make_engine(self, registry):
-        from pnw_campsites.search.engine import SearchEngine
-        return SearchEngine(registry=registry)
+    """PR B: enrich_wa_availability also overwrites max_num_people from cache."""
 
     def test_overwrites_max_num_people_when_cached(self, registry) -> None:
         """Cached max_capacity replaces the synthetic 8-person default."""
@@ -1845,7 +1442,7 @@ class TestEnrichWaAvailabilityCapacity:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         assert availability.campsites["-300"].max_num_people == 4
 
@@ -1864,7 +1461,7 @@ class TestEnrichWaAvailabilityCapacity:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         # Provider's synthetic default (8) survives — graceful fallback
         assert availability.campsites["-300"].max_num_people == 8

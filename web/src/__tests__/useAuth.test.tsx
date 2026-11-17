@@ -2,10 +2,6 @@ import { describe, test, expect, beforeEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 
-// ---------------------------------------------------------------------------
-// Mocks — vi.mock factories are hoisted, so no outer variable refs
-// ---------------------------------------------------------------------------
-
 const mockSignInWithPassword = vi.fn();
 const mockSignUp = vi.fn();
 const mockSignOut = vi.fn();
@@ -32,11 +28,6 @@ vi.mock("../lib/supabase", () => ({
 const mockPosthog = vi.hoisted(() => ({
   identify: vi.fn(),
   reset: vi.fn(),
-  capture: vi.fn(),
-  register: vi.fn(),
-  setPersonProperties: vi.fn(),
-  captureException: vi.fn(),
-  get_distinct_id: vi.fn(() => "anon-id"),
 }));
 
 vi.mock("../api", () => ({
@@ -66,10 +57,6 @@ const TEST_USER = {
   onboarding_complete: true,
 };
 
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
 function wrapper({ children }: { children: ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
 }
@@ -79,10 +66,6 @@ function triggerAuthChange(session: unknown) {
   const callback = mockOnAuthStateChange.mock.calls[0]?.[0];
   if (callback) callback("SIGNED_IN", session);
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("useAuth", () => {
   beforeEach(() => {
@@ -127,8 +110,6 @@ describe("useAuth", () => {
       email: "test@example.com",
       password: "password123",
     });
-    // Was `{}` — an unsegmentable vanity count with no method and no
-    // surface. The audit's point was that asserting the empty bag locked it in.
     expect(mockTrack).toHaveBeenCalledWith(
       "login",
       expect.objectContaining({ method: "password" }),

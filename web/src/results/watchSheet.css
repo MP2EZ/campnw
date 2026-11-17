@@ -1,4 +1,4 @@
-/* Watch sheet (v1.48 P3c): a centred dialog on desktop, a bottom sheet on
+/* Watch sheet: a centred dialog on desktop, a bottom sheet on
    phones with the safe areas kept clear. Every control is 44px tall. */
 .rv2-watch-backdrop {
   position: fixed;

@@ -10,45 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
-from tests.conftest import (
-    auth_headers as _auth_headers,
-)
-from tests.conftest import make_campground
-from tests.conftest import (
-    make_supabase_jwt as _make_jwt,
-)
-
-# ---------------------------------------------------------------------------
-# Auth helpers
-# ---------------------------------------------------------------------------
-
-
-def _signup_and_login(client: TestClient, email: str = "test@example.com"):
-    """Create user via auto-provisioning and return (user_data, auth_headers)."""
-    token = _make_jwt(email=email)
-    headers = _auth_headers(token)
-    resp = client.get("/api/auth/me", headers=headers)
-    assert resp.status_code == 200
-    return resp.json(), headers
-
-
-def _save_searches(client: TestClient, headers: dict, count: int = 3) -> None:
-    """Save several search history entries for the current user."""
-    for i in range(count):
-        client.post(
-            "/api/search-history",
-            json={
-                "params": {
-                    "start_date": "2026-06-01",
-                    "end_date": "2026-06-30",
-                    "state": "WA" if i % 2 == 0 else "OR",
-                    "tags": "lakeside,trails",
-                },
-                "result_count": i * 5,
-            },
-            headers=headers,
-        )
-
+from pnw_campsites.search.engine import CampgroundResult
+from tests.conftest import make_campground, save_searches, signup_and_auth
 
 # ---------------------------------------------------------------------------
 # Search History
@@ -69,7 +32,7 @@ class TestSearchHistory:
 
     def test_save_search_as_authenticated_user(self, api_client: TestClient):
         """Authenticated user can save search history."""
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.post(
             "/api/search-history",
             json={
@@ -88,8 +51,8 @@ class TestSearchHistory:
 
     def test_get_search_history_returns_saved_searches(self, api_client: TestClient):
         """Authenticated user gets their saved searches back."""
-        _, headers = _signup_and_login(api_client)
-        _save_searches(api_client, headers, count=3)
+        _, headers = signup_and_auth(api_client, display_name=None)
+        save_searches(api_client, headers, count=3)
 
         resp = api_client.get("/api/search-history", headers=headers)
         assert resp.status_code == 200
@@ -98,17 +61,17 @@ class TestSearchHistory:
 
     def test_get_search_history_empty_for_new_user(self, api_client: TestClient):
         """New user should have empty search history."""
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/search-history", headers=headers)
         assert resp.status_code == 200
         assert resp.json() == []
 
     def test_search_history_isolated_per_user(self, api_client: TestClient):
         """User A's history should not be visible to user B."""
-        _, headers_a = _signup_and_login(api_client, "alice@example.com")
-        _save_searches(api_client, headers_a, count=2)
+        _, headers_a = signup_and_auth(api_client, "alice@example.com", display_name=None)
+        save_searches(api_client, headers_a, count=2)
 
-        _, headers_b = _signup_and_login(api_client, "bob@example.com")
+        _, headers_b = signup_and_auth(api_client, "bob@example.com", display_name=None)
         resp = api_client.get("/api/search-history", headers=headers_b)
         assert resp.status_code == 200
         assert resp.json() == []
@@ -128,8 +91,8 @@ class TestDataExport:
 
     def test_export_returns_data(self, api_client: TestClient):
         """Authenticated user gets a data export."""
-        _, headers = _signup_and_login(api_client)
-        _save_searches(api_client, headers, count=2)
+        _, headers = signup_and_auth(api_client, display_name=None)
+        save_searches(api_client, headers, count=2)
 
         resp = api_client.get("/api/auth/export", headers=headers)
         assert resp.status_code == 200
@@ -156,7 +119,7 @@ class TestRecommendations:
         self, api_client: TestClient,
     ):
         """User with no search history gets empty recommendations."""
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         # Enable recommendations
         api_client.patch(
             "/api/auth/me",
@@ -169,7 +132,7 @@ class TestRecommendations:
 
     def test_recommendations_with_search_history(self, api_client: TestClient):
         """User with search history and matching campgrounds gets recommendations."""
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         api_client.patch(
             "/api/auth/me",
             json={"recommendations_enabled": True},
@@ -202,17 +165,14 @@ class TestRecommendations:
         resp = api_client.get("/api/recommendations", headers=headers)
         assert resp.status_code == 200
         recs = resp.json()
-        assert len(recs) <= 5
-        if recs:
-            assert "facility_id" in recs[0]
-            assert "name" in recs[0]
-            assert "reason" in recs[0]
+        assert len(recs) == 5
+        assert {"facility_id", "name", "reason"} <= recs[0].keys()
 
     def test_recommendations_disabled_returns_empty(self, api_client: TestClient):
         """User with recommendations disabled gets empty list."""
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         # Don't enable recommendations (default is disabled)
-        _save_searches(api_client, headers, count=5)
+        save_searches(api_client, headers, count=5)
         resp = api_client.get("/api/recommendations", headers=headers)
         assert resp.status_code == 200
         assert resp.json() == []
@@ -232,7 +192,7 @@ class TestPollStatus:
 
     def test_poll_status_returns_structure(self, api_client: TestClient):
         """Authenticated user gets poll state + recent notifications."""
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/poll-status", headers=headers)
         assert resp.status_code == 200
         data = resp.json()
@@ -240,7 +200,7 @@ class TestPollStatus:
 
     def test_poll_status_includes_poll_state(self, api_client: TestClient):
         """Response should include poll state fields."""
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
 
         # Set some poll state
         api_module._poll_state["last_poll"] = "2026-03-28T12:00:00"
@@ -275,11 +235,6 @@ class TestPushEndpoints:
         assert resp.status_code == 200
         assert resp.json()["public_key"] == ""
 
-    def test_vapid_key_is_public_endpoint(self, api_client: TestClient):
-        """VAPID key endpoint doesn't require authentication."""
-        resp = api_client.get("/api/push/vapid-key")
-        assert resp.status_code == 200
-
 
 # ---------------------------------------------------------------------------
 # Admin Digest
@@ -296,7 +251,7 @@ class TestAdminDigest:
 
     def test_digest_returns_report(self, api_client: TestClient):
         """Authenticated digest should return a report object."""
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/admin/digest", headers=headers)
         assert resp.status_code == 200
         data = resp.json()
@@ -304,15 +259,15 @@ class TestAdminDigest:
 
     def test_digest_with_no_data(self, api_client: TestClient):
         """Digest with no search history should return a message."""
-        _, headers = _signup_and_login(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.get("/api/admin/digest", headers=headers)
         assert resp.status_code == 200
         assert "No searches" in resp.json()["report"]
 
     def test_digest_with_search_data(self, api_client: TestClient):
         """Digest with search data should include stats."""
-        _, headers = _signup_and_login(api_client)
-        _save_searches(api_client, headers, count=5)
+        _, headers = signup_and_auth(api_client, display_name=None)
+        save_searches(api_client, headers, count=5)
 
         resp = api_client.get("/api/admin/digest", headers=headers)
         assert resp.status_code == 200
@@ -401,8 +356,6 @@ class TestResultFormatting:
 
     def test_response_includes_description_fields(self, api_client: TestClient):
         """Search results should include elevator_pitch, description_rewrite, best_for."""
-        from pnw_campsites.search.engine import CampgroundResult
-
         cg = make_campground(
             elevator_pitch="Great lakeside camp.",
             description_rewrite="A wonderful place by the lake.",

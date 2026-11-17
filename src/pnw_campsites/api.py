@@ -9,7 +9,9 @@ import sqlite3
 import time
 from collections import deque
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from functools import partial
+from itertools import groupby
 from pathlib import Path
 
 import httpx
@@ -21,15 +23,16 @@ from fastapi.staticfiles import StaticFiles
 
 from pnw_campsites.auth import warm_jwks_client
 from pnw_campsites.monitor.db import DEFAULT_DB_PATH, WatchDB
+from pnw_campsites.monitor.pacific import pacific_today
 from pnw_campsites.posthog_client import capture_event, get_posthog_client
 from pnw_campsites.providers.goingtocamp import GoingToCampClient
 from pnw_campsites.providers.recgov import RecGovClient
 from pnw_campsites.providers.reserveamerica import ReserveAmericaClient
 from pnw_campsites.registry.db import CampgroundRegistry
-from pnw_campsites.search.engine import SearchEngine
+from pnw_campsites.search.engine import SearchEngine, SearchQuery
 
-# App version — surfaced by /healthz so monitors can confirm what's deployed.
-APP_VERSION = "1.48.4"
+# Surfaced by /healthz so monitors can confirm what's deployed.
+APP_VERSION = "1.48.5"
 
 # ---------------------------------------------------------------------------
 # App state — initialized in lifespan
@@ -57,14 +60,7 @@ _poll_logger = logging.getLogger("pnw_campsites.poller")
 
 
 def _capture_notification(result, channel: str, status: str) -> None:
-    """Mirror a notification dispatch into PostHog.
-
-    The watch -> poll -> notify -> click -> book loop is the product's whole
-    reason to exist and none of it was observable: db.log_notification wrote a
-    row nothing analysed. Without these you cannot answer what fraction of
-    watches ever fire, the median time to first alert, or whether an alert ever
-    produced a booking.
-    """
+    """Mirror a notification dispatch into PostHog."""
     watch = result.watch
     capture_event(
         distinct_id=str(watch.user_id) if watch.user_id else f"watch:{watch.id}",
@@ -79,6 +75,59 @@ def _capture_notification(result, channel: str, status: str) -> None:
     )
 
 
+async def _cleanup_expired_links() -> None:
+    """Background job: purge expired share links.
+
+    Runs on the event loop, not an executor thread: the WatchDB sqlite
+    connection is bound to the thread that opened it.
+    """
+    if not _watch_db:
+        return
+    removed = _watch_db.cleanup_expired_links()
+    if removed:
+        _poll_logger.info("Purged %d expired share link(s)", removed)
+
+
+async def _refresh_booking_tips() -> None:
+    """Background job: rewrite the booking tips on campground profile pages.
+
+    Runs on the event loop for the same reason as _cleanup_expired_links.
+    """
+    if not _watch_db or not _registry:
+        return
+    from pnw_campsites.analytics.patterns import refresh_all_tips
+
+    await refresh_all_tips(_watch_db, _registry)
+
+
+async def _record_history() -> None:
+    """Background job: record availability history for HISTORY_FACILITIES.
+
+    Runs on the event loop for the same reason as _cleanup_expired_links.
+    """
+    if not _watch_db or not _recgov:
+        return
+    from pnw_campsites.monitor.history import record_history
+
+    await record_history(_recgov, _watch_db)
+
+
+# Thirteen months, so a campground's tips can compare a month with the same
+# month a year earlier.
+HISTORY_RETENTION = timedelta(days=400)
+
+
+async def _prune_history() -> None:
+    """Background job: drop availability history older than HISTORY_RETENTION."""
+    if not _watch_db:
+        return
+    removed = _watch_db.prune_availability_history(
+        before=pacific_today() - HISTORY_RETENTION,
+    )
+    if removed:
+        _poll_logger.info("Pruned %d availability history row(s)", removed)
+
+
 async def _poll_tranche(
     tranche: int | None = None,
     tier_filter: str = "all",
@@ -87,8 +136,8 @@ async def _poll_tranche(
 
     When tranche is 0 or 1, only polls watches where id % 2 == tranche.
     This splits the API load into two cycles offset by ~7.5 minutes.
-    tier_filter (v1.4) restricts to "pro" or "free" watches so the 5-min
-    Pro job and the 15-min free job don't double-poll Pro watches.
+    tier_filter restricts to "pro" or "free" watches so the 5-min Pro job and
+    the 15-min free job don't double-poll Pro watches.
     """
     from pnw_campsites.monitor.notify import notify_ntfy, notify_web_push
     from pnw_campsites.monitor.watcher import poll_all
@@ -115,7 +164,7 @@ async def _poll_tranche(
             for change in result.changes:
                 all_dates.extend(change.new_dates)
             try:
-                msg, urgency = await asyncio.wait_for(
+                msg = await asyncio.wait_for(
                     enrich_notification(
                         result.watch.name,
                         len(result.changes),
@@ -123,15 +172,13 @@ async def _poll_tranche(
                     ),
                     timeout=3.0,
                 )
-            except (TimeoutError, Exception):
+            except Exception:
                 msg = (
                     f"{result.watch.name}: "
                     f"{len(result.changes)} site(s) available"
                 )
-                urgency = 2
             for change in result.changes:
                 change.context_message = msg
-                change.urgency = urgency
 
     total_changes = 0
     total_errors = 0
@@ -240,7 +287,6 @@ async def lifespan(app: FastAPI):
     await _reserveamerica.__aenter__()
 
     _watch_db = WatchDB()
-    # Data fix: watches were saved as 'recgov' whatever the park (2026-11-07).
     from pnw_campsites.monitor.watcher import heal_booking_systems
 
     healed = heal_booking_systems(_watch_db, _registry)
@@ -263,8 +309,6 @@ async def lifespan(app: FastAPI):
     # to halve the burst of rec.gov API calls per cycle
     scheduler = None
     if os.getenv("DISABLE_SCHEDULER") != "1":
-        from functools import partial
-
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
         scheduler = AsyncIOScheduler()
@@ -291,7 +335,7 @@ async def lifespan(app: FastAPI):
         )
         # Pro-tier watches: 5-min interval, no tranche split (volumes are
         # low; split adds complexity without API-load benefit until we
-        # have 100+ Pro users). v1.4 entitlement.
+        # have 100+ Pro users).
         scheduler.add_job(
             partial(_poll_tranche, tier_filter="pro"),
             "interval",
@@ -301,7 +345,7 @@ async def lifespan(app: FastAPI):
             coalesce=True,
             next_run_time=datetime.now() + timedelta(minutes=1),
         )
-        # Release reminders (v1.48 D9): push at 6:55 am PT on release day, then
+        # Release reminders: push at 6:55 am PT on release day, then
         # convert to a cancellation watch. Also at startup, so a restart across
         # 6:55 still sends that day's pushes. Idempotent.
         from pnw_campsites.monitor.reminders import run_release_reminders
@@ -320,27 +364,21 @@ async def lifespan(app: FastAPI):
         )
         # Weekly analytics digest — Monday 8am Pacific
         async def _weekly_digest():
-            import logging
-
-            import httpx as _httpx
-
             from pnw_campsites.analytics.digest import generate_weekly_digest
 
-            log = logging.getLogger(__name__)
             report = await generate_weekly_digest(_watch_db)
-            log.info("Weekly digest:\n%s", report)
-            # Send via ntfy if configured
+            _poll_logger.info("Weekly digest:\n%s", report)
             topic = os.getenv("DIGEST_NTFY_TOPIC")
             if topic and report:
                 try:
-                    async with _httpx.AsyncClient() as c:
+                    async with httpx.AsyncClient() as c:
                         await c.post(
                             f"https://ntfy.sh/{topic}",
                             content=report[:4000].encode(),
                             headers={"Title": "campable Weekly Digest"},
                         )
                 except Exception as e:
-                    log.warning("Digest ntfy send failed: %s", e)
+                    _poll_logger.warning("Digest ntfy send failed: %s", e)
 
         scheduler.add_job(
             _weekly_digest,
@@ -352,29 +390,66 @@ async def lifespan(app: FastAPI):
             coalesce=True,
         )
 
+        scheduler.add_job(
+            _cleanup_expired_links,
+            "cron",
+            hour=3,
+            minute=30,
+            timezone="America/Los_Angeles",
+            id="cleanup_expired_links",
+            max_instances=1,
+            coalesce=True,
+        )
+
+        # Booking tips' data source. Off where the history isn't wanted
+        # (staging sets HISTORY_POLLER=0 at deploy).
+        if os.getenv("HISTORY_POLLER", "1") != "0":
+            scheduler.add_job(
+                _record_history,
+                "interval",
+                minutes=15,
+                id="history_poller",
+                max_instances=1,
+                coalesce=True,
+                # Between the two watch tranches, to spread rec.gov load.
+                next_run_time=datetime.now() + timedelta(minutes=3),
+            )
+        scheduler.add_job(
+            _prune_history,
+            "cron",
+            hour=3,
+            minute=45,
+            timezone="America/Los_Angeles",
+            id="prune_history",
+            max_instances=1,
+            coalesce=True,
+        )
+
+        scheduler.add_job(
+            _refresh_booking_tips,
+            "cron",
+            day_of_week="sun",
+            hour=4,
+            minute=15,
+            timezone="America/Los_Angeles",
+            id="booking_tips",
+            max_instances=1,
+            coalesce=True,
+        )
+
         # "This weekend" availability cache refresh
         async def _refresh_weekend_cache():
             """Populate the /this-weekend page cache with live availability."""
-            from datetime import date as _date
-
             from pnw_campsites.routes.seo import (
                 STATE_NAMES,
                 _booking_url,
                 get_weekend_cache,
             )
-            from pnw_campsites.search.engine import SearchQuery
 
             log = logging.getLogger("pnw_campsites.weekend")
-            if not _engine or not _registry:
-                return
 
-            # Calculate upcoming weekend (Fri-Sun)
-            today = _date.today()
+            today = date.today()
             days_to_fri = (4 - today.weekday()) % 7
-            if days_to_fri == 0 and today.weekday() == 4:
-                days_to_fri = 0  # Today is Friday
-            elif days_to_fri == 0:
-                days_to_fri = 7
             fri = today + timedelta(days=days_to_fri)
             sun = fri + timedelta(days=2)
 
@@ -400,12 +475,9 @@ async def lifespan(app: FastAPI):
                     })
             items.sort(key=lambda x: x["available_sites"], reverse=True)
 
-            # Group by state
-            from itertools import groupby as _groupby
-
             items.sort(key=lambda x: x["cg"].state)
             groups = []
-            for state_code, state_items in _groupby(items, key=lambda x: x["cg"].state):
+            for state_code, state_items in groupby(items, key=lambda x: x["cg"].state):
                 groups.append((
                     STATE_NAMES.get(state_code, state_code),
                     list(state_items),
@@ -475,7 +547,7 @@ app = FastAPI(title="PNW Campsites", lifespan=lifespan)
 _cors_origins = os.getenv(
     "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5177,http://localhost:3000"
 ).split(",")
-# Capacitor native shells (v1.45) request from a fixed local origin, not
+# Capacitor native shells request from a fixed local origin, not
 # campable.co. Always allow them regardless of ALLOWED_ORIGINS so the iOS/Android
 # app can reach the API. iOS bundled = capacitor://localhost; Android = https://localhost.
 _cors_origins += ["capacitor://localhost", "https://localhost"]
@@ -599,7 +671,6 @@ async def timing_middleware(request: Request, call_next):
 
 from pnw_campsites.routes.auth import router as auth_router  # noqa: E402
 from pnw_campsites.routes.billing import router as billing_router  # noqa: E402
-from pnw_campsites.routes.compare import router as compare_router  # noqa: E402
 from pnw_campsites.routes.planner import router as planner_router  # noqa: E402
 from pnw_campsites.routes.poll import router as poll_router  # noqa: E402
 from pnw_campsites.routes.push import router as push_router  # noqa: E402
@@ -620,7 +691,6 @@ app.include_router(tracking_router)
 app.include_router(recs_router)
 app.include_router(trips_router)
 app.include_router(sharing_router)
-app.include_router(compare_router)
 app.include_router(poll_router)
 app.include_router(billing_router)
 # SEO routes MUST be before the SPA catch-all so /campgrounds/{state}/{slug}

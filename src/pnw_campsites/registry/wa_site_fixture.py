@@ -17,12 +17,13 @@ Rules:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+
+from pnw_campsites.registry.fixture_meta import fixture_changed, record_fixture
 
 logger = logging.getLogger(__name__)
 
@@ -60,20 +61,13 @@ def _rows(conn: sqlite3.Connection, table: str, cols: tuple[str, ...], id_col: s
 
 def apply_wa_site_fixture(conn: sqlite3.Connection, path: Path | None = None) -> int:
     """Import the fixture if it changed since the last import. Returns sites upserted."""
-    path = path or FIXTURE_PATH
-    if not path.exists():
+    changed = fixture_changed(
+        conn, path or FIXTURE_PATH, _META_KEY,
+        "SELECT 1 FROM campgrounds WHERE booking_system='wa_state' LIMIT 1",
+    )
+    if changed is None:
         return 0
-    # Nothing to attach sites to yet (a fresh or test registry). Not recorded,
-    # so the import runs on a later open once WA parks are seeded.
-    if conn.execute(
-        "SELECT 1 FROM campgrounds WHERE booking_system='wa_state' LIMIT 1"
-    ).fetchone() is None:
-        return 0
-    raw = path.read_bytes()
-    digest = hashlib.sha256(raw).hexdigest()
-    row = conn.execute("SELECT value FROM registry_meta WHERE key=?", (_META_KEY,)).fetchone()
-    if row is not None and row[0] == digest:
-        return 0
+    raw, digest = changed
 
     data = json.loads(raw)
     now = datetime.now().isoformat()
@@ -110,11 +104,7 @@ def apply_wa_site_fixture(conn: sqlite3.Connection, path: Path | None = None) ->
             for site in data["sites"]
         ],
     )
-    conn.execute(
-        "INSERT INTO registry_meta (key, value) VALUES (?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        (_META_KEY, digest),
-    )
+    record_fixture(conn, _META_KEY, digest)
     conn.commit()
     logger.info(
         "Imported WA site fixture: %d sites, %d loops", len(data["sites"]), len(data["loops"]),

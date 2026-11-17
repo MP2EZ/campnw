@@ -1,18 +1,7 @@
 import { useEffect, useState } from "react";
 import { getPosthog, track } from "../api";
 
-/**
- * Per-device analytics opt-out.
- *
- * The privacy page described PostHog as seeing "clicks and page views" while
- * index.html also enabled session replay, and `opt_out_capturing` appeared
- * nowhere in the app — so the only route out was emailing support. This is the
- * in-product control that disclosure implies.
- *
- * PostHog persists the choice in its own localStorage entry, so it survives
- * reloads but is per-browser; the copy alongside says so rather than implying
- * an account-wide setting.
- */
+/** Per-device analytics opt-out; PostHog persists the choice in localStorage. */
 export function AnalyticsOptOut() {
   const [optedOut, setOptedOut] = useState<boolean | null>(null);
 

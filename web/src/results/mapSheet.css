@@ -1,4 +1,4 @@
-/* Map sheet (v1.48 P4a, D10): under 1024px the results map is a bottom sheet.
+/* Map sheet: under 1024px the results map is a bottom sheet.
    .rv2-sheet scrolls; its snap points are shut (the spacer), half (the
    marker) and full (the panel's end). Dragging is native scrolling. */
 .rv2-sheet-launch-wrap {

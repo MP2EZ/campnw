@@ -18,12 +18,14 @@ mutated anywhere. Safe to point at production.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import importlib
 import os
 import sqlite3
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
-from datetime import date, timedelta
+from dataclasses import asdict, dataclass
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -63,14 +65,7 @@ class CheckResult:
     error: str = ""
 
     def to_dict(self) -> dict:
-        return {
-            "name": self.name,
-            "category": self.category,
-            "status": self.status,
-            "latency_ms": self.latency_ms,
-            "detail": self.detail,
-            "error": self.error,
-        }
+        return asdict(self)
 
 
 @dataclass
@@ -82,12 +77,12 @@ class Check:
     # Env vars that must be set for the check to be meaningful. Missing ones
     # produce "skip", not "fail" — an unconfigured optional integration is not
     # an outage, and conflating the two trains you to ignore red.
-    requires: tuple[str, ...] = field(default_factory=tuple)
+    requires: tuple[str, ...] = ()
     # Modules this check imports lazily, warmed before timing starts (see
     # _preload_modules). Only the selected checks' modules are loaded, which
     # keeps `--only data` from dragging in stripe and curl_cffi — it matters on
     # a memory-capped box where a second Python process competes with uvicorn.
-    modules: tuple[str, ...] = field(default_factory=tuple)
+    modules: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +184,40 @@ async def _check_watch_db() -> str:
     return await asyncio.to_thread(_query)
 
 
+HISTORY_STALE_AFTER = timedelta(days=1)
+
+
+async def _check_availability_history() -> str:
+    """Fail when the history poller has stopped recording.
+
+    Prod's history stopped on 2026-07-31 and nobody noticed for three and a
+    half months. Reads one HISTORY_FACILITIES campground (the probe facility)
+    through the primary key, rather than scanning the whole table.
+    """
+    if os.getenv("HISTORY_POLLER", "1") == "0":
+        raise SkipCheck("history poller off here (HISTORY_POLLER=0)")
+    from pnw_campsites.monitor.db import DEFAULT_DB_PATH as WATCH_DB_PATH
+
+    def _query() -> str | None:
+        conn = _readonly_conn(WATCH_DB_PATH)
+        try:
+            return conn.execute(
+                "SELECT MAX(last_seen) FROM availability_daily WHERE campground_id=?",
+                (PROBE_FACILITY_ID,),
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+    last = await asyncio.to_thread(_query)
+    if last is None:
+        raise RuntimeError(f"no history recorded for {PROBE_FACILITY_ID}")
+    # last_seen is the server's naive local time, as is datetime.now() here.
+    age = datetime.now() - datetime.fromisoformat(last)
+    if age > HISTORY_STALE_AFTER:
+        raise RuntimeError(f"history has not grown since {last[:16]}")
+    return f"last recorded {int(age.total_seconds() // 60)} min ago"
+
+
 # ---------------------------------------------------------------------------
 # Checks — booking providers
 # ---------------------------------------------------------------------------
@@ -251,8 +280,6 @@ def _resolve_ra_probe() -> tuple[str, str, str]:
     can change facility IDs, and a hardcoded ID that quietly 404s would report
     a provider outage that isn't one.
     """
-    import contextlib
-
     from pnw_campsites.registry.db import DEFAULT_DB_PATH
 
     # Read-only for the same reason as the DB checks above.
@@ -420,6 +447,9 @@ CHECKS: list[Check] = [
           modules=("pnw_campsites.registry.db",)),
     Check("watch.db", "data", _check_watch_db, slow_ms=500,
           modules=("pnw_campsites.monitor.db",)),
+    # Only a deployed server runs the poller; a laptop's history is always old.
+    Check("availability history", "data", _check_availability_history, slow_ms=500,
+          requires=("FLY_APP_NAME",), modules=("pnw_campsites.monitor.db",)),
     Check("rec.gov RIDB", "provider", _check_recgov_ridb, requires=("RIDB_API_KEY",),
           modules=("pnw_campsites.providers.recgov",)),
     Check("rec.gov availability", "provider", _check_recgov_availability,
@@ -476,9 +506,6 @@ CHECKS: list[Check] = [
 
 def _preload_modules(names: tuple[str, ...] | list[str]) -> None:
     """Import the given modules before any timing begins."""
-    import contextlib
-    import importlib
-
     for name in names:
         # A genuinely broken import resurfaces as that check's own failure, with
         # a useful message; suppressing it here only skips the warmup.

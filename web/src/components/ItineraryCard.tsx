@@ -16,18 +16,14 @@ export interface ItineraryLeg {
   tags: string[];
 }
 
-
 export const ItineraryCard = memo(function ItineraryCard({ leg, index }: { leg: ItineraryLeg; index: number }) {
-  // Previously a nested ternary that collapsed id_state to "recgov".
-  const sourceClass = leg.booking_system;
-
   return (
     <div className="itinerary-card">
       <div className="itinerary-card-index">{index + 1}</div>
       <div className="itinerary-card-body">
         <div className="itinerary-card-header">
           <h4 className="itinerary-card-name">{leg.name}</h4>
-          <span className={`source-badge source-${sourceClass}`}>
+          <span className={`source-badge source-${leg.booking_system}`}>
             {sourceLabel(leg.booking_system)}
           </span>
         </div>

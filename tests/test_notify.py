@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import httpx
-import pytest
 import respx
 
 from pnw_campsites.monitor.db import Watch
@@ -11,8 +10,43 @@ from pnw_campsites.monitor.notify import (
     format_change,
     format_poll_result,
     notify_ntfy,
+    notify_pushover,
+    notify_web_push,
 )
 from pnw_campsites.monitor.watcher import AvailabilityChange, PollResult
+
+
+def _watch(**kw) -> Watch:
+    kw = {
+        "id": 1,
+        "facility_id": "232465",
+        "name": "Test Camp",
+        "start_date": "2026-06-01",
+        "end_date": "2026-06-30",
+        **kw,
+    }
+    return Watch(**kw)
+
+
+def _change(watch: Watch, **kw) -> AvailabilityChange:
+    kw = {
+        "site_id": "123456",
+        "site_name": "A001",
+        "loop": "Loop A",
+        "campsite_type": "STANDARD",
+        "new_dates": ["2026-06-01"],
+        "max_people": 6,
+        **kw,
+    }
+    return AvailabilityChange(watch=watch, **kw)
+
+
+def _result(watch: Watch | None = None, *changes: AvailabilityChange) -> PollResult:
+    return PollResult(watch=watch or _watch(), changes=list(changes))
+
+
+def _body(request: httpx.Request) -> str:
+    return request.content.decode()
 
 
 class TestFormatChange:
@@ -20,22 +54,7 @@ class TestFormatChange:
 
     def test_format_change_basic_structure(self):
         """format_change returns human-readable message with site and dates."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD NONELECTRIC",
-            new_dates=["2026-06-01"],
-            max_people=6,
-        )
+        change = _change(_watch(), campsite_type="STANDARD NONELECTRIC")
 
         formatted = format_change(change)
 
@@ -46,30 +65,7 @@ class TestFormatChange:
 
     def test_format_change_multiple_dates(self):
         """format_change includes first 5 dates, shows count for more."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=[
-                "2026-06-01",
-                "2026-06-02",
-                "2026-06-03",
-                "2026-06-04",
-                "2026-06-05",
-                "2026-06-06",
-                "2026-06-07",
-            ],
-            max_people=6,
-        )
+        change = _change(_watch(), new_dates=[f"2026-06-0{d}" for d in range(1, 8)])
 
         formatted = format_change(change)
 
@@ -85,21 +81,9 @@ class TestFormatChange:
 
     def test_format_change_single_date(self):
         """format_change with single date shows just that date."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="Site X",
-            loop="Loop B",
-            campsite_type="ELECTRIC",
-            new_dates=["2026-06-15"],
-            max_people=4,
+        change = _change(
+            _watch(), site_name="Site X", loop="Loop B", campsite_type="ELECTRIC",
+            new_dates=["2026-06-15"], max_people=4,
         )
 
         formatted = format_change(change)
@@ -108,30 +92,13 @@ class TestFormatChange:
         assert "Loop B" in formatted
         assert "max 4p" in formatted
         assert "Mon Jun 15" in formatted
-        assert "+0 more" not in formatted  # No "more"
+        assert "+0 more" not in formatted
 
     def test_format_change_date_formatting(self):
         """format_change dates are formatted as 'Day Mon DD'."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-12-01",
-            end_date="2026-12-31",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=["2026-12-25"],  # Christmas (Fri)
-            max_people=6,
-        )
+        change = _change(_watch(start_date="2026-12-01", end_date="2026-12-31"), new_dates=["2026-12-25"])
 
-        formatted = format_change(change)
-
-        assert "Fri Dec 25" in formatted
+        assert "Fri Dec 25" in format_change(change)
 
 
 class TestFormatPollResult:
@@ -139,23 +106,8 @@ class TestFormatPollResult:
 
     def test_format_poll_result_single_change(self):
         """format_poll_result includes watch name, change count, and booking URL."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Ohanapecosh Campground",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD NONELECTRIC",
-            new_dates=["2026-06-01"],
-            max_people=6,
-        )
-        result = PollResult(watch=watch, changes=[change])
+        watch = _watch(name="Ohanapecosh Campground")
+        result = _result(watch, _change(watch, campsite_type="STANDARD NONELECTRIC"))
 
         formatted = format_poll_result(result)
 
@@ -166,28 +118,10 @@ class TestFormatPollResult:
 
     def test_format_poll_result_multiple_changes(self):
         """format_poll_result shows up to 10 changes, then summary."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        changes = [
-            AvailabilityChange(
-                watch=watch,
-                site_id=f"site{i}",
-                site_name=f"Site {i}",
-                loop="Loop A",
-                campsite_type="STANDARD",
-                new_dates=["2026-06-01"],
-                max_people=6,
-            )
-            for i in range(15)
-        ]
-        result = PollResult(watch=watch, changes=changes)
+        watch = _watch()
+        changes = [_change(watch, site_id=f"site{i}", site_name=f"Site {i}") for i in range(15)]
 
-        formatted = format_poll_result(result)
+        formatted = format_poll_result(_result(watch, *changes))
 
         assert "15 sites open at" in formatted
         assert "Site 0" in formatted
@@ -197,58 +131,25 @@ class TestFormatPollResult:
 
     def test_format_poll_result_zero_changes(self):
         """format_poll_result with zero changes still formats."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        result = PollResult(watch=watch, changes=[])
-
-        formatted = format_poll_result(result)
+        formatted = format_poll_result(_result())
 
         assert "0 sites open at Test Camp" in formatted
         assert "https://www.recreation.gov" in formatted
 
     def test_format_poll_result_includes_booking_url_with_date(self):
         """format_poll_result booking URL includes start_date param."""
-        watch = Watch(
-            id=1,
-            facility_id="999",
-            name="Test Camp",
-            start_date="2026-08-15",
-            end_date="2026-08-31",
+        formatted = format_poll_result(
+            _result(_watch(facility_id="999", start_date="2026-08-15", end_date="2026-08-31"))
         )
-        result = PollResult(watch=watch, changes=[])
-
-        formatted = format_poll_result(result)
 
         assert "https://www.recreation.gov/camping/campgrounds/999" in formatted
         assert "startDate=2026-08-15" in formatted
 
     def test_format_poll_result_multi_line(self):
         """format_poll_result output is multi-line with proper structure."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=["2026-06-01"],
-            max_people=6,
-        )
-        result = PollResult(watch=watch, changes=[change])
+        watch = _watch()
 
-        formatted = format_poll_result(result)
-        lines = formatted.split("\n")
+        lines = format_poll_result(_result(watch, _change(watch))).split("\n")
 
         # Header, blank, site, blank, URL
         assert len(lines) >= 4
@@ -259,57 +160,26 @@ class TestFormatPollResult:
 class TestNotifyNtfy:
     """Tests for notify_ntfy dispatch function."""
 
-    @pytest.mark.asyncio
     async def test_notify_ntfy_posts_to_correct_endpoint(self):
         """notify_ntfy POSTs to ntfy.sh with topic."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=["2026-06-01"],
-            max_people=6,
-        )
-        result = PollResult(watch=watch, changes=[change])
+        watch = _watch()
 
         with respx.mock(base_url="https://ntfy.sh") as respx_mock:
-            respx_mock.post("/test-topic").mock(
-                return_value=httpx.Response(200)
-            )
+            respx_mock.post("/test-topic").mock(return_value=httpx.Response(200))
 
-            await notify_ntfy("test-topic", result)
+            await notify_ntfy("test-topic", _result(watch, _change(watch)))
 
             assert respx_mock.calls.called
             request = respx_mock.calls[0].request
             assert request.method == "POST"
             assert "test-topic" in request.url.path
 
-    @pytest.mark.asyncio
     async def test_notify_ntfy_includes_headers(self):
         """notify_ntfy includes Title, Tags, Click, Priority headers."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="My Campground",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        result = PollResult(watch=watch, changes=[])
-
         with respx.mock(base_url="https://ntfy.sh") as respx_mock:
-            respx_mock.post("/test-topic").mock(
-                return_value=httpx.Response(200)
-            )
+            respx_mock.post("/test-topic").mock(return_value=httpx.Response(200))
 
-            await notify_ntfy("test-topic", result)
+            await notify_ntfy("test-topic", _result(_watch(name="My Campground")))
 
             request = respx_mock.calls[0].request
             assert request.headers["Title"] == "Campsite Alert: My Campground"
@@ -317,108 +187,43 @@ class TestNotifyNtfy:
             assert "recreation.gov" in request.headers["Click"]
             assert request.headers["Priority"] == "high"
 
-    @pytest.mark.asyncio
     async def test_notify_ntfy_custom_server(self):
         """notify_ntfy respects custom ntfy server parameter."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        result = PollResult(watch=watch, changes=[])
-
         with respx.mock(base_url="https://ntfy.myserver.com") as respx_mock:
-            respx_mock.post("/mytopic").mock(
-                return_value=httpx.Response(200)
-            )
+            respx_mock.post("/mytopic").mock(return_value=httpx.Response(200))
 
-            await notify_ntfy(
-                "mytopic", result, server="https://ntfy.myserver.com"
-            )
+            await notify_ntfy("mytopic", _result(), server="https://ntfy.myserver.com")
 
-            request = respx_mock.calls[0].request
-            assert "ntfy.myserver.com" in str(request.url)
+            assert "ntfy.myserver.com" in str(respx_mock.calls[0].request.url)
 
-    @pytest.mark.asyncio
     async def test_notify_ntfy_body_contains_message(self):
         """notify_ntfy POST body contains formatted message."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=["2026-06-01"],
-            max_people=6,
-        )
-        result = PollResult(watch=watch, changes=[change])
+        watch = _watch()
 
         with respx.mock(base_url="https://ntfy.sh") as respx_mock:
-            respx_mock.post("/test-topic").mock(
-                return_value=httpx.Response(200)
-            )
+            respx_mock.post("/test-topic").mock(return_value=httpx.Response(200))
 
-            await notify_ntfy("test-topic", result)
+            await notify_ntfy("test-topic", _result(watch, _change(watch)))
 
-            request = respx_mock.calls[0].request
-            body = request.content.decode() if isinstance(
-                request.content, bytes
-            ) else request.content
+            body = _body(respx_mock.calls[0].request)
             assert "open at Test Camp" in body
             assert "Site A001" in body
 
-    @pytest.mark.asyncio
     async def test_notify_ntfy_handles_multiple_changes(self):
         """notify_ntfy includes all changes in message."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
+        watch = _watch()
         changes = [
-            AvailabilityChange(
-                watch=watch,
-                site_id="123456",
-                site_name="Site A",
-                loop="Loop A",
-                campsite_type="STANDARD",
-                new_dates=["2026-06-01"],
-                max_people=6,
-            ),
-            AvailabilityChange(
-                watch=watch,
-                site_id="789012",
-                site_name="Site B",
-                loop="Loop B",
-                campsite_type="ELECTRIC",
-                new_dates=["2026-06-02"],
-                max_people=8,
-            ),
+            _change(watch, site_id="123456", site_name="Site A"),
+            _change(watch, site_id="789012", site_name="Site B", loop="Loop B",
+                    campsite_type="ELECTRIC", new_dates=["2026-06-02"], max_people=8),
         ]
-        result = PollResult(watch=watch, changes=changes)
 
         with respx.mock(base_url="https://ntfy.sh") as respx_mock:
-            respx_mock.post("/test-topic").mock(
-                return_value=httpx.Response(200)
-            )
+            respx_mock.post("/test-topic").mock(return_value=httpx.Response(200))
 
-            await notify_ntfy("test-topic", result)
+            await notify_ntfy("test-topic", _result(watch, *changes))
 
-            request = respx_mock.calls[0].request
-            body = request.content.decode() if isinstance(
-                request.content, bytes
-            ) else request.content
+            body = _body(respx_mock.calls[0].request)
             assert "2 sites open at Test Camp" in body
             assert "Site A" in body
             assert "Site B" in body
@@ -429,28 +234,7 @@ class TestFormatChangeEdgeCases:
 
     def test_format_change_exactly_5_dates(self):
         """format_change with exactly 5 dates shows no '+more'."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=[
-                "2026-06-01",
-                "2026-06-02",
-                "2026-06-03",
-                "2026-06-04",
-                "2026-06-05",
-            ],
-            max_people=6,
-        )
+        change = _change(_watch(), new_dates=[f"2026-06-0{d}" for d in range(1, 6)])
 
         formatted = format_change(change)
 
@@ -460,29 +244,7 @@ class TestFormatChangeEdgeCases:
 
     def test_format_change_six_dates(self):
         """format_change with 6 dates shows '+1 more'."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=[
-                "2026-06-01",
-                "2026-06-02",
-                "2026-06-03",
-                "2026-06-04",
-                "2026-06-05",
-                "2026-06-06",
-            ],
-            max_people=6,
-        )
+        change = _change(_watch(), new_dates=[f"2026-06-0{d}" for d in range(1, 7)])
 
         formatted = format_change(change)
 
@@ -491,283 +253,79 @@ class TestFormatChangeEdgeCases:
 
 
 class TestContextualFormatting:
-    """Tests for context_message and urgency in format_poll_result."""
+    """Tests for context_message in format_poll_result."""
 
     def test_format_poll_result_with_context_message(self):
         """When context_message is set, it's used instead of standard header."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Ohanapecosh Campground",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD NONELECTRIC",
-            new_dates=["2026-06-01"],
-            max_people=6,
-            context_message="Popular weekend spot just opened!",
-            urgency=3,
-        )
-        result = PollResult(watch=watch, changes=[change])
+        watch = _watch(name="Ohanapecosh Campground")
+        change = _change(watch, context_message="Popular weekend spot just opened!")
 
-        formatted = format_poll_result(result)
+        formatted = format_poll_result(_result(watch, change))
 
         assert "Popular weekend spot just opened!" in formatted
         assert "1 site open at Ohanapecosh Campground" not in formatted
 
     def test_format_poll_result_without_context_message(self):
         """When context_message is empty, uses standard formatting."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Ohanapecosh Campground",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD NONELECTRIC",
-            new_dates=["2026-06-01"],
-            max_people=6,
-            context_message="",  # Empty context_message
-            urgency=2,
-        )
-        result = PollResult(watch=watch, changes=[change])
+        watch = _watch(name="Ohanapecosh Campground")
 
-        formatted = format_poll_result(result)
+        formatted = format_poll_result(_result(watch, _change(watch, context_message="")))
 
         assert "1 site open at Ohanapecosh Campground" in formatted
 
-    def test_format_poll_result_urgency_3_no_emoji(self):
-        """Urgency 3 no longer uses fire emoji — data speaks, not emoji."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Popular Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=["2026-06-01"],
-            max_people=6,
-            context_message="Peak weekend availability opened!",
-            urgency=3,  # High urgency
-        )
-        result = PollResult(watch=watch, changes=[change])
-
-        formatted = format_poll_result(result)
-
-        # No emoji prefix — brand voice is data-driven, not emoji-driven
-        assert "\U0001f525" not in formatted
-        assert "Peak weekend availability opened!" in formatted
-
-    def test_format_poll_result_urgency_1_no_prefix(self):
-        """Urgency 1 has no emoji prefix when context_message is set."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Quiet Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=["2026-06-01"],
-            max_people=6,
-            context_message="Midweek campground opening.",
-            urgency=1,  # Low urgency
-        )
-        result = PollResult(watch=watch, changes=[change])
-
-        formatted = format_poll_result(result)
-
-        # Should NOT include fire emoji
-        assert "\U0001f525" not in formatted
-        assert "Midweek campground opening." in formatted
-
-    def test_format_poll_result_urgency_2_no_prefix(self):
-        """Urgency 2 has no emoji prefix when context_message is set."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Standard Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=["2026-06-01"],
-            max_people=6,
-            context_message="Sites now available.",
-            urgency=2,  # Standard urgency
-        )
-        result = PollResult(watch=watch, changes=[change])
-
-        formatted = format_poll_result(result)
-
-        # Should NOT include fire emoji
-        assert "\U0001f525" not in formatted
-        assert "Sites now available." in formatted
-
     def test_format_poll_result_context_message_uses_first_change(self):
         """When multiple changes, uses context_message from first change."""
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test Camp",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
+        watch = _watch()
         changes = [
-            AvailabilityChange(
-                watch=watch,
-                site_id="123456",
-                site_name="A001",
-                loop="Loop A",
-                campsite_type="STANDARD",
-                new_dates=["2026-06-01"],
-                max_people=6,
-                context_message="First change context",
-                urgency=3,
-            ),
-            AvailabilityChange(
-                watch=watch,
-                site_id="789012",
-                site_name="A002",
-                loop="Loop B",
-                campsite_type="ELECTRIC",
-                new_dates=["2026-06-02"],
-                max_people=8,
-                context_message="Second change context",
-                urgency=2,
-            ),
+            _change(watch, context_message="First change context"),
+            _change(watch, site_id="789012", site_name="A002", context_message="Second change context"),
         ]
-        result = PollResult(watch=watch, changes=changes)
 
-        formatted = format_poll_result(result)
+        formatted = format_poll_result(_result(watch, *changes))
 
         assert "First change context" in formatted
         assert "Second change context" not in formatted
-        assert "\U0001f525" not in formatted  # No emoji — brand voice
 
 
 class TestNotifyPushover:
     """Tests for Pushover notification dispatch."""
 
-    @pytest.mark.asyncio
     async def test_notify_pushover_posts_to_api(self) -> None:
         """notify_pushover sends POST to Pushover API with correct data."""
-        from pnw_campsites.monitor.notify import notify_pushover
-
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Ohanapecosh",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        change = AvailabilityChange(
-            watch=watch,
-            site_id="123456",
-            site_name="A001",
-            loop="Loop A",
-            campsite_type="STANDARD",
-            new_dates=["2026-06-01"],
-            max_people=6,
-        )
-        result = PollResult(watch=watch, changes=[change])
+        watch = _watch(name="Ohanapecosh")
 
         with respx.mock:
-            route = respx.post(
-                "https://api.pushover.net/1/messages.json"
-            ).mock(return_value=httpx.Response(200, json={"status": 1}))
+            route = respx.post("https://api.pushover.net/1/messages.json").mock(
+                return_value=httpx.Response(200, json={"status": 1})
+            )
 
             await notify_pushover(
-                user_key="user123",
-                api_token="token123",
-                result=result,
+                user_key="user123", api_token="token123", result=_result(watch, _change(watch)),
             )
 
             assert route.called
-            request = route.calls[0].request
-            assert b"token=token123" in request.content
-            assert b"user=user123" in request.content
-            assert b"Ohanapecosh" in request.content
+            content = route.calls[0].request.content
+            assert b"token=token123" in content
+            assert b"user=user123" in content
+            assert b"Ohanapecosh" in content
 
-    @pytest.mark.asyncio
     async def test_notify_pushover_includes_booking_url(self) -> None:
         """notify_pushover includes the recreation.gov booking URL."""
-        from pnw_campsites.monitor.notify import notify_pushover
-
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        result = PollResult(watch=watch, changes=[])
-
         with respx.mock:
-            route = respx.post(
-                "https://api.pushover.net/1/messages.json"
-            ).mock(return_value=httpx.Response(200))
-
-            await notify_pushover(
-                user_key="user123",
-                api_token="token123",
-                result=result,
+            route = respx.post("https://api.pushover.net/1/messages.json").mock(
+                return_value=httpx.Response(200)
             )
 
-            request = route.calls[0].request
-            # Should include recreation.gov booking URL
-            assert b"recreation.gov" in request.content
+            await notify_pushover(user_key="user123", api_token="token123", result=_result())
+
+            assert b"recreation.gov" in route.calls[0].request.content
 
 
 class TestNotifyWebPush:
     """Tests for web push notification dispatch."""
 
-    @pytest.mark.asyncio
-    async def test_notify_web_push_returns_early_without_key(
-        self, monkeypatch
-    ) -> None:
+    async def test_notify_web_push_returns_early_without_key(self, monkeypatch) -> None:
         """notify_web_push returns early if VAPID_PRIVATE_KEY not set."""
-        from pnw_campsites.monitor.notify import notify_web_push
-
-        watch = Watch(
-            id=1,
-            facility_id="232465",
-            name="Test",
-            start_date="2026-06-01",
-            end_date="2026-06-30",
-        )
-        result = PollResult(watch=watch, changes=[])
-
-        subscription = {"endpoint": "https://example.com"}
-
-        # Ensure VAPID_PRIVATE_KEY is not set (defaults to empty string)
         monkeypatch.delenv("VAPID_PRIVATE_KEY", raising=False)
 
-        # Should return without raising an exception
-        await notify_web_push(subscription, result)
+        await notify_web_push({"endpoint": "https://example.com"}, _result())

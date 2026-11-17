@@ -2,10 +2,6 @@ import { useEffect, useState } from "react";
 import { getPollStatus } from "../api";
 import type { PollStatus } from "../api";
 
-// ---------------------------------------------------------------------------
-// Relative time helper — no external dependency
-// ---------------------------------------------------------------------------
-
 function relativeTime(isoString: string | null): string {
   if (!isoString) return "never";
   const now = Date.now();
@@ -14,7 +10,6 @@ function relativeTime(isoString: string | null): string {
   const diffSec = Math.round(diffMs / 1000);
 
   if (diffSec < 0) {
-    // future
     const absSec = Math.abs(diffSec);
     if (absSec < 60) return `in ${absSec}s`;
     if (absSec < 3600) return `in ${Math.round(absSec / 60)}m`;
@@ -39,10 +34,6 @@ function futureRelative(isoString: string | null): string {
   if (diffSec < 3600) return `in ${Math.round(diffSec / 60)}m`;
   return `in ${Math.round(diffSec / 3600)}h`;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function PollDashboard({ open }: { open: boolean }) {
   const [status, setStatus] = useState<PollStatus | null>(null);

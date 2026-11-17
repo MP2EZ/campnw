@@ -1,17 +1,9 @@
-"""Every SSR page must carry analytics (audit ANLT-04).
+"""Every SSR page must carry analytics.
 
-The SEO surface — /campgrounds, /campgrounds/{state}, the profile pages,
-/tags/{tag}, /this-weekend — had no instrumentation at all. That lost the
-organic funnel, but it also did something worse to every *other* channel:
-
-A visitor arrives from search on an uninstrumented SSR page, clicks through to
-the SPA, and *that* load is the first to initialise PostHog — with
-document.referrer set to campable.co. First-touch attribution is therefore
-$set_once'd as internal traffic. Organic search was not merely untracked, it
-was misfiled as direct, and $set_once means it cannot be corrected later.
-
-The fix has to be client-side: _cached_template sets max-age=3600, so
-Cloudflare serves most of these responses without ever reaching Python.
+The tag is client-side (not server-set) because _cached_template sets
+max-age=3600 and Cloudflare serves most of these without reaching Python.
+Without it, the SPA's first PostHog load $set_once's organic search traffic
+as internal (referrer campable.co), and it cannot be corrected later.
 """
 
 from __future__ import annotations

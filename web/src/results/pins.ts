@@ -14,7 +14,7 @@ export interface PinStyle {
 }
 
 /**
- * How a place looks on the map (D13). Shape carries the meaning, so the map
+ * How a place looks on the map. Shape carries the meaning, so the map
  * reads without colour: fuller pins are closer (solid, half, ring), boat-in
  * is a diamond, and places with nothing to book are dashed rings.
  */

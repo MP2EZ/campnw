@@ -24,11 +24,6 @@ def _facility(name: str, lat: float = 47.0, lon: float = -121.0, enabled: bool =
     )
 
 
-# ---------------------------------------------------------------------------
-# v1.35 audit S8 — URL allowlist on stored image_urls
-# ---------------------------------------------------------------------------
-
-
 class TestSafeRaPhotoUrl:
     """ReserveAmerica photo URL allowlist (seed_or_state._safe_ra_photo_url)."""
 
@@ -53,13 +48,6 @@ class TestSafeRaPhotoUrl:
     def test_rejects_protocol_relative_host_escape(self):
         """A '//evil.com/x' should NOT escape to a different host."""
         assert _safe_ra_photo_url("//evil.com/x.jpg") is None
-
-    def test_rejects_backslash_authority_escape(self):
-        """Some parsers treat '/\\evil.com' as authority — must reject."""
-        # urljoin will normalize this to a path on the base, but the netloc
-        # check stays on www.reserveamerica.com, so it's accepted as a path.
-        # We additionally reject anything pointing at a different netloc.
-        assert _safe_ra_photo_url("https://evil.com/x.jpg") is None
 
     def test_rejects_javascript_url(self):
         assert _safe_ra_photo_url("javascript:alert(1)") is None

@@ -8,13 +8,7 @@ export interface DisplayMessage {
   isError?: boolean;
 }
 
-/**
- * Patch the trailing assistant message.
- *
- * The streaming handler updates that message five separate ways — text,
- * tool calls, tool results, errors, completion — and each site had its own
- * copy of the spread-find-replace dance.
- */
+/** Patch the trailing assistant message; no-op if the last message isn't one. */
 export function patchLastAssistant(
   prev: DisplayMessage[],
   patch: Partial<DisplayMessage>,

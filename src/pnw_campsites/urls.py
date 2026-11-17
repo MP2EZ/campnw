@@ -99,7 +99,6 @@ def or_state_availability_url(
     park_id: str,
     slug: str,
     start_date: date | None = None,
-    end_date: date | None = None,
 ) -> str:
     """Deep link to an OR State Park's availability on ReserveAmerica.
 
@@ -145,5 +144,5 @@ def availability_url(
     if booking_system == BookingSystem.WA_STATE:
         return wa_state_availability_url(facility_id, start_date, end_date)
     if booking_system == BookingSystem.OR_STATE:
-        return or_state_availability_url(facility_id, slug, start_date, end_date)
+        return or_state_availability_url(facility_id, slug, start_date)
     return recgov_availability_url(facility_id, start_date)

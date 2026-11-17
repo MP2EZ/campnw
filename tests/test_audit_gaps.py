@@ -1,63 +1,35 @@
-"""Tests for gaps identified in the codebase audit.
-
-Covers: auth rate limiter, plan rate limiter, push subscribe/unsubscribe,
-recommendation scoring, search stream NL integration, date suggestion probes,
-and security header middleware.
+"""API-level tests: plan rate limiting and validation, push subscriptions,
+recommendation scoring, security headers, date suggestion probes, search
+stream NL parsing, watcher cache, result formatting and rec-reason enhancement.
 """
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
-from tests.conftest import (
-    auth_headers as _auth_headers,
+from pnw_campsites.monitor.watcher import _fetch_availability
+from pnw_campsites.providers.recgov import RecGovClient
+from pnw_campsites.registry.models import BookingSystem
+from pnw_campsites.routes.planner import _plan_rate_limit
+from pnw_campsites.routes.recommendations import _enhance_rec_reasons
+from pnw_campsites.routes.search import _format_result
+from pnw_campsites.search.engine import (
+    AvailableWindow,
+    CampgroundResult,
+    SearchEngine,
+    SearchQuery,
+    SearchResults,
+    StreamDiagnosisEvent,
 )
-from tests.conftest import (
-    make_supabase_jwt as _make_jwt,
-)
+from tests.conftest import make_campground, save_searches, signup_and_auth
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _signup(client: TestClient, email: str = "test@example.com"):
-    """Create user via auto-provisioning and return (user_data, auth_headers)."""
-    token = _make_jwt(email=email)
-    headers = _auth_headers(token)
-    resp = client.get("/api/auth/me", headers=headers)
-    assert resp.status_code == 200
-    return resp.json(), headers
-
-
-def _save_searches(client: TestClient, headers: dict, count: int = 5, tags: str = "lakeside") -> None:
-    for i in range(count):
-        client.post(
-            "/api/search-history",
-            json={
-                "params": {
-                    "start_date": "2026-06-01",
-                    "end_date": "2026-06-30",
-                    "state": "WA",
-                    "tags": tags,
-                },
-                "result_count": i * 3,
-            },
-            headers=headers,
-        )
-
-
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# TEST-04: Plan rate limiter
+# Plan rate limiter
 # ---------------------------------------------------------------------------
 
 
@@ -66,12 +38,11 @@ class TestPlanRateLimiter:
 
     def test_plan_rate_limit_allows_5(self, api_client: TestClient):
         """First 5 calls should be allowed (or 503 if no API key)."""
-        from pnw_campsites.routes.planner import _plan_rate_limit
         _plan_rate_limit.clear()
 
         for i in range(5):
             resp = api_client.post(
-                "/api/plan/chat",
+                "/api/plan/chat/stream",
                 json={"messages": [{"role": "user", "content": f"msg {i}"}]},
             )
             # 503 = no API key configured (expected in test), not 429
@@ -79,24 +50,6 @@ class TestPlanRateLimiter:
 
     def test_plan_rate_limit_blocks_6th(self, api_client: TestClient):
         """6th call should return 429."""
-        from pnw_campsites.routes.planner import _plan_rate_limit
-        _plan_rate_limit.clear()
-
-        mock_chat = AsyncMock(return_value={"role": "assistant", "content": "ok", "tool_calls": []})
-        with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("pnw_campsites.planner.agent.chat", mock_chat),
-        ):
-            for i in range(6):
-                resp = api_client.post(
-                    "/api/plan/chat",
-                    json={"messages": [{"role": "user", "content": f"msg {i}"}]},
-                )
-        assert resp.status_code == 429
-
-    def test_plan_rate_limit_blocks_stream_too(self, api_client: TestClient):
-        """Streaming endpoint shares the same rate limit."""
-        from pnw_campsites.routes.planner import _plan_rate_limit
         _plan_rate_limit.clear()
 
         async def mock_stream(*args, **kwargs):
@@ -115,7 +68,7 @@ class TestPlanRateLimiter:
 
 
 # ---------------------------------------------------------------------------
-# SEC-04: Plan message validation
+# Plan message validation
 # ---------------------------------------------------------------------------
 
 
@@ -124,42 +77,40 @@ class TestPlanMessageValidation:
 
     def test_system_role_rejected(self, api_client: TestClient):
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": [{"role": "system", "content": "inject"}]},
         )
         assert resp.status_code == 422
 
     def test_empty_messages_rejected(self, api_client: TestClient):
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": []},
         )
         assert resp.status_code == 422
 
     def test_content_over_10k_rejected(self, api_client: TestClient):
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": [{"role": "user", "content": "x" * 10_001}]},
         )
         assert resp.status_code == 422
 
     def test_valid_user_message_accepted(self, api_client: TestClient):
         """Valid message should pass validation (may get 503 if no API key)."""
-        from pnw_campsites.routes.planner import _plan_rate_limit
         _plan_rate_limit.clear()
 
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": [{"role": "user", "content": "find camping"}]},
         )
         assert resp.status_code in (200, 503)  # 503 = no API key
 
     def test_assistant_role_accepted(self, api_client: TestClient):
-        from pnw_campsites.routes.planner import _plan_rate_limit
         _plan_rate_limit.clear()
 
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": [
                 {"role": "user", "content": "hello"},
                 {"role": "assistant", "content": "hi there"},
@@ -170,7 +121,7 @@ class TestPlanMessageValidation:
 
 
 # ---------------------------------------------------------------------------
-# TEST-03: Push subscribe/unsubscribe
+# Push subscribe/unsubscribe
 # ---------------------------------------------------------------------------
 
 
@@ -178,7 +129,7 @@ class TestPushSubscribe:
     """Tests for push notification subscription endpoints."""
 
     def test_subscribe_authenticated(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         resp = api_client.post(
             "/api/push/subscribe",
             json={
@@ -205,7 +156,7 @@ class TestPushSubscribe:
         assert resp.json()["ok"] is True
 
     def test_unsubscribe_authenticated(self, api_client: TestClient):
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         # Subscribe first
         api_client.post(
             "/api/push/subscribe",
@@ -250,11 +201,9 @@ class TestRecommendationScoring:
 
     def test_recommendations_score_by_tag_overlap(self, api_client: TestClient):
         """Campgrounds matching searched tags should score higher."""
-        from tests.conftest import make_campground
-
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         self._enable_recs(api_client, headers)
-        _save_searches(api_client, headers, count=5, tags="lakeside")
+        save_searches(api_client, headers, count=5, tags="lakeside")
 
         campgrounds = [
             make_campground(facility_id="lake-1", name="Lake A", tags=["lakeside"], state="WA"),
@@ -269,11 +218,9 @@ class TestRecommendationScoring:
 
     def test_recommendations_exclude_watched(self, api_client: TestClient):
         """Watched campgrounds should not appear in recommendations."""
-        from tests.conftest import make_campground
-
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         self._enable_recs(api_client, headers)
-        _save_searches(api_client, headers, count=5, tags="lakeside")
+        save_searches(api_client, headers, count=5, tags="lakeside")
 
         # Create a watch for lake-1
         api_module._registry.get_by_facility_id.return_value = make_campground(
@@ -299,11 +246,9 @@ class TestRecommendationScoring:
 
     def test_recommendations_reason_references_tag(self, api_client: TestClient):
         """Reason string should reference the matched tag."""
-        from tests.conftest import make_campground
-
-        _, headers = _signup(api_client)
+        _, headers = signup_and_auth(api_client, display_name=None)
         self._enable_recs(api_client, headers)
-        _save_searches(api_client, headers, count=5, tags="lakeside")
+        save_searches(api_client, headers, count=5, tags="lakeside")
 
         campgrounds = [
             make_campground(facility_id="lake-1", name="Lake A", tags=["lakeside"], state="WA"),
@@ -316,12 +261,10 @@ class TestRecommendationScoring:
         assert "lakeside" in recs[0]["reason"]
 
     def test_recommendations_max_5(self, api_client: TestClient):
-        """Should return at most 5 recommendations."""
-        from tests.conftest import make_campground
-
-        _, headers = _signup(api_client)
+        """10 matching campgrounds are capped to 5 recommendations."""
+        _, headers = signup_and_auth(api_client, display_name=None)
         self._enable_recs(api_client, headers)
-        _save_searches(api_client, headers, count=5, tags="lakeside")
+        save_searches(api_client, headers, count=5, tags="lakeside")
 
         campgrounds = [
             make_campground(
@@ -333,11 +276,11 @@ class TestRecommendationScoring:
         api_module._registry.search.return_value = campgrounds
 
         resp = api_client.get("/api/recommendations", headers=headers)
-        assert len(resp.json()) <= 5
+        assert len(resp.json()) == 5
 
 
 # ---------------------------------------------------------------------------
-# TEST-10: Security headers
+# Security headers
 # ---------------------------------------------------------------------------
 
 
@@ -353,14 +296,14 @@ class TestSecurityHeaders:
         assert "default-src" in resp.headers.get("Content-Security-Policy", "")
 
     def test_csp_img_src_allows_photo_cdns(self, api_client: TestClient):
-        """v1.35: photo hotlinks must not be blocked by the production CSP."""
+        """Photo hotlinks must not be blocked by the production CSP."""
         resp = api_client.get("/api/perf")
         csp = resp.headers.get("Content-Security-Policy", "")
         assert "cdn.recreation.gov" in csp
         assert "reserveamerica.com" in csp
 
     def test_csp_img_src_allows_map_tiles(self, api_client: TestClient):
-        """v1.48: results map tiles (Mapbox raster, OSM fallback) are <img>s."""
+        """Results map tiles (Mapbox raster, OSM fallback) are <img>s."""
         resp = api_client.get("/api/perf")
         img_src = resp.headers["Content-Security-Policy"].split("img-src")[1].split(";")[0]
         assert "https://api.mapbox.com" in img_src
@@ -368,18 +311,15 @@ class TestSecurityHeaders:
 
 
 # ---------------------------------------------------------------------------
-# TEST-06: Date suggestion probes
+# Date suggestion probes
 # ---------------------------------------------------------------------------
 
 
 class TestDateSuggestionProbes:
     """Tests for _suggest_alternative_dates parallelized probes."""
 
-    @pytest.mark.asyncio
     async def test_past_date_windows_skipped(self):
         """Probes that would start before today should be excluded."""
-        from pnw_campsites.search.engine import SearchEngine, SearchQuery
-
         registry = MagicMock()
         registry.search.return_value = []
         engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
@@ -397,18 +337,14 @@ class TestDateSuggestionProbes:
         assert suggestions == []
         mock_search.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_returns_max_3_suggestions(self):
         """Should return at most 3 date suggestions."""
-        from pnw_campsites.search.engine import SearchEngine, SearchQuery, SearchResults
-
         registry = MagicMock()
         registry.search.return_value = []
         engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
 
-        # Relative to today: _suggest_alternative_dates drops probes whose
-        # shifted start is in the past, so an absolute date silently empties
-        # this test once it goes by. The -7 shift needs >7 days of headroom.
+        # Relative to today: probes whose shifted start is past are dropped, and
+        # the -7 shift needs >7 days of headroom.
         base = date.today() + timedelta(days=30)
         query = SearchQuery(start_date=base, end_date=base + timedelta(days=6))
 
@@ -417,22 +353,17 @@ class TestDateSuggestionProbes:
         with patch.object(engine, "search", new_callable=AsyncMock, return_value=mock_result):
             suggestions = await engine._suggest_alternative_dates(query)
 
-        # `<= 3` alone is satisfied by [], which is what this asserted for
-        # weeks. There are exactly three shifts, all valid from a future base.
+        # Exactly three shifts, all valid from a future base.
         assert len(suggestions) == 3
 
-    @pytest.mark.asyncio
     async def test_sorted_by_proximity(self):
         """Suggestions should be sorted by closeness to original dates."""
-        from pnw_campsites.search.engine import SearchEngine, SearchQuery, SearchResults
-
         registry = MagicMock()
         registry.search.return_value = []
         engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
 
-        # Relative to today: _suggest_alternative_dates drops probes whose
-        # shifted start is in the past, so an absolute date silently empties
-        # this test once it goes by. The -7 shift needs >7 days of headroom.
+        # Relative to today: probes whose shifted start is past are dropped, and
+        # the -7 shift needs >7 days of headroom.
         base = date.today() + timedelta(days=30)
         query = SearchQuery(start_date=base, end_date=base + timedelta(days=6))
 
@@ -440,9 +371,6 @@ class TestDateSuggestionProbes:
         with patch.object(engine, "search", new_callable=AsyncMock, return_value=mock_result):
             suggestions = await engine._suggest_alternative_dates(query)
 
-        # Assert the precondition rather than guarding on it: wrapped in
-        # `if len(suggestions) >= 2`, a regression returning zero or one
-        # suggestion made this test pass silently.
         assert len(suggestions) >= 2, (
             f"expected multiple date suggestions, got {len(suggestions)}"
         )
@@ -454,11 +382,8 @@ class TestDateSuggestionProbes:
             f"suggestions not ordered by closeness to the original dates: {offsets}"
         )
 
-    @pytest.mark.asyncio
     async def test_no_suggestions_when_no_dates(self):
         """Should return empty list when query has no dates."""
-        from pnw_campsites.search.engine import SearchEngine, SearchQuery
-
         registry = MagicMock()
         engine = SearchEngine(registry=registry, recgov_client=AsyncMock())
 
@@ -478,7 +403,6 @@ class TestSearchStreamNLIntegration:
     @staticmethod
     def _setup_empty_engine():
         async def empty_stream(query):
-            from pnw_campsites.search.engine import StreamDiagnosisEvent
             yield StreamDiagnosisEvent(diagnosis=None, date_suggestions=[], action_chips=[])
 
         api_module._engine.search_stream = empty_stream
@@ -532,22 +456,9 @@ class TestSearchStreamNLIntegration:
 class TestWatcherCachePath:
     """Tests for availability cache behavior during polling."""
 
-    @pytest.mark.asyncio
     async def test_cache_hit_skips_provider(self, watch_db):
-        """Second poll should use cached availability, not call provider again.
-
-        The assertions must read ``get_availability_range`` — the method
-        ``_fetch_availability`` actually calls for RECGOV. This test previously
-        asserted on ``get_availability``, an attribute AsyncMock auto-creates on
-        access and which nothing ever invokes, so both counts were 0 and
-        ``second == first`` held whether the cache worked, the provider was
-        called every time, or the function raised. ``spec_set`` below makes that
-        class of typo an AttributeError instead of a silent pass.
-        """
-        from pnw_campsites.monitor.watcher import _fetch_availability
-        from pnw_campsites.providers.recgov import RecGovClient
-        from pnw_campsites.registry.models import BookingSystem
-
+        """Second poll is served from cache; assertions read get_availability_range,
+        the method _fetch_availability calls for RECGOV (spec_set catches typos)."""
         mock_availability = MagicMock()
         mock_availability.campsites = {}
         mock_availability.model_dump_json = MagicMock(
@@ -571,130 +482,6 @@ class TestWatcherCachePath:
 
 
 # ---------------------------------------------------------------------------
-# _generate_search_summary
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateSearchSummary:
-    """Tests for the AI search summary helper."""
-
-    @pytest.mark.asyncio
-    async def test_off_by_default_even_with_api_key(self):
-        """Dropped for now (2026-11-07): it stated data bugs as fact and its
-        urgency contradicted the brand. Off unless SEARCH_SUMMARY_ENABLED is
-        set, and it must not spend a model call while off."""
-        from pnw_campsites.routes.search import _generate_search_summary
-        from pnw_campsites.search.engine import SearchQuery
-
-        query = SearchQuery(start_date=date(2026, 6, 1), end_date=date(2026, 6, 30))
-        with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}, clear=False),
-            patch("pnw_campsites.posthog_client.get_anthropic_client") as factory,
-        ):
-            import os
-            os.environ.pop("SEARCH_SUMMARY_ENABLED", None)
-            result = await _generate_search_summary([{"name": "Test"}], query)
-        assert result is None
-        factory.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_returns_none_without_api_key(self):
-        """Should return None when no ANTHROPIC_API_KEY is set."""
-        from pnw_campsites.routes.search import _generate_search_summary
-        from pnw_campsites.search.engine import SearchQuery
-
-        query = SearchQuery(start_date=date(2026, 6, 1), end_date=date(2026, 6, 30))
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}, clear=False):
-            result = await _generate_search_summary([{"name": "Test"}], query)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_returns_text_on_success(self):
-        """Should return the LLM-generated summary string."""
-        from pnw_campsites.routes.search import _generate_search_summary
-        from pnw_campsites.search.engine import SearchQuery
-
-        query = SearchQuery(
-            start_date=date(2026, 6, 1),
-            end_date=date(2026, 6, 30),
-            state="WA",
-        )
-
-        mock_content = MagicMock()
-        mock_content.text = "  Lake Easton has the most weekend openings.  "
-        mock_response = MagicMock()
-        mock_response.content = [mock_content]
-
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-
-        with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key", "SEARCH_SUMMARY_ENABLED": "1"}),
-            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
-        ):
-            result = await _generate_search_summary(
-                [{"name": "Lake Easton", "windows": 5}], query,
-            )
-
-        assert result == "Lake Easton has the most weekend openings."
-
-    @pytest.mark.asyncio
-    async def test_returns_none_on_timeout(self):
-        """Should return None when LLM call times out."""
-        from pnw_campsites.routes.search import _generate_search_summary
-        from pnw_campsites.search.engine import SearchQuery
-
-        query = SearchQuery(start_date=date(2026, 6, 1), end_date=date(2026, 6, 30))
-
-        async def slow_create(**kwargs):
-            import asyncio
-            await asyncio.sleep(10)
-
-        mock_client = MagicMock()
-        mock_client.messages.create = slow_create
-
-        with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key", "SEARCH_SUMMARY_ENABLED": "1"}),
-            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
-        ):
-            result = await _generate_search_summary(
-                [{"name": "Test"}], query,
-            )
-
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_caps_results_at_20(self):
-        """Prompt should only include first 20 results."""
-        from pnw_campsites.routes.search import _generate_search_summary
-        from pnw_campsites.search.engine import SearchQuery
-
-        query = SearchQuery(start_date=date(2026, 6, 1), end_date=date(2026, 6, 30))
-        results = [{"name": f"Camp {i}"} for i in range(30)]
-
-        mock_content = MagicMock()
-        mock_content.text = "Summary"
-        mock_response = MagicMock()
-        mock_response.content = [mock_content]
-
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-
-        with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key", "SEARCH_SUMMARY_ENABLED": "1"}),
-            patch("posthog.ai.anthropic.AsyncAnthropic", return_value=mock_client),
-        ):
-            await _generate_search_summary(results, query)
-
-        # Verify the prompt sent to the LLM only included 20 results in the JSON
-        call_args = mock_client.messages.create.call_args
-        prompt = call_args.kwargs["messages"][0]["content"]
-        # The prompt says "30 campgrounds" (total count) but the JSON caps at 20
-        assert "Camp 19" in prompt  # 0-indexed: Camp 0..19 = 20 items
-        assert "Camp 20" not in prompt  # 21st item should be excluded
-
-
-# ---------------------------------------------------------------------------
 # _format_result
 # ---------------------------------------------------------------------------
 
@@ -704,10 +491,6 @@ class TestFormatResult:
 
     def test_basic_recgov_result(self):
         """Should format a basic rec.gov result with windows and URLs."""
-        from pnw_campsites.routes.search import _format_result
-        from pnw_campsites.search.engine import AvailableWindow, CampgroundResult
-        from tests.conftest import make_campground
-
         cg = make_campground(
             facility_id="232465",
             name="Ohanapecosh",
@@ -746,10 +529,6 @@ class TestFormatResult:
 
     def test_fcfs_window_has_no_booking_url(self):
         """FCFS windows should not have booking URLs."""
-        from pnw_campsites.routes.search import _format_result
-        from pnw_campsites.search.engine import AvailableWindow, CampgroundResult
-        from tests.conftest import make_campground
-
         cg = make_campground(facility_id="123")
         window = AvailableWindow(
             campsite_id="fcfs-1", site_name="Walk-in 1", loop="C",
@@ -770,10 +549,6 @@ class TestFormatResult:
 
     def test_no_windows_gives_no_availability_url(self):
         """Result with no windows should have no availability URL."""
-        from pnw_campsites.routes.search import _format_result
-        from pnw_campsites.search.engine import CampgroundResult
-        from tests.conftest import make_campground
-
         cg = make_campground(facility_id="999")
         result = CampgroundResult(campground=cg, available_windows=[])
 
@@ -783,11 +558,6 @@ class TestFormatResult:
 
     def test_wa_state_window_links_to_the_park_with_dates(self):
         """WA has no per-site link: windows open the park with the stay filled in."""
-        from pnw_campsites.registry.models import BookingSystem
-        from pnw_campsites.routes.search import _format_result
-        from pnw_campsites.search.engine import AvailableWindow, CampgroundResult
-        from tests.conftest import make_campground
-
         cg = make_campground(
             facility_id="-2147483624",
             booking_system=BookingSystem.WA_STATE,
@@ -811,10 +581,6 @@ class TestFormatResult:
 
     def test_error_result_preserved(self):
         """Error message from the engine should be preserved."""
-        from pnw_campsites.routes.search import _format_result
-        from pnw_campsites.search.engine import CampgroundResult
-        from tests.conftest import make_campground
-
         cg = make_campground(facility_id="404")
         result = CampgroundResult(
             campground=cg,
@@ -827,10 +593,6 @@ class TestFormatResult:
 
     def test_drive_time_preserved(self):
         """Estimated drive time should be passed through."""
-        from pnw_campsites.routes.search import _format_result
-        from pnw_campsites.search.engine import CampgroundResult
-        from tests.conftest import make_campground
-
         cg = make_campground(facility_id="789")
         result = CampgroundResult(
             campground=cg,
@@ -850,11 +612,8 @@ class TestFormatResult:
 class TestEnhanceRecReasons:
     """Tests for the LLM recommendation reason enhancement."""
 
-    @pytest.mark.asyncio
     async def test_returns_none_without_api_key(self):
         """Should return None when no API key is set."""
-        from pnw_campsites.routes.recommendations import _enhance_rec_reasons
-
         results = [{"name": "Lake A", "state": "WA", "tags": ["lakeside"], "vibe": ""}]
         affinities = {"tags": {"lakeside": 3.0}, "states": {"WA": 5.0}}
 
@@ -862,11 +621,8 @@ class TestEnhanceRecReasons:
             result = await _enhance_rec_reasons(results, affinities)
         assert result is None
 
-    @pytest.mark.asyncio
     async def test_returns_reasons_on_success(self):
         """Should return a list of reason strings on success."""
-        from pnw_campsites.routes.recommendations import _enhance_rec_reasons
-
         results = [
             {"name": "Lake A", "state": "WA", "tags": ["lakeside"], "vibe": "Serene"},
             {"name": "Forest B", "state": "OR", "tags": ["forest"], "vibe": "Mossy"},
@@ -889,16 +645,12 @@ class TestEnhanceRecReasons:
 
         assert reasons == ["Lakefront paradise near your WA favorites", "Lush forest retreat"]
 
-    @pytest.mark.asyncio
     async def test_returns_none_on_timeout(self):
         """Should return None when LLM times out."""
-        from pnw_campsites.routes.recommendations import _enhance_rec_reasons
-
         results = [{"name": "Lake A", "state": "WA", "tags": ["lakeside"], "vibe": ""}]
         affinities = {"tags": {"lakeside": 3.0}, "states": {"WA": 5.0}}
 
         async def slow_create(**kwargs):
-            import asyncio
             await asyncio.sleep(10)
 
         mock_client = MagicMock()
@@ -912,11 +664,8 @@ class TestEnhanceRecReasons:
 
         assert result is None
 
-    @pytest.mark.asyncio
     async def test_returns_none_on_length_mismatch(self):
         """Should return None if LLM returns wrong number of reasons."""
-        from pnw_campsites.routes.recommendations import _enhance_rec_reasons
-
         results = [
             {"name": "Lake A", "state": "WA", "tags": ["lakeside"], "vibe": ""},
             {"name": "Lake B", "state": "WA", "tags": ["lakeside"], "vibe": ""},
@@ -939,11 +688,8 @@ class TestEnhanceRecReasons:
 
         assert result is None
 
-    @pytest.mark.asyncio
     async def test_strips_markdown_fences(self):
         """Should handle LLM responses wrapped in markdown code fences."""
-        from pnw_campsites.routes.recommendations import _enhance_rec_reasons
-
         results = [{"name": "Lake A", "state": "WA", "tags": ["lakeside"], "vibe": ""}]
         affinities = {"tags": {"lakeside": 3.0}, "states": {"WA": 5.0}}
 
@@ -963,11 +709,8 @@ class TestEnhanceRecReasons:
 
         assert reasons == ["Lakefront gem near Seattle"]
 
-    @pytest.mark.asyncio
     async def test_truncates_long_reasons(self):
         """Reasons longer than 80 chars should be truncated."""
-        from pnw_campsites.routes.recommendations import _enhance_rec_reasons
-
         results = [{"name": "Lake A", "state": "WA", "tags": ["lakeside"], "vibe": ""}]
         affinities = {"tags": {"lakeside": 3.0}, "states": {"WA": 5.0}}
 

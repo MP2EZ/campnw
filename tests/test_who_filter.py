@@ -9,14 +9,24 @@ from datetime import date
 
 import pytest
 
+from pnw_campsites.providers.reserveamerica import _record_to_campsite
 from pnw_campsites.registry.models import BookingSystem, SiteFit
-from pnw_campsites.search.engine import SearchQuery, _process_availability
+from pnw_campsites.routes import search as search_routes
+from pnw_campsites.search.engine import (
+    SearchQuery,
+    SearchResults,
+    _night_statuses,
+    _not_released_nights,
+    _process_availability,
+    enrich_wa_availability,
+)
 from pnw_campsites.search.who import fits_equipment, fits_party, fits_site_types
 from tests.conftest import (
     make_campground,
     make_campground_availability,
     make_campsite_availability,
 )
+from tests.test_provider_reserveamerica import _make_record
 
 TENT_ONLY = SiteFit(fits_tent=True, fits_van=False, fits_rv=False)
 RV_30 = SiteFit(fits_tent=True, fits_van=True, fits_rv=True, max_rv_ft=30)
@@ -133,24 +143,20 @@ def test_recgov_type_drives_equipment_filter() -> None:
 
 
 def test_ra_capacity_known_only_when_listed() -> None:
-    from pnw_campsites.providers.reserveamerica import _record_to_campsite
-    from tests.test_provider_reserveamerica import _make_record
 
     assert _record_to_campsite(_make_record(max_people="6"), {}).max_people_known
     assert not _record_to_campsite(_make_record(max_people=""), {}).max_people_known
 
 
 def test_wa_enrichment_makes_capacity_known(registry) -> None:
-    from pnw_campsites.search.engine import SearchEngine
-
     registry.bulk_upsert_wa_sites(
         "-9", [{"resource_id": -1, "name": "1", "loop_map_id": None, "max_capacity": 4,
                 "allowed_equipment": []}],
     )
     site = _site("-1", max_people=8, campsite_type="STANDARD")
     site.max_people_known = False
-    SearchEngine(registry=registry)._enrich_wa_availability(
-        "-9", make_campground_availability("-9", {"-1": site}),
+    enrich_wa_availability(
+        registry, "-9", make_campground_availability("-9", {"-1": site}),
     )
     assert (site.max_num_people, site.max_people_known) == (4, True)
 
@@ -165,7 +171,6 @@ class _CapturingEngine:
         self.queries: list[SearchQuery] = []
 
     async def search(self, query):
-        from pnw_campsites.search.engine import SearchResults
 
         self.queries.append(query)
         return SearchResults(query=query)
@@ -178,7 +183,6 @@ class _CapturingEngine:
 
 @pytest.fixture
 def engine(monkeypatch) -> _CapturingEngine:
-    from pnw_campsites.routes import search as search_routes
 
     fake = _CapturingEngine()
     monkeypatch.setattr(search_routes, "get_engine", lambda: fake)
@@ -207,7 +211,6 @@ def test_route_rejects_unknown_equipment(api_client, engine) -> None:
 
 
 def test_not_released_counts_only_fitting_sites_but_closed_ignores_who() -> None:
-    from pnw_campsites.search.engine import _night_statuses, _not_released_nights
 
     tent = make_campsite_availability(
         campsite_id="tent", dates_status={"2026-06-01T00:00:00.000Z": "NYR"},

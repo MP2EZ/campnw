@@ -63,7 +63,7 @@ def test_wrong_role_returns_none():
 
 
 def test_algorithm_none_rejected():
-    """Token signed with 'none' algorithm is rejected."""
+    """An unsigned token (alg: none) with otherwise valid claims is rejected."""
     payload = {
         "sub": str(uuid.uuid4()),
         "role": "authenticated",
@@ -71,9 +71,9 @@ def test_algorithm_none_rejected():
         "exp": datetime.now(UTC) + timedelta(hours=1),
         "iat": datetime.now(UTC),
     }
-    # Tamper with the token to simulate 'none' alg — just use a bad secret
-    bad_token = jwt.encode(payload, "wrong-secret", algorithm="HS256")
-    assert decode_supabase_jwt(bad_token) is None
+    unsigned = jwt.encode(payload, None, algorithm="none")
+    assert jwt.get_unverified_header(unsigned)["alg"] == "none"
+    assert decode_supabase_jwt(unsigned) is None
 
 
 def test_malformed_token_returns_none():

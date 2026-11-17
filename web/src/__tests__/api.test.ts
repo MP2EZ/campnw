@@ -13,7 +13,6 @@ vi.mock('../lib/supabase', () => ({
 }))
 
 import {
-  searchCampsites,
   searchCampsitesStream,
   STREAM_IDLE_MS,
   getWatches,
@@ -152,38 +151,14 @@ describe('API: Search stream always settles', () => {
 })
 
 describe('API: Search', () => {
-  test('searchCampsites constructs correct URL with required params', async () => {
+  test('searchCampsitesStream includes optional parameters in URL', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({
-        campgrounds_checked: 5,
-        campgrounds_with_availability: 2,
-        results: [],
-        warnings: [],
-      }),
-    })
-
-    const params: SearchParams = {
-      start_date: '2026-06-01',
-      end_date: '2026-06-30',
-    }
-    const result = await searchCampsites(params)
-
-    expect(mockFetch).toHaveBeenCalled()
-    const [url] = mockFetch.mock.calls[0]
-    expect(url).toContain('start_date=2026-06-01')
-    expect(url).toContain('end_date=2026-06-30')
-    expect(result.campgrounds_checked).toBe(5)
-  })
-
-  test('searchCampsites includes optional parameters in URL', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        campgrounds_checked: 0,
-        campgrounds_with_availability: 0,
-        results: [],
-        warnings: [],
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+          controller.close()
+        },
       }),
     })
 
@@ -203,7 +178,7 @@ describe('API: Search', () => {
       include_fcfs: true,
       limit: 50,
     }
-    await searchCampsites(params)
+    await searchCampsitesStream(params, vi.fn(), vi.fn(), vi.fn())
 
     const [url] = mockFetch.mock.calls[0]
     expect(url).toContain('state=WA')
@@ -218,17 +193,6 @@ describe('API: Search', () => {
     expect(url).toContain('no_groups=true')
     expect(url).toContain('include_fcfs=true')
     expect(url).toContain('limit=50')
-  })
-
-  test('searchCampsites throws on non-ok response', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false, status: 400,
-      json: async () => ({}),
-    })
-
-    await expect(
-      searchCampsites({ start_date: '2026-06-01', end_date: '2026-06-30' })
-    ).rejects.toThrow('Request failed: 400')
   })
 })
 
@@ -499,7 +463,7 @@ describe('API: Search History', () => {
   })
 })
 
-describe('API: Search who filter (v1.48 D5)', () => {
+describe('API: Search who filter', () => {
   const emptyStream = () => ({
     ok: true,
     body: new ReadableStream({
@@ -509,34 +473,25 @@ describe('API: Search who filter (v1.48 D5)', () => {
       },
     }),
   })
-  const searchJson = () => ({
-    ok: true,
-    json: async () => ({ campgrounds_checked: 0, campgrounds_with_availability: 0, results: [], warnings: [] }),
-  })
-  const run = async (kind: 'stream' | 'json', params: SearchParams) => {
-    if (kind === 'stream') {
-      mockFetch.mockResolvedValueOnce(emptyStream())
-      await searchCampsitesStream(params, vi.fn(), vi.fn(), vi.fn())
-    } else {
-      mockFetch.mockResolvedValueOnce(searchJson())
-      await searchCampsites(params)
-    }
+  const run = async (params: SearchParams) => {
+    mockFetch.mockResolvedValueOnce(emptyStream())
+    await searchCampsitesStream(params, vi.fn(), vi.fn(), vi.fn())
     return new URL(mockFetch.mock.calls[0][0], 'http://x').searchParams
   }
   const dates = { start_date: '2026-06-01', end_date: '2026-06-30' }
 
-  test.each(['stream', 'json'] as const)('%s sends people, equipment and trailer length', async (kind) => {
-    const q = await run(kind, { ...dates, people: 5, equipment: 'trailer', rig_length: 30 })
+  test('sends people, equipment and trailer length', async () => {
+    const q = await run({ ...dates, people: 5, equipment: 'trailer', rig_length: 30 })
     expect([q.get('people'), q.get('equipment'), q.get('rig_length')]).toEqual(['5', 'trailer', '30'])
   })
 
-  test.each(['stream', 'json'] as const)('%s sends no length for non-trailers', async (kind) => {
-    const q = await run(kind, { ...dates, equipment: 'van', rig_length: 30 })
+  test('sends no length for non-trailers', async () => {
+    const q = await run({ ...dates, equipment: 'van', rig_length: 30 })
     expect([q.get('equipment'), q.get('rig_length')]).toEqual(['van', null])
   })
 
-  test.each(['stream', 'json'] as const)('%s drops an unknown rig from the URL instead of failing', async (kind) => {
-    const q = await run(kind, { ...dates, people: 99, equipment: 'boat' })
+  test('drops an unknown rig from the URL instead of failing', async () => {
+    const q = await run({ ...dates, people: 99, equipment: 'boat' })
     expect([q.get('people'), q.get('equipment')]).toEqual([null, null])
   })
 })

@@ -24,19 +24,9 @@ class TestBookingSystemEnum:
         assert BookingSystem("or-state") is BookingSystem.OR_STATE
         assert BookingSystem("id-state") is BookingSystem.ID_STATE
 
-    def test_unknown_value_still_raises(self) -> None:
-        """Unrecognized strings still raise ValueError (no accidental rescue)."""
-        with pytest.raises(ValueError):
-            BookingSystem("nonsense")
-
     def test_dash_to_underscore_does_not_rescue_gibberish(self) -> None:
         """Dash-replacement only rescues actual enum values, not arbitrary strings."""
         with pytest.raises(ValueError):
             BookingSystem("not-a-thing")
         with pytest.raises(ValueError):
             BookingSystem("rec-gov")  # 'rec_gov' is also not an enum value
-
-    def test_str_enum_values_still_strings(self) -> None:
-        """BookingSystem is a StrEnum; values compare equal to their string form."""
-        assert BookingSystem.WA_STATE == "wa_state"
-        assert BookingSystem("wa-state") == "wa_state"

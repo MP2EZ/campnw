@@ -1,4 +1,4 @@
-"""Release reminders (v1.48 D9): a push on the morning a stay opens for booking.
+"""Release reminders: a push on the morning a stay opens for booking.
 
 A reminder is a watch with watch_type "release" and `releases_on`, the day its
 first night opens. The poller skips it. At 6:55 am Pacific that day the
@@ -12,8 +12,8 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Literal
-from zoneinfo import ZoneInfo
 
+from pnw_campsites.monitor.pacific import PACIFIC, pacific_now
 from pnw_campsites.posthog_client import capture_event
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.urls import availability_url
@@ -23,17 +23,11 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-PACIFIC = ZoneInfo("America/Los_Angeles")
-
 # Five minutes before Recreation.gov's 7:00 am PT release, so the camper is at
 # the booking page when it opens.
 REMIND_AT = time(6, 55)
 
 Action = Literal["wait", "push", "convert"]
-
-
-def pacific_now() -> datetime:
-    return datetime.now(PACIFIC)
 
 
 def reminder_action(releases_on: date, now: datetime) -> Action:

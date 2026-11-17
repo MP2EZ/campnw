@@ -7,7 +7,10 @@ lifespan.
 
 from __future__ import annotations
 
+import os
 import re
+import uuid
+from sqlite3 import IntegrityError
 
 from fastapi import Request
 from starlette.responses import Response
@@ -74,8 +77,6 @@ def get_current_user(request: Request) -> int | None:
         return user.id
 
     # Auto-provision local user on first authenticated request
-    from sqlite3 import IntegrityError
-
     from pnw_campsites.monitor.db import User
 
     try:
@@ -113,12 +114,8 @@ def get_current_user_obj(request: Request):
 
 def get_session_token(request: Request, response: Response) -> str:
     """Get or create a session token cookie for anonymous watch ownership."""
-    import uuid
-
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
-        import os
-
         token = str(uuid.uuid4())
         is_prod = bool(os.getenv("FLY_APP_NAME"))
         response.set_cookie(
