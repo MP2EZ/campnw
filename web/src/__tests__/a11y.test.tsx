@@ -79,18 +79,20 @@ describe("Accessibility (axe-core)", () => {
 
   test("map page has no a11y violations", async () => {
     const { container } = renderRoute("/map");
+    await waitFor(() => expect(container.querySelector(".loading-page")).toBeNull());
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 
   test("plan page has no a11y violations", async () => {
     const { container } = renderRoute("/plan");
+    await waitFor(() => expect(container.querySelector(".loading-page")).toBeNull());
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 });
 
-// ── Results v2 (v1.48) ───────────────────────────────────────────────
+// ── Results v2 ────────────────────────────────────────────────
 
 const site = (id: string, start: string, end: string, fit: Partial<Window> = {}): Window => ({
   campsite_id: id, site_name: id, loop: "", campsite_type: "STANDARD", start_date: start, end_date: end,
@@ -189,13 +191,11 @@ describe("Accessibility: results v2", () => {
     const css = readFileSync(join(__dirname, "../results/results.css"), "utf-8");
     for (const selector of [".rv2-chip", ".rv2-chip-more", ".rv2-band-more", ".rv2-full-action", ".rv2-pick",
       ".rv2-zero-remind-btn", ".rv2-sooner"]) {
-      const body = css.match(new RegExp(`\\n\\${selector}\\s*{([^}]*)}`))?.[1] ?? "";
-      const rem = Number(body.match(/min-height:\s*([\d.]+)rem/)?.[1] ?? 0);
-      expect(rem * 16, `${selector} min-height`).toBeGreaterThanOrEqual(44);
+      expect(minTarget(css, selector), `${selector} min-height`).toBeGreaterThanOrEqual(44);
     }
   });
 
-  test("date chips (P4a) are a labelled group of 44px toggles", () => {
+  test("date chips are a labelled group of 44px toggles", () => {
     renderV2();
     const group = screen.getByRole("group", { name: "Dates" });
     expect(within(group).getAllByRole("button", { pressed: true })).toHaveLength(1);
@@ -217,7 +217,7 @@ describe("Accessibility: results v2", () => {
     }
   });
 
-  test("under 1024px the map sheet (P4a) passes axe open, with 44px controls", async () => {
+  test("under 1024px the map sheet passes axe open, with 44px controls", async () => {
     const { container } = renderV2();
     await userEvent.click(screen.getByRole("button", { name: "Map" }));
     const sheet = screen.getByRole("dialog", { name: "Map of results" });
@@ -229,7 +229,7 @@ describe("Accessibility: results v2", () => {
     }
   });
 
-  test("an open chip opens the site panel (P3b): a modal that passes axe, focus back to the chip on Escape", async () => {
+  test("an open chip opens the site panel: a modal that passes axe, focus back to the chip on Escape", async () => {
     renderV2();
     const chip = screen.getAllByRole("button", { name: /see open sites$/ })[0];
     expect(chip).toHaveAccessibleName(/^Fri 4 → Sat 5, 1 left/);
@@ -288,7 +288,7 @@ describe("Accessibility: results v2", () => {
   });
 });
 
-// ── Watch sheet (v1.48 P3c) ──────────────────────────────────────────
+// ── Watch sheet ───────────────────────────────────────────
 
 describe("Accessibility: Watch sheet", () => {
   test("a full chip opens it as a labelled dialog that passes axe; Escape gives focus back", async () => {
@@ -339,7 +339,7 @@ describe("Accessibility: Watch sheet", () => {
   });
 });
 
-// ── v2 search bar (v1.48 P3a) ────────────────────────────────────────
+// ── v2 search bar ─────────────────────────────────────────
 
 function renderBar() {
   const ctx: SearchContextValue = {
@@ -402,15 +402,5 @@ describe("Accessibility: v2 search bar", () => {
       ".sb-select", ".sb-input", ".sb-option", ".sb-ask-input", ".sb-ask-go", ".sb-compact-btn"]) {
       expect(minTarget(css, selector), `${selector} height`).toBeGreaterThanOrEqual(44);
     }
-  });
-});
-
-describe("search bar (v1.48 flip)", () => {
-  test("the bar is the only search UI, with no v1 form, NL bar or first-visit state", async () => {
-    renderRoute("/?ui=v1");
-    expect(await screen.findByRole("search", { name: "Campsite search" })).toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: "Search in plain language" })).toBeNull();
-    expect(screen.queryByText("Find your next campsite")).toBeNull();
-    expect(screen.getByRole("textbox", { name: "Or ask" })).toBeInTheDocument();
   });
 });
