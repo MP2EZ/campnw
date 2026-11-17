@@ -1,14 +1,3 @@
-/**
- * Pricing page (/pricing) — v1.4 monetization.
- *
- * Single source of truth for the Free vs Pro comparison. Linked from
- * UpgradeModal, footer, and SEO upgrade CTAs. Reads billing status
- * from useBilling so the CTA reflects the user's current tier:
- *   - Anonymous: "Sign in to upgrade"
- *   - Free + logged in: "Upgrade to Pro" (starts Stripe Checkout)
- *   - Pro: "Manage billing" (opens Stripe Portal)
- */
-
 import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "../hooks/useAuth";
@@ -39,10 +28,8 @@ export default function Pricing() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fire once on mount. Keyed on isPro it double-fired for every Pro
-    // visitor (false while billing status was in flight, then true), so the
-    // pricing -> upgrade denominator was inflated by the one segment that
-    // structurally cannot convert. Tier is a person property now (#132).
+    // Fire once on mount: keyed on isPro it double-fires for Pro visitors
+    // (false while billing status is in flight, then true). Tier is a person property.
     track("pricing_page_viewed", { referrer_path: document.referrer || "" });
   }, []);
 

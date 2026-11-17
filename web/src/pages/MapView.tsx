@@ -30,19 +30,11 @@ const PIN_COLOR_TOKENS: Record<string, string> = {
   id_state: "--src-id-border",
 };
 
-const PIN_COLOR_FALLBACKS: Record<string, string> = {
-  recgov: "#5a8a32",
-  wa_state: "#3498b0",
-  or_state: "#d4920a",
-  id_state: "#7d3cb5",
-};
-
 function getPinColors(): Record<string, string> {
   const style = getComputedStyle(document.documentElement);
   const colors: Record<string, string> = {};
   for (const [key, token] of Object.entries(PIN_COLOR_TOKENS)) {
-    const val = style.getPropertyValue(token).trim();
-    colors[key] = val || PIN_COLOR_FALLBACKS[key];
+    colors[key] = style.getPropertyValue(token).trim();
   }
   return colors;
 }

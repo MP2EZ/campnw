@@ -1,11 +1,4 @@
-/**
- * UpgradeModal — shown when a free user hits an entitlement gate
- * (e.g., 4th watch creation) OR clicks "Upgrade to Pro" voluntarily.
- *
- * Reuses the watch-overlay / watch-panel chrome from AuthModal for
- * visual consistency. Focus trap + ESC handler match that component's
- * a11y pattern so screen-reader behavior is uniform across modals.
- */
+/** Shown when a free user hits an entitlement gate or clicks "Upgrade to Pro". */
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
@@ -54,7 +47,7 @@ export function UpgradeModal({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  // Initial focus + ESC + focus trap (mirrors AuthModal).
+  // Initial focus + ESC + focus trap.
   useEffect(() => {
     if (open && closeRef.current) closeRef.current.focus();
   }, [open]);
@@ -87,7 +80,7 @@ export function UpgradeModal({
 
   useEffect(() => {
     if (open) {
-      track("upgrade_modal_shown", { reason, ...(contextInfo || {}) });
+      track("upgrade_modal_shown", { reason, ...contextInfo });
     }
     // contextInfo is intentionally not in deps — fire once per open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,7 +95,7 @@ export function UpgradeModal({
   const handleUpgrade = async () => {
     setError(null);
     setSubmitting(true);
-    track("upgrade_clicked", { reason, ...(contextInfo || {}) });
+    track("upgrade_clicked", { reason, ...contextInfo });
     try {
       await startCheckout();
       // Redirect happens inside startCheckout → no further code runs
