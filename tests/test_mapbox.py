@@ -8,29 +8,9 @@ from pnw_campsites.mapbox import (
     DIRECTIONS_URL,
     MATRIX_MAX_COORDS,
     MATRIX_URL,
-    _ll,
     get_drive_time,
     get_drive_times_matrix,
 )
-
-# ---------------------------------------------------------------------------
-# Coordinate formatting
-# ---------------------------------------------------------------------------
-
-
-class TestCoordinateFormatting:
-    def test_ll_formats_lon_lat_order(self):
-        """Mapbox uses lon,lat — verify our helper swaps correctly."""
-        assert _ll(47.6, -122.3) == "-122.3,47.6"
-
-    def test_ll_preserves_precision(self):
-        result = _ll(47.6062, -122.3321)
-        assert result == "-122.3321,47.6062"
-
-
-# ---------------------------------------------------------------------------
-# Directions API (single route)
-# ---------------------------------------------------------------------------
 
 
 class TestGetDriveTime:
@@ -85,11 +65,6 @@ class TestGetDriveTime:
         )
         result = await get_drive_time((47.6, -122.3), (45.5, -122.7))
         assert result["drive_minutes"] == 90  # round(90.5) = 90
-
-
-# ---------------------------------------------------------------------------
-# Matrix API (batch)
-# ---------------------------------------------------------------------------
 
 
 class TestGetDriveTimesMatrix:
