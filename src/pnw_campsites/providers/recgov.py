@@ -35,7 +35,6 @@ class RecGovClient:
     """Async client for Recreation.gov APIs."""
 
     def __init__(self, ridb_api_key: str) -> None:
-        self._ridb_api_key = ridb_api_key
         self._ridb_client = httpx.AsyncClient(
             base_url=RIDB_BASE,
             headers={"accept": "application/json", "apikey": ridb_api_key},
