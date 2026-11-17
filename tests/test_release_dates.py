@@ -6,6 +6,8 @@ from datetime import date
 
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.search.release import (
+    NotReleasedRange,
+    not_released_ranges,
     recgov_release_date,
     release_date,
     wa_release_date,
@@ -107,16 +109,12 @@ class TestNotReleasedRanges:
     """
 
     def test_consecutive_nights_make_one_range(self) -> None:
-        from pnw_campsites.search.release import NotReleasedRange, not_released_ranges
-
         nights = [date(2027, 6, d) for d in (4, 5, 6)]
         assert not_released_ranges(nights, BookingSystem.RECGOV, date(2026, 11, 7)) == [
             NotReleasedRange(date(2027, 6, 4), date(2027, 6, 6), date(2026, 12, 4)),
         ]
 
     def test_a_gap_starts_a_new_range(self) -> None:
-        from pnw_campsites.search.release import not_released_ranges
-
         nights = [date(2027, 6, 4), date(2027, 6, 5), date(2027, 6, 11)]
         ranges = not_released_ranges(nights, BookingSystem.RECGOV, date(2026, 11, 7))
         assert [(r.start.day, r.end.day, r.releases_on) for r in ranges] == [
@@ -125,8 +123,6 @@ class TestNotReleasedRanges:
 
     def test_month_end_clamping_splits_the_range(self) -> None:
         # Aug 28-31 all open on Feb 28, so offsets stop holding after Aug 28.
-        from pnw_campsites.search.release import not_released_ranges
-
         nights = [date(2027, 8, d) for d in (27, 28, 29, 30, 31)]
         ranges = not_released_ranges(nights, BookingSystem.RECGOV, date(2026, 11, 7))
         assert [(r.start.day, r.end.day, r.releases_on) for r in ranges] == [
@@ -137,13 +133,9 @@ class TestNotReleasedRanges:
         ]
 
     def test_no_rule_gives_ranges_without_dates(self) -> None:
-        from pnw_campsites.search.release import not_released_ranges
-
         nights = [date(2027, 6, 4), date(2027, 6, 5)]
         ranges = not_released_ranges(nights, BookingSystem.OR_STATE, date(2026, 11, 7))
         assert [(r.start.day, r.end.day, r.releases_on) for r in ranges] == [(4, 5, None)]
 
     def test_nothing_unreleased(self) -> None:
-        from pnw_campsites.search.release import not_released_ranges
-
         assert not_released_ranges([], BookingSystem.RECGOV, date(2026, 11, 7)) == []

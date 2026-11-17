@@ -12,8 +12,6 @@ import json
 from datetime import date
 from unittest.mock import AsyncMock
 
-import pytest
-
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.search.engine import (
     SearchEngine,
@@ -49,13 +47,11 @@ def _seed(registry, n: int, base: int, **overrides) -> None:
 
 
 class TestEngineCoverage:
-    @pytest.mark.asyncio
     async def test_matched_is_the_pool_before_the_cap(self, registry) -> None:
         _seed(registry, 12, 1000)
         results = await _engine(registry).search(_query(max_campgrounds=5))
         assert (results.campgrounds_checked, results.campgrounds_matched) == (5, 12)
 
-    @pytest.mark.asyncio
     async def test_matched_is_counted_after_distance_filtering(
         self, registry,
     ) -> None:
@@ -69,7 +65,6 @@ class TestEngineCoverage:
 
         assert (results.campgrounds_checked, results.campgrounds_matched) == (2, 3)
 
-    @pytest.mark.asyncio
     async def test_uncapped_search_has_matched_equal_checked(
         self, registry,
     ) -> None:
@@ -77,7 +72,6 @@ class TestEngineCoverage:
         results = await _engine(registry).search(_query(max_campgrounds=20))
         assert results.campgrounds_matched == results.campgrounds_checked == 3
 
-    @pytest.mark.asyncio
     async def test_cap_is_per_source_so_checked_can_exceed_the_limit(
         self, registry,
     ) -> None:
@@ -92,14 +86,12 @@ class TestEngineCoverage:
 
         assert (results.campgrounds_checked, results.campgrounds_matched) == (4, 6)
 
-    @pytest.mark.asyncio
     async def test_no_matches_reports_zero(self, registry) -> None:
         results = await _engine(registry).search(_query(name_like="nowhere"))
         assert (results.campgrounds_checked, results.campgrounds_matched) == (0, 0)
 
 
 class TestStreamCoverage:
-    @pytest.mark.asyncio
     async def test_stream_reports_matched_and_checked(self, registry) -> None:
         _seed(registry, 8, 6000)
         items = [i async for i in _engine(registry).search_stream(
@@ -109,7 +101,6 @@ class TestStreamCoverage:
         assert [(c.campgrounds_matched, c.campgrounds_checked)
                 for c in coverage] == [(8, 3)]
 
-    @pytest.mark.asyncio
     async def test_stream_reports_coverage_when_nothing_matches(
         self, registry,
     ) -> None:

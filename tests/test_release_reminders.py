@@ -1,15 +1,19 @@
-"""Release reminders (v1.48 P3d, D9): the watch type, its dates and the API."""
+"""Release reminders: the watch type, its dates and the API."""
 
 from __future__ import annotations
 
 import sqlite3
 from datetime import date, datetime
+from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from pnw_campsites.monitor import reminders
 from pnw_campsites.monitor.db import Watch, WatchDB
 from pnw_campsites.monitor.reminders import PACIFIC, release_problem, reminder_action
+from pnw_campsites.monitor.watcher import poll_all
+from pnw_campsites.providers.recgov import RecGovClient
 from tests.conftest import signup_and_auth
 
 
@@ -35,8 +39,6 @@ class TestReminderAction:
         assert reminder_action(RELEASE, _pt(2026, 11, 22, 6, 55)) == "convert"
 
     def test_reads_the_clock_in_pacific_time(self):
-        from zoneinfo import ZoneInfo
-
         # 14:55 UTC on Nov 21 is 06:55 PST.
         utc = datetime(2026, 11, 21, 14, 55, tzinfo=ZoneInfo("UTC"))
         assert reminder_action(RELEASE, utc) == "push"
@@ -96,13 +98,7 @@ class TestReleaseWatchStorage:
             db.close()
 
 
-@pytest.mark.asyncio
 async def test_poller_skips_reminders(watch_db: WatchDB):
-    from unittest.mock import AsyncMock
-
-    from pnw_campsites.monitor.watcher import poll_all
-    from pnw_campsites.providers.recgov import RecGovClient
-
     watch_db.add_watch(Watch(
         facility_id="232465", start_date="2027-05-21", end_date="2027-05-22",
         watch_type="release", releases_on="2026-11-21",
