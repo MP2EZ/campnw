@@ -1,4 +1,4 @@
-"""Watch site filters (v1.48 P3c): party, rig and site type, as the search's `who`."""
+"""Watch site filters (party, rig and site type), as the search's `who`."""
 
 from __future__ import annotations
 

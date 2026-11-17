@@ -1,4 +1,4 @@
-"""Per-window booking links and capacity for the v1.48 site panel (P3b).
+"""Per-window booking links and capacity for the site panel.
 
 A window's end_date is its last night. Booking sites want the checkout day,
 so every per-site link sends end_date + 1.
