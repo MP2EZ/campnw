@@ -13,6 +13,7 @@ from datetime import date
 from unittest.mock import AsyncMock
 
 from pnw_campsites.registry.models import BookingSystem
+from pnw_campsites.routes import search as search_routes
 from pnw_campsites.search.engine import (
     SearchEngine,
     SearchQuery,
@@ -118,8 +119,6 @@ class TestCoverageOverHttp:
     def test_search_endpoint_returns_campgrounds_matched(
         self, api_client, monkeypatch,
     ) -> None:
-        from pnw_campsites.routes import search as search_routes
-
         class FakeEngine:
             async def search(self, query):
                 return SearchResults(
@@ -133,8 +132,6 @@ class TestCoverageOverHttp:
     def test_stream_carries_a_coverage_frame(
         self, api_client, monkeypatch,
     ) -> None:
-        from pnw_campsites.routes import search as search_routes
-
         async def fake_stream(query):
             yield StreamCoverageEvent(campgrounds_matched=46, campgrounds_checked=20)
 

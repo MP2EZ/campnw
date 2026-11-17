@@ -1,5 +1,7 @@
 """Tests for availability history compaction and change detection."""
 
+from datetime import date, timedelta
+
 from pnw_campsites.analytics.patterns import get_availability_summary
 from pnw_campsites.monitor.db import WatchDB
 
@@ -52,7 +54,6 @@ def test_patterns_reads_from_daily_table(tmp_path):
     """patterns.py should work with availability_daily, not raw history."""
     db = WatchDB(str(tmp_path / "test.db"))
 
-    from datetime import date, timedelta
     base = date(2026, 6, 1)
     for i in range(31):
         d = base + timedelta(days=i)
