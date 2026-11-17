@@ -18,13 +18,12 @@ async function openModal(page: Page) {
 
 /**
  * Sign up a fresh user. Email is timestamped per run so concurrent runs
- * don't collide. Returns the email used so tests can log it.
+ * don't collide.
  */
 export async function signupFresh(
   page: Page,
-  opts: { displayName?: string; password?: string } = {},
-): Promise<string> {
-  const password = opts.password ?? "PlaywrightE2E2026!";
+  opts: { displayName?: string } = {},
+): Promise<void> {
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const email = `e2e-fresh-${stamp}@maestro.test`;
 
@@ -35,7 +34,7 @@ export async function signupFresh(
     await page.getByTestId("display-name-input").fill(opts.displayName);
   }
   await page.getByTestId("email-input").fill(email);
-  await page.getByTestId("password-input").fill(password);
+  await page.getByTestId("password-input").fill("PlaywrightE2E2026!");
   await page.getByRole("button", { name: "Create account" }).click();
 
   // Wait for the AUTH modal specifically to close. After successful
@@ -46,7 +45,6 @@ export async function signupFresh(
     page.getByRole("dialog", { name: /Sign in|Create account/ }),
   ).toBeHidden({ timeout: 30_000 });
   await skipOnboarding(page);
-  return email;
 }
 
 /** Log in as a pre-seeded fixture user (created by scripts/seed_e2e_fixtures.py). */

@@ -47,7 +47,7 @@ import { FrameLocator, Page, expect } from "@playwright/test";
  *   - Submit: `data-testid="payment-form-submit-button"`, text "Subscribe".
  */
 
-const DEFAULTS = {
+const CARD = {
   cardNumber: "4242424242424242",
   cardExpiry: "12 / 30",
   cardCvc: "123",
@@ -56,17 +56,10 @@ const DEFAULTS = {
   phone: "2065551234",
 };
 
-type CardValues = typeof DEFAULTS;
-
 const EMBEDDED_FORM_FRAME =
   'iframe[title="Secure embedded form frame"], iframe[title="Secure payment input frame"]';
 
-export async function payWithCard(
-  page: Page,
-  overrides: Partial<CardValues> = {},
-): Promise<void> {
-  const values = { ...DEFAULTS, ...overrides };
-
+export async function payWithCard(page: Page): Promise<void> {
   const topPageCard = page.getByTestId("card-accordion-item");
   // .first(): only the iframe variant has a frame with these titles today,
   // but a strict-mode error here would sink the top-page path too.
@@ -84,13 +77,13 @@ export async function payWithCard(
   console.log(`Stripe Checkout variant: ${variant}`);
 
   if (variant === "iframe") {
-    await payInEmbeddedForm(form, values);
+    await payInEmbeddedForm(form);
   } else {
-    await payOnTopPage(page, values);
+    await payOnTopPage(page);
   }
 }
 
-async function payOnTopPage(page: Page, values: CardValues): Promise<void> {
+async function payOnTopPage(page: Page): Promise<void> {
   // Expand the Card item. Not the "Pay with card" button — that only becomes
   // the action button after the form is filled.
   await page.getByTestId("card-accordion-item").click();
@@ -99,17 +92,17 @@ async function payOnTopPage(page: Page, values: CardValues): Promise<void> {
   // doesn't accidentally hit info icons or country-code comboboxes that
   // share label substrings (e.g., a "CVC" info image, a "Phone number
   // country code" combobox).
-  await page.getByRole("textbox", { name: "Card number" }).fill(values.cardNumber);
-  await page.getByRole("textbox", { name: "Expiration" }).fill(values.cardExpiry);
-  await page.getByRole("textbox", { name: "CVC" }).fill(values.cardCvc);
-  await page.getByRole("textbox", { name: "Cardholder name" }).fill(values.cardholderName);
-  await page.getByRole("textbox", { name: "ZIP" }).fill(values.zip);
-  await page.getByRole("textbox", { name: "Phone number", exact: true }).fill(values.phone);
+  await page.getByRole("textbox", { name: "Card number" }).fill(CARD.cardNumber);
+  await page.getByRole("textbox", { name: "Expiration" }).fill(CARD.cardExpiry);
+  await page.getByRole("textbox", { name: "CVC" }).fill(CARD.cardCvc);
+  await page.getByRole("textbox", { name: "Cardholder name" }).fill(CARD.cardholderName);
+  await page.getByRole("textbox", { name: "ZIP" }).fill(CARD.zip);
+  await page.getByRole("textbox", { name: "Phone number", exact: true }).fill(CARD.phone);
 
   await page.getByRole("button", { name: "Subscribe" }).click();
 }
 
-async function payInEmbeddedForm(form: FrameLocator, values: CardValues): Promise<void> {
+async function payInEmbeddedForm(form: FrameLocator): Promise<void> {
   const card = form.locator('[role=button][data-value="card"]');
   // Clicking an already-open accordion item may collapse it.
   if ((await card.getAttribute("aria-expanded")) !== "true") {
@@ -117,11 +110,11 @@ async function payInEmbeddedForm(form: FrameLocator, values: CardValues): Promis
   }
   await expect(card).toHaveAttribute("aria-expanded", "true");
 
-  await form.getByRole("textbox", { name: "Card number" }).fill(values.cardNumber);
-  await form.getByRole("textbox", { name: /^Expiration/ }).fill(values.cardExpiry);
-  await form.getByRole("textbox", { name: "Security code" }).fill(values.cardCvc);
-  await form.getByRole("textbox", { name: "Name on card" }).fill(values.cardholderName);
-  await form.getByRole("textbox", { name: /^ZIP/ }).fill(values.zip);
+  await form.getByRole("textbox", { name: "Card number" }).fill(CARD.cardNumber);
+  await form.getByRole("textbox", { name: /^Expiration/ }).fill(CARD.cardExpiry);
+  await form.getByRole("textbox", { name: "Security code" }).fill(CARD.cardCvc);
+  await form.getByRole("textbox", { name: "Name on card" }).fill(CARD.cardholderName);
+  await form.getByRole("textbox", { name: /^ZIP/ }).fill(CARD.zip);
 
   const saveInfo = form.getByRole("checkbox", { name: /Save my information/ });
   if (await saveInfo.isVisible()) {
