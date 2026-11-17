@@ -1,11 +1,11 @@
 import { useState } from "react";
 import type { CampgroundResult, SearchParams } from "../api";
+import { plural } from "../lib/plural";
 import { groupByDriveBand, type DriveBand } from "./bands";
 import { CampgroundCard } from "./CampgroundCard";
 
 const BAND_LIMIT = 5;
 
-const places = (n: number) => `${n} place${n === 1 ? "" : "s"}`;
 
 function moreLabel(band: DriveBand, n: number): string {
   if (band.key === "h0") return `Show ${n} more under 1 hour`;
@@ -48,7 +48,7 @@ function Band({ band, params, firstRank, reveal }: {
     <section className="rv2-band" aria-labelledby={id}>
       <div className="rv2-band-head">
         <h2 id={id} className="rv2-band-title">{band.title}</h2>
-        <span className="rv2-band-count">{places(band.results.length)}</span>
+        <span className="rv2-band-count">{plural(band.results.length, "place")}</span>
         <span className="rv2-band-rule" aria-hidden="true" />
       </div>
       {body}
@@ -57,7 +57,7 @@ function Band({ band, params, firstRank, reveal }: {
 }
 
 /**
- * Open places by drive time (D13's bands): under 1 hour, 1–2 hours, …, then
+ * Open places by drive time: under 1 hour, 1–2 hours, …, then
  * boat-in places, which have no drive time to the site. Ranks for analytics
  * follow the order on screen.
  */

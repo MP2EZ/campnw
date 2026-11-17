@@ -19,7 +19,7 @@ export interface SelectionStore {
 const NONE: Selection = { id: null, from: null };
 
 /**
- * The place selected across the v2 list and map (D13). A store rather than
+ * The place selected across the v2 list and map. A store rather than
  * React state, so hovering a card re-renders that card and the map, not the
  * whole list.
  */

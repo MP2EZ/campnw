@@ -4,8 +4,9 @@ import { track, type SearchParams } from "../api";
 import type { SearchMode } from "../hooks/useSearch";
 import { useSearchContext } from "../contexts/SearchContext";
 import { IconSearch } from "../icons";
+import { todayIso } from "../lib/dates";
 import {
-  barToParams, compactLabel, DEFAULT_BAR, driveLabel, EDIT_DATES_EVENT, localToday, paramsToBar, whenLabel, whereLabel, whoLabel,
+  barToParams, compactLabel, DEFAULT_BAR, driveLabel, EDIT_DATES_EVENT, paramsToBar, whenLabel, whereLabel, whoLabel,
   type BarState,
 } from "./searchState";
 import { DrivePanel, WhenPanel, WhoPanel, type PanelProps } from "./SearchPanels";
@@ -139,7 +140,7 @@ function CompactBar({ bar, panelProps, open, onOpen, close }: {
   );
 }
 
-/** The plain-language box. It sits under the header, apart from the bar (P4b). */
+/** The plain-language box. It sits under the header, apart from the bar. */
 export function AskForm({ onAsk }: { onAsk: (q: string) => void }) {
   const [value, setValue] = useState("");
   const id = useId();
@@ -161,14 +162,14 @@ export function AskForm({ onAsk }: { onAsk: (q: string) => void }) {
 }
 
 /**
- * The v2 search bar (v1.48 P3a): Where / When / Who / Drive segments over a
+ * The v2 search bar: Where / When / Who / Drive segments over a
  * draft of the search, with a popover each on desktop and one sheet on
  * mobile. It shows the current search, and follows it when a new one runs
  * (Back, a shared link, or what a plain-language question was parsed into).
  */
 export default function SearchBar({ onSearch, userDefaults }: Props) {
   const { searchParams } = useSearchContext();
-  const today = localToday();
+  const today = todayIso();
   const fromSearch = useCallback(
     (p: SearchParams | null): BarState => p ? paramsToBar(p, today) : {
       ...DEFAULT_BAR,

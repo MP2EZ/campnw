@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import type { CampgroundResult, SearchParams } from "../api";
 import { formatDriveTime } from "../lib/dates";
 import { displayName } from "../lib/displayName";
+import { plural } from "../lib/plural";
 import { IconClose, IconExternal } from "../icons";
 import { FEW_LEFT, type WindowChip } from "./chips";
 import { BOOKING_SITES, handoffCopy, stayLabel } from "./handoff";
@@ -16,13 +17,13 @@ interface Props {
   /** Gets focus back when the panel closes: the chip that opened it. */
   returnFocus: HTMLElement | null;
   onClose: () => void;
-  onBook: (site: PanelSite, sites: number) => void;
+  onBook: (site: PanelSite) => void;
 }
 
 const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):checked, input:not([type="radio"]):not([disabled])';
 
 /**
- * The open sites behind one chip (v1.48 P3b): a modal dialog, a side panel
+ * The open sites behind one chip: a modal dialog, a side panel
  * on wide screens and a bottom sheet on phones. Pick a site, then "Book on
  * <booking site>" opens that site's page in a new tab; the copy under the
  * button says what that site fills in.
@@ -95,7 +96,7 @@ export function SitePanel({ result, chip, params, returnFocus, onClose, onBook }
         <div className="rv2-panel-body">
           <p className={few ? "rv2-panel-count is-few" : "rv2-panel-count"}>
             {few && <span className="rv2-chip-dot" aria-hidden="true" />}
-            <span><strong>{count} site{count === 1 ? "" : "s"} {few ? "left" : "open"}</strong> for these nights. Pick one to book.</span>
+            <span><strong>{plural(count, "site")} {few ? "left" : "open"}</strong> for these nights. Pick one to book.</span>
           </p>
           {groups.map((g) => (
             <fieldset key={g.kind} className="rv2-panel-group">
@@ -137,7 +138,7 @@ export function SitePanel({ result, chip, params, returnFocus, onClose, onBook }
         <div className="rv2-panel-foot">
           {site?.href ? (
             <a className="rv2-panel-book" href={site.href} target="_blank" rel="noopener"
-              onClick={() => onBook(site, count)}>
+              onClick={() => onBook(site)}>
               Book on {where}<IconExternal className="icon" />
               <span className="sr-only">, site {site.name} (opens in a new tab)</span>
             </a>

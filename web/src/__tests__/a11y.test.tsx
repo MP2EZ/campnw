@@ -12,6 +12,7 @@ import { SearchContext, type SearchContextValue } from "../contexts/SearchContex
 import type { CampgroundResult, Window } from "../api";
 import { CampgroundCard } from "../results/CampgroundCard";
 import { createSelectionStore, SelectionContext } from "../results/selection";
+import { WatchContext } from "../results/watchContext";
 
 expect.extend(toHaveNoViolations);
 
@@ -268,9 +269,11 @@ describe("Accessibility: results v2", () => {
   test("hovering or focusing a card selects it for the map; a pin's card is marked", () => {
     const store = createSelectionStore();
     const { container } = render(
-      <SelectionContext.Provider value={store}>
-        <CampgroundCard result={v2Place("1", "Dash Point State Park", 48)} params={null} rank={0} />
-      </SelectionContext.Provider>,
+      <WatchContext.Provider value={() => {}}>
+        <SelectionContext.Provider value={store}>
+          <CampgroundCard result={v2Place("1", "Dash Point State Park", 48)} params={null} rank={0} />
+        </SelectionContext.Provider>
+      </WatchContext.Provider>,
     );
     const card = container.querySelector("article")!;
     fireEvent.mouseEnter(card);

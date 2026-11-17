@@ -1,12 +1,13 @@
 import type { CampgroundResult, SearchParams, SearchResponse } from "../api";
 import { formatDateRange, parseIsoDate } from "../lib/dates";
+import { plural } from "../lib/plural";
 import { SOURCE_NAMES } from "../lib/sources";
 import {
   addDays, candidateStatus, candidateWindows, fullGroupTitle, nightsIn, searchedDays, unavailability,
 } from "./candidates";
 import { hours } from "./searchState";
 
-/** The zero-results page (design: Zero.dc.html), from the checked places with nothing to book. */
+/** The zero-results page, from the checked places with nothing to book. */
 
 export interface TimelineItem {
   /** "Jun 4 – 6", or "Arrive Tue Jun 1" for a flexible search. */
@@ -41,7 +42,6 @@ export interface SoonerOption {
 }
 
 const daysBetween = (a: string, b: string) => nightsIn(a, b) - 1;
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /**
  * "Or camp sooner": other searches worth one tap, each from data the search
@@ -140,7 +140,7 @@ export function zeroLede(results: SearchResponse, places: CampgroundResult[], p:
   // The answer counts every campground checked, including ones whose check
   // failed, so a smaller count here says "of the N" rather than contradict it.
   const checked = results.campgrounds_checked;
-  const counted = (noun: string) => (n < checked ? `${n} of the ${checked} ${noun}s` : `The ${n} ${noun}${n === 1 ? "" : "s"}`);
+  const counted = (noun: string) => (n < checked ? `${n} of the ${checked} ${noun}s` : `The ${plural(n, noun)}`);
   if (n > 0 && nyr === n) {
     const systems = new Set(places.map((r) => r.booking_system));
     const source = systems.size === 1 ? `${SOURCE_NAMES[[...systems][0]] ?? ""} ` : "";

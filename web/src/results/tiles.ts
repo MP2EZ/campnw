@@ -10,7 +10,7 @@ const OSM_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright">Ope
 const MAPBOX_STYLES: Record<Theme, string> = { light: "light-v11", dark: "dark-v11" };
 
 /**
- * Map tiles (D13). A public Mapbox token (VITE_PUBLIC_MAPBOX_TOKEN, baked in
+ * Map tiles. A public Mapbox token (VITE_PUBLIC_MAPBOX_TOKEN, baked in
  * at build time) gets a Mapbox style per theme. Without one, OpenStreetMap's
  * tiles, which results-map CSS tones down to fit the palette.
  */

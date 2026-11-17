@@ -1,11 +1,12 @@
 import type { CampgroundResult, SearchParams } from "../api";
 import { formatDateRange, formatDriveTime, parseIsoDate } from "../lib/dates";
+import { plural } from "../lib/plural";
 import { candidateStatus, candidateWindows, searchedDays } from "./candidates";
 
 /**
- * Quick picks: three ways into the results, each chosen from the data alone
- * (D6 dropped the AI summary). Closest, most open, and a setting worth
- * naming, each a different place. No urgency wording.
+ * Quick picks: three ways into the results, each chosen from the data alone.
+ * Closest, most open, and a setting worth naming, each a different place.
+ * No urgency wording.
  */
 export interface QuickPick {
   kicker: string;
@@ -15,7 +16,7 @@ export interface QuickPick {
 
 /**
  * Fewer open places than this and the list is short enough to scan: picks
- * would only repeat it above itself (UX #13).
+ * would only repeat it above itself.
  */
 export const MIN_PLACES = 6;
 
@@ -38,7 +39,7 @@ function openBlocks(r: CampgroundResult, p: SearchParams | null): { open: number
   return { open: open.length, of: candidates.length, only: open.length === 1 ? formatDateRange(open[0].start, open[0].end) : null };
 }
 
-const sitesOpen = (n: number) => `${n} site${n === 1 ? "" : "s"} open`;
+const sitesOpen = (n: number) => `${plural(n, "site")} open`;
 
 function openSummary(r: CampgroundResult, p: SearchParams | null, weekends: boolean): string {
   if (p?.mode === "exact") return sitesOpen(r.total_available_sites);

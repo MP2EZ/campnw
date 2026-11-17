@@ -1,8 +1,9 @@
 import { parseIsoDate } from "../lib/dates";
+import { plural } from "../lib/plural";
 import { addDays, nightsIn } from "./candidates";
 
 /**
- * Hand-off to the booking site (v1.48 P3b): the link for the nights a site
+ * Hand-off to the booking site: the link for the nights a site
  * has, and what happens after "Book on …". Dates are nights; links get the
  * checkout day after the last night.
  */
@@ -55,7 +56,7 @@ const dayName = (iso: string) => parseIsoDate(iso)
 /** "Fri Jun 18 → Sun Jun 20 · 2 nights": arrival to checkout. */
 export function stayLabel(start: string, lastNight: string): string {
   const n = nightsIn(start, lastNight);
-  return `${dayName(start)} → ${dayName(addDays(lastNight, 1))} · ${n} night${n === 1 ? "" : "s"}`;
+  return `${dayName(start)} → ${dayName(addDays(lastNight, 1))} · ${plural(n, "night")}`;
 }
 
 /** "Jun 18–20", "Jun 30–Jul 2": arrival to checkout, compact. */

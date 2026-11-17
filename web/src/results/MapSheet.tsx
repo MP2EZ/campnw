@@ -19,7 +19,7 @@ const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), [tabi
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 /**
- * The results map on phones and tablets (D10): a "Map" button that opens a
+ * The results map on phones and tablets: a "Map" button that opens a
  * bottom sheet. The sheet is a CSS scroll-snap scroller: dragging it snaps to
  * half height, full height or closed, with no gesture code. The handle is a
  * real button (half ↔ full) and Close and Escape work from the keyboard. The

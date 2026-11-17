@@ -5,7 +5,7 @@ import { stayText } from "./chips";
 import type { Equipment } from "./searchState";
 
 /**
- * Per-weekend watches (v1.48 D8): what the Watch sheet can watch at a place,
+ * Per-weekend watches: what the Watch sheet can watch at a place,
  * and the one watch it creates. Dates are nights, like a chip's.
  */
 export interface WatchStay {
@@ -45,17 +45,11 @@ export interface RemindStay extends WatchStay {
   releasesOn: string;
 }
 
-/** Today on this device, YYYY-MM-DD: what remindStays compares release dates to. */
-export function todayIso(now = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
 /** Flexible searches have a stay per arrival day; offer the earliest few. */
 export const REMIND_LIMIT = 6;
 
 /**
- * The not-released stays a release reminder can cover (v1.48 D9): each
+ * The not-released stays a release reminder can cover: each
  * not-released weekend (or block, or the exact dates), or for a flexible
  * range the earliest stays. Only stays with a known release date that hasn't
  * passed (`today`, YYYY-MM-DD); the server refuses one already released.

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { findCampgrounds, type CampgroundMatch } from "../api";
 import { displayName } from "../lib/displayName";
+import { plural } from "../lib/plural";
 import { SOURCE_NAMES } from "../lib/sources";
 import { FromSelect, type PanelProps } from "./SearchPanels";
 
@@ -33,7 +34,7 @@ export function CampgroundCombobox({ value, onChange, inputRef }: {
           setMatches(found);
           setActive(-1);
           setExpanded(found.length > 0);
-          setStatus(found.length ? `${found.length} campground${found.length === 1 ? "" : "s"} found` : "No campgrounds match");
+          setStatus(found.length ? `${plural(found.length, "campground")} found` : "No campgrounds match");
         })
         .catch(() => {});
     }, DEBOUNCE_MS);
