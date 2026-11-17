@@ -7,7 +7,11 @@ from datetime import date
 from pnw_campsites.providers.reserveamerica import _record_to_campsite
 from pnw_campsites.registry.models import BookingSystem, SiteFit
 from pnw_campsites.routes.search import _format_result
-from pnw_campsites.search.engine import SearchEngine, SearchQuery, _process_availability
+from pnw_campsites.search.engine import (
+    SearchQuery,
+    _process_availability,
+    enrich_wa_availability,
+)
 from tests.conftest import (
     make_campground,
     make_campground_availability,
@@ -38,7 +42,7 @@ def test_wa_enrichment_sets_fit_from_equipment_and_loop(registry) -> None:
     campsite = make_campsite_availability(campsite_id="-27", site="-27", campsite_type="STANDARD")
     availability = make_campground_availability("-2147483616", {"-27": campsite})
 
-    SearchEngine(registry=registry)._enrich_wa_availability("-2147483616", availability)
+    enrich_wa_availability(registry, "-2147483616", availability)
 
     assert campsite.fit == SiteFit(
         fits_tent=True, fits_van=True, fits_rv=True, max_rv_ft=30, hookups=True, walk_in=False,

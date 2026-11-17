@@ -14,6 +14,7 @@ from pnw_campsites.search.engine import (
     _find_consecutive_windows,
     _process_availability,
     days,
+    enrich_wa_availability,
     next_weekend,
     this_weekend,
 )
@@ -1736,12 +1737,7 @@ class TestResolveDriveTimes:
 
 
 class TestEnrichWaAvailability:
-    """A1: SearchEngine._enrich_wa_availability replaces synthetic IDs with cached names."""
-
-    def _make_engine(self, registry):
-        from pnw_campsites.search.engine import SearchEngine
-        # Provider clients default to None — _enrich_wa_availability doesn't use them.
-        return SearchEngine(registry=registry)
+    """A1: enrich_wa_availability replaces synthetic IDs with cached names."""
 
     def test_replaces_synthetic_label_with_cached_name(self, registry) -> None:
         """Synthetic resource_id label gets replaced with cached human name."""
@@ -1761,7 +1757,7 @@ class TestEnrichWaAvailability:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         site = availability.campsites["-300"]
         assert site.site == "B042"
@@ -1778,7 +1774,7 @@ class TestEnrichWaAvailability:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         # Synthetic label preserved — engine doesn't touch it
         assert availability.campsites["-300"].site == "-300"
@@ -1798,7 +1794,7 @@ class TestEnrichWaAvailability:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         assert availability.campsites["-300"].site == "Orphan-1"
         assert availability.campsites["-300"].loop == ""
@@ -1817,18 +1813,14 @@ class TestEnrichWaAvailability:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         assert availability.campsites["-300"].site == "Known"
         assert availability.campsites["-999"].site == "-999"
 
 
 class TestEnrichWaAvailabilityCapacity:
-    """PR B: _enrich_wa_availability also overwrites max_num_people from cache."""
-
-    def _make_engine(self, registry):
-        from pnw_campsites.search.engine import SearchEngine
-        return SearchEngine(registry=registry)
+    """PR B: enrich_wa_availability also overwrites max_num_people from cache."""
 
     def test_overwrites_max_num_people_when_cached(self, registry) -> None:
         """Cached max_capacity replaces the synthetic 8-person default."""
@@ -1845,7 +1837,7 @@ class TestEnrichWaAvailabilityCapacity:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         assert availability.campsites["-300"].max_num_people == 4
 
@@ -1864,7 +1856,7 @@ class TestEnrichWaAvailabilityCapacity:
             },
         )
 
-        self._make_engine(registry)._enrich_wa_availability("-100", availability)
+        enrich_wa_availability(registry, "-100", availability)
 
         # Provider's synthetic default (8) survives — graceful fallback
         assert availability.campsites["-300"].max_num_people == 8

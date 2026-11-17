@@ -2,10 +2,10 @@
 
 ReserveAmerica answers one 14-night window per request, at most 50 sites a
 page, under an app-wide 1 req/s limit. A month search for a big park is 20+
-requests, so a search used to lose a park's whole fetch when the deadline cut
-it, and could only reuse a cached park for the exact span it was fetched for.
+requests, so a deadline cut would lose a park's whole fetch, and a cached park
+could only be reused for the exact span it was fetched for.
 
-Each finished window is now stored on its own (``ra_window_cache``). A park is
+Each finished window is stored on its own (``ra_window_cache``). A park is
 assembled from the fresh windows that hold its requested nights, and only the
 nights none of them hold are fetched, so a search for Feb 6-19 uses a fetch of
 Feb 5-18 and pays for Feb 19 alone.
@@ -138,13 +138,12 @@ class OregonWindows:
     """
 
     def __init__(
-        self, client, watch_db=None, *, ttl_s: float = CACHE_TTL_S,
+        self, client, watch_db=None, *,
         max_background: int = BACKGROUND_MAX_WINDOWS,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._client = client
         self._db = watch_db
-        self._ttl_s = ttl_s
         self._max_background = max_background
         self._clock = clock
         self._pruned_at = float("-inf")
@@ -338,7 +337,7 @@ class OregonWindows:
             return [
                 CachedWindow(a, d, at, CampgroundAvailability.model_validate_json(payload))
                 for a, d, at, payload in self._db.get_ra_windows(
-                    park_id, min(nights), max(nights), max_age_s=self._ttl_s,
+                    park_id, min(nights), max(nights), max_age_s=CACHE_TTL_S,
                 )
             ]
         except Exception:
@@ -355,6 +354,6 @@ class OregonWindows:
             )
             if time.monotonic() - self._pruned_at >= PRUNE_EVERY_S:
                 self._pruned_at = time.monotonic()
-                self._db.prune_ra_windows(self._ttl_s)
+                self._db.prune_ra_windows(CACHE_TTL_S)
         except Exception:
             logger.debug("ReserveAmerica window cache write failed", exc_info=True)
