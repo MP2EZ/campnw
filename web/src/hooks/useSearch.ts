@@ -1,12 +1,4 @@
-/**
- * useSearch — encapsulates all search state and orchestration logic.
- *
- * Extracted from App.tsx to reduce the god-file problem. Contains:
- * - Search results, loading, error state
- * - SSE stream orchestration (handleSearch)
- * - Live announcement state
- * - Derived computations (filteredResults, resultSources)
- */
+/** Search state and SSE stream orchestration (handleSearch). */
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { getPosthog, searchCampsitesStream, saveSearchHistory, track } from "../api";
@@ -16,16 +8,8 @@ import type {
 } from "../api";
 
 /**
- * Read a SearchParams back out of the query string.
- *
- * handleSearch has always *written* every param to the URL, so the address bar
- * looked shareable — but nothing anywhere read it back. A pasted or bookmarked
- * search link opened a blank first-visit form, and MapView's own "Edit search"
- * link built `/?state=WA&start_date=...` and then discarded all of it. Both
- * /pricing and /terms advertise shareable searches as a shipped feature.
- *
- * Returns null unless a usable date range is present, since that is the
- * minimum a search needs.
+ * Read a SearchParams back out of the query string (the inverse of what
+ * handleSearch writes). Returns null unless a usable date range is present.
  */
 export function parseSearchParamsFromUrl(
   search: string = window.location.search,
@@ -95,12 +79,10 @@ export interface UseSearchReturn {
   error: string | null;
   searchDates: { start: string; end: string } | null;
   sourceFilter: Set<string>;
-  resultSources: Set<string>;
   filteredResults: CampgroundResult[];
   activeSearchParams: SearchParams | null;
   searchId: string;
   liveAnnouncement: string;
-  setLiveAnnouncement: (s: string) => void;
   maxResults: number;
   /** When the last search finished streaming (ms epoch); null before one has. */
   completedAt: number | null;
@@ -122,7 +104,6 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   const [activeSearchParams, setActiveSearchParams] = useState<SearchParams | null>(
     () => parseSearchParamsFromUrl(),
   );
-  const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const lastSearchParams = useRef<SearchParams | null>(null);
   const lastSearchMode = useRef<SearchMode>("find");
   const searchAbortRef = useRef<AbortController | null>(null);
@@ -143,11 +124,8 @@ export function useSearch(user: UserData | null): UseSearchReturn {
 
   useEffect(() => {
     if (resultSources.size === 0) return;
-    // resultSources is a fresh Set on every render, so an unconditional
-    // setSourceFilter never bails out — during a streaming search, where
-    // setResults fires once per animation frame, that produced *two* full
-    // App-tree renders per frame instead of one. Compare contents, not
-    // identity, and keep the previous Set when nothing actually changed.
+    // resultSources is a fresh Set on every recompute: compare contents and
+    // keep the previous Set, or every streamed frame re-renders the App twice.
     setSourceFilter((prev) =>
       prev.size === resultSources.size &&
       [...resultSources].every((s) => prev.has(s))
@@ -164,7 +142,6 @@ export function useSearch(user: UserData | null): UseSearchReturn {
   }, [results, sourceFilter, maxResults]);
 
   const handleSearch = useCallback(async (params: SearchParams, mode: SearchMode) => {
-    const searchParams = { ...params };
     lastSearchParams.current = params;
     lastSearchMode.current = mode;
     setActiveSearchParams(params);
@@ -201,27 +178,22 @@ export function useSearch(user: UserData | null): UseSearchReturn {
 
     const url = new URL(window.location.href);
     url.search = "";
-    for (const [k, v] of Object.entries(searchParams)) {
+    for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== "" && v !== false) {
         url.searchParams.set(k, String(v));
       }
     }
-    // pushState, not replaceState: with replace, Back never undid a search —
-    // it left the site entirely.
+    // pushState so Back undoes a search instead of leaving the site.
     if (url.toString() !== window.location.href) {
       window.history.pushState(null, "", url.toString());
     }
 
     const streamedResults: CampgroundResult[] = [];
     const streamedUnavailable: CampgroundResult[] = [];
-    // Warnings arrive as their own SSE frame near the end of the stream. They
-    // were hardcoded to [] at every setResults call, so provider outages
-    // reached the UI as silently fewer results.
+    // Warnings arrive as their own SSE frame near the end of the stream.
     let streamedWarnings: SearchWarning[] = [];
     // Diagnosis and not-released frames arrive just before [DONE]. Every
-    // update rebuilds `results` from this snapshot so the end of the stream
-    // can't drop them — onDone used to, so the zero-results screen never
-    // received a diagnosis.
+    // update rebuilds `results` from this snapshot so onDone can't drop them.
     let streamedEnd: Partial<SearchResponse> = {};
     // For search_executed: what the user waited for, and which source held it.
     let firstResultMs: number | undefined;
@@ -243,6 +215,13 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       warnings: streamedWarnings,
       ...streamedEnd,
     });
+    const scheduleFlush = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (current()) setResults(snapshot());
+      });
+    };
     setResults({
       campgrounds_checked: 0,
       campgrounds_with_availability: 0,
@@ -251,19 +230,14 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     });
 
     await searchCampsitesStream(
-      searchParams,
+      params,
       (result) => {
         streamedResults.push(result);
         checkedCount++;
         if (firstResultMs === undefined && result.total_available_sites > 0) {
           firstResultMs = Math.round(performance.now() - startedAt);
         }
-        if (!rafId) {
-          rafId = requestAnimationFrame(() => {
-            rafId = null;
-            if (current()) setResults(snapshot());
-          });
-        }
+        scheduleFlush();
       },
       () => {
         if (!current()) return;
@@ -282,8 +256,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           state: params.state || "all",
           nights: params.nights || 2,
           result_count: withAvail,
-          // Campgrounds checked (from the coverage frame). It counted result
-          // frames, which left out every campground with nothing open.
+          // Campgrounds checked (from the coverage frame), including those with nothing open.
           total_checked: checkedCount,
           oregon_timeouts: timing?.sources.or_state?.timeouts ?? 0,
           oregon_pending: timing?.sources.or_state?.pending ?? 0,
@@ -349,17 +322,11 @@ export function useSearch(user: UserData | null): UseSearchReturn {
           days_of_week: parsed.days_of_week || undefined,
         });
       },
-      // v2 doesn't show the AI summary (v1.48 flip).
       () => {},
       (checked, total) => {
         checkedCount = checked;
         plannedCount = total;
-        if (!rafId) {
-          rafId = requestAnimationFrame(() => {
-            rafId = null;
-            if (current()) setResults(snapshot());
-          });
-        }
+        scheduleFlush();
       },
       (warnings) => {
         streamedWarnings = warnings;
@@ -382,12 +349,7 @@ export function useSearch(user: UserData | null): UseSearchReturn {
       },
       (unavailable) => {
         streamedUnavailable.push(unavailable);
-        if (!rafId) {
-          rafId = requestAnimationFrame(() => {
-            rafId = null;
-            if (current()) setResults(snapshot());
-          });
-        }
+        scheduleFlush();
       },
       (t) => {
         timing = t;
@@ -430,11 +392,10 @@ export function useSearch(user: UserData | null): UseSearchReturn {
     error,
     searchDates,
     sourceFilter,
-    resultSources,
     filteredResults,
     activeSearchParams,
-    liveAnnouncement,
-    setLiveAnnouncement,
+    // Never announced anything; App still renders the aria-live region.
+    liveAnnouncement: "",
     maxResults,
     completedAt,
     handleSearch,

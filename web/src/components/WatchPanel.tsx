@@ -136,7 +136,7 @@ export const WatchPanel = memo(function WatchPanel({
 
         <div className="watch-list">
           {watches.map((w) => {
-            // A release reminder (v1.48 P3d) becomes a plain watch on release day.
+            // A release reminder becomes a plain watch on release day.
             const reminder = w.watch_type === "release" && !!w.releases_on;
             const kind = reminder ? "reminder" : "watch";
             return (

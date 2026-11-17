@@ -1,12 +1,4 @@
-/**
- * Billing context hook (v1.4 monetization).
- *
- * Fetches /api/billing/status on mount (and re-reads briefly after a
- * Customer Portal return) and exposes the tier state plus action helpers
- * (startCheckout, openPortal, refresh). Shared via
- * a context so multiple components (UpgradeModal, WatchPanel, UserMenu)
- * read consistent state without re-fetching.
- */
+/** Billing tier state and actions (checkout, portal, refresh), shared via context. */
 
 import {
   createContext,
@@ -154,8 +146,7 @@ export function BillingProvider({ children }: { children: ReactNode }) {
   }, [authLoading, userId, load, apply]);
 
   const handleStartCheckout = useCallback(async () => {
-    // Option A (v1.45): the native app sells nothing in-app (no StoreKit IAP).
-    // Send users to the web pricing page in the system browser to upgrade as a
+    // The native app sells nothing in-app (no StoreKit IAP). Send users to the web pricing page in the system browser to upgrade as a
     // web session. No backend checkout call from native.
     if (Capacitor.isNativePlatform()) {
       // SFSafariViewController has its own cookie jar, so PostHog mints a
