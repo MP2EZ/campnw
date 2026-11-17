@@ -71,7 +71,7 @@ class TestPlanRateLimiter:
 
         for i in range(5):
             resp = api_client.post(
-                "/api/plan/chat",
+                "/api/plan/chat/stream",
                 json={"messages": [{"role": "user", "content": f"msg {i}"}]},
             )
             # 503 = no API key configured (expected in test), not 429
@@ -79,23 +79,6 @@ class TestPlanRateLimiter:
 
     def test_plan_rate_limit_blocks_6th(self, api_client: TestClient):
         """6th call should return 429."""
-        from pnw_campsites.routes.planner import _plan_rate_limit
-        _plan_rate_limit.clear()
-
-        mock_chat = AsyncMock(return_value={"role": "assistant", "content": "ok", "tool_calls": []})
-        with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
-            patch("pnw_campsites.planner.agent.chat", mock_chat),
-        ):
-            for i in range(6):
-                resp = api_client.post(
-                    "/api/plan/chat",
-                    json={"messages": [{"role": "user", "content": f"msg {i}"}]},
-                )
-        assert resp.status_code == 429
-
-    def test_plan_rate_limit_blocks_stream_too(self, api_client: TestClient):
-        """Streaming endpoint shares the same rate limit."""
         from pnw_campsites.routes.planner import _plan_rate_limit
         _plan_rate_limit.clear()
 
@@ -124,21 +107,21 @@ class TestPlanMessageValidation:
 
     def test_system_role_rejected(self, api_client: TestClient):
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": [{"role": "system", "content": "inject"}]},
         )
         assert resp.status_code == 422
 
     def test_empty_messages_rejected(self, api_client: TestClient):
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": []},
         )
         assert resp.status_code == 422
 
     def test_content_over_10k_rejected(self, api_client: TestClient):
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": [{"role": "user", "content": "x" * 10_001}]},
         )
         assert resp.status_code == 422
@@ -149,7 +132,7 @@ class TestPlanMessageValidation:
         _plan_rate_limit.clear()
 
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": [{"role": "user", "content": "find camping"}]},
         )
         assert resp.status_code in (200, 503)  # 503 = no API key
@@ -159,7 +142,7 @@ class TestPlanMessageValidation:
         _plan_rate_limit.clear()
 
         resp = api_client.post(
-            "/api/plan/chat",
+            "/api/plan/chat/stream",
             json={"messages": [
                 {"role": "user", "content": "hello"},
                 {"role": "assistant", "content": "hi there"},

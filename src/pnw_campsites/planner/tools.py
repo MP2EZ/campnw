@@ -6,9 +6,16 @@ import json
 import logging
 from datetime import date
 
+from pnw_campsites.geo import (
+    geocode_address,
+    get_accurate_drive_minutes,
+    is_known_base,
+    resolve_base,
+)
 from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.search.engine import SearchEngine, SearchQuery
+from pnw_campsites.urls import recgov_availability_url, wa_state_availability_url
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +81,11 @@ TOOLS: list[dict] = [
                 "name": {
                     "type": "string",
                     "description": "Search by campground name (partial match)",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": ["recgov", "wa_state"],
+                    "description": "Booking system (default: all)",
                 },
             },
             "required": ["start_date", "end_date"],
@@ -183,7 +195,7 @@ async def execute_tool(
         if name == "search_campgrounds":
             return await _search_campgrounds(tool_input, engine)
         elif name == "check_availability":
-            return await _check_availability(tool_input, engine, registry)
+            return await _check_availability(tool_input, engine)
         elif name == "get_drive_time":
             return await _get_drive_time(tool_input)
         elif name == "get_campground_detail":
@@ -203,8 +215,6 @@ async def execute_tool(
 
 
 async def _search_campgrounds(tool_input: dict, engine: SearchEngine) -> str:
-    from pnw_campsites.urls import recgov_availability_url, wa_state_availability_url
-
     start = date.fromisoformat(tool_input["start_date"])
     end = date.fromisoformat(tool_input["end_date"])
 
@@ -223,7 +233,6 @@ async def _search_campgrounds(tool_input: dict, engine: SearchEngine) -> str:
         max_drive_minutes=tool_input.get("max_drive_minutes"),
         name_like=tool_input.get("name"),
         booking_system=booking_system,
-        max_campgrounds=20,
     )
 
     results = await engine.search(query, _skip_diagnosis=True)
@@ -274,13 +283,7 @@ async def _search_campgrounds(tool_input: dict, engine: SearchEngine) -> str:
     })
 
 
-async def _check_availability(
-    tool_input: dict,
-    engine: SearchEngine,
-    registry: CampgroundRegistry,
-) -> str:
-    from pnw_campsites.urls import recgov_availability_url, wa_state_availability_url
-
+async def _check_availability(tool_input: dict, engine: SearchEngine) -> str:
     facility_id = tool_input["facility_id"]
     start = date.fromisoformat(tool_input["start_date"])
     end = date.fromisoformat(tool_input["end_date"])
@@ -338,8 +341,6 @@ async def _check_availability(
 
 
 async def _get_drive_time(tool_input: dict) -> str:
-    from pnw_campsites.geo import get_accurate_drive_minutes
-
     minutes = await get_accurate_drive_minutes(
         tool_input["from_lat"],
         tool_input["from_lon"],
@@ -378,11 +379,8 @@ def _get_campground_detail(tool_input: dict, registry: CampgroundRegistry) -> st
 
 
 async def _geocode_address(tool_input: dict) -> str:
-    from pnw_campsites.geo import geocode_address, is_known_base, resolve_base
-
     address = tool_input["address"]
 
-    # Check known bases first (no network call)
     if is_known_base(address):
         lat, lon = resolve_base(address)
         return json.dumps({"lat": lat, "lon": lon, "source": "known_base"})

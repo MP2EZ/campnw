@@ -394,13 +394,17 @@ class TestWatchLimitEnforcement:
 
 
 # ---------------------------------------------------------------------------
-# Planner session enforcement (slice 4a)
+# Planner session enforcement
 # ---------------------------------------------------------------------------
+
+
+async def _fake_stream(*args, **kwargs):
+    yield '{"type":"done","content":"ok","tool_calls":[]}'
 
 
 def _start_chat(client, headers=None, content="plan me a trip"):
     return client.post(
-        "/api/plan/chat",
+        "/api/plan/chat/stream",
         json={"messages": [{"role": "user", "content": content}]},
         headers=headers or {},
     )
@@ -414,7 +418,7 @@ class TestPlannerSessionEnforcement:
         The route-level _PLAN_DAILY_LIMIT (5/day per IP) is an anti-abuse
         limit independent of the tier cap we're testing; TestClient reuses
         the same IP across calls, so without this we'd hit 429 before the
-        v1.4 402. Depends on api_client so the watch_db reset hits the
+        402. Depends on api_client so the watch_db reset hits the
         current (not torn-down) DB instance.
         """
         import pnw_campsites.routes.planner as planner_mod
@@ -426,10 +430,7 @@ class TestPlannerSessionEnforcement:
     def test_free_user_first_three_succeed(self, api_client, monkeypatch) -> None:
         # Skip the actual LLM call — we're testing gating, not chat behaviour.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             _, headers = signup_and_auth(
                 api_client, email="planner1@example.com",
             )
@@ -441,10 +442,7 @@ class TestPlannerSessionEnforcement:
         self, api_client, monkeypatch,
     ) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             _, headers = signup_and_auth(
                 api_client, email="planner4@example.com",
             )
@@ -470,10 +468,7 @@ class TestPlannerSessionEnforcement:
             user_data["id"], subscription_status="pro",
         )
 
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             # 5 sessions — well past free cap, well under Pro cap of 20
             for i in range(5):
                 resp = _start_chat(api_client, headers=headers)
@@ -489,16 +484,13 @@ class TestPlannerSessionEnforcement:
         user_data, headers = signup_and_auth(
             api_client, email="multi@example.com",
         )
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             # 1 session starter
             assert _start_chat(api_client, headers=headers).status_code == 200
             # Continuation: 3 messages — should not count as new sessions
             for _ in range(10):
                 resp = api_client.post(
-                    "/api/plan/chat",
+                    "/api/plan/chat/stream",
                     json={
                         "messages": [
                             {"role": "user", "content": "hi"},
@@ -520,14 +512,12 @@ class TestPlannerSessionEnforcement:
     def test_anonymous_session_also_capped(
         self, api_client, monkeypatch,
     ) -> None:
-        # Anonymous users must be capped by session_token so the limit
-        # can't be bypassed by signing out / clearing cookies repeatedly.
+        # Anonymous users are capped by session_token. The stream route returns
+        # a StreamingResponse, which drops the cookie get_session_token sets, so
+        # the token is sent explicitly here.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-        with patch(
-            "pnw_campsites.planner.agent.chat",
-            return_value={"role": "assistant", "content": "ok", "tool_calls": []},
-        ):
-            # Use TestClient cookies (sticky across calls)
+        api_client.cookies.set("campnw_session", "anon-planner-token")
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             for _ in range(3):
                 _start_chat(api_client)
             resp = _start_chat(api_client)

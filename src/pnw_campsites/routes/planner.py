@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
 import os
+import re
+from datetime import date
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -33,11 +37,8 @@ _PLAN_DAILY_LIMIT = 5
 
 def _check_plan_rate_limit(ip: str) -> bool:
     """Return True if request is allowed, False if daily limit exceeded."""
-    from datetime import date
-
     today = date.today().isoformat()
 
-    # Evict stale entries from previous days
     stale = [k for k, (d, _) in _plan_rate_limit.items() if d != today]
     for k in stale:
         del _plan_rate_limit[k]
@@ -67,14 +68,8 @@ class PlanChatRequest(BaseModel):
     messages: list[PlanMessage] = Field(..., min_length=1, max_length=50)
 
 
-class PlanChatResponse(BaseModel):
-    role: str
-    content: str
-    tool_calls: list[dict] = []
-
-
 # ---------------------------------------------------------------------------
-# Tier-based session gating (v1.4)
+# Tier-based session gating
 # ---------------------------------------------------------------------------
 
 
@@ -91,7 +86,7 @@ def _is_session_start(messages: list[PlanMessage]) -> bool:
 def _check_planner_session_limit(
     messages: list[PlanMessage], request: Request, response: Response,
 ) -> None:
-    """Enforce v1.4 per-month planner cap on session starts.
+    """Enforce per-month planner cap on session starts.
 
     Free: 3/month. Pro: 20/month. Anonymous sessions use session_token
     so the cap can't be bypassed by signing out. Raises HTTPException
@@ -127,33 +122,6 @@ def _check_planner_session_limit(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/chat", response_model=PlanChatResponse)
-async def plan_chat(body: PlanChatRequest, request: Request, response: Response):
-    from pnw_campsites.planner.agent import chat
-
-    engine = get_engine()
-    registry = get_registry()
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Trip planner not configured")
-
-    # IP-level abuse limit (anti-spam, always-on)
-    if not _check_plan_rate_limit(get_client_ip(request)):
-        raise HTTPException(
-            status_code=429,
-            detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
-        )
-
-    # Tier-based monthly session cap (v1.4)
-    _check_planner_session_limit(body.messages, request, response)
-
-    user_id = get_current_user(request)
-    ph_distinct_id = str(user_id) if user_id else None
-    msgs = [m.model_dump() for m in body.messages]
-    result = await chat(msgs, engine, registry, api_key, posthog_distinct_id=ph_distinct_id)
-    return PlanChatResponse(**result)
-
-
 @router.post("/chat/stream")
 async def plan_chat_stream(body: PlanChatRequest, request: Request, response: Response):
     from pnw_campsites.planner.agent import chat_stream
@@ -170,7 +138,6 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request, response: Re
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
         )
 
-    # Tier-based monthly session cap (v1.4)
     _check_planner_session_limit(body.messages, request, response)
 
     user_id = get_current_user(request)
@@ -202,8 +169,6 @@ class SaveTripRequest(BaseModel):
 
 def _extract_campgrounds_from_messages(messages: list[dict]) -> list[dict]:
     """Extract unique facility_ids from tool_call results in conversation."""
-    import json as _json
-
     seen = set()
     campgrounds = []
     for msg in messages:
@@ -212,7 +177,7 @@ def _extract_campgrounds_from_messages(messages: list[dict]) -> list[dict]:
             if not result_str:
                 continue
             try:
-                result = _json.loads(result_str)
+                result = json.loads(result_str)
             except (ValueError, TypeError):
                 continue
             # search_campgrounds returns {"campgrounds": [...]}
@@ -245,12 +210,10 @@ async def save_plan_as_trip(body: SaveTripRequest, request: Request):
 
     db = get_watch_db()
 
-    # Extract campgrounds from tool results in conversation
     msgs = [m.model_dump() for m in body.messages]
     campgrounds = _extract_campgrounds_from_messages(msgs)
 
     # Infer date range from messages (simple: find YYYY-MM-DD patterns)
-    import re
     all_text = " ".join(m.get("content", "") for m in msgs)
     date_matches = sorted(set(re.findall(r"\d{4}-\d{2}-\d{2}", all_text)))
     start_date = date_matches[0] if date_matches else ""
@@ -264,8 +227,6 @@ async def save_plan_as_trip(body: SaveTripRequest, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from None
-
-    import contextlib
 
     for cg in campgrounds:
         with contextlib.suppress(Exception):
