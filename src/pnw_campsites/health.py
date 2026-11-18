@@ -42,7 +42,7 @@ DEFAULT_TIMEOUT_S = 20.0
 # Probe targets. Deliberately stable, well-known records — a check that fails
 # because the probe target was decommissioned is a false alarm, so prefer
 # flagship facilities over arbitrary ones.
-PROBE_FACILITY_ID = "232464"  # Ohanapecosh, Mt. Rainier NP
+PROBE_FACILITY_ID = "232464"  # Kalaloch, Olympic NP
 PROBE_RA_PARK = ("402146", "cape-lookout-state-park", "OR")  # fallback; park_id, slug, state
 PROBE_LATLON = (46.7860, -121.7350)  # Paradise, Mt. Rainier
 SEATTLE = (47.6062, -122.3321)
@@ -191,26 +191,31 @@ async def _check_availability_history() -> str:
     """Fail when the history poller has stopped recording.
 
     Prod's history stopped on 2026-07-31 and nobody noticed for three and a
-    half months. Reads one HISTORY_FACILITIES campground (the probe facility)
-    through the primary key, rather than scanning the whole table.
+    half months. Reads the newest row across every HISTORY_FACILITIES
+    campground through the primary key, rather than scanning the whole table.
+    Not one campground: off-season, rec.gov returns some of them with no
+    nights at all, so a single probe goes stale while the poller is healthy.
     """
     if os.getenv("HISTORY_POLLER", "1") == "0":
         raise SkipCheck("history poller off here (HISTORY_POLLER=0)")
     from pnw_campsites.monitor.db import DEFAULT_DB_PATH as WATCH_DB_PATH
+    from pnw_campsites.monitor.history import HISTORY_FACILITIES
 
     def _query() -> str | None:
         conn = _readonly_conn(WATCH_DB_PATH)
+        marks = ",".join("?" * len(HISTORY_FACILITIES))
         try:
             return conn.execute(
-                "SELECT MAX(last_seen) FROM availability_daily WHERE campground_id=?",
-                (PROBE_FACILITY_ID,),
+                f"SELECT MAX(last_seen) FROM availability_daily"  # noqa: S608 — placeholders only
+                f" WHERE campground_id IN ({marks})",
+                HISTORY_FACILITIES,
             ).fetchone()[0]
         finally:
             conn.close()
 
     last = await asyncio.to_thread(_query)
     if last is None:
-        raise RuntimeError(f"no history recorded for {PROBE_FACILITY_ID}")
+        raise RuntimeError("no history recorded for any history campground")
     # last_seen is the server's naive local time, as is datetime.now() here.
     age = datetime.now() - datetime.fromisoformat(last)
     if age > HISTORY_STALE_AFTER:
