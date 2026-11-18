@@ -153,16 +153,29 @@ async def test_prune_job_keeps_thirteen_months(watch_db):
 # --- doctor -----------------------------------------------------------------
 
 
-def _history_db(tmp_path, last_seen: datetime):
+def _history_db(tmp_path, last_seen: datetime, facility_id: str = health.PROBE_FACILITY_ID):
     from pnw_campsites.monitor.db import WatchDB
 
     path = tmp_path / "watches.db"
     db = WatchDB(path)
-    db.record_availability_history(health.PROBE_FACILITY_ID, [("s1", "2027-06-01", "Reserved")])
-    db._conn.execute("UPDATE availability_daily SET last_seen=?", (last_seen.isoformat(),))
+    db.record_availability_history(facility_id, [("s1", "2027-06-01", "Reserved")])
+    db._conn.execute(
+        "UPDATE availability_daily SET last_seen=? WHERE campground_id=?",
+        (last_seen.isoformat(), facility_id),
+    )
     db._conn.commit()
     db.close()
     return path
+
+
+async def test_doctor_passes_off_season_when_another_campground_is_fresh(tmp_path, monkeypatch):
+    # Off-season, rec.gov returns the probe campground's sites with no nights,
+    # so only other history campgrounds get new rows.
+    path = _history_db(tmp_path, datetime.now() - timedelta(days=100))
+    other = next(f for f in history.HISTORY_FACILITIES if f != health.PROBE_FACILITY_ID)
+    _history_db(tmp_path, datetime.now() - timedelta(minutes=20), facility_id=other)
+    monkeypatch.setattr("pnw_campsites.monitor.db.DEFAULT_DB_PATH", path)
+    assert "last recorded" in await health._check_availability_history()
 
 
 async def test_doctor_passes_when_history_is_fresh(tmp_path, monkeypatch):
