@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 const mockSignInWithPassword = vi.fn();
 const mockSignUp = vi.fn();
+const mockResend = vi.fn();
 const mockSignOut = vi.fn();
 const mockOnAuthStateChange = vi.fn();
 
@@ -12,6 +13,7 @@ vi.mock("../lib/supabase", () => ({
     auth: {
       signInWithPassword: (...args: unknown[]) => mockSignInWithPassword(...args),
       signUp: (...args: unknown[]) => mockSignUp(...args),
+      resend: (...args: unknown[]) => mockResend(...args),
       signOut: (...args: unknown[]) => mockSignOut(...args),
       onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
       getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
@@ -37,7 +39,7 @@ vi.mock("../api", () => ({
   getPosthog: vi.fn(() => mockPosthog),
 }));
 
-import { AuthProvider, useAuth } from "../hooks/useAuth";
+import { AuthProvider, EMAIL_NOT_CONFIRMED, useAuth } from "../hooks/useAuth";
 import { getMe, updateProfile, track } from "../api";
 
 const mockGetMe = vi.mocked(getMe);
@@ -75,7 +77,8 @@ describe("useAuth", () => {
       data: { subscription: { unsubscribe: vi.fn() } },
     });
     mockSignInWithPassword.mockResolvedValue({ error: null });
-    mockSignUp.mockResolvedValue({ error: null });
+    mockSignUp.mockResolvedValue({ data: { user: {}, session: null }, error: null });
+    mockResend.mockResolvedValue({ error: null });
     mockSignOut.mockResolvedValue({ error: null });
   });
 
@@ -142,7 +145,10 @@ describe("useAuth", () => {
     expect(mockSignUp).toHaveBeenCalledWith({
       email: "test@example.com",
       password: "password123",
-      options: { data: { display_name: "Tester" } },
+      options: {
+        data: { display_name: "Tester" },
+        emailRedirectTo: `${window.location.origin}/`,
+      },
     });
     expect(mockTrack).toHaveBeenCalledWith(
       "signup",
@@ -241,5 +247,66 @@ describe("useAuth", () => {
     await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
     expect(mockGetMe).toHaveBeenCalled();
     expect(result.current.loading).toBe(false);
+  });
+
+  test("signup reports needsConfirmation when Supabase returns no session", async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let outcome: { needsConfirmation: boolean } | undefined;
+    await act(async () => {
+      outcome = await result.current.signup("test@example.com", "password123");
+    });
+
+    expect(outcome).toEqual({ needsConfirmation: true });
+    expect(mockTrack).toHaveBeenCalledWith(
+      "signup",
+      expect.objectContaining({ needs_confirmation: 1 }),
+    );
+  });
+
+  test("signup does not need confirmation when Supabase returns a session", async () => {
+    mockSignUp.mockResolvedValue({
+      data: { user: {}, session: { access_token: "t" } },
+      error: null,
+    });
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let outcome: { needsConfirmation: boolean } | undefined;
+    await act(async () => {
+      outcome = await result.current.signup("test@example.com", "password123");
+    });
+
+    expect(outcome).toEqual({ needsConfirmation: false });
+  });
+
+  test("login with an unconfirmed email throws a plain explanation", async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      error: { message: "Email not confirmed", code: "email_not_confirmed" },
+    });
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await expect(
+      act(async () => {
+        await result.current.login("test@example.com", "password123");
+      })
+    ).rejects.toThrow(EMAIL_NOT_CONFIRMED);
+  });
+
+  test("resendConfirmation resends the signup email with the redirect URL", async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.resendConfirmation("test@example.com");
+    });
+
+    expect(mockResend).toHaveBeenCalledWith({
+      type: "signup",
+      email: "test@example.com",
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    });
   });
 });

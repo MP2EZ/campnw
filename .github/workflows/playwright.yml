@@ -103,6 +103,9 @@ jobs:
         env:
           E2E_BASE_URL: ${{ env.STAGING_URL }}
           E2E_FIXTURE_PASSWORD: ${{ secrets.E2E_FIXTURE_PASSWORD }}
+          # signupFresh creates confirmed users through the admin API.
+          SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CI: "true"
         run: npx playwright test tests/upgrade.spec.ts
 
@@ -184,6 +187,9 @@ jobs:
         env:
           E2E_BASE_URL: ${{ env.STAGING_URL }}
           E2E_FIXTURE_PASSWORD: ${{ secrets.E2E_FIXTURE_PASSWORD }}
+          # signupFresh creates confirmed users through the admin API.
+          SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CI: "true"
         run: npx playwright test
 
