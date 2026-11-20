@@ -16,31 +16,56 @@ async function openModal(page: Page) {
   await expect(page.getByTestId("email-input")).toBeVisible();
 }
 
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const FRESH_PASSWORD = "PlaywrightE2E2026!";
+
 /**
- * Sign up a fresh user. Email is timestamped per run so concurrent runs
- * don't collide.
+ * Create a brand-new, already-confirmed user and sign in as them.
+ *
+ * Sign-up through the UI ends at "check your email" once Supabase's
+ * "Confirm email" is on, and a test can't click the link. The admin API
+ * creates the user pre-confirmed; the app creates its own user row on the
+ * first authenticated request, the same as after a real confirmation.
+ * Email is timestamped per call so retries and concurrent runs don't collide.
  */
 export async function signupFresh(
   page: Page,
   opts: { displayName?: string } = {},
 ): Promise<void> {
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for signupFresh");
+  }
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const email = `e2e-fresh-${stamp}@maestro.test`;
 
+  const resp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      password: FRESH_PASSWORD,
+      email_confirm: true,
+      user_metadata: { display_name: opts.displayName || "" },
+    }),
+  });
+  if (!resp.ok) {
+    throw new Error(`admin create user failed: ${resp.status} ${await resp.text()}`);
+  }
+
   await page.goto("/");
   await openModal(page);
-  await page.getByRole("button", { name: "Create one" }).click();
-  if (opts.displayName) {
-    await page.getByTestId("display-name-input").fill(opts.displayName);
-  }
   await page.getByTestId("email-input").fill(email);
-  await page.getByTestId("password-input").fill("PlaywrightE2E2026!");
-  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByTestId("password-input").fill(FRESH_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).last().click();
 
-  // Wait for the AUTH modal specifically to close. After successful
-  // signup, an onboarding "Welcome to campable" modal immediately
-  // opens — also role=dialog — so an unscoped dialog selector never
-  // sees an empty state. Match by accessible name.
+  // Wait for the AUTH modal specifically to close. A new user's onboarding
+  // "Welcome to campable" modal opens right after — also role=dialog — so an
+  // unscoped dialog selector never sees an empty state. Match by name.
   await expect(
     page.getByRole("dialog", { name: /Sign in|Create account/ }),
   ).toBeHidden({ timeout: 30_000 });

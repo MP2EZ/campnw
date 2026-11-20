@@ -5,12 +5,19 @@ vi.mock("../api", () => ({
   track: vi.fn(),
 }));
 
+const authMocks = vi.hoisted(() => ({
+  signup: vi.fn(),
+  resendConfirmation: vi.fn(),
+}));
+
 vi.mock("../hooks/useAuth", () => ({
+  EMAIL_NOT_CONFIRMED: "Confirm your email first.",
   useAuth: () => ({
     user: { id: 1, email: "test@example.com", display_name: "Test" },
     loading: false,
     login: vi.fn(),
-    signup: vi.fn(),
+    signup: authMocks.signup,
+    resendConfirmation: authMocks.resendConfirmation,
     logout: vi.fn(),
     updateProfile: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn(),
@@ -104,3 +111,58 @@ describe("AuthModal funnel events", () => {
     );
   });
 })
+
+describe("AuthModal email confirmation", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function submitSignup(onClose = vi.fn()) {
+    render(<AuthModal open entryPoint="header" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Create one" }));
+    fireEvent.change(screen.getByTestId("email-input"), {
+      target: { value: "new@example.com" },
+    });
+    fireEvent.change(screen.getByTestId("password-input"), {
+      target: { value: "password123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    return onClose;
+  }
+
+  test("a sign-up that needs confirmation shows check-your-email and stays open", async () => {
+    authMocks.signup.mockResolvedValue({ needsConfirmation: true });
+    const onClose = submitSignup();
+
+    expect(await screen.findByTestId("auth-check-email")).toHaveTextContent(
+      "new@example.com",
+    );
+    expect(screen.getByRole("heading", { name: "Check your email" })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("a sign-up with a session closes the modal", async () => {
+    authMocks.signup.mockResolvedValue({ needsConfirmation: false });
+    const onClose = submitSignup();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  test("send it again resends to the pending address", async () => {
+    authMocks.signup.mockResolvedValue({ needsConfirmation: true });
+    authMocks.resendConfirmation.mockResolvedValue(undefined);
+    submitSignup();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Send it again" }));
+
+    await screen.findByText(/Sent\./);
+    expect(authMocks.resendConfirmation).toHaveBeenCalledWith("new@example.com");
+  });
+
+  test("back to sign in returns to the login form", async () => {
+    authMocks.signup.mockResolvedValue({ needsConfirmation: true });
+    submitSignup();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Back to sign in" }));
+
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByTestId("email-input")).toBeInTheDocument();
+  });
+});

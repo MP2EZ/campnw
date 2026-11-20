@@ -5,12 +5,37 @@ from __future__ import annotations
 import json
 import os
 from datetime import date
+from urllib.parse import urlsplit
 
 import httpx
 from pywebpush import webpush
 
 from pnw_campsites.monitor.watcher import AvailabilityChange, PollResult
 from pnw_campsites.urls import availability_url
+
+# Browser push services. The server POSTs to every stored endpoint, so any
+# other host would turn a subscription into a server-side request to it.
+_PUSH_HOSTS = frozenset({
+    "fcm.googleapis.com",                 # Chrome, Edge, Android
+    "updates.push.services.mozilla.com",  # Firefox
+    "web.push.apple.com",                 # Safari
+})
+_PUSH_HOST_SUFFIXES = (".notify.windows.com",)  # legacy Edge (WNS)
+
+
+def is_push_service_endpoint(url: str) -> bool:
+    """True for an https URL on a known browser push service."""
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return False
+    host = parts.hostname or ""
+    return (
+        parts.scheme == "https"
+        and port in (None, 443)
+        and (host in _PUSH_HOSTS or host.endswith(_PUSH_HOST_SUFFIXES))
+    )
 
 
 def booking_link(result: PollResult) -> str:
@@ -140,6 +165,8 @@ async def send_web_push(
     vapid_private_key = os.getenv("VAPID_PRIVATE_KEY", "")
     vapid_claims_email = os.getenv("VAPID_CLAIMS_EMAIL", "")
     if not vapid_private_key:
+        return
+    if not is_push_service_endpoint(subscription.get("endpoint", "")):
         return
 
     webpush(

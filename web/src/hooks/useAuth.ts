@@ -1,6 +1,7 @@
 import { createContext, useContext, useCallback, useEffect, useState, useRef } from "react";
 import type { ReactNode } from "react";
 import { createElement } from "react";
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "../lib/supabase";
 import { getMe, updateProfile, track, getPosthog, type UserData } from "../api";
 
@@ -8,13 +9,30 @@ interface AuthContextValue {
   user: UserData | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, displayName?: string) => Promise<void>;
+  signup: (
+    email: string,
+    password: string,
+    displayName?: string,
+  ) => Promise<{ needsConfirmation: boolean }>;
+  resendConfirmation: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<Omit<UserData, "id" | "email">>) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+export const EMAIL_NOT_CONFIRMED =
+  "Confirm your email first. The link is in the message we sent when you signed up.";
+
+// The confirmation link opens in a browser. The iOS app's own origin is
+// capacitor://localhost, which a browser can't open, so native sends people
+// to the website. Both URLs must be in Supabase's Redirect URLs allow list.
+function confirmRedirectUrl(): string {
+  return Capacitor.isNativePlatform()
+    ? "https://campable.co/"
+    : `${window.location.origin}/`;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
@@ -106,24 +124,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleLogin = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error?.code === "email_not_confirmed") throw new Error(EMAIL_NOT_CONFIRMED);
     if (error) throw new Error(error.message);
     track("login", { method: "password" });
     // onAuthStateChange fires → fetches profile and sets user
   }, []);
 
+  // With "Confirm email" on, signUp returns no session, for a new address and
+  // for one that's already registered alike, so the caller can't tell them
+  // apart. With it off, a session comes back and onAuthStateChange signs in.
   const handleSignup = useCallback(
     async (email: string, password: string, displayName?: string) => {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { display_name: displayName || "" } },
+        options: {
+          data: { display_name: displayName || "" },
+          emailRedirectTo: confirmRedirectUrl(),
+        },
       });
       if (error) throw new Error(error.message);
-      track("signup", { method: "password", has_display_name: displayName ? 1 : 0 });
-      // onAuthStateChange fires → fetches profile and sets user
+      const needsConfirmation = !data.session;
+      track("signup", {
+        method: "password",
+        has_display_name: displayName ? 1 : 0,
+        needs_confirmation: needsConfirmation ? 1 : 0,
+      });
+      return { needsConfirmation };
     },
     []
   );
+
+  const handleResendConfirmation = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: confirmRedirectUrl() },
+    });
+    if (error) throw new Error(error.message);
+    track("signup_confirmation_resent", {});
+  }, []);
 
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -149,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login: handleLogin,
         signup: handleSignup,
+        resendConfirmation: handleResendConfirmation,
         logout: handleLogout,
         updateProfile: handleUpdateProfile,
         refresh,

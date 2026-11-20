@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from pnw_campsites.monitor.notify import is_push_service_endpoint
 from pnw_campsites.routes.deps import (
     SESSION_COOKIE,
     get_current_user,
@@ -24,6 +25,13 @@ class PushSubscribeRequest(BaseModel):
     endpoint: str = Field(max_length=500)
     p256dh: str = Field(max_length=200)
     auth: str = Field(max_length=100)
+
+    @field_validator("endpoint")
+    @classmethod
+    def _push_service_only(cls, v: str) -> str:
+        if not is_push_service_endpoint(v):
+            raise ValueError("endpoint must be a browser push service URL")
+        return v
 
 
 class PushUnsubscribeRequest(BaseModel):
