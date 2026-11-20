@@ -133,7 +133,7 @@ class TestPushSubscribe:
         resp = api_client.post(
             "/api/push/subscribe",
             json={
-                "endpoint": "https://push.example.com/user-endpoint",
+                "endpoint": "https://fcm.googleapis.com/fcm/send/user-endpoint",
                 "p256dh": "test-p256dh-key",
                 "auth": "test-auth-key",
             },
@@ -147,7 +147,7 @@ class TestPushSubscribe:
         resp = api_client.post(
             "/api/push/subscribe",
             json={
-                "endpoint": "https://push.example.com/anon-endpoint",
+                "endpoint": "https://fcm.googleapis.com/fcm/send/anon-endpoint",
                 "p256dh": "test-p256dh",
                 "auth": "test-auth",
             },
@@ -161,7 +161,7 @@ class TestPushSubscribe:
         api_client.post(
             "/api/push/subscribe",
             json={
-                "endpoint": "https://push.example.com/to-remove",
+                "endpoint": "https://fcm.googleapis.com/fcm/send/to-remove",
                 "p256dh": "key",
                 "auth": "auth",
             },
@@ -171,7 +171,7 @@ class TestPushSubscribe:
         resp = api_client.request(
             "DELETE",
             "/api/push/subscribe",
-            json={"endpoint": "https://push.example.com/to-remove"},
+            json={"endpoint": "https://fcm.googleapis.com/fcm/send/to-remove"},
             headers=headers,
         )
         assert resp.status_code == 200
@@ -180,7 +180,7 @@ class TestPushSubscribe:
     def test_subscribe_missing_fields_422(self, api_client: TestClient):
         resp = api_client.post(
             "/api/push/subscribe",
-            json={"endpoint": "https://push.example.com/test"},
+            json={"endpoint": "https://fcm.googleapis.com/fcm/send/test"},
         )
         assert resp.status_code == 422
 
