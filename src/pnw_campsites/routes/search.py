@@ -24,6 +24,7 @@ from pnw_campsites.routes.deps import (
     get_search_timings,
 )
 from pnw_campsites.search.engine import (
+    DateRangeError,
     SearchQuery,
     StreamCoverageEvent,
     StreamDiagnosisEvent,
@@ -31,6 +32,7 @@ from pnw_campsites.search.engine import (
     StreamProgressEvent,
     StreamTimingEvent,
     StreamWarningsEvent,
+    check_date_range,
 )
 from pnw_campsites.urls import (
     availability_url,
@@ -441,6 +443,14 @@ def _lookup_weather_single(
     return registry.get_weather_normals(cg_lat, cg_lon, month, day)
 
 
+def _require_sane_range(start_date: date, end_date: date) -> None:
+    """422 before any provider is asked: the range is the upstream fan-out."""
+    try:
+        check_date_range(start_date, end_date)
+    except DateRangeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -473,6 +483,7 @@ async def search(
         None, ge=1, le=100, description="Trailer/RV length in feet (trailer only)",
     ),
 ):
+    _require_sane_range(start_date, end_date)
     engine = get_engine()
     days_set = (
         {int(d) for d in days_of_week.split(",")}
@@ -605,6 +616,7 @@ async def search_stream(
         # Default: 2 weeks out, 30-day window
         start_date = start_date or (date.today() + timedelta(days=14))
         end_date = end_date or (start_date + timedelta(days=30))
+    _require_sane_range(start_date, end_date)
 
     days_set = (
         {int(d) for d in days_of_week.split(",")} if days_of_week else None
@@ -784,6 +796,7 @@ async def check(
 ):
     if not _FACILITY_ID_RE.match(facility_id):
         raise HTTPException(status_code=400, detail="Invalid facility_id")
+    _require_sane_range(start_date, end_date)
     engine = get_engine()
     booking_system = BookingSystem(source) if source else None
     result = await engine.check_specific(
