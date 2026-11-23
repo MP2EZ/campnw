@@ -689,7 +689,13 @@ export async function updateProfile(
 }
 
 export async function deleteAccount(): Promise<void> {
-  await authFetch(`${API_BASE}/api/auth/me`, { method: "DELETE" });
+  const resp = await authFetch(`${API_BASE}/api/auth/me`, { method: "DELETE" });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail || `Delete failed: ${resp.status}`,
+    );
+  }
 }
 
 export async function exportData(): Promise<object> {

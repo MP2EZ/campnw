@@ -94,6 +94,17 @@ describe("UserMenu", () => {
     });
   });
 
+  test("Delete account failure keeps the user signed in and says so", async () => {
+    vi.mocked(deleteAccount).mockRejectedValueOnce(new Error("Couldn't delete your account."));
+    renderInRouter(<UserMenu />);
+    fireEvent.click(screen.getByText("Tester"));
+    fireEvent.click(screen.getByText("Delete account"));
+    fireEvent.click(screen.getByText("Delete"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't delete your account.");
+    expect(mockLogout).not.toHaveBeenCalled();
+  });
+
   test("Delete account cancel returns to main menu", () => {
     renderInRouter(<UserMenu />);
     fireEvent.click(screen.getByText("Tester"));

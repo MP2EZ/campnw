@@ -830,7 +830,7 @@ async def check(
     nights: int = Query(1),
     source: str | None = Query(None, description="recgov or wa_state"),
 ):
-    if not _FACILITY_ID_RE.match(facility_id):
+    if not _FACILITY_ID_RE.fullmatch(facility_id):
         raise HTTPException(status_code=400, detail="Invalid facility_id")
     _require_sane_range(start_date, end_date)
     engine = get_engine()
