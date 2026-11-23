@@ -44,70 +44,8 @@ jobs:
         run: npx vitest run --coverage
 
   security:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Python CVE scan
-        run: |
-          # Upgrade pip first — the pip version pre-installed by setup-python
-          # lags actual CVE patches (e.g. CVE-2026-6357 fixed in pip 26.1).
-          # Without this, pip-audit flags pip itself, regardless of project deps.
-          python -m pip install --upgrade pip
-          pip install pip-audit
-          pip install -e ".[api]"
-          # CVE-2026-3219: pip vulnerability with no patched version available yet.
-          # Revisit periodically — when pip-audit reports a Fix Version, drop the ignore.
-          pip-audit --ignore-vuln CVE-2026-3219
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: npm CVE scan
-        working-directory: web
-        run: |
-          npm ci
-          # GHSA-qwww-vcr4-c8h2 (react-router): CSRF bypass that the advisory
-          # states is reachable only through the unstable RSC APIs. Campable is
-          # a client-only SPA — src/main.tsx uses plain BrowserRouter, with no
-          # RSC, no data-router action/loader, no server runtime — so the
-          # vulnerable path cannot be reached. npm's only offered fix is a
-          # downgrade to react-router-dom@7.11.0; the real fix is React Router 8,
-          # which folds react-router-dom into react-router (an import migration).
-          # Revisit when that migration is scheduled.
-          #
-          # GHSA-fc5q-39xc-vjpf (picomatch <=4.0.7): ReDoS on attacker-supplied
-          # extglob patterns. picomatch is build/test tooling only (vite, vitest,
-          # tinyglobby, rollup-plugin-visualizer, @types/jest); it is not in the
-          # shipped bundle or the server, and only ever sees our own config
-          # globs. No patched release exists yet. Remove once picomatch >=4.0.8
-          # ships and the tree updates to it.
-          #
-          # Pipe-separate to allowlist more advisories. Anything high/critical
-          # that is NOT listed here still fails the build.
-          ALLOWED='GHSA-qwww-vcr4-c8h2|GHSA-fc5q-39xc-vjpf'
-
-          npm audit --json > "$RUNNER_TEMP/audit.json" || true
-          UNEXPECTED=$(jq -r '
-            [ .vulnerabilities[]
-              | select(.severity == "high" or .severity == "critical")
-              | .via[] | objects | .url
-            ] | unique | .[]' "$RUNNER_TEMP/audit.json" \
-            | grep -vE "$ALLOWED" || true)
-
-          if [ -n "$UNEXPECTED" ]; then
-            echo "::error::Unallowlisted high/critical npm advisories found:"
-            echo "$UNEXPECTED"
-            exit 1
-          fi
-          echo "No unallowlisted high/critical npm advisories."
+    # Shared with the nightly scan; allowlist lives in .github/security-allowlist.toml.
+    uses: ./.github/workflows/security-scan.yml
 
   lighthouse:
     runs-on: ubuntu-latest
@@ -125,7 +63,7 @@ jobs:
           npm run build
 
       - name: Lighthouse CI
-        uses: treosh/lighthouse-ci-action@v12
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18  # v12.6.2
         with:
           configPath: .lighthouserc.js
           uploadArtifacts: true

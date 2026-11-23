@@ -1,0 +1,190 @@
+name: Security Scan
+
+# Two modes, one set of scanners (docs/MONITORING.md → "Layer 5 — Security scan"):
+#
+#   PR gate  — called by pr-checks.yml. Dependency CVEs (pip-audit, npm audit)
+#              and workflow lint (zizmor). Fails on any finding not accepted in
+#              .github/security-allowlist.toml.
+#   Nightly  — schedule / manual. Same scans against unchanged code (new CVEs
+#              land without a PR), plus Trivy on the image Fly is actually
+#              running and read-only checks of campable.co. Files one GitHub
+#              issue per finding and closes it when the finding clears.
+#
+# A scanner that fails is reported as broken (its own issue), never as clean.
+
+on:
+  workflow_call: {}
+  schedule:
+    - cron: "30 10 * * *" # daily 10:30 UTC — clear of prod-monitor (15:00) and backup (Mon 08:00)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  deps:
+    name: dependencies + workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: pip-audit
+        run: |
+          mkdir -p "$RUNNER_TEMP/scan"
+          # The pip that setup-python ships lags its own CVE fixes; upgrade it
+          # so pip-audit doesn't flag pip itself.
+          python -m pip install --upgrade pip
+          pip install pip-audit
+          pip install -e ".[api]"
+          pip-audit --progress-spinner off -f json -o "$RUNNER_TEMP/scan/pip-audit.json" || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: npm audit
+        working-directory: web
+        run: |
+          npm ci
+          npm audit --json > "$RUNNER_TEMP/scan/npm-audit.json" || true
+
+      - name: zizmor (workflow lint)
+        run: |
+          pip install zizmor==1.33.1
+          zizmor --offline --config .github/zizmor.yml --format json .github/workflows \
+            > "$RUNNER_TEMP/scan/zizmor.json" || true
+
+      - name: Gate
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        run: |
+          python scripts/security_scan.py check --dir "$RUNNER_TEMP/scan" \
+            --expect pip-audit.json npm-audit.json zizmor.json \
+            --out "$RUNNER_TEMP/findings.json"
+
+      - name: Upload results
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-deps
+          path: ${{ runner.temp }}/scan/
+          retention-days: 14
+
+  image:
+    name: deployed image (Trivy)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TRIVY_VERSION: "0.76.1"
+      TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2  # pinned
+
+      # Binary download pinned by checksum rather than trivy-action: that
+      # action's tags were hijacked in 2026, and it would run near a Fly token.
+      - name: Install Trivy
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/trivy.tgz" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/trivy.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/trivy.tgz" -C "$RUNNER_TEMP" trivy
+          sudo mv "$RUNNER_TEMP/trivy" /usr/local/bin/trivy
+
+      - name: Scan the image prod is running
+        env:
+          # Read-only org token (fly tokens create readonly): can list images
+          # and pull from registry.fly.io, cannot deploy or ssh.
+          FLY_API_TOKEN: ${{ secrets.FLY_READONLY_TOKEN }}
+        run: |
+          ref=$(flyctl image show -a campnw --json \
+            | jq -r '(.[0] // .) | "\(.Registry)/\(.Repository)@\(.Digest)"')
+          echo "Deployed image: $ref"
+          # Trivy splits TRIVY_PASSWORD on commas, and Fly tokens contain them,
+          # so authenticate through a throwaway docker config instead.
+          export DOCKER_CONFIG="$RUNNER_TEMP/docker"
+          mkdir -p "$DOCKER_CONFIG" "$RUNNER_TEMP/scan"
+          printf '{"auths":{"registry.fly.io":{"auth":"%s"}}}' \
+            "$(printf 'x:%s' "$FLY_API_TOKEN" | base64 -w0)" > "$DOCKER_CONFIG/config.json"
+          trivy image --quiet --scanners vuln --severity HIGH,CRITICAL \
+            --format json -o "$RUNNER_TEMP/trivy-full.json" "$ref"
+          rm -rf "$DOCKER_CONFIG"
+          # Artifacts are public: keep only the findings, drop image metadata.
+          jq '{ArtifactName, Results}' "$RUNNER_TEMP/trivy-full.json" > "$RUNNER_TEMP/scan/trivy.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scan-image
+          path: ${{ runner.temp }}/scan/
+          retention-days: 14
+
+  live:
+    name: campable.co live config
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Seven GETs and one TLS handshake: TLS expiry, security headers,
+      # exposed /openapi.json /docs /.git /.env, and the Fly origin bypass.
+      - name: Live checks
+        run: |
+          pip install httpx==0.28.1
+          mkdir -p "$RUNNER_TEMP/scan"
+          python scripts/security_scan.py live --out "$RUNNER_TEMP/scan/live.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scan-live
+          path: ${{ runner.temp }}/scan/
+          retention-days: 14
+
+  report:
+    name: file issues
+    needs: [deps, image, live]
+    # always(): a failed scanner must still be reported, as broken.
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: scan-*
+          merge-multiple: true
+          path: scan
+
+      - name: Check and file issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          rc=0
+          python scripts/security_scan.py check --dir scan \
+            --expect pip-audit.json npm-audit.json zizmor.json trivy.json live.json \
+            --out findings.json || rc=$?
+          python scripts/security_scan.py file-issues findings.json
+          exit $rc

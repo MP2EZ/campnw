@@ -1,0 +1,10 @@
+# zizmor policy (https://docs.zizmor.sh/configuration/).
+# GitHub-owned actions may be pinned by tag; every third-party action must be
+# pinned by commit SHA, since a moved tag would run with our secrets.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "actions/*": ref-pin
+        "github/*": ref-pin
+        "*": hash-pin
