@@ -18,6 +18,8 @@ from pnw_campsites.geo import is_known_base
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import (
     _FACILITY_ID_RE,
+    check_ip_quota,
+    get_client_ip,
     get_current_user,
     get_engine,
     get_registry,
@@ -554,6 +556,12 @@ async def search(
     )
 
 
+# Natural-language parses per client IP per day. Each one is a paid Claude
+# call that needs no account.
+_nl_rate_limit: dict[str, tuple[str, int]] = {}
+_NL_DAILY_LIMIT = 50
+
+
 @router.get("/search/stream")
 async def search_stream(
     request: Request,
@@ -574,7 +582,9 @@ async def search_stream(
     people: int | None = Query(None, ge=1, le=50),
     equipment: Equipment | None = Query(None),
     rig_length: int | None = Query(None, ge=1, le=100),
-    q: str | None = Query(None, description="Natural language search query"),
+    q: str | None = Query(
+        None, max_length=300, description="Natural language search query",
+    ),
 ):
     """SSE streaming search — yields results as each batch completes."""
     engine = get_engine()
@@ -590,6 +600,11 @@ async def search_stream(
         if api_key:
             from pnw_campsites.search.nl_parser import parse_natural_query
 
+            if not check_ip_quota(_nl_rate_limit, get_client_ip(request), _NL_DAILY_LIMIT):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many natural-language searches today; try the filters instead",
+                )
             nl_parsed = await parse_natural_query(q, api_key, posthog_distinct_id=ph_distinct_id)
             # Apply NL-parsed values as defaults (explicit params override)
             if "start_date" in nl_parsed:

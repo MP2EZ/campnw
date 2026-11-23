@@ -154,7 +154,7 @@ export function AskForm({ onAsk }: { onAsk: (q: string) => void }) {
         setValue("");
       }}>
       <label htmlFor={id} className="sb-ask-label">Or ask</label>
-      <input id={id} className="sb-ask-input" type="text" value={value} onChange={(e) => setValue(e.target.value)}
+      <input id={id} className="sb-ask-input" type="text" maxLength={300} value={value} onChange={(e) => setValue(e.target.value)}
         placeholder="pet-friendly near Portland, a July weekend" />
       <button type="submit" className="sb-ask-go" disabled={!value.trim()}>Ask</button>
     </form>

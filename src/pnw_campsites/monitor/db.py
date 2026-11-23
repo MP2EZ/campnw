@@ -553,6 +553,14 @@ class WatchDB:
             CREATE INDEX IF NOT EXISTS idx_planner_sessions_session
                 ON planner_sessions(session_token, started_at DESC);
         """)
+        planner_cols = [
+            r[1] for r in self._conn.execute("PRAGMA table_info(planner_sessions)")
+        ]
+        if "conversation_id" not in planner_cols:
+            self._conn.execute(
+                "ALTER TABLE planner_sessions ADD COLUMN"
+                " conversation_id TEXT NOT NULL DEFAULT ''"
+            )
         self._conn.commit()
 
     # -------------------------------------------------------------------
@@ -1016,19 +1024,49 @@ class WatchDB:
         self,
         user_id: int | None = None,
         session_token: str = "",
-    ) -> None:
-        """Record a new trip-planner conversation start.
+    ) -> str:
+        """Record a new trip-planner conversation start; return its id.
 
         Exactly one of user_id / session_token should be populated. Anonymous
         sessions are tracked by session_token so the per-month cap can't be
-        bypassed by signing out.
+        bypassed by signing out. Later turns present the id to show they
+        continue this conversation rather than start a new one.
         """
+        import uuid as _uuid
+
+        conversation_id = _uuid.uuid4().hex
         self._conn.execute(
-            "INSERT INTO planner_sessions (user_id, session_token, started_at)"
-            " VALUES (?, ?, ?)",
-            (user_id, session_token, datetime.now().isoformat()),
+            "INSERT INTO planner_sessions"
+            " (user_id, session_token, started_at, conversation_id)"
+            " VALUES (?, ?, ?, ?)",
+            (user_id, session_token, datetime.now().isoformat(), conversation_id),
         )
         self._conn.commit()
+        return conversation_id
+
+    def planner_conversation_exists(
+        self,
+        conversation_id: str,
+        user_id: int | None = None,
+        session_token: str = "",
+    ) -> bool:
+        """Whether this user (or anonymous session) started that conversation
+        this month. A conversation from an earlier month counts as new."""
+        if not conversation_id:
+            return False
+        month_prefix = datetime.now().strftime("%Y-%m")
+        if user_id is not None:
+            owner_sql, owner = "user_id=?", user_id
+        elif session_token:
+            owner_sql, owner = "user_id IS NULL AND session_token=?", session_token
+        else:
+            return False
+        row = self._conn.execute(
+            "SELECT 1 FROM planner_sessions WHERE conversation_id=?"
+            f" AND {owner_sql} AND started_at LIKE ?",
+            (conversation_id, owner, f"{month_prefix}-%"),
+        ).fetchone()
+        return row is not None
 
     def count_planner_sessions_this_month(
         self,
