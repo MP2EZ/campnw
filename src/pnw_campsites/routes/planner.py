@@ -6,7 +6,7 @@ import contextlib
 import json
 import os
 import re
-from datetime import date
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -15,6 +15,7 @@ from starlette.responses import Response
 
 from pnw_campsites import billing
 from pnw_campsites.routes.deps import (
+    check_ip_quota,
     get_client_ip,
     get_current_user,
     get_current_user_obj,
@@ -34,24 +35,22 @@ router = APIRouter(prefix="/api/plan", tags=["planner"])
 _plan_rate_limit: dict[str, tuple[str, int]] = {}
 _PLAN_DAILY_LIMIT = 5
 
+# Anonymous conversation starts per client IP per month. Dropping the
+# session cookie mints a fresh token with a zero count, so the per-token cap
+# alone doesn't hold. Looser than the per-token cap to allow a few people
+# behind one shared address.
+_anon_plan_sessions: dict[str, tuple[str, int]] = {}
+_ANON_IP_MONTHLY_SESSIONS = 10
+
+# Total characters of history sent to Claude per request. Older turns past
+# it are dropped: the planner re-sends the whole context on every tool
+# iteration, so a long forged history multiplies the cost of one request.
+_HISTORY_CHAR_BUDGET = 40_000
+
 
 def _check_plan_rate_limit(ip: str) -> bool:
     """Return True if request is allowed, False if daily limit exceeded."""
-    today = date.today().isoformat()
-
-    stale = [k for k, (d, _) in _plan_rate_limit.items() if d != today]
-    for k in stale:
-        del _plan_rate_limit[k]
-
-    existing = _plan_rate_limit.get(ip)
-    if existing is None or existing[0] != today:
-        _plan_rate_limit[ip] = (today, 1)
-        return True
-    day, count = existing
-    if count >= _PLAN_DAILY_LIMIT:
-        return False
-    _plan_rate_limit[ip] = (day, count + 1)
-    return True
+    return check_ip_quota(_plan_rate_limit, ip, _PLAN_DAILY_LIMIT)
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +65,29 @@ class PlanMessage(BaseModel):
 
 class PlanChatRequest(BaseModel):
     messages: list[PlanMessage] = Field(..., min_length=1, max_length=50)
+    # Issued by the server on a conversation's first turn (X-Plan-Conversation).
+    conversation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+
+
+def _trim_history(messages: list[PlanMessage], budget: int) -> list[PlanMessage]:
+    """The most recent turns that fit in `budget` chars, starting with a user turn.
+
+    The last message is always kept, cut to the budget if it alone exceeds it.
+    """
+    kept: list[PlanMessage] = []
+    used = 0
+    for msg in reversed(messages):
+        if used + len(msg.content) > budget:
+            break
+        kept.append(msg)
+        used += len(msg.content)
+    kept.reverse()
+    while kept and kept[0].role != "user":
+        kept.pop(0)
+    if not kept:
+        last = messages[-1]
+        return [PlanMessage(role=last.role, content=last.content[:budget])]
+    return kept
 
 
 # ---------------------------------------------------------------------------
@@ -73,48 +95,52 @@ class PlanChatRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _is_session_start(messages: list[PlanMessage]) -> bool:
-    """A session = the first user message in a conversation.
-
-    Continuation messages (multi-turn) don't count. Defined narrowly so
-    refreshing a long conversation doesn't burn through the user's
-    monthly cap.
-    """
-    return len(messages) == 1 and messages[0].role == "user"
-
-
 def _check_planner_session_limit(
-    messages: list[PlanMessage], request: Request, response: Response,
-) -> None:
-    """Enforce per-month planner cap on session starts.
+    body: PlanChatRequest, request: Request, response: Response,
+) -> str:
+    """Enforce the per-month planner cap on conversation starts; return the
+    conversation id.
 
-    Free: 3/month. Pro: 20/month. Anonymous sessions use session_token
-    so the cap can't be bypassed by signing out. Raises HTTPException
-    402 with the same machine-readable shape as the watch cap.
+    A request continues a conversation only when it presents an id this
+    user or session was issued. The client supplies the whole history, so
+    its shape proves nothing. Anything else is a new conversation and
+    counts. Free: 3/month. Pro: 20/month. Anonymous sessions are counted by
+    session_token and, since that cookie can be dropped, by client IP.
+    Raises HTTPException 402 with the same machine-readable shape as the
+    watch cap.
     """
-    if not _is_session_start(messages):
-        return  # mid-conversation message — no cap
-
     db = get_watch_db()
     user = get_current_user_obj(request)
     user_id = user.id if user else None
     token = get_session_token(request, response) if user is None else ""
 
+    if body.conversation_id and db.planner_conversation_exists(
+        body.conversation_id, user_id=user_id, session_token=token,
+    ):
+        return body.conversation_id
+
     limit = billing.planner_session_limit(user)
     current = db.count_planner_sessions_this_month(
         user_id=user_id, session_token=token,
     )
-    if current >= limit:
+    over = current >= limit or (
+        user is None
+        and not check_ip_quota(
+            _anon_plan_sessions, get_client_ip(request),
+            _ANON_IP_MONTHLY_SESSIONS, period=datetime.now().strftime("%Y-%m"),
+        )
+    )
+    if over:
         raise HTTPException(
             status_code=402,
             detail={
                 "error": "planner_session_limit_reached",
                 "limit": limit,
-                "current": current,
+                "current": max(current, limit),
                 "upgrade_url": "/pricing",
             },
         )
-    db.log_planner_session(user_id=user_id, session_token=token)
+    return db.log_planner_session(user_id=user_id, session_token=token)
 
 
 # ---------------------------------------------------------------------------
@@ -138,11 +164,14 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request, response: Re
             detail=f"Trip planner limit: {_PLAN_DAILY_LIMIT} conversations per day",
         )
 
-    _check_planner_session_limit(body.messages, request, response)
+    conversation_id = _check_planner_session_limit(body, request, response)
 
     user_id = get_current_user(request)
     ph_distinct_id = str(user_id) if user_id else None
-    msgs = [m.model_dump() for m in body.messages]
+    msgs = [
+        m.model_dump()
+        for m in _trim_history(body.messages, _HISTORY_CHAR_BUDGET)
+    ]
 
     async def event_generator():
         async for event_json in chat_stream(
@@ -159,6 +188,7 @@ async def plan_chat_stream(body: PlanChatRequest, request: Request, response: Re
     stream.raw_headers.extend(
         (k, v) for k, v in response.raw_headers if k == b"set-cookie"
     )
+    stream.headers["X-Plan-Conversation"] = conversation_id
     return stream
 
 

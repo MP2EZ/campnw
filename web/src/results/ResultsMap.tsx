@@ -3,6 +3,7 @@ import L from "../leaflet-setup";
 import "leaflet.markercluster";
 import type { CampgroundResult } from "../api";
 import { framedPlaces, hasCoords, pinLabel, pinLegend, pinStyle, pinSvg } from "./pins";
+import { escapeHtml } from "../lib/mapPopup";
 import type { SelectionStore } from "./selection";
 import { tileLayerConfig, type Theme } from "./tiles";
 import "./ResultsMap.css";
@@ -25,8 +26,6 @@ const MAPBOX_TOKEN: string | undefined = import.meta.env.VITE_PUBLIC_MAPBOX_TOKE
 
 const currentTheme = (): Theme => (document.documentElement.dataset.theme === "dark" ? "dark" : "light");
 
-const escapeHtml = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function pinIcon(r: CampgroundResult): L.DivIcon {
   const style = pinStyle(r);

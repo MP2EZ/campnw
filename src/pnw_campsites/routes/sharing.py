@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request
@@ -28,6 +29,7 @@ class CreateShareRequest(BaseModel):
 
 _share_view_counts: dict[str, tuple[str, int]] = {}  # key -> (hour_key, count)
 _share_cleanup_counter = 0
+_SHARE_UUID_RE = re.compile(r"[0-9a-f]{32}")
 
 
 def _days_since(iso: str) -> int:
@@ -50,16 +52,8 @@ def _check_share_rate_limit(uuid: str, client_ip: str) -> bool:
             del _share_view_counts[k]
         _share_cleanup_counter = 0
 
-    # Per-UUID limit (prevent excessive views of one link)
-    uuid_entry = _share_view_counts.get(uuid)
-    if uuid_entry is None or uuid_entry[0] != hour_key:
-        _share_view_counts[uuid] = (hour_key, 1)
-    elif uuid_entry[1] >= 10:
-        return False
-    else:
-        _share_view_counts[uuid] = (hour_key, uuid_entry[1] + 1)
-
-    # Per-IP limit (prevent UUID enumeration)
+    # Per-IP limit first (prevents UUID enumeration), so a limited client
+    # adds no per-UUID keys.
     ip_key = f"ip:{client_ip}"
     ip_entry = _share_view_counts.get(ip_key)
     if ip_entry is None or ip_entry[0] != hour_key:
@@ -68,6 +62,15 @@ def _check_share_rate_limit(uuid: str, client_ip: str) -> bool:
         return False
     else:
         _share_view_counts[ip_key] = (hour_key, ip_entry[1] + 1)
+
+    # Per-UUID limit (prevent excessive views of one link)
+    uuid_entry = _share_view_counts.get(uuid)
+    if uuid_entry is None or uuid_entry[0] != hour_key:
+        _share_view_counts[uuid] = (hour_key, 1)
+    elif uuid_entry[1] >= 10:
+        return False
+    else:
+        _share_view_counts[uuid] = (hour_key, uuid_entry[1] + 1)
 
     return True
 
@@ -107,6 +110,10 @@ async def create_share(body: CreateShareRequest, request: Request):
 @router.get("/api/shared/{uuid}")
 async def view_shared(uuid: str, request: Request):
     """Public endpoint — no auth required."""
+    # Links are uuid4().hex. Anything else can't exist, and mustn't become a
+    # limiter key.
+    if not _SHARE_UUID_RE.fullmatch(uuid):
+        raise HTTPException(status_code=404, detail="Link not found")
     if not _check_share_rate_limit(uuid, get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many views")
 

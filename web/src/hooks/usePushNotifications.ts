@@ -1,5 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
-import { getVapidKey, subscribePush, track } from "../api";
+import { getVapidKey, subscribePush, track, unsubscribePush } from "../api";
+
+const SUBSCRIBED_KEY = "campable-push-subscribed";
+
+/** Stop this browser receiving the signed-in user's alerts. Call before
+ * sign-out, while the auth header still scopes the server-side delete.
+ * Best-effort: a failure must not block signing out. */
+export async function unregisterPushDevice(): Promise<void> {
+  try {
+    // getRegistration, not .ready: .ready never settles without a worker.
+    const reg = await navigator.serviceWorker?.getRegistration();
+    const sub = await reg?.pushManager?.getSubscription();
+    if (sub) {
+      await unsubscribePush(sub.endpoint).catch(() => {});
+      await sub.unsubscribe().catch(() => false);
+    }
+  } catch {
+    // No service worker or push support here.
+  }
+  localStorage.removeItem(SUBSCRIBED_KEY);
+}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -15,7 +35,7 @@ export function usePushNotifications() {
   const [subscribed, setSubscribed] = useState(false);
 
   useEffect(() => {
-    if (localStorage.getItem("campable-push-subscribed") === "true") {
+    if (localStorage.getItem(SUBSCRIBED_KEY) === "true") {
       setSubscribed(true);
     }
   }, []);
@@ -62,7 +82,7 @@ export function usePushNotifications() {
 
     await subscribePush(subscription.endpoint, p256dh, authStr);
     setSubscribed(true);
-    localStorage.setItem("campable-push-subscribed", "true");
+    localStorage.setItem(SUBSCRIBED_KEY, "true");
     return true;
   }, []);
 

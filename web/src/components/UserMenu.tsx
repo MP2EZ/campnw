@@ -13,6 +13,7 @@ export function UserMenu() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [billingActionPending, setBillingActionPending] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
@@ -49,7 +50,13 @@ export function UserMenu() {
   };
 
   const handleDelete = async () => {
-    await deleteAccount();
+    setDeleteError(null);
+    try {
+      await deleteAccount();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete your account.");
+      return;
+    }
     await logout();
     setOpen(false);
   };
@@ -192,6 +199,9 @@ export function UserMenu() {
           {showDeleteConfirm && (
             <div className="user-menu-confirm">
               <p>Delete your account and all data? This cannot be undone.</p>
+              {deleteError && (
+                <p className="auth-error" role="alert">{deleteError}</p>
+              )}
               <div className="user-menu-confirm-actions">
                 <button
                   className="user-menu-item danger"

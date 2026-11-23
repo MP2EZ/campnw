@@ -32,7 +32,7 @@ from pnw_campsites.registry.db import CampgroundRegistry
 from pnw_campsites.search.engine import SearchEngine, SearchQuery
 
 # Surfaced by /healthz so monitors can confirm what's deployed.
-APP_VERSION = "1.48.7"
+APP_VERSION = "1.48.8"
 
 # ---------------------------------------------------------------------------
 # App state — initialized in lifespan
@@ -556,6 +556,7 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "DELETE", "PATCH"],
     allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["X-Plan-Conversation"],
     allow_credentials=True,
 )
 
@@ -651,7 +652,7 @@ async def timing_middleware(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:"
@@ -748,6 +749,11 @@ _posthog_host = "https://eu.i.posthog.com"
 _posthog_asset_host = "https://eu-assets.i.posthog.com"
 
 
+# posthog-js keeps each batch, session-recording snapshots included, under
+# about 1 MB before compression.
+_INGEST_MAX_BODY = 2 * 1024 * 1024
+
+
 @app.api_route("/ingest/{path:path}", methods=["GET", "POST", "OPTIONS"])
 async def posthog_proxy(request: Request, path: str):
     """Proxy PostHog requests through our domain to bypass ad blockers.
@@ -764,7 +770,19 @@ async def posthog_proxy(request: Request, path: str):
         k: v for k, v in request.headers.items()
         if k.lower() in forward
     }
-    body = await request.body()
+    # Anonymous and schema-less, so never buffer an unbounded body: check the
+    # declared length, then count the bytes actually read (chunked bodies).
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > _INGEST_MAX_BODY:
+        return Response(status_code=413)
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > _INGEST_MAX_BODY:
+            return Response(status_code=413)
+        chunks.append(chunk)
+    body = b"".join(chunks)
 
     if not _posthog_client:
         return Response(status_code=503)
@@ -809,6 +827,19 @@ _static_candidates = [
     Path(__file__).resolve().parents[2] / "static",
 ]
 _static_dir: Path | None = None
+
+
+def _static_file(static_dir: Path, path: str) -> Path | None:
+    """The file `path` names inside `static_dir`, or None if it isn't one."""
+    if not path:
+        return None
+    root = static_dir.resolve()
+    file_path = (root / path).resolve()
+    if file_path.is_relative_to(root) and file_path.is_file():
+        return file_path
+    return None
+
+
 for _candidate in _static_candidates:
     if _candidate.is_dir():
         _static_dir = _candidate
@@ -823,8 +854,8 @@ if _static_dir is not None:
         if path.startswith("api/"):
             raise HTTPException(404)
         # Serve actual file if it exists (JS, CSS, images, etc.)
-        file_path = (_static_dir / path).resolve()
-        if path and file_path.is_file() and str(file_path).startswith(str(_static_dir.resolve())):
+        file_path = _static_file(_static_dir, path)
+        if file_path:
             return FileResponse(file_path)
         # Everything else gets index.html for React Router
         index = _static_dir / "index.html"

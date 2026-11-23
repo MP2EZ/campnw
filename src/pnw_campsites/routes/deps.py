@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+from datetime import date
 from ipaddress import ip_address, ip_network
 from sqlite3 import IntegrityError
 
@@ -21,7 +22,7 @@ from starlette.responses import Response
 # ---------------------------------------------------------------------------
 
 SESSION_COOKIE = "campnw_session"
-_FACILITY_ID_RE = re.compile(r"^[-\w]{1,30}$")
+_FACILITY_ID_RE = re.compile(r"[-\w]{1,30}")  # use .fullmatch
 
 # https://www.cloudflare.com/ips/ (fetched 2026-11-19)
 _CLOUDFLARE_NETWORKS = tuple(ip_network(n) for n in (
@@ -145,6 +146,24 @@ def _from_cloudflare(ip: str) -> bool:
     except ValueError:
         return False
     return any(addr in net for net in _CLOUDFLARE_NETWORKS)
+
+
+def check_ip_quota(
+    store: dict[str, tuple[str, int]], ip: str, limit: int, period: str | None = None,
+) -> bool:
+    """Count one use for `ip` in `period` (default: today) and say whether it fits.
+
+    In memory, so it resets on deploy. Entries from other periods are dropped
+    on every call, which keeps the store to one period's IPs.
+    """
+    period = period or date.today().isoformat()
+    for k in [k for k, (p, _) in store.items() if p != period]:
+        del store[k]
+    _, count = store.get(ip, (period, 0))
+    if count >= limit:
+        return False
+    store[ip] = (period, count + 1)
+    return True
 
 
 def get_client_ip(request: Request) -> str:

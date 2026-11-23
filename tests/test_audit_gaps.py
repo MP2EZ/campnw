@@ -9,6 +9,7 @@ import asyncio
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
@@ -310,6 +311,21 @@ class TestSecurityHeaders:
         assert "https://*.tile.openstreetmap.org" in img_src
 
 
+    def test_csp_script_src_disallows_inline(self, api_client: TestClient):
+        """SEC-12: with no inline scripts left, an injection can't run script."""
+        resp = api_client.get("/api/perf")
+        script_src = resp.headers["Content-Security-Policy"].split("script-src")[1].split(";")[0]
+        assert "'unsafe-inline'" not in script_src
+
+    def test_spa_index_has_no_inline_scripts(self):
+        """The CSP above only holds while index.html loads every script by src."""
+        import re
+        from pathlib import Path
+
+        html = (Path(__file__).parents[1] / "web" / "index.html").read_text()
+        for tag in re.findall(r"<script\b[^>]*>", html):
+            assert "src=" in tag, tag
+
 # ---------------------------------------------------------------------------
 # Date suggestion probes
 # ---------------------------------------------------------------------------
@@ -446,6 +462,77 @@ class TestSearchStreamNLIntegration:
         assert "data: [DONE]" in resp.text
         # Should NOT have parsed_params since no API key
         assert "parsed_params" not in resp.text
+
+
+    def test_q_longer_than_300_chars_rejected(self, api_client: TestClient):
+        """The NL query is sent to Claude, so its size is bounded."""
+        self._setup_empty_engine()
+        parse = AsyncMock(return_value={})
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}), patch(
+            "pnw_campsites.search.nl_parser.parse_natural_query", parse,
+        ):
+            resp = api_client.get("/api/search/stream", params={"q": "x" * 301})
+
+        assert resp.status_code == 422
+        parse.assert_not_called()
+
+    def test_nl_parse_rate_limited_per_ip(self, api_client: TestClient, monkeypatch):
+        """Each NL parse is a paid Claude call, so it has a per-IP daily cap."""
+        import pnw_campsites.routes.search as search_mod
+
+        self._setup_empty_engine()
+        monkeypatch.setattr(search_mod, "_NL_DAILY_LIMIT", 2)
+        search_mod._nl_rate_limit.clear()
+        parse = AsyncMock(return_value={})
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}), patch(
+            "pnw_campsites.search.nl_parser.parse_natural_query", parse,
+        ):
+            codes = [
+                api_client.get(
+                    "/api/search/stream", params={"q": "camping in montana"},
+                ).status_code
+                for _ in range(3)
+            ]
+
+        assert codes == [200, 200, 429]
+        assert parse.await_count == 2
+
+
+class TestCustomOriginRateLimit:
+    """A custom `from` address costs a Nominatim lookup and Mapbox Matrix
+    calls, so searches from one are capped per client IP per day."""
+
+    @pytest.fixture(autouse=True)
+    def _small_limit(self, monkeypatch, api_client):
+        import pnw_campsites.routes.search as search_mod
+
+        monkeypatch.setattr(search_mod, "_CUSTOM_ORIGIN_DAILY_LIMIT", 2)
+        search_mod._custom_origin_rate_limit.clear()
+
+        async def empty_stream(query):
+            yield StreamDiagnosisEvent(diagnosis=None, date_suggestions=[], action_chips=[])
+
+        api_module._engine.search_stream = empty_stream
+
+    def _codes(self, api_client, path, origin):
+        params = {"start_date": "2027-06-01", "end_date": "2027-06-03", "from": origin}
+        return [api_client.get(path, params=params).status_code for _ in range(3)]
+
+    def test_stream_custom_address_limited(self, api_client: TestClient):
+        codes = self._codes(api_client, "/api/search/stream", "123 Main St, Tacoma")
+        assert codes == [200, 200, 429]
+
+    def test_stream_known_base_not_limited(self, api_client: TestClient):
+        assert self._codes(api_client, "/api/search/stream", "seattle") == [200] * 3
+
+    def test_search_custom_address_limited(self, api_client: TestClient, monkeypatch):
+        import pnw_campsites.routes.search as search_mod
+
+        monkeypatch.setattr(search_mod, "_CUSTOM_ORIGIN_DAILY_LIMIT", 0)
+        resp = api_client.get("/api/search", params={
+            "start_date": "2027-06-01", "end_date": "2027-06-03", "from": "123 Main St",
+        })
+        assert resp.status_code == 429
 
 
 # ---------------------------------------------------------------------------

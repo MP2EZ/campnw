@@ -18,12 +18,15 @@ from pnw_campsites.geo import is_known_base
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import (
     _FACILITY_ID_RE,
+    check_ip_quota,
+    get_client_ip,
     get_current_user,
     get_engine,
     get_registry,
     get_search_timings,
 )
 from pnw_campsites.search.engine import (
+    DateRangeError,
     SearchQuery,
     StreamCoverageEvent,
     StreamDiagnosisEvent,
@@ -31,6 +34,7 @@ from pnw_campsites.search.engine import (
     StreamProgressEvent,
     StreamTimingEvent,
     StreamWarningsEvent,
+    check_date_range,
 )
 from pnw_campsites.urls import (
     availability_url,
@@ -441,6 +445,32 @@ def _lookup_weather_single(
     return registry.get_weather_normals(cg_lat, cg_lon, month, day)
 
 
+def _require_sane_range(start_date: date, end_date: date) -> None:
+    """422 before any provider is asked: the range is the upstream fan-out."""
+    try:
+        check_date_range(start_date, end_date)
+    except DateRangeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+# Searches from a custom address per client IP per day. Each can cost a
+# Nominatim lookup (1 req/s policy) and up to 5 billed Mapbox Matrix calls.
+_custom_origin_rate_limit: dict[str, tuple[str, int]] = {}
+_CUSTOM_ORIGIN_DAILY_LIMIT = 100
+
+
+def _require_origin_quota(request: Request, from_location: str | None) -> None:
+    if not from_location or is_known_base(from_location):
+        return
+    if not check_ip_quota(
+        _custom_origin_rate_limit, get_client_ip(request), _CUSTOM_ORIGIN_DAILY_LIMIT,
+    ):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many searches from a custom address today; try a listed city",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -448,6 +478,7 @@ def _lookup_weather_single(
 
 @router.get("/search", response_model=SearchResponse)
 async def search(
+    request: Request,
     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: date = Query(..., description="End date (YYYY-MM-DD)"),
     state: str | None = Query(None, description="Filter by state: WA, OR, ID"),
@@ -473,6 +504,8 @@ async def search(
         None, ge=1, le=100, description="Trailer/RV length in feet (trailer only)",
     ),
 ):
+    _require_sane_range(start_date, end_date)
+    _require_origin_quota(request, from_location)
     engine = get_engine()
     days_set = (
         {int(d) for d in days_of_week.split(",")}
@@ -543,6 +576,12 @@ async def search(
     )
 
 
+# Natural-language parses per client IP per day. Each one is a paid Claude
+# call that needs no account.
+_nl_rate_limit: dict[str, tuple[str, int]] = {}
+_NL_DAILY_LIMIT = 50
+
+
 @router.get("/search/stream")
 async def search_stream(
     request: Request,
@@ -563,7 +602,9 @@ async def search_stream(
     people: int | None = Query(None, ge=1, le=50),
     equipment: Equipment | None = Query(None),
     rig_length: int | None = Query(None, ge=1, le=100),
-    q: str | None = Query(None, description="Natural language search query"),
+    q: str | None = Query(
+        None, max_length=300, description="Natural language search query",
+    ),
 ):
     """SSE streaming search — yields results as each batch completes."""
     engine = get_engine()
@@ -579,6 +620,11 @@ async def search_stream(
         if api_key:
             from pnw_campsites.search.nl_parser import parse_natural_query
 
+            if not check_ip_quota(_nl_rate_limit, get_client_ip(request), _NL_DAILY_LIMIT):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many natural-language searches today; try the filters instead",
+                )
             nl_parsed = await parse_natural_query(q, api_key, posthog_distinct_id=ph_distinct_id)
             # Apply NL-parsed values as defaults (explicit params override)
             if "start_date" in nl_parsed:
@@ -605,6 +651,8 @@ async def search_stream(
         # Default: 2 weeks out, 30-day window
         start_date = start_date or (date.today() + timedelta(days=14))
         end_date = end_date or (start_date + timedelta(days=30))
+    _require_sane_range(start_date, end_date)
+    _require_origin_quota(request, from_location)
 
     days_set = (
         {int(d) for d in days_of_week.split(",")} if days_of_week else None
@@ -782,8 +830,9 @@ async def check(
     nights: int = Query(1),
     source: str | None = Query(None, description="recgov or wa_state"),
 ):
-    if not _FACILITY_ID_RE.match(facility_id):
+    if not _FACILITY_ID_RE.fullmatch(facility_id):
         raise HTTPException(status_code=400, detail="Invalid facility_id")
+    _require_sane_range(start_date, end_date)
     engine = get_engine()
     booking_system = BookingSystem(source) if source else None
     result = await engine.check_specific(

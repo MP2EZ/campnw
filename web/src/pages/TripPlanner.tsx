@@ -91,6 +91,9 @@ export default function TripPlanner() {
   const [apiMessages, setApiMessages] = useState<ChatMessage[]>(
     () => loadSaved("campable-plan-api-messages", []),
   );
+  const [conversationId, setConversationId] = useState<string | null>(
+    () => loadSaved<string | null>("campable-plan-conversation", null),
+  );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,8 +107,9 @@ export default function TripPlanner() {
     if (messages.length > 0) {
       localStorage.setItem("campable-plan-messages", JSON.stringify(messages));
       localStorage.setItem("campable-plan-api-messages", JSON.stringify(apiMessages));
+      localStorage.setItem("campable-plan-conversation", JSON.stringify(conversationId));
     }
-  }, [messages, apiMessages]);
+  }, [messages, apiMessages, conversationId]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -210,6 +214,8 @@ export default function TripPlanner() {
         setLoading(false);
         inputRef.current?.focus();
       },
+      conversationId,
+      setConversationId,
     );
   };
 
@@ -225,8 +231,10 @@ export default function TripPlanner() {
   const handleNewConversation = () => {
     setMessages([]);
     setApiMessages([]);
+    setConversationId(null);
     localStorage.removeItem("campable-plan-messages");
     localStorage.removeItem("campable-plan-api-messages");
+    localStorage.removeItem("campable-plan-conversation");
   };
 
   return (
