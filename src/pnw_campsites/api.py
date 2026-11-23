@@ -556,6 +556,7 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "DELETE", "PATCH"],
     allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["X-Plan-Conversation"],
     allow_credentials=True,
 )
 

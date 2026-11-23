@@ -161,6 +161,32 @@ describe("api: WatchLimitError on 402", () => {
     expect(caught).toBeInstanceOf(PlannerLimitError);
     expect((caught as InstanceType<typeof PlannerLimitError>).limit).toBe(3);
   });
+
+  test("planChatStream sends the conversation id and reports the server's", async () => {
+    const body = new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+        c.close();
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "X-Plan-Conversation": "b".repeat(32) }),
+      body,
+    });
+    globalThis.fetch = fetchMock;
+    const { planChatStream } = await import("../api");
+    const onConversation = vi.fn();
+    await planChatStream(
+      [{ role: "user", content: "x" }],
+      vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(),
+      "a".repeat(32), onConversation,
+    );
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sent.conversation_id).toBe("a".repeat(32));
+    expect(onConversation).toHaveBeenCalledWith("b".repeat(32));
+  });
 });
 
 describe("useBilling", () => {

@@ -933,12 +933,18 @@ export async function planChatStream(
   onToolResult: (name: string, summary: string) => void,
   onDone: (fullContent: string, toolCalls: ToolCall[]) => void,
   onError: (err: Error) => void,
+  // Issued by the server on the first turn; later turns send it back so they
+  // don't count as new conversations against the monthly cap.
+  conversationId?: string | null,
+  onConversation?: (id: string) => void,
 ): Promise<void> {
   try {
     const resp = await authFetch(`${API_BASE}/api/plan/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify(
+        conversationId ? { messages, conversation_id: conversationId } : { messages },
+      ),
     });
     if (!resp.ok) {
       if (resp.status === 402) {
@@ -950,6 +956,9 @@ export async function planChatStream(
         (data as { detail?: string }).detail || `Chat failed: ${resp.status}`,
       );
     }
+
+    const issued = resp.headers?.get("X-Plan-Conversation");
+    if (issued) onConversation?.(issued);
 
     const reader = resp.body?.getReader();
     if (!reader) throw new Error("No response body");

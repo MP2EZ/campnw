@@ -448,6 +448,40 @@ class TestSearchStreamNLIntegration:
         assert "parsed_params" not in resp.text
 
 
+    def test_q_longer_than_300_chars_rejected(self, api_client: TestClient):
+        """The NL query is sent to Claude, so its size is bounded."""
+        self._setup_empty_engine()
+        parse = AsyncMock(return_value={})
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}), patch(
+            "pnw_campsites.search.nl_parser.parse_natural_query", parse,
+        ):
+            resp = api_client.get("/api/search/stream", params={"q": "x" * 301})
+
+        assert resp.status_code == 422
+        parse.assert_not_called()
+
+    def test_nl_parse_rate_limited_per_ip(self, api_client: TestClient, monkeypatch):
+        """Each NL parse is a paid Claude call, so it has a per-IP daily cap."""
+        import pnw_campsites.routes.search as search_mod
+
+        self._setup_empty_engine()
+        monkeypatch.setattr(search_mod, "_NL_DAILY_LIMIT", 2)
+        search_mod._nl_rate_limit.clear()
+        parse = AsyncMock(return_value={})
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}), patch(
+            "pnw_campsites.search.nl_parser.parse_natural_query", parse,
+        ):
+            codes = [
+                api_client.get(
+                    "/api/search/stream", params={"q": "camping in montana"},
+                ).status_code
+                for _ in range(3)
+            ]
+
+        assert codes == [200, 200, 429]
+        assert parse.await_count == 2
+
+
 # ---------------------------------------------------------------------------
 # Watcher cache path
 # ---------------------------------------------------------------------------

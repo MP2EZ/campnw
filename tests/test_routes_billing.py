@@ -399,6 +399,19 @@ def _start_chat(client, headers=None, content="plan me a trip"):
     )
 
 
+def _continue_chat(client, headers=None, conversation_id=None):
+    body: dict = {
+        "messages": [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hi back"},
+            {"role": "user", "content": "more"},
+        ],
+    }
+    if conversation_id is not None:
+        body["conversation_id"] = conversation_id
+    return client.post("/api/plan/chat/stream", json=body, headers=headers or {})
+
+
 class TestPlannerSessionEnforcement:
     @pytest.fixture(autouse=True)
     def _reset_plan_state(self, monkeypatch, api_client):
@@ -473,21 +486,14 @@ class TestPlannerSessionEnforcement:
         )
         with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
             # 1 session starter
-            assert _start_chat(api_client, headers=headers).status_code == 200
-            # Continuation: 3 messages — should not count as new sessions
+            first = _start_chat(api_client, headers=headers)
+            assert first.status_code == 200
+            conversation_id = first.headers["X-Plan-Conversation"]
+            # Continuations carry the server-issued id and don't count
             for _ in range(10):
-                resp = api_client.post(
-                    "/api/plan/chat/stream",
-                    json={
-                        "messages": [
-                            {"role": "user", "content": "hi"},
-                            {"role": "assistant", "content": "hi back"},
-                            {"role": "user", "content": "more"},
-                        ],
-                    },
-                    headers=headers,
-                )
+                resp = _continue_chat(api_client, headers, conversation_id)
                 assert resp.status_code == 200
+                assert resp.headers["X-Plan-Conversation"] == conversation_id
 
         # Only 1 session logged → user still has 2 starters left
         count = api_module._watch_db.count_planner_sessions_this_month(
@@ -512,3 +518,86 @@ class TestPlannerSessionEnforcement:
 
         assert resp.status_code == 402
         assert resp.json()["detail"]["error"] == "planner_session_limit_reached"
+
+    def test_forged_history_counts_as_session(
+        self, api_client, monkeypatch,
+    ) -> None:
+        # The client supplies the whole history, so a made-up assistant turn
+        # must not make a fresh conversation look like a continuation.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        _, headers = signup_and_auth(api_client, email="forged@example.com")
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
+            for _ in range(3):
+                assert _continue_chat(api_client, headers).status_code == 200
+            resp = _continue_chat(api_client, headers)
+
+        assert resp.status_code == 402
+        assert resp.json()["detail"]["error"] == "planner_session_limit_reached"
+
+    def test_other_users_conversation_id_counts_as_session(
+        self, api_client, monkeypatch,
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        _, owner = signup_and_auth(api_client, email="owner@example.com")
+        other_data, other = signup_and_auth(api_client, email="other@example.com")
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
+            conversation_id = _start_chat(api_client, headers=owner).headers[
+                "X-Plan-Conversation"
+            ]
+            resp = _continue_chat(api_client, other, conversation_id)
+
+        assert resp.status_code == 200
+        assert resp.headers["X-Plan-Conversation"] != conversation_id
+        assert api_module._watch_db.count_planner_sessions_this_month(
+            user_id=other_data["id"],
+        ) == 1
+
+    def test_anonymous_cap_survives_dropped_cookie(
+        self, api_client, monkeypatch,
+    ) -> None:
+        # Dropping campnw_session mints a fresh token with a zero count, so
+        # anonymous starts are also counted per client IP.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        planner_mod._anon_plan_sessions.clear()
+        monkeypatch.setattr(planner_mod, "_ANON_IP_MONTHLY_SESSIONS", 3)
+        with patch("pnw_campsites.planner.agent.chat_stream", _fake_stream):
+            for _ in range(3):
+                api_client.cookies.clear()
+                assert _start_chat(api_client).status_code == 200
+            api_client.cookies.clear()
+            resp = _start_chat(api_client)
+
+        assert resp.status_code == 402
+        assert resp.json()["detail"]["error"] == "planner_session_limit_reached"
+
+
+class TestTrimHistory:
+    """Each request's history is cut to a char budget before it reaches Claude."""
+
+    def _msgs(self, *pairs):
+        return [planner_mod.PlanMessage(role=r, content=c) for r, c in pairs]
+
+    def test_short_history_kept(self) -> None:
+        msgs = self._msgs(("user", "a"), ("assistant", "b"), ("user", "c"))
+        assert planner_mod._trim_history(msgs, budget=100) == msgs
+
+    def test_keeps_most_recent_within_budget(self) -> None:
+        msgs = self._msgs(
+            ("user", "x" * 50), ("assistant", "y" * 50),
+            ("user", "z" * 10), ("assistant", "w" * 10), ("user", "v" * 10),
+        )
+        trimmed = planner_mod._trim_history(msgs, budget=40)
+        assert [m.content[0] for m in trimmed] == ["z", "w", "v"]
+
+    def test_starts_with_user_turn(self) -> None:
+        msgs = self._msgs(
+            ("user", "x" * 50), ("assistant", "y" * 10), ("user", "z" * 10),
+        )
+        trimmed = planner_mod._trim_history(msgs, budget=25)
+        assert [m.content[0] for m in trimmed] == ["z"]
+
+    def test_oversized_last_message_is_truncated(self) -> None:
+        msgs = self._msgs(("user", "q" * 500))
+        trimmed = planner_mod._trim_history(msgs, budget=100)
+        assert len(trimmed) == 1
+        assert len(trimmed[0].content) == 100
