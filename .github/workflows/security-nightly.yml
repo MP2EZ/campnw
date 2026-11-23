@@ -1,0 +1,59 @@
+name: Security Nightly
+
+# Runs the shared scan in nightly mode and turns its results into GitHub
+# issues: one per finding, closed when a clean run no longer sees it. A
+# scanner that failed is reported as broken, never as clean.
+# See docs/MONITORING.md → "Layer 5 — Security scan".
+
+on:
+  schedule:
+    - cron: "30 10 * * *" # daily 10:30 UTC — clear of prod-monitor (15:00) and backup (Mon 08:00)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    uses: ./.github/workflows/security-scan.yml
+    with:
+      nightly: true
+    secrets:
+      FLY_READONLY_TOKEN: ${{ secrets.FLY_READONLY_TOKEN }}
+
+  report:
+    name: file issues
+    needs: scan
+    # always(): a failed scanner must still be reported, as broken.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: scan-*
+          merge-multiple: true
+          path: scan
+
+      - name: Check and file issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          rc=0
+          python scripts/security_scan.py check --dir scan \
+            --expect pip-audit.json npm-audit.json zizmor.json trivy.json live.json \
+            --out findings.json || rc=$?
+          python scripts/security_scan.py file-issues findings.json
+          exit $rc

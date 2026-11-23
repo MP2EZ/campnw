@@ -1,22 +1,27 @@
 name: Security Scan
 
-# Two modes, one set of scanners (docs/MONITORING.md → "Layer 5 — Security scan"):
+# Reusable scan, two callers (docs/MONITORING.md → "Layer 5 — Security scan"):
 #
-#   PR gate  — called by pr-checks.yml. Dependency CVEs (pip-audit, npm audit)
-#              and workflow lint (zizmor). Fails on any finding not accepted in
-#              .github/security-allowlist.toml.
-#   Nightly  — schedule / manual. Same scans against unchanged code (new CVEs
-#              land without a PR), plus Trivy on the image Fly is actually
-#              running and read-only checks of campable.co. Files one GitHub
-#              issue per finding and closes it when the finding clears.
+#   pr-checks.yml        nightly: false. Dependency CVEs (pip-audit, npm audit)
+#                        and workflow lint (zizmor). Fails on any finding not
+#                        accepted in .github/security-allowlist.toml.
+#   security-nightly.yml nightly: true. Same scans against unchanged code (new
+#                        CVEs land without a PR), plus Trivy on the image Fly is
+#                        actually running and read-only checks of campable.co.
+#                        Uploads results; the caller files the issues.
 #
-# A scanner that fails is reported as broken (its own issue), never as clean.
+# Read-only on purpose: issue writes live in security-nightly.yml, so PR runs
+# never hold issues: write.
 
 on:
-  workflow_call: {}
-  schedule:
-    - cron: "30 10 * * *" # daily 10:30 UTC — clear of prod-monitor (15:00) and backup (Mon 08:00)
-  workflow_dispatch: {}
+  workflow_call:
+    inputs:
+      nightly:
+        type: boolean
+        default: false
+    secrets:
+      FLY_READONLY_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -62,14 +67,14 @@ jobs:
             > "$RUNNER_TEMP/scan/zizmor.json" || true
 
       - name: Gate
-        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        if: ${{ !inputs.nightly }}
         run: |
           python scripts/security_scan.py check --dir "$RUNNER_TEMP/scan" \
             --expect pip-audit.json npm-audit.json zizmor.json \
             --out "$RUNNER_TEMP/findings.json"
 
       - name: Upload results
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: inputs.nightly
         uses: actions/upload-artifact@v4
         with:
           name: scan-deps
@@ -78,7 +83,7 @@ jobs:
 
   image:
     name: deployed image (Trivy)
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: inputs.nightly
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -126,7 +131,7 @@ jobs:
 
   live:
     name: campable.co live config
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: inputs.nightly
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -151,40 +156,3 @@ jobs:
           name: scan-live
           path: ${{ runner.temp }}/scan/
           retention-days: 14
-
-  report:
-    name: file issues
-    needs: [deps, image, live]
-    # always(): a failed scanner must still be reported, as broken.
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: scan-*
-          merge-multiple: true
-          path: scan
-
-      - name: Check and file issues
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          rc=0
-          python scripts/security_scan.py check --dir scan \
-            --expect pip-audit.json npm-audit.json zizmor.json trivy.json live.json \
-            --out findings.json || rc=$?
-          python scripts/security_scan.py file-issues findings.json
-          exit $rc

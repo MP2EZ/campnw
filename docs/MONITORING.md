@@ -231,7 +231,7 @@ One workflow, two modes:
 | Mode | When | Scans | On a finding |
 |---|---|---|---|
 | PR gate | every PR / push to dev, main (called from `pr-checks.yml`) | pip-audit, npm audit (high/critical), zizmor on `.github/workflows` | job fails |
-| Nightly | daily 10:30 UTC, or Actions → Security Scan → Run workflow | the above, plus Trivy on the image prod runs and read-only checks of campable.co | one issue per finding |
+| Nightly | daily 10:30 UTC (`security-nightly.yml`), or Actions → Security Nightly → Run workflow | the above, plus Trivy on the image prod runs and read-only checks of campable.co | one issue per finding |
 
 Also on in repo settings (free for a public repo): Dependabot alerts, secret
 scanning with push protection, and CodeQL default setup. Those alert through
