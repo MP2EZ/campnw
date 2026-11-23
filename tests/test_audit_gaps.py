@@ -9,6 +9,7 @@ import asyncio
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
@@ -480,6 +481,43 @@ class TestSearchStreamNLIntegration:
 
         assert codes == [200, 200, 429]
         assert parse.await_count == 2
+
+
+class TestCustomOriginRateLimit:
+    """A custom `from` address costs a Nominatim lookup and Mapbox Matrix
+    calls, so searches from one are capped per client IP per day."""
+
+    @pytest.fixture(autouse=True)
+    def _small_limit(self, monkeypatch, api_client):
+        import pnw_campsites.routes.search as search_mod
+
+        monkeypatch.setattr(search_mod, "_CUSTOM_ORIGIN_DAILY_LIMIT", 2)
+        search_mod._custom_origin_rate_limit.clear()
+
+        async def empty_stream(query):
+            yield StreamDiagnosisEvent(diagnosis=None, date_suggestions=[], action_chips=[])
+
+        api_module._engine.search_stream = empty_stream
+
+    def _codes(self, api_client, path, origin):
+        params = {"start_date": "2027-06-01", "end_date": "2027-06-03", "from": origin}
+        return [api_client.get(path, params=params).status_code for _ in range(3)]
+
+    def test_stream_custom_address_limited(self, api_client: TestClient):
+        codes = self._codes(api_client, "/api/search/stream", "123 Main St, Tacoma")
+        assert codes == [200, 200, 429]
+
+    def test_stream_known_base_not_limited(self, api_client: TestClient):
+        assert self._codes(api_client, "/api/search/stream", "seattle") == [200] * 3
+
+    def test_search_custom_address_limited(self, api_client: TestClient, monkeypatch):
+        import pnw_campsites.routes.search as search_mod
+
+        monkeypatch.setattr(search_mod, "_CUSTOM_ORIGIN_DAILY_LIMIT", 0)
+        resp = api_client.get("/api/search", params={
+            "start_date": "2027-06-01", "end_date": "2027-06-03", "from": "123 Main St",
+        })
+        assert resp.status_code == 429
 
 
 # ---------------------------------------------------------------------------

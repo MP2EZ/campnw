@@ -93,6 +93,12 @@ def is_known_base(name: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+# Normalized address -> (lat, lon). Nominatim's policy is 1 req/s, and the
+# same custom address is geocoded on every search from it.
+_geocode_cache: dict[str, tuple[float, float]] = {}
+_GEOCODE_CACHE_SIZE = 512
+
+
 async def geocode_address(address: str) -> tuple[float, float]:
     """Geocode an address via Nominatim. Returns (lat, lon).
 
@@ -100,6 +106,9 @@ async def geocode_address(address: str) -> tuple[float, float]:
     """
     if not address.strip() or len(address) > 200:
         raise ValueError("Address must be 1-200 characters")
+    key = " ".join(address.lower().split())
+    if key in _geocode_cache:
+        return _geocode_cache[key]
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             "https://nominatim.openstreetmap.org/search",
@@ -113,7 +122,11 @@ async def geocode_address(address: str) -> tuple[float, float]:
     if not results:
         raise ValueError(f"Could not geocode address: '{address}'")
 
-    return float(results[0]["lat"]), float(results[0]["lon"])
+    coords = float(results[0]["lat"]), float(results[0]["lon"])
+    if len(_geocode_cache) >= _GEOCODE_CACHE_SIZE:
+        del _geocode_cache[next(iter(_geocode_cache))]
+    _geocode_cache[key] = coords
+    return coords
 
 
 # ---------------------------------------------------------------------------

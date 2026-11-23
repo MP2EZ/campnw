@@ -1312,6 +1312,72 @@ class TestResolveDriveTimes:
 
         assert drive_times["100"] == 120  # from Mapbox
 
+    async def test_tier2_sends_only_nearest_candidates_to_mapbox(
+        self, registry, monkeypatch,
+    ) -> None:
+        """Matrix is billed per element, so a custom-address search sends at
+        most _MATRIX_MAX_DESTINATIONS, nearest first; the rest keep the
+        haversine estimate."""
+        import pnw_campsites.search.engine as engine_mod
+
+        monkeypatch.setattr(engine_mod, "_MATRIX_MAX_DESTINATIONS", 3)
+        matrix = AsyncMock(side_effect=lambda origin, dests: {
+            fid: {"drive_minutes": 1} for fid, _, _ in dests
+        })
+        monkeypatch.setattr(engine_mod, "get_drive_times_matrix", matrix)
+        cgs = [
+            make_campground(facility_id=str(i), latitude=47.25 + i * 0.1,
+                            longitude=-122.44, state="WA")
+            for i in range(1, 9)
+        ]
+        engine = SearchEngine(registry=registry, recgov_client=None)
+        query = SearchQuery(from_location="123 Main St, Tacoma, WA",
+                            from_coords=(47.25, -122.44))
+
+        drive_times = await engine._resolve_drive_times(query, query.from_coords, cgs)
+
+        sent = [fid for fid, _, _ in matrix.await_args.args[1]]
+        assert sent == ["1", "2", "3"]
+        assert set(drive_times) == {str(i) for i in range(1, 9)}
+        assert drive_times["8"] > 1  # haversine estimate, not Mapbox
+
+    async def test_tier2_skips_candidates_far_past_max_drive(
+        self, registry, monkeypatch,
+    ) -> None:
+        import pnw_campsites.search.engine as engine_mod
+
+        matrix = AsyncMock(return_value={})
+        monkeypatch.setattr(engine_mod, "get_drive_times_matrix", matrix)
+        near = make_campground(facility_id="near", latitude=47.4, longitude=-122.44)
+        far = make_campground(facility_id="far", latitude=49.0, longitude=-122.44)
+        engine = SearchEngine(registry=registry, recgov_client=None)
+        query = SearchQuery(from_location="123 Main St, Tacoma, WA",
+                            from_coords=(47.25, -122.44), max_drive_minutes=60)
+
+        await engine._resolve_drive_times(query, query.from_coords, [near, far])
+
+        assert [fid for fid, _, _ in matrix.await_args.args[1]] == ["near"]
+
+    async def test_tier2_reuses_matrix_results_for_same_origin(
+        self, registry, monkeypatch,
+    ) -> None:
+        """Date-suggestion probes re-run _prepare_search; they must not pay
+        for the same Matrix call again."""
+        import pnw_campsites.search.engine as engine_mod
+
+        matrix = AsyncMock(return_value={"100": {"drive_minutes": 120}})
+        monkeypatch.setattr(engine_mod, "get_drive_times_matrix", matrix)
+        cg = make_campground(facility_id="100", latitude=47.0, longitude=-121.5)
+        engine = SearchEngine(registry=registry, recgov_client=None)
+        query = SearchQuery(from_location="123 Main St, Tacoma, WA",
+                            from_coords=(47.25, -122.44))
+
+        first = await engine._resolve_drive_times(query, query.from_coords, [cg])
+        second = await engine._resolve_drive_times(query, query.from_coords, [cg])
+
+        assert first == second == {"100": 120}
+        assert matrix.await_count == 1
+
     async def test_tier3_fallback_when_mapbox_fails(
         self, registry, monkeypatch,
     ) -> None:

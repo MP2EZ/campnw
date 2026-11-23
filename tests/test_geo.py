@@ -225,6 +225,16 @@ class TestGeocodeAddress:
         assert await geocode_address(address_200) == (1.0, 2.0)
         assert route.calls[0].request.url.params["q"] == address_200
 
+    @respx.mock
+    async def test_repeat_address_is_served_from_cache(self):
+        """Nominatim allows 1 req/s; the same address isn't looked up twice."""
+        route = respx.get("https://nominatim.openstreetmap.org/search").mock(
+            return_value=httpx.Response(200, json=[{"lat": "3", "lon": "4"}]),
+        )
+        assert await geocode_address("12 Cache St, Olympia") == (3.0, 4.0)
+        assert await geocode_address("  12 cache st, olympia ") == (3.0, 4.0)
+        assert route.call_count == 1
+
 DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/driving"
 
 
