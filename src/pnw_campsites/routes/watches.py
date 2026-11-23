@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import Response
 
 from pnw_campsites import billing
@@ -15,6 +15,8 @@ from pnw_campsites.monitor.db import Watch
 from pnw_campsites.registry.models import BookingSystem
 from pnw_campsites.routes.deps import (
     SESSION_COOKIE,
+    check_ip_quota,
+    get_client_ip,
     get_current_user,
     get_current_user_obj,
     get_registry,
@@ -29,19 +31,40 @@ router = APIRouter(prefix="/api/watches", tags=["watches"])
 # ---------------------------------------------------------------------------
 
 
+# Anonymous watch creations per client IP per day. Dropping the session
+# cookie resets the per-token cap, and every watch is polled upstream.
+_anon_watch_creates: dict[str, tuple[str, int]] = {}
+_ANON_WATCH_DAILY_LIMIT = 10
+
+
+class TemplateSearchParams(BaseModel):
+    """The registry filters a template watch expands with (monitor/expand.py)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    state: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+    tags: list[Annotated[str, Field(max_length=40)]] | None = Field(
+        default=None, max_length=10,
+    )
+    max_drive: int | None = Field(default=None, ge=1, le=1440)
+    name: str | None = Field(default=None, max_length=100)
+
+
 class WatchRequest(BaseModel):
     facility_id: str = Field(default="", max_length=30, pattern=r"^[-\w]{0,30}$")
     name: str = Field(default="", max_length=200)
     start_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     end_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     min_nights: int = Field(default=1, ge=1, le=30)
-    days_of_week: list[int] | None = None
+    days_of_week: list[Annotated[int, Field(ge=0, le=6)]] | None = Field(
+        default=None, max_length=7,
+    )
     notify_topic: str = Field(default="", max_length=64, pattern=r"^[A-Za-z0-9_-]*$")
     notification_channel: str = Field(
         default="", max_length=20, pattern=r"^(ntfy|pushover|web_push|)?$"
     )
     watch_type: str = Field(default="single", pattern=r"^(single|template|release)$")
-    search_params: dict | None = None
+    search_params: TemplateSearchParams | None = None
     # Site filters, the same bounds as the search's `who` params.
     min_people: int | None = Field(default=None, ge=1, le=50)
     equipment: Literal["tent", "van", "trailer"] | None = None
@@ -121,6 +144,9 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
             )
 
     if body.watch_type == "template":
+        # Each one expands to up to 20 polled campgrounds.
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in to watch a search")
         if not body.search_params:
             raise HTTPException(
                 status_code=422,
@@ -168,7 +194,10 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
         user_id=user_id,
         booking_system=booking_system,
         watch_type=body.watch_type,
-        search_params=json.dumps(body.search_params) if body.search_params else "",
+        search_params=(
+            json.dumps(body.search_params.model_dump(exclude_none=True))
+            if body.search_params else ""
+        ),
         min_people=body.min_people,
         equipment=body.equipment,
         rig_length=body.rig_length if body.equipment == "trailer" else None,
@@ -178,6 +207,12 @@ async def create_watch(body: WatchRequest, request: Request, response: Response)
     if body.watch_type != "template" and db.has_duplicate_watch(watch):
         raise HTTPException(
             status_code=409, detail="Watch already exists",
+        )
+    if not user_id and not check_ip_quota(
+        _anon_watch_creates, get_client_ip(request), _ANON_WATCH_DAILY_LIMIT,
+    ):
+        raise HTTPException(
+            status_code=429, detail="Too many watches created today; sign in to add more",
         )
     saved = db.add_watch(watch)
     return _watch_to_response(saved)

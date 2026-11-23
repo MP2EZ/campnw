@@ -295,11 +295,12 @@ def _reset_in_memory_quotas():
     """Per-IP quotas and caches are module globals, and every TestClient
     request comes from the same IP; start each test from empty."""
     from pnw_campsites import geo
-    from pnw_campsites.routes import planner, search
+    from pnw_campsites.routes import planner, search, watches
 
     stores = (
         geo._geocode_cache, planner._plan_rate_limit, planner._anon_plan_sessions,
         search._nl_rate_limit, search._custom_origin_rate_limit,
+        watches._anon_watch_creates,
     )
     for store in stores:
         store.clear()

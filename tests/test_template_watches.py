@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 import pnw_campsites.api as api_module
@@ -126,3 +127,59 @@ class TestTemplateWatchAPI:
         }, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["watch_type"] == "single"
+
+
+class TestWatchInputBounds:
+    """SEC-05: watch input is bounded and anonymous creation is capped."""
+
+    def _post(self, client, headers=None, **fields):
+        body = {"start_date": "2026-07-01", "end_date": "2026-07-31", **fields}
+        return client.post("/api/watches", json=body, headers=headers or {})
+
+    def test_template_requires_sign_in(self, api_client: TestClient):
+        resp = self._post(api_client, watch_type="template",
+                          search_params={"state": "WA"})
+        assert resp.status_code == 401
+
+    @pytest.mark.parametrize("params", [
+        {"state": "WA", "evil": "x"},
+        {"tags": [f"t{i}" for i in range(11)]},
+        {"tags": ["x" * 41]},
+        {"max_drive": 0},
+        {"max_drive": 100_000},
+        {"name": "n" * 101},
+        {"state": "Washington"},
+    ])
+    def test_search_params_are_validated(self, api_client: TestClient, params):
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
+        resp = self._post(api_client, headers, watch_type="template",
+                          search_params=params)
+        assert resp.status_code == 422
+
+    def test_search_params_stored_without_unset_keys(self, api_client: TestClient):
+        _, headers = signup_and_auth(api_client, EMAIL, display_name="")
+        resp = self._post(api_client, headers, watch_type="template",
+                          search_params={"state": "WA", "max_drive": 120})
+        assert resp.json()["search_params"] == {"state": "WA", "max_drive": 120}
+
+    @pytest.mark.parametrize("days", [[7], [-1], [0, 1, 2, 3, 4, 5, 6, 0]])
+    def test_days_of_week_bounded(self, api_client: TestClient, days):
+        resp = self._post(api_client, facility_id="232465", days_of_week=days)
+        assert resp.status_code == 422
+
+    def test_anonymous_creation_capped_per_ip(self, api_client: TestClient, monkeypatch):
+        """Dropping the session cookie resets the per-token watch cap, so
+        anonymous creation is also counted per client IP."""
+        import pnw_campsites.routes.watches as watches_mod
+
+        monkeypatch.setattr(watches_mod, "_ANON_WATCH_DAILY_LIMIT", 2)
+        api_module._registry.get_by_facility_id.return_value = make_campground(
+            facility_id="232465",
+        )
+        codes = []
+        for i in range(3):
+            api_client.cookies.clear()
+            codes.append(self._post(
+                api_client, facility_id="232465", start_date=f"2026-07-0{i + 1}",
+            ).status_code)
+        assert codes == [200, 200, 429]
