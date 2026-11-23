@@ -65,6 +65,31 @@ SOURCE_CONCURRENCY: dict[BookingSystem, int] = {BookingSystem.OR_STATE: 2}
 # pause ends on its own, and the next search retries WA.
 WAF_BACKOFF_S = 600.0
 
+# Every month in a range is one rec.gov request per park, so the range is the
+# fan-out. The UI asks for a month at most; three cover a widened search. No
+# system books further out than WA's nine months.
+MAX_SPAN_DAYS = 92
+MAX_DAYS_AHEAD = 400
+
+
+class DateRangeError(ValueError):
+    """A search range that is backwards, too long, or past every booking window."""
+
+
+def check_span(start: date, end: date) -> None:
+    """What bounds the fan-out, enforced wherever a range reaches a provider."""
+    if end < start:
+        raise DateRangeError("end_date is before start_date")
+    if (end - start).days > MAX_SPAN_DAYS:
+        raise DateRangeError(f"date range is longer than {MAX_SPAN_DAYS} days")
+
+
+def check_date_range(start: date, end: date, today: date | None = None) -> None:
+    """The span, plus the booking horizon: what a public request may ask for."""
+    check_span(start, end)
+    if end > (today or date.today()) + timedelta(days=MAX_DAYS_AHEAD):
+        raise DateRangeError(f"end_date is more than {MAX_DAYS_AHEAD} days out")
+
 
 @dataclass
 class SearchQuery:
@@ -726,6 +751,8 @@ class SearchEngine:
     async def _prepare_search(self, query: SearchQuery) -> _PreparedSearch:
         """Shared setup for search() and search_stream(): registry filter,
         coordinate resolution, drive-time computation, per-source limiter."""
+        if query.start_date and query.end_date:
+            check_span(query.start_date, query.end_date)
         campgrounds = self._registry.search(
             state=query.state,
             tags=query.tags,
@@ -1084,6 +1111,8 @@ class SearchEngine:
             shifted_start = query.start_date + timedelta(days=delta_days)
             shifted_end = shifted_start + timedelta(days=span)
             if shifted_start < date.today():
+                continue
+            if shifted_end > date.today() + timedelta(days=MAX_DAYS_AHEAD):
                 continue
             probes.append((shifted_start, shifted_end, reason, SearchQuery(
                 start_date=shifted_start,
@@ -1557,6 +1586,7 @@ class SearchEngine:
         booking_system: BookingSystem | None = None,
     ) -> CampgroundResult:
         """Check availability for a specific known campground."""
+        check_span(start_date, end_date)
         campground = self._registry.get_by_facility_id(
             facility_id, booking_system=booking_system or BookingSystem.RECGOV
         )
