@@ -37,6 +37,14 @@ from pnw_campsites.search.who import site_fits
 
 logger = logging.getLogger("pnw_campsites.search")
 
+# Custom-address searches send at most this many destinations to Mapbox
+# Matrix (5 calls), nearest by haversine. A search checks at most 50 parks.
+_MATRIX_MAX_DESTINATIONS = 120
+# The haversine estimate is at most 1.38x the Mapbox time across the 3,811
+# measured base pairs under 6 h, so nothing within max_drive is skipped.
+_MATRIX_ESTIMATE_SLACK = 1.5
+_MATRIX_CACHE_ORIGINS = 64
+
 # One park's provider fetch may take this long before it is reported as
 # "timeout". Cloudflare drops a stream after 100 s without a byte, so it must
 # stay well under that.
@@ -688,6 +696,8 @@ class SearchEngine:
         self._watch_db = watch_db
         # monotonic() until which WA is treated as blocked (WAF_BACKOFF_S).
         self._wa_blocked_until = float("-inf")
+        # Rounded custom origin -> {facility_id: Mapbox drive minutes}.
+        self._matrix_cache: dict[tuple[float, float], dict[str, int]] = {}
 
     def _wa_blocked(self) -> bool:
         return time.monotonic() < self._wa_blocked_until
@@ -722,30 +732,45 @@ class SearchEngine:
                         )
                 return drive_times
 
-        # Tier 2: custom address — Mapbox Matrix for filtered set
-        try:
-            destinations = [
-                (cg.facility_id, cg.latitude, cg.longitude)
-                for cg in campgrounds
-                if cg.latitude and cg.longitude
-            ]
-            if destinations:
-                mapbox_times = await get_drive_times_matrix(
-                    from_coords, destinations,
-                )
-                for fid, data in mapbox_times.items():
-                    drive_times[fid] = data["drive_minutes"]
-                return drive_times
-        except Exception:
-            logger.warning("Mapbox Matrix API failed, falling back to haversine")
-
-        # Tier 3: haversine fallback
+        # Tier 2: custom address — Mapbox Matrix for the nearest candidates.
+        # Every candidate starts from the haversine estimate (also the
+        # fallback when Mapbox fails). Matrix is billed per element, so only
+        # the nearest few that could be within max_drive are sent, and results
+        # are cached per origin so date probes and re-runs reuse them.
         for cg in campgrounds:
             if cg.latitude and cg.longitude:
                 drive_times[cg.facility_id] = estimated_drive_minutes(
                     from_coords[0], from_coords[1],
                     cg.latitude, cg.longitude,
                 )
+        reach = (
+            query.max_drive_minutes * _MATRIX_ESTIMATE_SLACK
+            if query.max_drive_minutes else float("inf")
+        )
+        nearest = sorted(
+            (cg for cg in campgrounds
+             if drive_times.get(cg.facility_id, float("inf")) <= reach),
+            key=lambda cg: drive_times[cg.facility_id],
+        )[:_MATRIX_MAX_DESTINATIONS]
+
+        origin = (round(from_coords[0], 3), round(from_coords[1], 3))
+        if origin not in self._matrix_cache and len(self._matrix_cache) >= _MATRIX_CACHE_ORIGINS:
+            del self._matrix_cache[next(iter(self._matrix_cache))]
+        cached = self._matrix_cache.setdefault(origin, {})
+        missing = [
+            (cg.facility_id, cg.latitude, cg.longitude)
+            for cg in nearest if cg.facility_id not in cached
+        ]
+        if missing:
+            try:
+                mapbox_times = await get_drive_times_matrix(from_coords, missing)
+                for fid, data in mapbox_times.items():
+                    cached[fid] = data["drive_minutes"]
+            except Exception:
+                logger.warning("Mapbox Matrix API failed, falling back to haversine")
+        for cg in nearest:
+            if cg.facility_id in cached:
+                drive_times[cg.facility_id] = cached[cg.facility_id]
         return drive_times
 
     async def _prepare_search(self, query: SearchQuery) -> _PreparedSearch:

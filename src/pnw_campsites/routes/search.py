@@ -453,6 +453,24 @@ def _require_sane_range(start_date: date, end_date: date) -> None:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
 
+# Searches from a custom address per client IP per day. Each can cost a
+# Nominatim lookup (1 req/s policy) and up to 5 billed Mapbox Matrix calls.
+_custom_origin_rate_limit: dict[str, tuple[str, int]] = {}
+_CUSTOM_ORIGIN_DAILY_LIMIT = 100
+
+
+def _require_origin_quota(request: Request, from_location: str | None) -> None:
+    if not from_location or is_known_base(from_location):
+        return
+    if not check_ip_quota(
+        _custom_origin_rate_limit, get_client_ip(request), _CUSTOM_ORIGIN_DAILY_LIMIT,
+    ):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many searches from a custom address today; try a listed city",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -460,6 +478,7 @@ def _require_sane_range(start_date: date, end_date: date) -> None:
 
 @router.get("/search", response_model=SearchResponse)
 async def search(
+    request: Request,
     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: date = Query(..., description="End date (YYYY-MM-DD)"),
     state: str | None = Query(None, description="Filter by state: WA, OR, ID"),
@@ -486,6 +505,7 @@ async def search(
     ),
 ):
     _require_sane_range(start_date, end_date)
+    _require_origin_quota(request, from_location)
     engine = get_engine()
     days_set = (
         {int(d) for d in days_of_week.split(",")}
@@ -632,6 +652,7 @@ async def search_stream(
         start_date = start_date or (date.today() + timedelta(days=14))
         end_date = end_date or (start_date + timedelta(days=30))
     _require_sane_range(start_date, end_date)
+    _require_origin_quota(request, from_location)
 
     days_set = (
         {int(d) for d in days_of_week.split(",")} if days_of_week else None
