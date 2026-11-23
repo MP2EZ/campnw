@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { createElement } from "react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "../lib/supabase";
+import { unregisterPushDevice } from "./usePushNotifications";
 import { getMe, updateProfile, track, getPosthog, type UserData } from "../api";
 
 interface AuthContextValue {
@@ -166,6 +167,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleLogout = useCallback(async () => {
+    // A shared device must not keep this user's alerts or planner chat.
+    await unregisterPushDevice();
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("campable-plan-")) localStorage.removeItem(key);
+    }
     await supabase.auth.signOut();
     setUser(null);
     // Without a real reset the next person to sign in on this device is

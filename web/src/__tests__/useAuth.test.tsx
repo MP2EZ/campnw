@@ -37,10 +37,11 @@ vi.mock("../api", () => ({
   updateProfile: vi.fn(),
   track: vi.fn(),
   getPosthog: vi.fn(() => mockPosthog),
+  unsubscribePush: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { AuthProvider, EMAIL_NOT_CONFIRMED, useAuth } from "../hooks/useAuth";
-import { getMe, updateProfile, track } from "../api";
+import { getMe, updateProfile, track, unsubscribePush } from "../api";
 
 const mockGetMe = vi.mocked(getMe);
 const mockUpdateProfile = vi.mocked(updateProfile);
@@ -195,6 +196,43 @@ describe("useAuth", () => {
     await waitFor(() => {
       expect(mockPosthog.reset).toHaveBeenCalled();
     });
+  });
+
+  test("logout unregisters this device's push and clears the planner transcript", async () => {
+    // SEC-06 / SEC-11: on a shared device the next person must not get the
+    // previous user's alerts or see their planner conversation.
+    mockGetMe.mockResolvedValue(TEST_USER as any);
+    const sub = { endpoint: "https://fcm.googleapis.com/fcm/send/abc", unsubscribe: vi.fn().mockResolvedValue(true) };
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { getRegistration: vi.fn().mockResolvedValue({ pushManager: { getSubscription: () => Promise.resolve(sub) } }) },
+    });
+    for (const k of ["campable-push-subscribed", "campable-plan-messages",
+      "campable-plan-api-messages", "campable-plan-conversation", "campable-theme"]) {
+      localStorage.setItem(k, "x");
+    }
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await act(async () => {
+      triggerAuthChange({ access_token: "test-token" });
+    });
+    await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(vi.mocked(unsubscribePush)).toHaveBeenCalledWith(sub.endpoint);
+    // While the auth header is still valid: the server scopes the delete to the user.
+    expect(vi.mocked(unsubscribePush).mock.invocationCallOrder[0])
+      .toBeLessThan(mockSignOut.mock.invocationCallOrder[0]);
+    expect(sub.unsubscribe).toHaveBeenCalled();
+    for (const k of ["campable-push-subscribed", "campable-plan-messages",
+      "campable-plan-api-messages", "campable-plan-conversation"]) {
+      expect(localStorage.getItem(k)).toBeNull();
+    }
+    expect(localStorage.getItem("campable-theme")).toBe("x");
+    // @ts-expect-error -- test cleanup of the stub
+    delete navigator.serviceWorker;
   });
 
   test("updateProfile updates user state", async () => {
