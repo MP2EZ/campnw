@@ -1,10 +1,11 @@
 import { useEffect, useRef, useMemo } from "react";
+import { mapPopupHtml } from "../lib/mapPopup";
 import { sourceLabel } from "../lib/sources";
 import { formatDateRange, formatDriveTime } from "../lib/dates";
 import { Helmet } from "react-helmet-async";
 import { Link, useLocation } from "react-router-dom";
 import { useSearchContext } from "../contexts/SearchContext";
-import type { CampgroundResult, SearchParams } from "../api";
+import type { SearchParams } from "../api";
 import L from "../leaflet-setup";
 import "leaflet.markercluster";
 import "./MapView.css";
@@ -45,23 +46,6 @@ function pinRadius(totalSites: number): number {
   return 6;
 }
 
-
-function popupHtml(r: CampgroundResult): string {
-  const label = sourceLabel(r.booking_system);
-  const sourceClass = `source-${r.booking_system}`;
-  const drive = r.estimated_drive_minutes ? ` · ${formatDriveTime(r.estimated_drive_minutes)} drive` : "";
-  const link = r.availability_url
-    ? `<a href="${r.availability_url}" target="_blank" rel="noopener">View availability ↗</a>`
-    : "";
-  return `
-    <div class="map-popup">
-      <strong>${r.name}</strong>
-      <span class="source-badge ${sourceClass}">${label}</span>
-      <p>${r.total_available_sites} sites available${drive}</p>
-      ${link}
-    </div>
-  `;
-}
 
 function clusterIcon(cluster: { getChildCount: () => number; getAllChildMarkers: () => L.Marker[] }): L.DivIcon {
   const count = cluster.getChildCount();
@@ -146,7 +130,7 @@ export default function MapView() {
         weight: 2,
         opacity: 1,
       });
-      marker.bindPopup(popupHtml(r), { maxWidth: 280 });
+      marker.bindPopup(mapPopupHtml(r), { maxWidth: 280 });
       cluster.addLayer(marker);
       markers.set(String(r.facility_id), marker);
     }
