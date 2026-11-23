@@ -406,6 +406,16 @@ describe('API: Auth', () => {
     expect(opts.credentials).toBe('include')
   })
 
+  test('deleteAccount throws the server detail on failure', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: () => Promise.resolve({ detail: "Couldn't delete your account. Please try again." }),
+    })
+
+    await expect(deleteAccount()).rejects.toThrow("Couldn't delete your account")
+  })
+
   test('exportData returns parsed JSON', async () => {
     const mockData = { searches: [], watches: [], export_date: '2026-03-22' }
     mockFetch.mockResolvedValueOnce({

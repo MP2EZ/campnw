@@ -58,19 +58,23 @@ def _user_to_dict(user: User) -> dict:
 
 
 async def _delete_supabase_user(supabase_id: str) -> None:
-    """Delete user from Supabase via admin API. Best-effort — logs but doesn't block."""
+    """Delete the user from Supabase Auth via the admin API.
+
+    Raises on failure so the caller doesn't report a deletion that didn't
+    happen. A 404 means it's already gone. Skipped when Supabase isn't
+    configured (local dev).
+    """
     url = os.getenv("SUPABASE_URL", "")
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url or not key:
         return
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.delete(
-                f"{url}/auth/v1/admin/users/{supabase_id}",
-                headers={"apikey": key},
-            )
-    except Exception:
-        log.error("Failed to delete Supabase user %s", supabase_id, exc_info=True)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.delete(
+            f"{url}/auth/v1/admin/users/{supabase_id}",
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+        )
+    if resp.status_code != 404:
+        resp.raise_for_status()
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +116,17 @@ async def delete_me(request: Request):
 
     user = db.get_user_by_id(user_id)
     if user and user.supabase_id:
-        await _delete_supabase_user(user.supabase_id)
+        # Before the local delete: if the sign-in survived, the next login
+        # would silently re-provision the account, so keep both and let the
+        # user retry.
+        try:
+            await _delete_supabase_user(user.supabase_id)
+        except httpx.HTTPError:
+            log.error("Failed to delete Supabase user %s", user.supabase_id, exc_info=True)
+            raise HTTPException(
+                status_code=502,
+                detail="Couldn't delete your account. Please try again.",
+            ) from None
 
     db.delete_user(user_id)
     return {"ok": True}

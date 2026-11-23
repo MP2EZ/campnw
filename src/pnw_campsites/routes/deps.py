@@ -21,7 +21,7 @@ from starlette.responses import Response
 # ---------------------------------------------------------------------------
 
 SESSION_COOKIE = "campnw_session"
-_FACILITY_ID_RE = re.compile(r"^[-\w]{1,30}$")
+_FACILITY_ID_RE = re.compile(r"[-\w]{1,30}")  # use .fullmatch
 
 # https://www.cloudflare.com/ips/ (fetched 2026-11-19)
 _CLOUDFLARE_NETWORKS = tuple(ip_network(n) for n in (
