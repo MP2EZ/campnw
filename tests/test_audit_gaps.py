@@ -310,6 +310,21 @@ class TestSecurityHeaders:
         assert "https://*.tile.openstreetmap.org" in img_src
 
 
+    def test_csp_script_src_disallows_inline(self, api_client: TestClient):
+        """SEC-12: with no inline scripts left, an injection can't run script."""
+        resp = api_client.get("/api/perf")
+        script_src = resp.headers["Content-Security-Policy"].split("script-src")[1].split(";")[0]
+        assert "'unsafe-inline'" not in script_src
+
+    def test_spa_index_has_no_inline_scripts(self):
+        """The CSP above only holds while index.html loads every script by src."""
+        import re
+        from pathlib import Path
+
+        html = (Path(__file__).parents[1] / "web" / "index.html").read_text()
+        for tag in re.findall(r"<script\b[^>]*>", html):
+            assert "src=" in tag, tag
+
 # ---------------------------------------------------------------------------
 # Date suggestion probes
 # ---------------------------------------------------------------------------
