@@ -36,6 +36,12 @@ APP_MARKER = '<div id="root">'
 TLS_MIN_DAYS = 21
 TITLE_PREFIX = "[security] "
 BROKEN_TITLE = f"{TITLE_PREFIX}Nightly security scan is broken"
+PRIVATE_TITLE = f"{TITLE_PREFIX}Nightly scan has private findings"
+
+# The repo is public. These name weaknesses in what prod is running right now,
+# so only a count leaves the runner; details come from running the checks
+# locally (docs/MONITORING.md -> "Private findings").
+PRIVATE = {"image-cve", "live-config"}
 
 # scanner file -> issue category it feeds
 SCANNERS = {
@@ -192,8 +198,24 @@ def plan_issues(
     an issue is only closed when the scanner that would re-find it ran."""
     broken = broken or []
     by_title = {i["title"]: i for i in open_issues}
+    private = [f for f in findings if f.category in PRIVATE]
+    findings = [f for f in findings if f.category not in PRIVATE]
     current = {f.title for f in findings}
     plan: dict[str, list] = {"create": [], "close": [], "comment": []}
+
+    private_issue = by_title.get(PRIVATE_TITLE)
+    if private and not private_issue:
+        plan["create"].append({
+            "title": PRIVATE_TITLE,
+            "labels": ["security", "private"],
+            "body": (f"The nightly scan has {len(private)} private finding(s) in the "
+                     "deployed image or campable.co's live config. Details are kept "
+                     "out of this public repo: run the checks locally, see "
+                     "docs/MONITORING.md → \"Private findings\". This issue closes "
+                     "once a clean run no longer sees any."),
+        })
+    elif private_issue and not private and ok >= PRIVATE:
+        plan["close"].append(private_issue["number"])
 
     for f in findings:
         if f.title not in by_title:
@@ -205,7 +227,7 @@ def plan_issues(
 
     for issue in open_issues:
         # Only touch issues this scan filed; hand-filed ones may share labels.
-        if issue["title"] == BROKEN_TITLE or not issue["title"].startswith(TITLE_PREFIX):
+        if issue["title"] in (BROKEN_TITLE, PRIVATE_TITLE) or not issue["title"].startswith(TITLE_PREFIX):
             continue
         cat = next((lbl for lbl in issue["labels"] if lbl in SCANNERS.values()), None)
         if cat in ok and issue["title"] not in current:
@@ -337,7 +359,11 @@ def collect(scan_dir: Path, expect: list[str]) -> tuple[list[Finding], set[str],
 
 
 def write_summary(kept, suppressed, expired, broken) -> None:
+    private = [f for f in kept if f.category in PRIVATE]
+    kept = [f for f in kept if f.category not in PRIVATE]
     lines = [f"### Security scan: {len(kept)} finding(s)\n"]
+    if private:
+        lines.append(f"Plus {len(private)} private finding(s), details withheld (public repo).\n")
     if kept:
         lines += ["| Severity | Advisory | Package | Fixed in |", "|---|---|---|---|"]
         lines += [f"| {f.severity} | {f.id} | {f.package} ({f.ecosystem}) | {f.fixed or '—'} |" for f in kept]
@@ -346,7 +372,8 @@ def write_summary(kept, suppressed, expired, broken) -> None:
     for b in broken:
         lines.append(f"- ❌ scanner broken: {b}")
     if suppressed:
-        lines.append(f"\n{len(suppressed)} allowlisted: " + ", ".join(sorted({f.id for f in suppressed})))
+        ids = sorted({f.id for f in suppressed if f.category not in PRIVATE})
+        lines.append(f"\n{len(suppressed)} allowlisted: " + ", ".join(ids))
     text = "\n".join(lines)
     print(text)
     if summary := os.environ.get("GITHUB_STEP_SUMMARY"):

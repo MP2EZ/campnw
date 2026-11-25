@@ -9,6 +9,7 @@ from datetime import date
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from security_scan import (
+    PRIVATE_TITLE,
     Finding,
     apply_allowlist,
     load_allowlist,
@@ -206,3 +207,39 @@ class TestReviewFixes:
                 "x-content-type-options": "nosniff", "content-type": "text/html"})
         with httpx.Client(transport=httpx.MockTransport(handler)) as c:
             assert check_http(c) == []
+
+
+class TestPrivateFindingsStayOutOfPublicView:
+    """Repo is public: live-config and image-cve details never reach issues,
+    step summaries or logs. Only a count does."""
+
+    def _private(self):
+        return [_f("exposed-path", "live-config", "live", "campable.co/.env"),
+                _f("CVE-2026-1", "image-cve", "debian", "zlib1g")]
+
+    def test_private_findings_open_one_count_only_issue(self):
+        plan = plan_issues(self._private() + [_f("GHSA-a")],
+                           ok={"dep-cve", "live-config", "image-cve"}, open_issues=[])
+        titles = [c["title"] for c in plan["create"]]
+        assert "[security] GHSA-a in p (npm)" in titles
+        [priv] = [c for c in plan["create"] if c["title"] == PRIVATE_TITLE]
+        text = priv["title"] + priv["body"]
+        assert "2 private finding" in text
+        for leak in (".env", "zlib1g", "CVE-2026-1", "exposed-path"):
+            assert leak not in text
+        assert len(titles) == 2
+
+    def test_private_issue_closes_only_when_private_scanners_ran_clean(self):
+        issue = {"number": 3, "title": PRIVATE_TITLE, "labels": ["security", "private"]}
+        assert plan_issues([], ok={"dep-cve"}, open_issues=[issue])["close"] == []
+        assert plan_issues([], ok={"live-config", "image-cve"}, open_issues=[issue])["close"] == [3]
+        still = plan_issues(self._private(), ok={"live-config", "image-cve"}, open_issues=[issue])
+        assert still["close"] == [] and still["create"] == []
+
+    def test_summary_counts_private_findings_without_details(self, capsys):
+        from security_scan import write_summary
+        write_summary(self._private() + [_f("GHSA-a")], [], [], [])
+        out = capsys.readouterr().out
+        assert "GHSA-a" in out and "2 private finding" in out
+        for leak in (".env", "zlib1g", "CVE-2026-1", "exposed-path"):
+            assert leak not in out

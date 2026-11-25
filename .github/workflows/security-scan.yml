@@ -6,9 +6,8 @@ name: Security Scan
 #                        and workflow lint (zizmor). Fails on any finding not
 #                        accepted in .github/security-allowlist.toml.
 #   security-nightly.yml nightly: true. Same scans against unchanged code (new
-#                        CVEs land without a PR), plus Trivy on the image Fly is
-#                        actually running and read-only checks of campable.co.
-#                        Uploads results; the caller files the issues.
+#                        CVEs land without a PR). Uploads results; the caller
+#                        adds the image and live checks and files the issues.
 #
 # Read-only on purpose: issue writes live in security-nightly.yml, so PR runs
 # never hold issues: write.
@@ -19,9 +18,6 @@ on:
       nightly:
         type: boolean
         default: false
-    secrets:
-      FLY_READONLY_TOKEN:
-        required: false
 
 permissions:
   contents: read
@@ -81,78 +77,3 @@ jobs:
           path: ${{ runner.temp }}/scan/
           retention-days: 14
 
-  image:
-    name: deployed image (Trivy)
-    if: inputs.nightly
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      TRIVY_VERSION: "0.76.1"
-      TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
-    steps:
-      - uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2  # pinned
-
-      # Binary download pinned by checksum rather than trivy-action: that
-      # action's tags were hijacked in 2026, and it would run near a Fly token.
-      - name: Install Trivy
-        run: |
-          curl -sSfL -o "$RUNNER_TEMP/trivy.tgz" \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          echo "${TRIVY_SHA256}  $RUNNER_TEMP/trivy.tgz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/trivy.tgz" -C "$RUNNER_TEMP" trivy
-          sudo mv "$RUNNER_TEMP/trivy" /usr/local/bin/trivy
-
-      - name: Scan the image prod is running
-        env:
-          # Read-only org token (fly tokens create readonly): can list images
-          # and pull from registry.fly.io, cannot deploy or ssh.
-          FLY_API_TOKEN: ${{ secrets.FLY_READONLY_TOKEN }}
-        run: |
-          ref=$(flyctl image show -a campnw --json \
-            | jq -r '(.[0] // .) | "\(.Registry)/\(.Repository)@\(.Digest)"')
-          echo "Deployed image: $ref"
-          # Trivy splits TRIVY_PASSWORD on commas, and Fly tokens contain them,
-          # so authenticate through a throwaway docker config instead.
-          export DOCKER_CONFIG="$RUNNER_TEMP/docker"
-          mkdir -p "$DOCKER_CONFIG" "$RUNNER_TEMP/scan"
-          printf '{"auths":{"registry.fly.io":{"auth":"%s"}}}' \
-            "$(printf 'x:%s' "$FLY_API_TOKEN" | base64 -w0)" > "$DOCKER_CONFIG/config.json"
-          trivy image --quiet --scanners vuln --severity HIGH,CRITICAL \
-            --format json -o "$RUNNER_TEMP/trivy-full.json" "$ref"
-          rm -rf "$DOCKER_CONFIG"
-          # Artifacts are public: keep only the findings, drop image metadata.
-          jq '{ArtifactName, Results}' "$RUNNER_TEMP/trivy-full.json" > "$RUNNER_TEMP/scan/trivy.json"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: scan-image
-          path: ${{ runner.temp }}/scan/
-          retention-days: 14
-
-  live:
-    name: campable.co live config
-    if: inputs.nightly
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      # Seven GETs and one TLS handshake: TLS expiry, security headers,
-      # exposed /openapi.json /docs /.git /.env, and the Fly origin bypass.
-      - name: Live checks
-        run: |
-          pip install httpx==0.28.1
-          mkdir -p "$RUNNER_TEMP/scan"
-          python scripts/security_scan.py live --out "$RUNNER_TEMP/scan/live.json"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: scan-live
-          path: ${{ runner.temp }}/scan/
-          retention-days: 14
