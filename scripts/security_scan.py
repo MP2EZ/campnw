@@ -325,6 +325,7 @@ def run_live_checks() -> list[dict]:
     out: list[dict] = []
 
     ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     with (
         socket.create_connection((PROD, 443), timeout=15) as sock,
         ctx.wrap_socket(sock, server_hostname=PROD) as tls,

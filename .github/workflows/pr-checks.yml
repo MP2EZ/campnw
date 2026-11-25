@@ -8,6 +8,9 @@ on:
     # (security scan, lighthouse, bundle-size enforcement, frontend tests).
     branches: [main, dev]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
