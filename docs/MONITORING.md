@@ -223,3 +223,82 @@ Oregon (ReserveAmerica, 1 req/s app-wide). Each search reports which source held
     - Parks cut by the deadline or a closed tab keep fetching in the background (at most 24 windows, yielding the 1 req/s limit to live searches): `ReserveAmerica 402178 2027-02-19: background window, 11 requests in 31.2s (cached)`. `background full, N windows dropped` means the cap was hit.
   - Per-request timing and limiter wait are logged at DEBUG.
 - **Admin `GET /api/perf`:** percentiles of whole-search durations. For the stream this is the full stream, not the time to start the response.
+
+## Layer 5 — Security scan (`.github/workflows/security-scan.yml`)
+
+One workflow, two modes:
+
+| Mode | When | Scans | On a finding |
+|---|---|---|---|
+| PR gate | every PR / push to dev, main (called from `pr-checks.yml`) | pip-audit, npm audit (high/critical), zizmor on `.github/workflows` | job fails |
+| Nightly | daily 10:30 UTC (`security-nightly.yml`), or Actions → Security Nightly → Run workflow | the above, plus Trivy on the image prod runs and read-only checks of campable.co | one issue per dependency/workflow finding; one count-only issue for image and live findings |
+
+Also on in repo settings (free for a public repo): Dependabot alerts, secret
+scanning with push protection, and CodeQL default setup. Those alert through
+GitHub's Security tab and notifications, not through this workflow.
+
+**What counts.** Python: every pip-audit vuln (it reports no severity). npm:
+high and critical. Image: high with a fix available, and any critical.
+zizmor: high (mostly third-party actions not pinned by SHA; policy in
+`.github/zizmor.yml`). Live: TLS expiring within 21 days, missing HSTS / CSP /
+nosniff / frame protection, `/openapi.json` `/docs` `/.git/HEAD` `/.env`
+serving real content, and `campnw.fly.dev` answering (Cloudflare bypass).
+
+**Issues.** Labelled `security` plus a category (`dep-cve`, `image-cve`,
+`actions`, `live-config`). Title `[security] <advisory> in <package> (<ecosystem>)`
+is the dedupe key: an open issue is left alone while the finding persists and
+closed automatically once a clean run of that scanner no longer sees it. Only
+issues with the `[security] ` title prefix are ever auto-closed. If a
+scanner fails (Trivy can't pull, npm audit endpoint down), one
+`[security] Nightly security scan is broken` issue opens and is commented on
+each night until a run completes — a broken scan is never read as clean.
+
+**Private findings.** The repo is public, so issues, run logs, step summaries
+and artifacts are public too. Image CVEs and live-config findings (exposed
+paths, origin bypass, missing headers, TLS expiry) describe what prod is
+running right now, so the nightly run reports only their count, in one
+`[security] Nightly scan has private findings` issue, and uploads none of their
+output. To see the details, run the checks locally:
+
+```bash
+.venv/bin/python3 scripts/security_scan.py live --out /tmp/live.json && cat /tmp/live.json
+ref=$(fly image show -a campnw --json | jq -r '(.[0] // .) | "\(.Registry)/\(.Repository)@\(.Digest)"')
+fly auth docker && trivy image --scanners vuln --severity HIGH,CRITICAL "$ref"
+```
+
+The issue closes once a run where both checks completed finds none.
+
+**Accepting a finding.** Add it to `.github/security-allowlist.toml` with a
+reason and an `expires` date. Both modes read that file. An expired or undated
+entry fails the scan.
+
+**The image scan** uses `FLY_READONLY_TOKEN` (a `fly tokens create readonly`
+org token, 1-year expiry from 2026-11-23): it reads the digest prod is running
+and pulls it from `registry.fly.io`. It cannot deploy or ssh. When it expires
+the scan opens the "broken" issue; recreate it with
+`fly tokens create readonly -o personal -x 8760h | gh secret set FLY_READONLY_TOKEN`.
+
+
+## Restoring a DB backup (`.github/workflows/backup-db.yml`)
+
+The repo is public, so Actions artifacts are downloadable by anyone signed in
+to GitHub. The weekly backup is therefore age-encrypted before upload; only
+the encrypted `db-backup-YYYYMMDD.tar.gz.age` leaves the runner.
+
+The private key is on Max's machine only: `~/.config/campable/backup-age.key`.
+Keep a copy in a password manager — without it the backups can't be read.
+The public key is `BACKUP_AGE_RECIPIENT` in the workflow.
+
+Needs `age` installed (`brew install age`).
+
+```bash
+dir=$(mktemp -d)
+gh run download <run-id> -R MP2EZ/campnw -n db-backup-<run-id> -D "$dir"
+age -d -i ~/.config/campable/backup-age.key "$dir"/db-backup-*.tar.gz.age | tar -xzf - -C "$dir"
+```
+
+This yields `watches-YYYYMMDD.db` and `registry-YYYYMMDD.db`; rename them to
+`watches.db` / `registry.db` before putting them back on the volume.
+
+Before Nov 2026 backups were uploaded unencrypted; those artifacts were
+deleted on 2026-11-23 (INFRA-7).

@@ -1,9 +1,30 @@
 name: Backup Production DB
 
+# The repo is PUBLIC, so every Actions artifact can be downloaded by any
+# signed-in GitHub user. watches.db holds user emails, password hashes, push
+# subscription keys and session tokens, so the backup is age-encrypted to a
+# public key before upload and the plaintext never leaves the runner.
+#
+# The private key lives only on Max's machine (~/.config/campable/backup-age.key).
+# Restore: see docs/MONITORING.md → "Restoring a DB backup".
+
 on:
   schedule:
     - cron: "0 8 * * 1"  # Weekly, Monday 8am UTC
   workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Explicit bash adds pipefail, so a failing tar can't feed age a truncated
+# stream that still uploads green.
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Public half of the backup keypair. Safe to commit.
+  BACKUP_AGE_RECIPIENT: age1pmdejpkfu92q45qacrhcwl5ucgv2j9z2ka9t6jtaltyx68uq85ssazknkt
 
 jobs:
   backup:
@@ -11,26 +32,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2  # pinned
+
+      - name: Install age
+        run: sudo apt-get update -q && sudo apt-get install -y -q age
 
       - name: Download production DBs
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          mkdir -p backups
-          flyctl ssh sftp get /app/data/watches.db backups/watches-$(date +%Y%m%d).db
-          flyctl ssh sftp get /app/data/registry.db backups/registry-$(date +%Y%m%d).db
+          mkdir -p "$RUNNER_TEMP/plain"
+          flyctl ssh sftp get /app/data/watches.db "$RUNNER_TEMP/plain/watches-$(date +%Y%m%d).db"
+          flyctl ssh sftp get /app/data/registry.db "$RUNNER_TEMP/plain/registry-$(date +%Y%m%d).db"
 
       - name: Verify DB integrity
         run: |
-          for db in backups/*.db; do
-            echo "Checking $db..."
-            sqlite3 "$db" "PRAGMA integrity_check;" | head -1
+          for name in watches registry; do
+            db="$RUNNER_TEMP/plain/$name-$(date +%Y%m%d).db"
+            # sqlite3 reports "ok" for a missing or empty file, so check size first.
+            [ -s "$db" ] || { echo "::error::$name backup missing or empty"; exit 1; }
+            echo "Checking $(basename "$db")..."
+            result=$(sqlite3 "$db" "PRAGMA integrity_check;" | head -1)
+            echo "$result"
+            [ "$result" = "ok" ] || { echo "::error::$(basename "$db") failed integrity_check"; exit 1; }
           done
 
-      - name: Upload backup artifact
+      - name: Encrypt
+        run: |
+          mkdir -p encrypted
+          name="db-backup-$(date +%Y%m%d)"
+          tar -C "$RUNNER_TEMP/plain" -czf - . \
+            | age -r "$BACKUP_AGE_RECIPIENT" -o "encrypted/$name.tar.gz.age"
+          rm -rf "$RUNNER_TEMP/plain"
+          # Guard: nothing but the encrypted file may be uploaded.
+          if find encrypted -type f ! -name '*.age' | grep -q .; then
+            echo "::error::unencrypted file in upload dir"; exit 1
+          fi
+          ls -l encrypted
+
+      - name: Upload encrypted backup
         uses: actions/upload-artifact@v4
         with:
           name: db-backup-${{ github.run_id }}
-          path: backups/
+          path: encrypted/
           retention-days: 90
+          if-no-files-found: error
