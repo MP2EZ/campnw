@@ -32,8 +32,10 @@ from pathlib import Path
 
 PROD = "campable.co"
 ORIGIN = "campnw.fly.dev"
+APP_MARKER = '<div id="root">'
 TLS_MIN_DAYS = 21
-BROKEN_TITLE = "[security] Nightly security scan is broken"
+TITLE_PREFIX = "[security] "
+BROKEN_TITLE = f"{TITLE_PREFIX}Nightly security scan is broken"
 
 # scanner file -> issue category it feeds
 SCANNERS = {
@@ -58,7 +60,7 @@ class Finding:
 
     @property
     def title(self) -> str:
-        return f"[security] {self.id} in {self.package} ({self.ecosystem})"
+        return f"{TITLE_PREFIX}{self.id} in {self.package} ({self.ecosystem})"
 
 
 # ── allowlist ────────────────────────────────────────────────────────────
@@ -202,7 +204,8 @@ def plan_issues(
             })
 
     for issue in open_issues:
-        if issue["title"] == BROKEN_TITLE:
+        # Only touch issues this scan filed; hand-filed ones may share labels.
+        if issue["title"] == BROKEN_TITLE or not issue["title"].startswith(TITLE_PREFIX):
             continue
         cat = next((lbl for lbl in issue["labels"] if lbl in SCANNERS.values()), None)
         if cat in ok and issue["title"] not in current:
@@ -251,6 +254,49 @@ def _live(id_: str, package: str, detail: str) -> dict:
                           package=package, severity="HIGH", detail=detail))
 
 
+def check_http(c) -> list[dict]:
+    """Headers, exposed paths and origin bypass, through client `c`."""
+    import httpx
+
+    out: list[dict] = []
+    root = c.get(f"https://{PROD}/")
+    # A WAF challenge or error page would make every probe read "not exposed".
+    if root.status_code != 200 or APP_MARKER not in root.text:
+        raise RuntimeError(f"{PROD}/ is not serving the app (HTTP {root.status_code})")
+    h = root.headers
+    csp = h.get("content-security-policy", "")
+    required = {
+        "strict-transport-security": "strict-transport-security" in h,
+        "content-security-policy": bool(csp),
+        "x-content-type-options": h.get("x-content-type-options", "").lower() == "nosniff",
+        "frame protection": "x-frame-options" in h or "frame-ancestors" in csp,
+    }
+    for name, present in required.items():
+        if not present:
+            out.append(_live("missing-header", f"{PROD} {name}", f"{name} not set on /"))
+
+    # The SPA answers unknown paths with index.html + 200, so judge by body.
+    probes = {
+        "/openapi.json": lambda r: "application/json" in r.headers.get("content-type", ""),
+        "/docs": lambda r: "swagger-ui" in r.text.lower(),
+        "/.git/HEAD": lambda r: r.text.startswith("ref:"),
+        "/.env": lambda r: r.status_code == 200 and "<html" not in r.text[:500].lower(),
+    }
+    for path, exposed in probes.items():
+        r = c.get(f"https://{PROD}{path}")
+        if r.status_code == 200 and exposed(r):
+            out.append(_live("exposed-path", f"{PROD}{path}", f"served with {r.headers.get('content-type')}"))
+
+    try:
+        r = c.get(f"https://{ORIGIN}/healthz")
+    except httpx.TransportError:
+        return out  # origin not reachable directly: no bypass
+    if r.status_code == 200:
+        out.append(_live("origin-bypass", ORIGIN,
+                         "Fly origin answers directly, skipping Cloudflare WAF/cache/rate rules"))
+    return out
+
+
 def run_live_checks() -> list[dict]:
     import httpx  # project dependency; deferred so `check` needs no install
 
@@ -268,34 +314,7 @@ def run_live_checks() -> list[dict]:
         out.append(_live("tls-expiring", PROD, f"certificate expires in {days} days ({not_after})"))
 
     with httpx.Client(timeout=20, follow_redirects=False) as c:
-        h = c.get(f"https://{PROD}/").headers
-        csp = h.get("content-security-policy", "")
-        required = {
-            "strict-transport-security": "strict-transport-security" in h,
-            "content-security-policy": bool(csp),
-            "x-content-type-options": h.get("x-content-type-options", "").lower() == "nosniff",
-            "frame protection": "x-frame-options" in h or "frame-ancestors" in csp,
-        }
-        for name, present in required.items():
-            if not present:
-                out.append(_live("missing-header", f"{PROD} {name}", f"{name} not set on /"))
-
-        # The SPA answers unknown paths with index.html + 200, so judge by body.
-        probes = {
-            "/openapi.json": lambda r: "application/json" in r.headers.get("content-type", ""),
-            "/docs": lambda r: "swagger-ui" in r.text.lower(),
-            "/.git/HEAD": lambda r: r.text.startswith("ref:"),
-            "/.env": lambda r: r.status_code == 200 and "<html" not in r.text[:500].lower(),
-        }
-        for path, exposed in probes.items():
-            r = c.get(f"https://{PROD}{path}")
-            if r.status_code == 200 and exposed(r):
-                out.append(_live("exposed-path", f"{PROD}{path}", f"served with {r.headers.get('content-type')}"))
-
-        r = c.get(f"https://{ORIGIN}/healthz")
-        if r.status_code == 200:
-            out.append(_live("origin-bypass", ORIGIN,
-                             "Fly origin answers directly, skipping Cloudflare WAF/cache/rate rules"))
+        out += check_http(c)
     return out
 
 
@@ -340,7 +359,7 @@ def cmd_check(args) -> int:
     findings, ok, broken = collect(Path(args.dir), args.expect)
     kept, suppressed = apply_allowlist(findings, allowed)
     broken += [f"allowlist entry {e['id']} expired or undated" for e in expired]
-    write_summary(kept, suppressed, expired, [])
+    write_summary(kept, suppressed, expired, broken[:len(broken) - len(expired)])
     Path(args.out).write_text(json.dumps({
         "findings": [asdict(f) for f in kept], "ok": sorted(ok), "broken": broken,
     }, indent=2))

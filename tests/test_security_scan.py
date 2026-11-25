@@ -164,3 +164,45 @@ class TestScannerFailureIsNotClean:
         findings, ok, broken = collect(tmp_path, ["npm-audit.json", "pip-audit.json"])
         assert findings == [] and ok == set()
         assert broken and broken[0].startswith("pip-audit.json")
+
+
+class TestReviewFixes:
+    def test_close_ignores_hand_filed_issue_with_same_labels(self):
+        open_issues = [{"number": 7, "title": "Pin remaining actions by SHA",
+                        "labels": ["security", "actions"]}]
+        plan = plan_issues([], ok={"actions"}, open_issues=open_issues)
+        assert plan["close"] == []
+
+    def test_check_summary_names_the_broken_scanner(self, tmp_path, capsys):
+        import argparse
+
+        from security_scan import cmd_check
+        allow = tmp_path / "allow.toml"
+        allow.write_text("")
+        rc = cmd_check(argparse.Namespace(
+            allowlist=str(allow), dir=str(tmp_path), expect=["pip-audit.json"],
+            out=str(tmp_path / "findings.json")))
+        assert rc == 1
+        assert "scanner broken: pip-audit.json" in capsys.readouterr().out
+
+    def test_live_root_not_serving_the_app_is_broken_not_clean(self):
+        import httpx
+        import pytest
+        from security_scan import check_http
+        def challenge(req):
+            return httpx.Response(403, text="Just a moment...")
+        with httpx.Client(transport=httpx.MockTransport(challenge)) as c, \
+                pytest.raises(RuntimeError):
+            check_http(c)
+
+    def test_origin_unreachable_means_no_bypass(self):
+        import httpx
+        from security_scan import check_http
+        def handler(req):
+            if req.url.host == "campnw.fly.dev":
+                raise httpx.ConnectError("no address")
+            return httpx.Response(200, text='<html><div id="root"></div></html>', headers={
+                "strict-transport-security": "max-age=1", "content-security-policy": "frame-ancestors 'none'",
+                "x-content-type-options": "nosniff", "content-type": "text/html"})
+        with httpx.Client(transport=httpx.MockTransport(handler)) as c:
+            assert check_http(c) == []

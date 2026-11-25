@@ -13,6 +13,11 @@ on:
 permissions:
   contents: read
 
+# A manual dispatch overlapping the schedule would file duplicate issues.
+concurrency:
+  group: security-nightly
+  cancel-in-progress: false
+
 jobs:
   scan:
     uses: ./.github/workflows/security-scan.yml
