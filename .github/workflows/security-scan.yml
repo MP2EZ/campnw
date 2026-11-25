@@ -1,0 +1,79 @@
+name: Security Scan
+
+# Reusable scan, two callers (docs/MONITORING.md → "Layer 5 — Security scan"):
+#
+#   pr-checks.yml        nightly: false. Dependency CVEs (pip-audit, npm audit)
+#                        and workflow lint (zizmor). Fails on any finding not
+#                        accepted in .github/security-allowlist.toml.
+#   security-nightly.yml nightly: true. Same scans against unchanged code (new
+#                        CVEs land without a PR). Uploads results; the caller
+#                        adds the image and live checks and files the issues.
+#
+# Read-only on purpose: issue writes live in security-nightly.yml, so PR runs
+# never hold issues: write.
+
+on:
+  workflow_call:
+    inputs:
+      nightly:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  deps:
+    name: dependencies + workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: pip-audit
+        run: |
+          mkdir -p "$RUNNER_TEMP/scan"
+          # The pip that setup-python ships lags its own CVE fixes; upgrade it
+          # so pip-audit doesn't flag pip itself.
+          python -m pip install --upgrade pip
+          pip install pip-audit
+          pip install -e ".[api]"
+          pip-audit --progress-spinner off -f json -o "$RUNNER_TEMP/scan/pip-audit.json" || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: npm audit
+        working-directory: web
+        run: |
+          npm ci
+          npm audit --json > "$RUNNER_TEMP/scan/npm-audit.json" || true
+
+      - name: zizmor (workflow lint)
+        run: |
+          pip install zizmor==1.33.1
+          zizmor --offline --config .github/zizmor.yml --format json .github/workflows \
+            > "$RUNNER_TEMP/scan/zizmor.json" || true
+
+      - name: Gate
+        if: ${{ !inputs.nightly }}
+        run: |
+          python scripts/security_scan.py check --dir "$RUNNER_TEMP/scan" \
+            --expect pip-audit.json npm-audit.json zizmor.json \
+            --out "$RUNNER_TEMP/findings.json"
+
+      - name: Upload results
+        if: inputs.nightly
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-deps
+          path: ${{ runner.temp }}/scan/
+          retention-days: 14
+

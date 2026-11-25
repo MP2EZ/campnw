@@ -1,0 +1,113 @@
+name: Security Nightly
+
+# Runs the shared scan in nightly mode and turns its results into GitHub
+# issues: one per finding, closed when a clean run no longer sees it. A
+# scanner that failed is reported as broken, never as clean.
+# See docs/MONITORING.md → "Layer 5 — Security scan".
+
+on:
+  schedule:
+    - cron: "30 10 * * *" # daily 10:30 UTC — clear of prod-monitor (15:00) and backup (Mon 08:00)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# A manual dispatch overlapping the schedule would file duplicate issues.
+concurrency:
+  group: security-nightly
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    uses: ./.github/workflows/security-scan.yml
+    with:
+      nightly: true
+
+  # Image and live checks run here, not in the reusable scan, because their
+  # output names weaknesses in what prod is running and artifacts are public.
+  # Nothing from them is uploaded; only a count reaches the issue and summary.
+  report:
+    name: image + live checks, file issues
+    needs: scan
+    # always(): a failed scanner must still be reported, as broken.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      issues: write
+    env:
+      TRIVY_VERSION: "0.76.1"
+      TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true  # missing deps results are reported as broken
+        with:
+          name: scan-deps
+          path: scan
+
+      - uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2  # pinned
+
+      # Binary download pinned by checksum rather than trivy-action: that
+      # action's tags were hijacked in 2026, and it would run near a Fly token.
+      - name: Install Trivy
+        continue-on-error: true
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/trivy.tgz" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/trivy.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/trivy.tgz" -C "$RUNNER_TEMP" trivy
+          sudo mv "$RUNNER_TEMP/trivy" /usr/local/bin/trivy
+
+      # A failed step leaves trivy.json / live.json missing, which `check`
+      # reports as a broken scanner, never as clean.
+      - name: Scan the image prod is running
+        continue-on-error: true
+        shell: bash
+        env:
+          # Read-only org token (fly tokens create readonly): can list images
+          # and pull from registry.fly.io, cannot deploy or ssh.
+          FLY_API_TOKEN: ${{ secrets.FLY_READONLY_TOKEN }}
+        run: |
+          mkdir -p scan
+          ref=$(flyctl image show -a campnw --json \
+            | jq -r '(.[0] // .) | "\(.Registry)/\(.Repository)@\(.Digest)"')
+          # Trivy splits TRIVY_PASSWORD on commas, and Fly tokens contain them,
+          # so authenticate through a throwaway docker config instead.
+          export DOCKER_CONFIG="$RUNNER_TEMP/docker"
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          mkdir -p "$DOCKER_CONFIG"
+          printf '{"auths":{"registry.fly.io":{"auth":"%s"}}}' \
+            "$(printf 'x:%s' "$FLY_API_TOKEN" | base64 -w0)" > "$DOCKER_CONFIG/config.json"
+          trivy image --quiet --scanners vuln --severity HIGH,CRITICAL \
+            --format json -o scan/trivy.json "$ref"
+
+      # Six GETs and one TLS handshake: TLS expiry, security headers, exposed
+      # /openapi.json /docs /.git /.env, and the Fly origin bypass.
+      - name: Live checks
+        continue-on-error: true
+        run: |
+          pip install httpx==0.28.1
+          mkdir -p scan
+          python scripts/security_scan.py live --out scan/live.json
+
+      - name: Check and file issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          rc=0
+          python scripts/security_scan.py check --dir scan \
+            --expect pip-audit.json npm-audit.json zizmor.json trivy.json live.json \
+            --out "$RUNNER_TEMP/findings.json" || rc=$?
+          python scripts/security_scan.py file-issues "$RUNNER_TEMP/findings.json"
+          exit $rc

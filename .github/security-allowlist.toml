@@ -1,0 +1,29 @@
+# Accepted security findings, read by PR Checks and the nightly scan
+# (scripts/security_scan.py). Match on advisory id or any alias.
+#
+# Every entry needs a reason and an `expires` date. An expired or undated
+# entry fails the scan, so each exception gets re-reviewed instead of rotting.
+
+[[allow]]
+id = "CVE-2026-3219"
+ecosystem = "pypi"
+reason = "pip itself, not a project dependency; no patched pip release yet. Drop when pip-audit reports a fix version."
+expires = 2027-02-28
+
+[[allow]]
+id = "GHSA-qwww-vcr4-c8h2"
+ecosystem = "npm"
+reason = """react-router CSRF bypass reachable only through the unstable RSC APIs.
+Campable is a client-only SPA (src/main.tsx uses plain BrowserRouter: no RSC,
+no data-router action/loader, no server runtime). npm's only offered fix is a
+downgrade to react-router-dom@7.11.0; the real fix is the React Router 8 migration."""
+expires = 2027-03-31
+
+[[allow]]
+id = "GHSA-fc5q-39xc-vjpf"
+ecosystem = "npm"
+reason = """picomatch <=4.0.7 ReDoS on attacker-supplied extglob patterns. Build/test
+tooling only (vite, vitest, tinyglobby, rollup-plugin-visualizer); not in the
+shipped bundle or the server, and only sees our own config globs. Remove once
+picomatch >=4.0.8 ships and the tree updates."""
+expires = 2027-01-31
