@@ -234,10 +234,16 @@ The private key is on Max's machine only: `~/.config/campable/backup-age.key`.
 Keep a copy in a password manager — without it the backups can't be read.
 The public key is `BACKUP_AGE_RECIPIENT` in the workflow.
 
+Needs `age` installed (`brew install age`).
+
 ```bash
-gh run download <run-id> -R MP2EZ/campnw -n db-backup-<run-id> -D /tmp/restore
-age -d -i ~/.config/campable/backup-age.key /tmp/restore/db-backup-*.tar.gz.age | tar -xzf - -C /tmp/restore
+dir=$(mktemp -d)
+gh run download <run-id> -R MP2EZ/campnw -n db-backup-<run-id> -D "$dir"
+age -d -i ~/.config/campable/backup-age.key "$dir"/db-backup-*.tar.gz.age | tar -xzf - -C "$dir"
 ```
+
+This yields `watches-YYYYMMDD.db` and `registry-YYYYMMDD.db`; rename them to
+`watches.db` / `registry.db` before putting them back on the volume.
 
 Before Nov 2026 backups were uploaded unencrypted; those artifacts were
 deleted on 2026-11-23 (INFRA-7).

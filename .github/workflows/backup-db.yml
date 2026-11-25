@@ -16,6 +16,12 @@ on:
 permissions:
   contents: read
 
+# Explicit bash adds pipefail, so a failing tar can't feed age a truncated
+# stream that still uploads green.
+defaults:
+  run:
+    shell: bash
+
 env:
   # Public half of the backup keypair. Safe to commit.
   BACKUP_AGE_RECIPIENT: age1pmdejpkfu92q45qacrhcwl5ucgv2j9z2ka9t6jtaltyx68uq85ssazknkt
@@ -41,7 +47,10 @@ jobs:
 
       - name: Verify DB integrity
         run: |
-          for db in "$RUNNER_TEMP"/plain/*.db; do
+          for name in watches registry; do
+            db="$RUNNER_TEMP/plain/$name-$(date +%Y%m%d).db"
+            # sqlite3 reports "ok" for a missing or empty file, so check size first.
+            [ -s "$db" ] || { echo "::error::$name backup missing or empty"; exit 1; }
             echo "Checking $(basename "$db")..."
             result=$(sqlite3 "$db" "PRAGMA integrity_check;" | head -1)
             echo "$result"
