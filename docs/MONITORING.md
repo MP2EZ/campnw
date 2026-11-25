@@ -278,3 +278,27 @@ and pulls it from `registry.fly.io`. It cannot deploy or ssh. When it expires
 the scan opens the "broken" issue; recreate it with
 `fly tokens create readonly -o personal -x 8760h | gh secret set FLY_READONLY_TOKEN`.
 
+
+## Restoring a DB backup (`.github/workflows/backup-db.yml`)
+
+The repo is public, so Actions artifacts are downloadable by anyone signed in
+to GitHub. The weekly backup is therefore age-encrypted before upload; only
+the encrypted `db-backup-YYYYMMDD.tar.gz.age` leaves the runner.
+
+The private key is on Max's machine only: `~/.config/campable/backup-age.key`.
+Keep a copy in a password manager — without it the backups can't be read.
+The public key is `BACKUP_AGE_RECIPIENT` in the workflow.
+
+Needs `age` installed (`brew install age`).
+
+```bash
+dir=$(mktemp -d)
+gh run download <run-id> -R MP2EZ/campnw -n db-backup-<run-id> -D "$dir"
+age -d -i ~/.config/campable/backup-age.key "$dir"/db-backup-*.tar.gz.age | tar -xzf - -C "$dir"
+```
+
+This yields `watches-YYYYMMDD.db` and `registry-YYYYMMDD.db`; rename them to
+`watches.db` / `registry.db` before putting them back on the volume.
+
+Before Nov 2026 backups were uploaded unencrypted; those artifacts were
+deleted on 2026-11-23 (INFRA-7).
