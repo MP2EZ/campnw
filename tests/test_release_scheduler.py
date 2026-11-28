@@ -126,3 +126,57 @@ class TestReminderPush:
         ))
         assert push["title"] == "Deception Pass opens for booking today"
         assert push["body"].startswith("Fri Aug 6 – Sat Aug 7.")
+
+
+class _Apns:
+    def __init__(self):
+        self.sent: list[tuple[str, dict, str | None]] = []
+
+    async def send(self, token, payload, *, collapse_id=None, expires_in=1800):
+        self.sent.append((token, payload, collapse_id))
+        return "sent"
+
+
+class TestReminderReachesThePhone:
+    async def test_phone_gets_the_reminder(self, watch_db, user_id):
+        token = "a1" * 32
+        watch_db.save_device_token(user_id, token)
+        watch = _reminder(watch_db, user_id)
+        apns = _Apns()
+        await run_release_reminders(
+            watch_db, now=_pt(21, 6, 55), send=Sender(), apns_sender=apns,
+        )
+        assert len(apns.sent) == 1
+        sent_token, payload, collapse = apns.sent[0]
+        assert sent_token == token
+        assert collapse == f"release-{watch.id}"
+        web = reminder_push(watch_db.get_watch(watch.id))
+        assert payload["aps"]["alert"] == {"title": web["title"], "body": web["body"]}
+        assert payload["aps"]["interruption-level"] == "time-sensitive"
+        assert payload["booking_url"] == web["url"]
+        assert "path" not in payload
+        channels = [
+            tuple(r) for r in watch_db._conn.execute(
+                "SELECT channel, status FROM notification_log ORDER BY id",
+            )
+        ]
+        assert channels == [("web_push", "sent"), ("apns", "sent")]
+
+
+    async def test_phone_copy_uses_the_registry_name(self, watch_db, user_id):
+        """The watch name is user-edited; lock-screen text uses the registry's."""
+        watch_db.save_device_token(user_id, "a1" * 32)
+        _reminder(watch_db, user_id, name="anything a user typed")
+        apns = _Apns()
+
+        class Registry:
+            def get_by_facility_id(self, fid):
+                return type("Cg", (), {"name": "Kachess"})()
+
+        await run_release_reminders(
+            watch_db, now=_pt(21, 6, 55), send=Sender(), apns_sender=apns,
+            registry=Registry(),
+        )
+        title = apns.sent[0][1]["aps"]["alert"]["title"]
+        assert title.startswith("Kachess ")
+        assert "anything a user typed" not in title

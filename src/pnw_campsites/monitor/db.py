@@ -10,6 +10,8 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 _docker_db = Path("/app/data/watches.db")
+
+MAX_DEVICE_TOKENS_PER_USER = 5
 _local_db = Path(__file__).resolve().parents[3] / "data" / "watches.db"
 DEFAULT_DB_PATH = _docker_db if _docker_db.parent.exists() else _local_db
 
@@ -374,6 +376,18 @@ class WatchDB:
                 auth TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+            -- Native (APNs) device tokens. Signed-in users only, so user_id
+            -- is required and account deletion cascades.
+            CREATE TABLE IF NOT EXISTS device_push_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                token TEXT NOT NULL UNIQUE,
+                platform TEXT NOT NULL DEFAULT 'ios',
+                created_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_device_push_tokens_user
+                ON device_push_tokens(user_id);
         """)
         # recommendations opt-in flag
         user_cols = [
@@ -865,6 +879,56 @@ class WatchDB:
                 "DELETE FROM push_subscriptions"
                 " WHERE endpoint=? AND session_token=?",
                 (endpoint, session_token),
+            )
+        self._conn.commit()
+
+    # -------------------------------------------------------------------
+    # Native device tokens (APNs)
+    # -------------------------------------------------------------------
+
+    def save_device_token(
+        self, user_id: int, token: str, platform: str = "ios",
+    ) -> None:
+        """Register a device token. A token already held by another account
+        moves to this one: the phone now belongs to whoever signed in last."""
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "INSERT INTO device_push_tokens"
+            " (user_id, token, platform, created_at, last_seen_at)"
+            " VALUES (?, ?, ?, ?, ?)"
+            " ON CONFLICT(token) DO UPDATE SET"
+            " user_id=excluded.user_id, platform=excluded.platform,"
+            " last_seen_at=excluded.last_seen_at",
+            (user_id, token, platform, now, now),
+        )
+        # Cap per user: each token costs an APNs call per alert, and phones
+        # replace their tokens, so keep the most recently seen few.
+        self._conn.execute(
+            "DELETE FROM device_push_tokens WHERE user_id=? AND id NOT IN ("
+            " SELECT id FROM device_push_tokens WHERE user_id=?"
+            " ORDER BY last_seen_at DESC, id DESC LIMIT ?)",
+            (user_id, user_id, MAX_DEVICE_TOKENS_PER_USER),
+        )
+        self._conn.commit()
+
+    def get_device_tokens_for_user(self, user_id: int) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT token FROM device_push_tokens WHERE user_id=? ORDER BY id",
+            (user_id,),
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def delete_device_token(self, token: str, user_id: int | None = None) -> None:
+        """Remove a token: scoped to user_id when given (sign-out), unscoped
+        when APNs reports the token dead."""
+        if user_id is None:
+            self._conn.execute(
+                "DELETE FROM device_push_tokens WHERE token=?", (token,),
+            )
+        else:
+            self._conn.execute(
+                "DELETE FROM device_push_tokens WHERE token=? AND user_id=?",
+                (token, user_id),
             )
         self._conn.commit()
 

@@ -427,6 +427,19 @@ async def _check_pushover() -> str:
     return "credentials valid"
 
 
+async def _check_apns() -> str:
+    # Local only: parse the key and sign a JWT. A network probe would mint a
+    # new provider token per doctor run, and Apple throttles those.
+    from pnw_campsites.monitor import apns
+
+    config = apns.ApnsConfig.from_env()
+    if config is None:
+        raise SkipCheck("APNs not configured here")
+    apns.ApnsSender(config, None)._jwt()
+    environment = next(k for k, v in apns.HOSTS.items() if v == config.host)
+    return f"key signs; {environment}, topic {config.topic}"
+
+
 async def _check_anthropic() -> str:
     try:
         import anthropic
@@ -492,6 +505,12 @@ CHECKS: list[Check] = [
         "notify",
         _check_pushover,
         requires=("PUSHOVER_API_TOKEN", "PUSHOVER_USER_KEY"),
+    ),
+    Check(
+        "APNs",
+        "notify",
+        _check_apns,
+        requires=("APNS_KEY_P8_B64", "APNS_KEY_ID", "APNS_TEAM_ID"),
     ),
     Check("Anthropic", "llm", _check_anthropic, requires=("ANTHROPIC_API_KEY",),
           modules=("anthropic",)),

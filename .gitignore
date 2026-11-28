@@ -56,3 +56,7 @@ web/src/assets/
 # Working files (temp exploration artifacts)
 scripts/probe_*.py
 ux-audit/
+
+# APNs signing keys: Fly secrets only (APNS_KEY_P8_B64)
+*.p8
+AuthKey_*

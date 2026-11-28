@@ -110,6 +110,7 @@ $ .venv/bin/python3 -m pnw_campsites doctor
   PLATFORM  PostHog               ok       708ms  eu.i.posthog.com accepted project token
   NOTIFY    ntfy                  ok       360ms  ntfy.sh healthy
   NOTIFY    Pushover              skip            not configured (PUSHOVER_API_TOKEN, ...)
+  NOTIFY    APNs                  skip            not configured (APNS_KEY_P8_B64, ...)
   LLM       Anthropic             ok       320ms  key valid, 1 model(s) listed
 
   14 ok · 1 fail · 1 skip
@@ -136,6 +137,13 @@ shell or CI step directly.
 - **skip** — the credentials aren't configured here. **Not** a failure: an
   unconfigured optional integration is not an outage, and rendering it red is
   how you train yourself to ignore red.
+
+`APNs` only parses the .p8 key and signs a JWT; it never calls Apple. Each
+doctor run is a new process, so a network probe would mint a new provider
+token per run, and Apple throttles those (`TooManyProviderTokenUpdates`). A
+revoked or wrong key shows up as `notification_log` rows with channel `apns`
+and status `failed`, and as an `APNs rejected our credentials` error in
+`fly logs`.
 
 `WA site metadata` fails when an enabled WA park has no rows in
 `wa_state_sites`, so its windows show raw resource ids and unknown site fit.
