@@ -67,7 +67,7 @@ v1.36   ------->   OAuth Login          — Google, Apple, + GitHub sign-in (Goo
 v1.4    [SHIPPED]  Monetization Launch  — Pro tier gate, Stripe Checkout/Portal, webhook handler, 1202 tests (test mode validated; live keys pending)
 v1.41   [SHIPPED]  Playwright E2E       — Playwright E2E suite — smoke + watch/planner limits + cancel — 4/4 nightly green (2026-05-31)
 v1.42   [SHIPPED]  Site Polish + Legal  — About, Privacy, Terms, footer (2026-05-31)
-v1.45   ~PARTIAL~  Native Apps          — Internal iOS TestFlight SHIPPED 2026-06-14 (Capacitor shell); App Store + Play + native push/GPS/offline registry in progress
+v1.45   ~PARTIAL~  Native Apps          — Internal iOS TestFlight SHIPPED 2026-06-14 (Capacitor shell); US App Store launch planned 2026-11-27 (backlog 12–25); Android deferred
 v1.46   ~PARTIAL~  Mobile Polish        — Touch feel + 44px tap targets SHIPPED 2026-08-06 (Themes B+C); safe-area, layout, keyboard (A/D/E) pending
 v1.47   [SHIPPED]  Prod Monitoring      — /healthz, daily prod smoke, `doctor` dependency sweep (v1.47.1). Alert delivery path still unproven — see v1.47 section
 —       [SHIPPED]  Audit Remediation    — Analytics identity fix, SEO/funnel instrumentation, query perf, cache correctness, UX/a11y, shared-link page (2026-08-26, no version bump)
@@ -1787,6 +1787,37 @@ Sequencing: realistically wants to happen before live Stripe mode activates (Str
 Wrap the existing React app in a Capacitor shell and ship to the iOS App Store and Google Play Store. Capacitor lets us keep the entire web codebase as the UI layer while adding native capabilities (APNs/FCM push, GPS, offline registry) that satisfy Apple's "Minimum Functionality" guideline (4.2) and make the app actually useful at the campground — where users frequently have no cell signal. This is not a port; it's a thin native shell + native plugins + a re-architected data layer that respects three different freshness models (registry = local, watches = local-with-sync, availability = online-only). Slotted after v1.4 so the monetization model is validated on the web (cheap iteration) before committing to App Store review cycles.
 
 The Features table below is the **eventual full target** (App Store + Play Store, push, offline, IAP-free monetization). The first executable slice is much smaller and is scoped under "First Milestone" immediately below.
+
+### App Store Launch Plan (decided 2026-11-27)
+
+Full plan: [Campable iOS App Store launch plan](https://claude.ai/artifact/2uiK55ChdrNGVQPnJF12mz). Max's decisions, which supersede the older notes in this section where they differ:
+
+- **Billing:** US storefront only. Pro stays on Stripe and the native Upgrade button keeps linking to campable.co checkout, which App Review Guideline 3.1.1(a) allows for US storefront apps (text as of 2026-10-16). No StoreKit IAP. Keep the native Upgrade entry behind a flag so it can switch to "sell nothing in the app" if the US rule changes.
+- **Devices:** iPhone only at launch (`TARGETED_DEVICE_FAMILY = 1`).
+- **Android:** out of this launch. This replaces "Ship Android two weeks before iOS" below.
+- **Native features at launch:** APNs push for watch alerts, native share sheet, GPS "near me". Bundled offline registry and local watch sync come later.
+- **Analytics:** first-launch consent prompt and an in-app toggle (Guideline 5.1.1(ii)); session replay off in native.
+- **Sign-in:** email-only is fine at launch. When v1.36 brings Google or GitHub sign-in to the app, Sign in with Apple ships with it (Guideline 4.8).
+- **Seller:** Palouse Labs LLC.
+
+Backlog (Campable Product Backlog), Phase A blocks submission:
+
+| ID | Item | Phase |
+|----|------|-------|
+| FEAT-12 | Watch alerts arrive as native push notifications in the iOS app | A |
+| DEBUG-13 | Deleting an account cancels Stripe billing, removes the PostHog person and can't be undone by a live token (also a live web bug) | A, now |
+| FEAT-14 | iOS app asks for analytics consent, offers an in-app toggle, and the server honours opt-out | A |
+| MAINT-15 | Native WebView runs only bundled code under a CSP, with the session in the Keychain | A |
+| MAINT-16 | Privacy policy, App Privacy label and privacy manifest cover the iOS app accurately | A |
+| FEAT-17 | iOS app navigates like an app: tab bar, back, swipe-back, no web footer, themed status bar | A |
+| DEBUG-18 | Share and Export data work in the iOS app, and export includes every user table | A |
+| FEAT-19 | iOS app shows an offline state with Retry instead of raw network errors | A |
+| DEBUG-20 | Sign-in and planner inputs don't zoom, and layouts fit the iOS keyboard | A |
+| FEAT-21 | iOS app follows system dark mode and Larger Text, and dialogs work with VoiceOver | A |
+| INFRA-22 | Campable is submitted to the US App Store with a demo account, metadata and screenshots | A, last |
+| FEAT-23 | Email confirmation, alert and share links open the iOS app (Universal Links) | B |
+| INFRA-24 | Native crashes reach a crash reporter | B |
+| FEAT-25 | "Near me" search uses the phone's GPS | A |
 
 ---
 
