@@ -11,9 +11,12 @@ vi.mock("../hooks/useAuth", () => ({ useAuth: () => ({ user: auth.user }) }));
 vi.mock("../hooks/useBilling", () => ({
   useBilling: () => ({ isPro: false, watchLimit: 3, status: null, startCheckout: vi.fn() }),
 }));
-vi.mock("../hooks/usePushNotifications", () => ({
-  usePushNotifications: () => ({ permission: "default", subscribed: false, subscribe: vi.fn() }),
+const push = vi.hoisted(() => ({
+  state: { permission: "default", subscribed: false, native: false, subscribe: vi.fn() },
 }));
+vi.mock("../hooks/usePushNotifications", () => ({ usePushNotifications: () => push.state }));
+const settings = vi.hoisted(() => ({ open: vi.fn() }));
+vi.mock("../lib/nativePush", () => ({ openAppSettings: settings.open }));
 vi.mock("../api", async (orig) => ({ ...(await orig<typeof import("../api")>()), ...api }));
 
 const params: SearchParams = {
@@ -35,6 +38,8 @@ function renderSheet(extra: Partial<Parameters<typeof WatchSheet>[0]> = {}) {
 }
 
 beforeEach(() => {
+  push.state = { permission: "default", subscribed: false, native: false, subscribe: vi.fn() };
+  settings.open.mockReset();
   auth.user = { id: 2 };
   api.createWatch.mockReset().mockResolvedValue({ id: 1 });
   api.track.mockReset();
@@ -189,5 +194,39 @@ describe("WatchSheet in release mode", () => {
     renderRemind();
     await userEvent.click(screen.getByRole("button", { name: /Remind me on/ }));
     expect(await screen.findByRole("dialog", { name: "Upgrade for unlimited watches" })).toBeInTheDocument();
+  });
+
+  describe("in the iOS app", () => {
+    test("asking for notifications is the primary action after saving", async () => {
+      push.state = { ...push.state, native: true };
+      const { onClose } = renderSheet();
+      await userEvent.click(screen.getByRole("button", { name: /Start watching/ }));
+      expect(await screen.findByText(/Sites go in minutes/)).toBeInTheDocument();
+      expect(api.track).toHaveBeenCalledWith("watch_created", expect.objectContaining({
+        notification_channel: "apns",
+      }));
+      await userEvent.click(screen.getByRole("button", { name: "Allow notifications" }));
+      expect(push.state.subscribe).toHaveBeenCalled();
+      await userEvent.click(screen.getByRole("button", { name: "Not now" }));
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    test("denied: says the watch can't reach the phone and links to Settings", async () => {
+      push.state = { ...push.state, native: true, permission: "denied" };
+      renderSheet();
+      await userEvent.click(screen.getByRole("button", { name: /Start watching/ }));
+      expect(await screen.findByText(/can't reach your phone/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Allow notifications" })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+      expect(settings.open).toHaveBeenCalled();
+    });
+
+    test("already allowed: just Done", async () => {
+      push.state = { ...push.state, native: true, permission: "granted", subscribed: true };
+      renderSheet();
+      await userEvent.click(screen.getByRole("button", { name: /Start watching/ }));
+      expect(await screen.findByRole("button", { name: "Done" })).toBeInTheDocument();
+      expect(screen.queryByText(/Sites go in minutes/)).not.toBeInTheDocument();
+    });
   });
 });

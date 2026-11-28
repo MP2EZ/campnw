@@ -233,3 +233,4 @@
 }
 .rv2-full-action--live { cursor: pointer; opacity: 1; transition: background var(--transition-fast); }
 .rv2-full-action--live:hover { background: var(--bg-hover); }
+.rv2-watch-foot .rv2-watch-secondary { align-self: stretch; }

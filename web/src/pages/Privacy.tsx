@@ -49,6 +49,16 @@ export default function Privacy() {
               analytics vendor.
             </li>
             <li>
+              <strong>iPhone notifications:</strong> if you allow
+              notifications in the Campable app, Apple gives the app a device
+              token, the address Apple delivers alerts to. We store it against
+              your account only to send your watch alerts, and delete it when
+              you sign out, delete your account, or Apple tells us it no
+              longer works. Alerts show the campground and dates on your lock
+              screen; iOS Settings &rarr; Notifications &rarr; Show Previews
+              &rarr; When Unlocked hides them until you unlock.
+            </li>
+            <li>
               <strong>Server logs:</strong> standard HTTP request metadata for
               debugging and abuse prevention. Retained 30 days.
             </li>
@@ -87,6 +97,11 @@ export default function Privacy() {
               <strong>Visual Crossing:</strong> weather climate normals.
               Called server-side with campground coordinates only. Never sees
               user identity.
+            </li>
+            <li>
+              <strong>Apple Push Notification service:</strong> delivers alerts
+              to the Campable iPhone app. Sees the device token and the
+              alert text (campground, dates, site), not your account.
             </li>
             <li>
               <strong>Cloudflare:</strong> DNS and TLS termination. Sees

@@ -8,6 +8,7 @@ import { useBilling } from "../hooks/useBilling";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { IconClose } from "../icons";
 import { parseIsoDate } from "../lib/dates";
+import { openAppSettings } from "../lib/nativePush";
 import { displayName } from "../lib/displayName";
 import { UpgradeModal } from "../components/UpgradeModal";
 import type { Equipment } from "./searchState";
@@ -131,7 +132,7 @@ export function WatchSheet({ place, params, mode = "watch", stays, initial, from
         start_date: req.start_date,
         end_date: req.end_date,
         min_nights: req.min_nights ?? 1,
-        notification_channel: "web_push",
+        notification_channel: push.native ? "apns" : "web_push",
         push_already_granted: push.subscribed ? 1 : 0,
         ...(req.releases_on ? { releases_on: req.releases_on } : {}),
       });
@@ -161,8 +162,18 @@ export function WatchSheet({ place, params, mode = "watch", stays, initial, from
     setWho({ ...who, rigLength: Number.isInteger(n) && n >= 1 && n <= 100 ? n : null });
   };
 
+  // In the iOS app the ask is the primary action: iOS shows its prompt once,
+  // and a watch that can't reach the phone does nothing.
+  const askNative = push.native && !push.subscribed && push.permission !== "denied";
   const pushNote = !push.subscribed && (
-    push.permission === "denied"
+    push.native ? (
+      askNative
+        ? <p className="rv2-watch-muted">Sites go in minutes. Allow notifications so we can reach you.</p>
+        : <>
+            <p className="rv2-watch-muted">Notifications are off for Campable, so this watch can't reach your phone.</p>
+            <button type="button" className="rv2-watch-secondary" onClick={openAppSettings}>Open Settings</button>
+          </>
+    ) : push.permission === "denied"
       ? <p className="rv2-watch-muted">Notifications are blocked for Campable in this browser. Allow them in its settings to get alerts.</p>
       : <button type="button" className="rv2-watch-secondary" onClick={() => void push.subscribe()}>Turn on notifications</button>
   );
@@ -197,7 +208,16 @@ export function WatchSheet({ place, params, mode = "watch", stays, initial, from
               </p>
               {pushNote}
               <div className="rv2-watch-foot">
-                <button type="button" className="rv2-watch-primary" onClick={onClose}>Done</button>
+                {askNative ? (
+                  <>
+                    <button type="button" className="rv2-watch-primary" onClick={() => void push.subscribe()}>
+                      Allow notifications
+                    </button>
+                    <button type="button" className="rv2-watch-secondary" onClick={onClose}>Not now</button>
+                  </>
+                ) : (
+                  <button type="button" className="rv2-watch-primary" onClick={onClose}>Done</button>
+                )}
               </div>
             </div>
           ) : (

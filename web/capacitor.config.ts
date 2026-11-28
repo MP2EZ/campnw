@@ -16,6 +16,13 @@ const config: CapacitorConfig = {
     // the status bar (and env(safe-area-inset-*) reports 0 in this setup).
     contentInset: "always",
   },
+  plugins: {
+    PushNotifications: {
+      // Show watch alerts while the app is open too. No badge: an alert is
+      // stale within minutes, so a count would only mislead.
+      presentationOptions: ["sound", "banner", "list"],
+    },
+  },
 };
 
 export default config;

@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { getVapidKey, subscribePush, track, unsubscribePush } from "../api";
+import {
+  isNativePush,
+  nativePermission,
+  requestNativePush,
+  unregisterNativePush,
+} from "../lib/nativePush";
 
 const SUBSCRIBED_KEY = "campable-push-subscribed";
 
@@ -7,6 +13,10 @@ const SUBSCRIBED_KEY = "campable-push-subscribed";
  * sign-out, while the auth header still scopes the server-side delete.
  * Best-effort: a failure must not block signing out. */
 export async function unregisterPushDevice(): Promise<void> {
+  if (isNativePush()) {
+    await unregisterNativePush();
+    return;
+  }
   try {
     // getRegistration, not .ready: .ready never settles without a worker.
     const reg = await navigator.serviceWorker?.getRegistration();
@@ -28,11 +38,33 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
+/** In the iOS app, permission lives in iOS Settings and can change while the
+ * app is in the background, so read it on mount and on every return. */
+function useNativePermission(): [NotificationPermission, (p: NotificationPermission) => void] {
+  const [permission, setPermission] = useState<NotificationPermission>("default");
+  useEffect(() => {
+    if (!isNativePush()) return;
+    const read = () => {
+      if (document.visibilityState !== "visible") return;
+      nativePermission().then(setPermission).catch(() => {});
+    };
+    read();
+    document.addEventListener("visibilitychange", read);
+    return () => document.removeEventListener("visibilitychange", read);
+  }, []);
+  return [permission, setPermission];
+}
+
 export function usePushNotifications() {
-  const [permission, setPermission] = useState<NotificationPermission>(
+  const native = isNativePush();
+  const [webPermission, setWebPermission] = useState<NotificationPermission>(
     typeof Notification !== "undefined" ? Notification.permission : "default"
   );
-  const [subscribed, setSubscribed] = useState(false);
+  const [nativePerm, setNativePerm] = useNativePermission();
+  const permission = native ? nativePerm : webPermission;
+  const [webSubscribed, setSubscribed] = useState(false);
+  // Native: granted means registered (useNativePushSync registers on sign-in).
+  const subscribed = native ? nativePerm === "granted" : webSubscribed;
 
   useEffect(() => {
     if (localStorage.getItem(SUBSCRIBED_KEY) === "true") {
@@ -41,6 +73,20 @@ export function usePushNotifications() {
   }, []);
 
   const subscribe = useCallback(async (): Promise<boolean> => {
+    if (isNativePush()) {
+      const prior = await nativePermission().catch(() => "default" as const);
+      try {
+        const result = await requestNativePush();
+        setNativePerm(result);
+        track("push_permission_result", { result, prior_permission: prior, platform: "ios_native" });
+        return result === "granted";
+      } catch {
+        // Registration failed (no network, APNs unreachable). Permission
+        // may still be granted; the next sign-in or launch retries.
+        setNativePerm(await nativePermission().catch(() => "default" as const));
+        return false;
+      }
+    }
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       return false;
     }
@@ -51,7 +97,7 @@ export function usePushNotifications() {
 
     const priorPermission = Notification.permission;
     const result = await Notification.requestPermission();
-    setPermission(result);
+    setWebPermission(result);
     // Push permission is the single gate on whether a watch can ever deliver
     // value. The result was discarded, so "watches created" overstated the
     // reachable alert audience by an unknown factor.
@@ -84,7 +130,7 @@ export function usePushNotifications() {
     setSubscribed(true);
     localStorage.setItem(SUBSCRIBED_KEY, "true");
     return true;
-  }, []);
+  }, [setNativePerm]);
 
-  return { permission, subscribed, subscribe };
+  return { permission, subscribed, subscribe, native };
 }

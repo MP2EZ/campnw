@@ -917,6 +917,26 @@ export async function unsubscribePush(endpoint: string): Promise<void> {
   });
 }
 
+/** Register this phone's APNs token for the signed-in user. Throws on
+ * failure so the caller can say alerts aren't set up. */
+export async function registerDeviceToken(token: string): Promise<void> {
+  const resp = await authFetch(`${API_BASE}/api/push/device-token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, platform: "ios" }),
+  });
+  if (!resp.ok) throw new Error(`device token registration failed (${resp.status})`);
+}
+
+/** Stop this phone receiving alerts. Needs only the token. */
+export async function deleteDeviceToken(token: string): Promise<void> {
+  await authFetch(`${API_BASE}/api/push/device-token`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Trip Planner / Chat
 // ---------------------------------------------------------------------------

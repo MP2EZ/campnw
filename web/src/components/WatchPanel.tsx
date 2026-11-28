@@ -5,6 +5,8 @@ import type { WatchData } from "../api";
 import { parseIsoDate } from "../lib/dates";
 import { useAuth } from "../hooks/useAuth";
 import { useBilling } from "../hooks/useBilling";
+import { usePushNotifications } from "../hooks/usePushNotifications";
+import { openAppSettings } from "../lib/nativePush";
 import { PollDashboard } from "./PollDashboard";
 import { ShareButton } from "./ShareButton";
 
@@ -41,6 +43,14 @@ export const WatchPanel = memo(function WatchPanel({
 
   useEffect(() => {
     if (open) refresh();
+  }, [open, refresh]);
+
+  // An alert arrived while the app is open: show the watchlist as it is now.
+  useEffect(() => {
+    if (!open) return;
+    const onAlert = () => void refresh();
+    window.addEventListener("campable:watch-alert", onAlert);
+    return () => window.removeEventListener("campable:watch-alert", onAlert);
   }, [open, refresh]);
 
   const handleDelete = async (id: number) => {
@@ -126,6 +136,7 @@ export const WatchPanel = memo(function WatchPanel({
           </div>
         )}
         {error && <p className="watch-error">{error}</p>}
+        <PushReachRow count={watches.filter((w) => w.enabled).length} />
 
         {!loading && watches.length === 0 && (
           <div className="watch-empty">
@@ -220,5 +231,33 @@ function WatchLimitIndicator({ watchCount }: { watchCount: number }) {
     >
       {watchCount}/{watchLimit}
     </span>
+  );
+}
+
+/** iOS app only: a watch is useless if alerts can't reach this phone. People
+ * whose watches were made on the web never see the watch sheet's ask, so the
+ * watchlist asks too, and gives a way back after "Don't Allow". */
+function PushReachRow({ count }: { count: number }) {
+  const push = usePushNotifications();
+  if (!push.native || count === 0 || push.permission === "granted") return null;
+  const watches = count === 1 ? "Your watch" : `Your ${count} watches`;
+  return (
+    <div className="watch-push-row" role="status">
+      {push.permission === "denied" ? (
+        <>
+          <p>{watches} can't reach this phone. Notifications are off for Campable.</p>
+          <button type="button" className="watch-push-action" onClick={openAppSettings}>
+            Open Settings
+          </button>
+        </>
+      ) : (
+        <>
+          <p>Sites go in minutes. Allow notifications so {count === 1 ? "your watch" : "your watches"} can reach this phone.</p>
+          <button type="button" className="watch-push-action" onClick={() => void push.subscribe()}>
+            Allow notifications
+          </button>
+        </>
+      )}
+    </div>
   );
 }
