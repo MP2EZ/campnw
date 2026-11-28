@@ -5,6 +5,9 @@ import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom"
 import { getPosthog, getRecommendations, track } from "./api";
 import type { Recommendation, SearchParams } from "./api";
 import { WatchPanel } from "./components/WatchPanel";
+import { PushAlertSheet } from "./components/PushAlertSheet";
+import { usePendingAlert } from "./lib/pushAlerts";
+import { useNativePushSync } from "./hooks/useNativePushSync";
 import { OnboardingModal } from "./components/OnboardingModal";
 const AuthModal = lazy(() => import("./components/AuthModal").then(m => ({ default: m.AuthModal })));
 const ShortcutHelpModal = lazy(() => import("./components/ShortcutHelpModal").then(m => ({ default: m.ShortcutHelpModal })));
@@ -123,6 +126,8 @@ export default function App() {
   } = useSearch(user ?? null);
 
   const [watchPanelOpen, setWatchPanelOpen] = useState(false);
+  useNativePushSync(user?.id);
+  const [pushAlert, clearPushAlert] = usePendingAlert();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authEntryPoint, setAuthEntryPoint] = useState("unknown");
   const [helpModalOpen, setHelpModalOpen] = useState(false);
@@ -333,6 +338,13 @@ export default function App() {
         open={watchPanelOpen}
         onClose={() => setWatchPanelOpen(false)}
       />
+      {pushAlert && (
+        <PushAlertSheet
+          alert={pushAlert}
+          onClose={clearPushAlert}
+          onOpenWatchlist={() => setWatchPanelOpen(true)}
+        />
+      )}
       <Suspense fallback={null}>
         {authModalOpen && (
           <AuthModal
