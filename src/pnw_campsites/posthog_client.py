@@ -66,7 +66,9 @@ async def delete_person(distinct_id: str) -> bool:
     key = os.getenv("POSTHOG_PERSONAL_API_KEY", "")
     project_id = os.getenv("POSTHOG_PROJECT_ID", "")
     if not key or not project_id:
-        logger.warning("PostHog person delete skipped: admin API not configured")
+        # Expected in local dev; in prod it means deleted users stay in PostHog.
+        log = logger.error if os.getenv("FLY_APP_NAME") else logger.warning
+        log("PostHog person delete skipped: admin API not configured")
         return False
     url = f"{_api_host()}/api/projects/{project_id}/persons/bulk_delete/"
     try:
@@ -81,7 +83,9 @@ async def delete_person(distinct_id: str) -> bool:
                 },
             )
         resp.raise_for_status()
-    except httpx.HTTPError:
+    except Exception:
+        # Not only HTTPError: a malformed host raises InvalidURL, and the
+        # account is already deleted by the time this runs.
         logger.error("PostHog person delete failed for user %s", distinct_id, exc_info=True)
         return False
     return True

@@ -41,10 +41,15 @@ def _provision(client: TestClient) -> tuple[str, int]:
     return token, user_id
 
 
+def _page(items):
+    return type("L", (), {"auto_paging_iter": lambda self: iter(items)})()
+
+
 class _FakeSubscriptions:
     def __init__(self, active: list[str], fail_cancel: Exception | None = None,
-                 fail_list: Exception | None = None):
-        self.active = active
+                 fail_list: Exception | None = None, ended: dict[str, str] | None = None):
+        # active: ids of open subscriptions; ended: id -> terminal status
+        self.subs = [(s, "active") for s in active] + list((ended or {}).items())
         self.fail_cancel = fail_cancel
         self.fail_list = fail_list
         self.listed: list[dict] = []
@@ -54,7 +59,7 @@ class _FakeSubscriptions:
         self.listed.append(params or {})
         if self.fail_list:
             raise self.fail_list
-        return type("L", (), {"data": [type("S", (), {"id": s})() for s in self.active]})()
+        return _page([type("S", (), {"id": i, "status": st})() for i, st in self.subs])
 
     def cancel(self, subscription_id, params=None):
         if self.fail_cancel:
@@ -62,11 +67,31 @@ class _FakeSubscriptions:
         self.cancelled.append(subscription_id)
 
 
-def _fake_stripe(monkeypatch, subs: _FakeSubscriptions) -> None:
+class _FakeCheckoutSessions:
+    def __init__(self, open_ids: list[str] | None = None):
+        self.open_ids = open_ids or []
+        self.listed: list[dict] = []
+        self.expired: list[str] = []
+
+    def list(self, params=None):
+        self.listed.append(params or {})
+        return _page([type("CS", (), {"id": i})() for i in self.open_ids])
+
+    def expire(self, session_id, params=None):
+        self.expired.append(session_id)
+
+
+def _fake_stripe(monkeypatch, subs: _FakeSubscriptions,
+                 sessions: _FakeCheckoutSessions | None = None) -> _FakeCheckoutSessions:
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_fake")
+    sessions = sessions or _FakeCheckoutSessions()
     fake = type("C", (), {})()
-    fake.v1 = type("V1", (), {"subscriptions": subs})()
+    fake.v1 = type("V1", (), {
+        "subscriptions": subs,
+        "checkout": type("CO", (), {"sessions": sessions})(),
+    })()
     monkeypatch.setattr(billing, "_get_client", lambda: fake)
+    return sessions
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +203,66 @@ class TestStripeCancelledOnDelete:
         assert api_module._watch_db.get_user_by_id(user_id) is None
 
 
+    def test_open_checkout_session_is_expired(self, client: TestClient, monkeypatch):
+        # Checkout saves the customer before payment; a session left open in
+        # another tab must not be able to start billing a deleted account.
+        sessions = _fake_stripe(
+            monkeypatch, _FakeSubscriptions(active=[]), _FakeCheckoutSessions(["cs_open"]),
+        )
+        token, user_id = _provision(client)
+        api_module._watch_db.update_user(user_id, stripe_customer_id="cus_123")
+
+        assert client.delete("/api/auth/me", headers=auth_headers(token)).status_code == 200
+        assert sessions.listed[0] == {"customer": "cus_123", "status": "open", "limit": 100}
+        assert sessions.expired == ["cs_open"]
+
+    def test_ended_subscriptions_are_not_cancelled_again(self, client: TestClient, monkeypatch):
+        subs = _FakeSubscriptions(
+            active=["sub_live"], ended={"sub_old": "incomplete_expired"},
+        )
+        _fake_stripe(monkeypatch, subs)
+        token, user_id = _provision(client)
+        api_module._watch_db.update_user(user_id, stripe_customer_id="cus_123")
+
+        assert client.delete("/api/auth/me", headers=auth_headers(token)).status_code == 200
+        assert subs.cancelled == ["sub_live"]
+
+    def test_other_invalid_request_errors_keep_the_account(
+        self, client: TestClient, monkeypatch,
+    ):
+        bad = InvalidRequestError("Invalid API key", param=None, code="api_key_invalid")
+        _fake_stripe(monkeypatch, _FakeSubscriptions(active=[], fail_list=bad))
+        token, user_id = _provision(client)
+        api_module._watch_db.update_user(user_id, stripe_customer_id="cus_123")
+
+        assert client.delete("/api/auth/me", headers=auth_headers(token)).status_code == 502
+        assert api_module._watch_db.get_user_by_id(user_id) is not None
+
+    def test_supabase_failure_after_cancel_says_billing_ended(
+        self, client: TestClient, monkeypatch,
+    ):
+        _fake_stripe(monkeypatch, _FakeSubscriptions(active=["sub_1"]))
+        client.supabase_delete.side_effect = httpx.ConnectError("down")
+        token, user_id = _provision(client)
+        api_module._watch_db.update_user(user_id, stripe_customer_id="cus_123")
+
+        resp = client.delete("/api/auth/me", headers=auth_headers(token))
+
+        assert resp.status_code == 502
+        assert "subscription is cancelled" in resp.json()["detail"]
+        assert api_module._watch_db.get_user_by_id(user_id) is not None
+
+    def test_missing_stripe_key_is_logged_as_error(self, client: TestClient, monkeypatch, caplog):
+        monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
+        token, user_id = _provision(client)
+        api_module._watch_db.update_user(user_id, stripe_customer_id="cus_123")
+
+        with caplog.at_level("ERROR"):
+            client.delete("/api/auth/me", headers=auth_headers(token))
+
+        assert any("STRIPE_SECRET_KEY unset" in r.message for r in caplog.records)
+
+
 # ---------------------------------------------------------------------------
 # PostHog person is deleted
 # ---------------------------------------------------------------------------
@@ -216,6 +301,14 @@ class TestPosthogPersonDeleted:
         respx_mock.post(POSTHOG_BULK_DELETE).mock(return_value=httpx.Response(500))
         token, user_id = _provision(client)
 
+        assert client.delete("/api/auth/me", headers=auth_headers(token)).status_code == 200
+        assert api_module._watch_db.get_user_by_id(user_id) is None
+
+    def test_malformed_posthog_host_does_not_fail_delete(
+        self, client: TestClient, posthog_admin, monkeypatch,
+    ):
+        monkeypatch.setenv("POSTHOG_API_HOST", "not a url")
+        token, user_id = _provision(client)
         assert client.delete("/api/auth/me", headers=auth_headers(token)).status_code == 200
         assert api_module._watch_db.get_user_by_id(user_id) is None
 

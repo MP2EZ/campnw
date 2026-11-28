@@ -142,8 +142,15 @@ class TestUserCRUD:
 
     def test_tombstone_migration_is_idempotent(self, tmp_path) -> None:
         path = tmp_path / "w.db"
-        WatchDB(path).close()
-        WatchDB(path).close()
+        db = WatchDB(path)
+        user = _user(db, "otto")
+        db._conn.execute("UPDATE users SET supabase_id='sb-9' WHERE id=?", (user.id,))
+        db.delete_user(user.id)
+        db.close()
+
+        reopened = WatchDB(path)
+        assert reopened.is_deleted_supabase_id("sb-9")
+        reopened.close()
 
     def test_delete_user_nonexistent(self, watch_db: WatchDB) -> None:
         """delete_user returns False for nonexistent user."""

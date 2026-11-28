@@ -7,6 +7,7 @@ which is auto-provisioned on first authenticated API call (see deps.py).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
@@ -121,9 +122,14 @@ async def delete_me(request: Request):
 
     # First, before anything is deleted: a deleted account must not keep
     # being charged, and if this fails the user can still sign in and retry.
+    billing_cancelled = False
     if user and user.stripe_customer_id:
         try:
-            cancelled = cancel_customer_subscriptions(user.stripe_customer_id)
+            # The Stripe SDK is synchronous; inline it would block the event
+            # loop of the single worker for every Stripe round-trip.
+            cancelled = await asyncio.to_thread(
+                cancel_customer_subscriptions, user.stripe_customer_id,
+            )
         except StripeError:
             log.error("Failed to cancel Stripe subscriptions for user %s", user_id, exc_info=True)
             raise HTTPException(
@@ -131,6 +137,7 @@ async def delete_me(request: Request):
                 detail="Couldn't cancel your subscription. Please try again.",
             ) from None
         if cancelled:
+            billing_cancelled = True
             log.info("Cancelled %d subscription(s) for deleted user %s", len(cancelled), user_id)
 
     if user and user.supabase_id:
@@ -141,10 +148,13 @@ async def delete_me(request: Request):
             await _delete_supabase_user(user.supabase_id)
         except httpx.HTTPError:
             log.error("Failed to delete Supabase user %s", user.supabase_id, exc_info=True)
-            raise HTTPException(
-                status_code=502,
-                detail="Couldn't delete your account. Please try again.",
-            ) from None
+            detail = "Couldn't delete your account. Please try again."
+            if billing_cancelled:
+                detail = (
+                    "Your subscription is cancelled, but we couldn't delete your"
+                    " account. Please try again."
+                )
+            raise HTTPException(status_code=502, detail=detail) from None
 
     db.delete_user(user_id)
     # Best-effort: the account is already gone, and an analytics outage must
