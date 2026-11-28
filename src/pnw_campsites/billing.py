@@ -13,7 +13,13 @@ import os
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from stripe import RequestsClient, SignatureVerificationError, StripeClient, Webhook
+from stripe import (
+    InvalidRequestError,
+    RequestsClient,
+    SignatureVerificationError,
+    StripeClient,
+    Webhook,
+)
 
 from pnw_campsites.monitor.db import User, WatchDB
 from pnw_campsites.posthog_client import capture_event
@@ -118,6 +124,50 @@ def create_checkout_session(
         },
     )
     return session.url, customer_id
+
+
+_ENDED_SUBSCRIPTION_STATUSES = frozenset({"canceled", "incomplete_expired"})
+
+
+def cancel_customer_subscriptions(customer_id: str) -> list[str]:
+    """Stop all billing on a Stripe customer: cancel every open subscription
+    immediately and expire every open Checkout Session.
+
+    Used by account deletion: a deleted account must stop being billed.
+    Checkout saves the customer before payment, so a session left open in
+    another tab could otherwise start a subscription after the account is
+    gone. Returns the cancelled subscription ids. Raises StripeError on
+    failure so the caller can keep the account and let the user retry. A
+    customer that no longer exists in Stripe has nothing to cancel.
+    """
+    if not customer_id:
+        return []
+    if not _env("STRIPE_SECRET_KEY"):
+        # Only expected in local dev. Anywhere else this means a deleted
+        # account may keep being billed.
+        logger.error("STRIPE_SECRET_KEY unset: not cancelling billing for %s", customer_id)
+        return []
+    client = _get_client()
+    try:
+        sessions = client.v1.checkout.sessions.list(
+            params={"customer": customer_id, "status": "open", "limit": 100},
+        )
+        for session in sessions.auto_paging_iter():
+            client.v1.checkout.sessions.expire(session.id)
+        # Without a status filter Stripe lists every subscription that isn't
+        # canceled (active, trialing, past_due, unpaid, incomplete...).
+        subs = client.v1.subscriptions.list(params={"customer": customer_id, "limit": 100})
+        cancelled = []
+        for sub in subs.auto_paging_iter():
+            if sub.status in _ENDED_SUBSCRIPTION_STATUSES:
+                continue
+            client.v1.subscriptions.cancel(sub.id)
+            cancelled.append(sub.id)
+    except InvalidRequestError as exc:
+        if exc.code == "resource_missing":
+            return []
+        raise
+    return cancelled
 
 
 def portal_return_url() -> str:

@@ -99,10 +99,10 @@ class TestGetMe:
         user_id = resp.json()["user"]["id"]
         # Delete from DB
         api_module._watch_db.delete_user(user_id)
-        # Next request re-provisions (auto-provisioning creates new user)
+        # The still-valid token must not re-provision the deleted account
         resp2 = client.get("/api/auth/me", headers=_auth_headers(token))
-        assert resp2.status_code == 200
-        assert resp2.json()["user"]["id"] != user_id
+        assert resp2.status_code == 401
+        assert api_module._watch_db.get_user_by_supabase_id(sub) is None
 
     def test_response_includes_all_fields(self, client: TestClient):
         token = _make_jwt(email="fields@example.com")

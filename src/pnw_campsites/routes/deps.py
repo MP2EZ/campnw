@@ -88,6 +88,11 @@ def get_current_user(request: Request) -> int | None:
     if user:
         return user.id
 
+    # A deleted account's token stays valid until it expires; it must not
+    # re-provision the account it belonged to.
+    if db.is_deleted_supabase_id(supabase_id):
+        return None
+
     # Auto-provision local user on first authenticated request
     from pnw_campsites.monitor.db import User
 

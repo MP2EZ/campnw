@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass, field, fields
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 _docker_db = Path("/app/data/watches.db")
@@ -552,6 +553,13 @@ class WatchDB:
                 ON planner_sessions(user_id, started_at DESC);
             CREATE INDEX IF NOT EXISTS idx_planner_sessions_session
                 ON planner_sessions(session_token, started_at DESC);
+            -- Supabase ids of deleted accounts, hashed. A sign-in token stays
+            -- valid for up to an hour after the Supabase user is deleted, and
+            -- without this the next request would re-provision the account.
+            CREATE TABLE IF NOT EXISTS deleted_accounts (
+                supabase_id_hash TEXT PRIMARY KEY,
+                deleted_at TEXT NOT NULL
+            );
         """)
         planner_cols = [
             r[1] for r in self._conn.execute("PRAGMA table_info(planner_sessions)")
@@ -934,7 +942,25 @@ class WatchDB:
         self._conn.commit()
         return self.get_user_by_id(user_id)
 
+    @staticmethod
+    def _supabase_id_hash(supabase_id: str) -> str:
+        return hashlib.sha256(supabase_id.encode()).hexdigest()
+
+    def is_deleted_supabase_id(self, supabase_id: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM deleted_accounts WHERE supabase_id_hash=?",
+            (self._supabase_id_hash(supabase_id),),
+        ).fetchone()
+        return row is not None
+
     def delete_user(self, user_id: int) -> bool:
+        user = self.get_user_by_id(user_id)
+        if user and user.supabase_id:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO deleted_accounts (supabase_id_hash, deleted_at)"
+                " VALUES (?, ?)",
+                (self._supabase_id_hash(user.supabase_id), datetime.now(UTC).isoformat()),
+            )
         # Delete watches and search history (cascade), then user
         self._conn.execute("DELETE FROM watches WHERE user_id=?", (user_id,))
         self._conn.execute("DELETE FROM search_history WHERE user_id=?", (user_id,))

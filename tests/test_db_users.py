@@ -125,6 +125,33 @@ class TestUserCRUD:
         # Verify deletion
         assert watch_db.get_user_by_id(user_id) is None
 
+    def test_delete_user_remembers_supabase_id(self, watch_db: WatchDB) -> None:
+        """A deleted account's Supabase id is tombstoned, hashed."""
+        user = _user(watch_db, "gwen")
+        watch_db._conn.execute(
+            "UPDATE users SET supabase_id='sb-123' WHERE id=?", (user.id,)
+        )
+        assert not watch_db.is_deleted_supabase_id("sb-123")
+
+        watch_db.delete_user(user.id)
+
+        assert watch_db.is_deleted_supabase_id("sb-123")
+        assert not watch_db.is_deleted_supabase_id("sb-456")
+        raw = watch_db._conn.execute("SELECT * FROM deleted_accounts").fetchall()
+        assert "sb-123" not in str([tuple(r) for r in raw])
+
+    def test_tombstone_migration_is_idempotent(self, tmp_path) -> None:
+        path = tmp_path / "w.db"
+        db = WatchDB(path)
+        user = _user(db, "otto")
+        db._conn.execute("UPDATE users SET supabase_id='sb-9' WHERE id=?", (user.id,))
+        db.delete_user(user.id)
+        db.close()
+
+        reopened = WatchDB(path)
+        assert reopened.is_deleted_supabase_id("sb-9")
+        reopened.close()
+
     def test_delete_user_nonexistent(self, watch_db: WatchDB) -> None:
         """delete_user returns False for nonexistent user."""
         result = watch_db.delete_user(999)
