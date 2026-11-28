@@ -145,14 +145,17 @@ class TestRequest:
 class TestResponses:
     @pytest.mark.parametrize("status,reason", [
         (410, "Unregistered"), (410, "ExpiredToken"), (400, "BadDeviceToken"),
+        # Apple: "The device token doesn't match the specified topic" — a
+        # token from another app or build. Our topic is a constant.
+        (400, "DeviceTokenNotForTopic"),
     ])
     async def test_dead_tokens(self, config, status, reason):
         async with _client(lambda r: _err(status, reason)) as c:
             assert await ApnsSender(config, c).send(TOKEN, PAYLOAD) == "dead"
 
     @pytest.mark.parametrize("reason", [
-        "InvalidProviderToken", "BadTopic", "DeviceTokenNotForTopic",
-        "TopicDisallowed", "Forbidden",
+        "InvalidProviderToken", "BadTopic", "TopicDisallowed", "Forbidden",
+        "UnrelatedKeyIdInToken", "BadEnvironmentKeyIdInToken",
     ])
     async def test_provider_errors_disable_the_sender_and_keep_tokens(
         self, config, reason,
@@ -161,7 +164,7 @@ class TestResponses:
 
         def handler(req):
             calls.append(req)
-            return _err(403 if reason != "BadTopic" else 400, reason)
+            return _err(400 if reason in ("BadTopic", "TopicDisallowed") else 403, reason)
 
         async with _client(handler) as c:
             sender = ApnsSender(config, c)

@@ -348,7 +348,7 @@ async def lifespan(app: FastAPI):
         from pnw_campsites.monitor.reminders import run_release_reminders
 
         scheduler.add_job(
-            partial(run_release_reminders, _watch_db),
+            partial(run_release_reminders, _watch_db, registry=_registry),
             "cron",
             hour=6,
             minute=55,

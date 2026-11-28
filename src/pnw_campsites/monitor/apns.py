@@ -39,14 +39,16 @@ _JWT_MAX_AGE = 50 * 60   # refresh before Apple's 60-minute limit
 _JWT_MIN_AGE = 20 * 60   # Apple: no more often than every 20 minutes
 _RETRY_DELAY = 1.0
 
-# The token is gone: the app was deleted or the token rotated.
-_DEAD = {"BadDeviceToken", "Unregistered", "ExpiredToken"}
+# The token is gone (app deleted, token rotated) or belongs to another app.
+# DeviceTokenNotForTopic is per token, not ours to fix: the topic is fixed.
+_DEAD = {"BadDeviceToken", "Unregistered", "ExpiredToken", "DeviceTokenNotForTopic"}
 # Our key, team or topic is wrong. Every send would fail the same way, and no
 # token is at fault, so stop the cycle and delete nothing.
 _PROVIDER = {
     "InvalidProviderToken", "MissingProviderToken", "BadTopic", "MissingTopic",
-    "TopicDisallowed", "DeviceTokenNotForTopic", "Forbidden",
-    "BadCertificate", "BadCertificateEnvironment", "TooManyProviderTokenUpdates",
+    "TopicDisallowed", "Forbidden", "BadCertificate", "BadCertificateEnvironment",
+    "TooManyProviderTokenUpdates", "UnrelatedKeyIdInToken",
+    "BadEnvironmentKeyIdInToken",
 }
 
 SendStatus = Literal["sent", "dead", "failed"]
@@ -90,7 +92,9 @@ class ApnsConfig:
             raise ValueError("APNS_KEY_P8_B64 is not an EC (.p8) key")
         return cls(
             key=key, key_id=key_id, team_id=team_id,
-            topic=env.get("APNS_TOPIC", DEFAULT_TOPIC), host=HOSTS[environment],
+            # Not configurable: a wrong topic makes every token answer
+            # DeviceTokenNotForTopic, which deletes it.
+            topic=DEFAULT_TOPIC, host=HOSTS[environment],
         )
 
 

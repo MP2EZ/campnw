@@ -73,6 +73,25 @@ class TestPushToUser:
         )
         assert watch_db.get_device_tokens_for_user(uid) == [TOKEN]
 
+    async def test_a_send_that_raises_counts_as_failed(self, watch_db, caplog):
+        """Anything the sender raises stays here: escaping would abort the
+        poll loop after snapshots were saved, losing later watches' alerts."""
+        uid = _user(watch_db)
+        watch_db.save_device_token(uid, TOKEN)
+        watch_db.save_device_token(uid, DEAD)
+
+        class Exploding(FakeSender):
+            async def send(self, token, payload, **kw):
+                if token == TOKEN:
+                    raise RuntimeError(f"h2 blew up sending to {token}")
+                return await super().send(token, payload, **kw)
+
+        sender = Exploding()
+        out = await push_to_user(watch_db, uid, WEB, NATIVE, sender=sender)
+        assert out == [("apns", "failed"), ("apns", "sent")]
+        assert sorted(watch_db.get_device_tokens_for_user(uid)) == sorted([TOKEN, DEAD])
+        assert TOKEN not in caplog.text
+
     async def test_no_sender_means_web_only(self, watch_db):
         """APNs not configured here: phones are skipped, browsers still get it."""
         uid = _user(watch_db)
@@ -148,7 +167,7 @@ class TestNativeAlert:
         p = native_alert(_result(), "X")
         assert p["watch_id"] == 42
         assert p["booking_url"] == "https://www.recreation.gov/x"
-        assert p["path"] == "/?alert=42"
+        assert "path" not in p
 
     def test_other_providers(self):
         r = _result()
@@ -204,3 +223,43 @@ def _fixed(sender):
         yield sender
 
     return opener
+
+
+class TestPollLoopSurvivesASenderError:
+    async def test_later_watches_still_alert(self, watch_db, monkeypatch):
+        uid = _user(watch_db)
+        watch_db.save_device_token(uid, TOKEN)
+        first = _result()
+        first.watch.user_id = uid
+        first.watch.id = watch_db.add_watch(Watch(
+            facility_id="232465", name="x", start_date="2026-06-01",
+            end_date="2026-06-30", user_id=uid,
+        )).id
+        second = _result()
+        second.watch = Watch(
+            id=watch_db.add_watch(Watch(
+                facility_id="1", name="y", start_date="2026-06-01", end_date="2026-06-30",
+            )).id,
+            facility_id="1", name="y", notification_channel="ntfy", notify_topic="t",
+        )
+        second.changes[0].watch = second.watch
+
+        class Exploding:
+            async def send(self, *a, **k):
+                raise RuntimeError("boom")
+
+        ntfy_sent = []
+
+        async def fake_ntfy(topic, result):
+            ntfy_sent.append(result.watch.id)
+
+        async def fake_poll_all(*a, **k):
+            return [first, second]
+
+        monkeypatch.setattr(watcher_mod, "poll_all", fake_poll_all)
+        monkeypatch.setattr(notify_mod, "notify_ntfy", fake_ntfy)
+        monkeypatch.setattr(api_module, "_watch_db", watch_db)
+        monkeypatch.setattr(api_module, "_registry", _Registry("Ohanapecosh"))
+        monkeypatch.setattr(notify_mod, "open_apns_sender", _fixed(Exploding()))
+        await api_module._poll_tranche()
+        assert ntfy_sent == [second.watch.id]

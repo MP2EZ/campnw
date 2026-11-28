@@ -257,7 +257,6 @@ def native_alert(result: PollResult, campground_name: str) -> dict:
         },
         "watch_id": watch.id,
         "booking_url": booking_link(result),
-        "path": f"/?alert={watch.id}",
     }
 
 
@@ -314,8 +313,18 @@ async def push_to_user(
             _logger.warning("web push failed for user %s: %s", user_id, type(e).__name__)
             out.append(("web_push", "failed"))
     if sender is not None:
+        from pnw_campsites.monitor.apns import token_ref
+
         for token in watch_db.get_device_tokens_for_user(user_id):
-            status = await sender.send(token, native_payload, collapse_id=collapse_id)
+            # Nothing may escape: the caller's loop runs after snapshots are
+            # saved, so an exception here would lose later watches' alerts.
+            try:
+                status = await sender.send(token, native_payload, collapse_id=collapse_id)
+            except Exception as e:
+                _logger.warning(
+                    "APNs send to %s raised %s", token_ref(token), type(e).__name__,
+                )
+                status = "failed"
             if status == "dead":
                 watch_db.delete_device_token(token)
             out.append(("apns", "sent" if status == "sent" else "failed"))

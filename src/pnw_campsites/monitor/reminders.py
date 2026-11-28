@@ -20,6 +20,7 @@ from pnw_campsites.urls import availability_url
 if TYPE_CHECKING:
     from pnw_campsites.monitor.db import Watch, WatchDB
     from pnw_campsites.monitor.notify import Sender
+    from pnw_campsites.registry.db import CampgroundRegistry
 
 
 # Five minutes before Recreation.gov's 7:00 am PT release, so the camper is at
@@ -68,14 +69,15 @@ def _day(d: date) -> str:
     return f"{d:%a %b} {d.day}"
 
 
-def reminder_push(watch: Watch) -> dict:
-    """The push for a reminder's release morning: {title, body, url}."""
+def reminder_push(watch: Watch, name: str | None = None) -> dict:
+    """The push for a reminder's release morning: {title, body, url}.
+    `name` overrides the watch name (the phone copy uses the registry's)."""
     first = date.fromisoformat(watch.start_date)
     last = date.fromisoformat(watch.end_date)
     # Recreation.gov releases at 7:00 am PT; WA's time of day is unverified.
     when = "at 7:00 am" if watch.booking_system == BookingSystem.RECGOV else "today"
     return {
-        "title": f"{watch.name} opens for booking {when}",
+        "title": f"{name or watch.name} opens for booking {when}",
         # Nights, first to last, as the results' chips and the sheet label them.
         "body": (
             f"{_day(first)} – {_day(last)}. "
@@ -93,6 +95,7 @@ async def run_release_reminders(
     now: datetime | None = None,
     send: Send | None = None,
     apns_sender: Sender | None = None,
+    registry: CampgroundRegistry | None = None,
 ) -> int:
     """Push due reminders and convert them to cancellation watches.
 
@@ -111,12 +114,13 @@ async def run_release_reminders(
     now = now or pacific_now()
     if apns_sender is None:
         async with open_apns_sender() as opened:
-            return await _run(watch_db, now, send, opened)
-    return await _run(watch_db, now, send, apns_sender)
+            return await _run(watch_db, now, send, opened, registry)
+    return await _run(watch_db, now, send, apns_sender, registry)
 
 
 async def _run(
     watch_db: WatchDB, now: datetime, send: Send, apns_sender: Sender | None,
+    registry: CampgroundRegistry | None,
 ) -> int:
     converted = 0
     for watch in watch_db.list_release_watches():
@@ -128,33 +132,38 @@ async def _run(
             continue
         converted += 1
         if action == "push" and watch.user_id:
-            await _push(watch_db, watch, send, apns_sender)
+            await _push(watch_db, watch, send, apns_sender, registry)
     return converted
 
 
-def reminder_native(watch: Watch, web: dict) -> dict:
-    """APNs payload for a release reminder: the web copy, time-sensitive."""
+def reminder_native(watch: Watch, name: str) -> dict:
+    """APNs payload for a release reminder: the web copy with the registry's
+    campground name, time-sensitive."""
+    from pnw_campsites.monitor.notify import short_name
+
+    copy = reminder_push(watch, short_name(name))
     return {
         "aps": {
-            "alert": {"title": web["title"], "body": web["body"]},
+            "alert": {"title": copy["title"], "body": copy["body"]},
             "sound": "default",
             "interruption-level": "time-sensitive",
             "thread-id": f"watch-{watch.id}",
         },
         "watch_id": watch.id,
-        "booking_url": web["url"],
-        "path": f"/?alert={watch.id}",
+        "booking_url": copy["url"],
     }
 
 
 async def _push(
     watch_db: WatchDB, watch: Watch, send: Send, apns_sender: Sender | None,
+    registry: CampgroundRegistry | None,
 ) -> None:
     from pnw_campsites.monitor.notify import push_to_user
 
-    web = reminder_push(watch)
+    cg = registry.get_by_facility_id(watch.facility_id) if registry else None
     sent = await push_to_user(
-        watch_db, watch.user_id, web, reminder_native(watch, web),
+        watch_db, watch.user_id, reminder_push(watch),
+        reminder_native(watch, cg.name if cg else watch.name),
         sender=apns_sender, collapse_id=f"release-{watch.id}", send_web=send,
     )
     for channel, status in sent:
