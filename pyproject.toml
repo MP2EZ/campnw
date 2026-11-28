@@ -24,6 +24,7 @@ api = [
     "PyJWT==2.15.1",
     "apscheduler==3.11.2",
     "pywebpush==2.3.0",
+    "h2==4.4.1",  # HTTP/2 for APNs (httpx http2=True)
     "anthropic==0.87.0",
     "posthog==7.13.2",
     "jinja2>=3.1",

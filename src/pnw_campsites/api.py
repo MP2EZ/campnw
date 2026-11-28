@@ -139,7 +139,7 @@ async def _poll_tranche(
     tier_filter restricts to "pro" or "free" watches so the 5-min Pro job and
     the 15-min free job don't double-poll Pro watches.
     """
-    from pnw_campsites.monitor.notify import notify_ntfy, notify_web_push
+    from pnw_campsites.monitor.notify import notify_ntfy
     from pnw_campsites.monitor.watcher import poll_all
 
     if not _watch_db:
@@ -180,82 +180,79 @@ async def _poll_tranche(
             for change in result.changes:
                 change.context_message = msg
 
-    total_changes = 0
-    total_errors = 0
-    for result in results:
-        if result.error:
-            total_errors += 1
-            continue
-        if not result.has_changes:
-            continue
-        total_changes += len(result.changes)
-        capture_event(
-            distinct_id=(
-                str(result.watch.user_id) if result.watch.user_id
-                else f"watch:{result.watch.id}"
-            ),
-            event="watch_triggered",
-            properties={
-                "watch_id": result.watch.id,
-                "facility_id": result.watch.facility_id,
-                "source": result.watch.booking_system,
-                "sites_freed": len(result.changes),
-                "current_available": result.current_available,
-            },
-        )
-        channel = result.watch.notification_channel or ""
-        topic = result.watch.notify_topic
-        # Dispatch notification based on channel
-        if channel == "ntfy" and topic:
-            try:
-                await notify_ntfy(topic, result)
-                _watch_db.log_notification(
-                    result.watch.id, "ntfy", "sent",
-                    len(result.changes),
-                )
-                _capture_notification(result, "ntfy", "sent")
-            except Exception as e:
-                _poll_logger.warning(
-                    "ntfy failed for watch %s: %s",
-                    result.watch.id, e,
-                )
-                _watch_db.log_notification(
-                    result.watch.id, "ntfy", "failed",
-                )
-                _capture_notification(result, "ntfy", "failed")
-        elif channel == "web_push" and result.watch.user_id:
-            subs = _watch_db.get_push_subscriptions_for_user(result.watch.user_id)
-            for sub in subs:
+    from pnw_campsites.monitor import notify as notify_mod
+
+    async with notify_mod.open_apns_sender() as apns_sender:
+        total_changes = 0
+        total_errors = 0
+        for result in results:
+            if result.error:
+                total_errors += 1
+                continue
+            if not result.has_changes:
+                continue
+            total_changes += len(result.changes)
+            capture_event(
+                distinct_id=(
+                    str(result.watch.user_id) if result.watch.user_id
+                    else f"watch:{result.watch.id}"
+                ),
+                event="watch_triggered",
+                properties={
+                    "watch_id": result.watch.id,
+                    "facility_id": result.watch.facility_id,
+                    "source": result.watch.booking_system,
+                    "sites_freed": len(result.changes),
+                    "current_available": result.current_available,
+                },
+            )
+            channel = result.watch.notification_channel or ""
+            topic = result.watch.notify_topic
+            # Dispatch notification based on channel
+            if channel == "ntfy" and topic:
                 try:
-                    await notify_web_push(
-                        {
-                            "endpoint": sub["endpoint"],
-                            "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]},
-                        },
-                        result,
-                    )
+                    await notify_ntfy(topic, result)
                     _watch_db.log_notification(
-                        result.watch.id, "web_push", "sent", len(result.changes),
+                        result.watch.id, "ntfy", "sent",
+                        len(result.changes),
                     )
-                    _capture_notification(result, "web_push", "sent")
+                    _capture_notification(result, "ntfy", "sent")
                 except Exception as e:
                     _poll_logger.warning(
-                        "web_push failed for watch %s: %s",
+                        "ntfy failed for watch %s: %s",
                         result.watch.id, e,
                     )
-                    _watch_db.log_notification(result.watch.id, "web_push", "failed")
-                    _capture_notification(result, "web_push", "failed")
-        elif topic:
-            # Legacy: if notify_topic is set but no channel,
-            # treat as ntfy for backward compatibility
-            try:
-                await notify_ntfy(topic, result)
-                _watch_db.log_notification(
-                    result.watch.id, "ntfy", "sent",
-                    len(result.changes),
+                    _watch_db.log_notification(
+                        result.watch.id, "ntfy", "failed",
+                    )
+                    _capture_notification(result, "ntfy", "failed")
+            elif channel == "web_push" and result.watch.user_id:
+                # "web_push" predates the app: it means every device the user
+                # registered, browsers and phones.
+                cg = _registry.get_by_facility_id(result.watch.facility_id) if _registry else None
+                sent = await notify_mod.push_to_user(
+                    _watch_db, result.watch.user_id,
+                    notify_mod.web_push_payload(result),
+                    notify_mod.native_alert(result, cg.name if cg else result.watch.name),
+                    sender=apns_sender,
                 )
-            except Exception:
-                pass
+                for device_channel, status in sent:
+                    _watch_db.log_notification(
+                        result.watch.id, device_channel, status,
+                        len(result.changes) if status == "sent" else 0,
+                    )
+                    _capture_notification(result, device_channel, status)
+            elif topic:
+                # Legacy: if notify_topic is set but no channel,
+                # treat as ntfy for backward compatibility
+                try:
+                    await notify_ntfy(topic, result)
+                    _watch_db.log_notification(
+                        result.watch.id, "ntfy", "sent",
+                        len(result.changes),
+                    )
+                except Exception:
+                    pass
 
     now = datetime.now(UTC)
     _poll_state["last_poll"] = now.isoformat()
@@ -541,6 +538,10 @@ async def lifespan(app: FastAPI):
 
 
 logging.basicConfig(level=logging.INFO)
+# httpx logs every request URL at INFO. APNs URLs contain the device token,
+# which must stay out of Fly logs.
+for _name in ("httpx", "httpcore"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
 
 app = FastAPI(title="PNW Campsites", lifespan=lifespan)
 
