@@ -13,8 +13,11 @@ import os
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+from stripe import StripeError
 
+from pnw_campsites.billing import cancel_customer_subscriptions
 from pnw_campsites.monitor.db import User
+from pnw_campsites.posthog_client import delete_person
 from pnw_campsites.routes.deps import get_current_user, get_watch_db
 
 log = logging.getLogger(__name__)
@@ -115,6 +118,21 @@ async def delete_me(request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     user = db.get_user_by_id(user_id)
+
+    # First, before anything is deleted: a deleted account must not keep
+    # being charged, and if this fails the user can still sign in and retry.
+    if user and user.stripe_customer_id:
+        try:
+            cancelled = cancel_customer_subscriptions(user.stripe_customer_id)
+        except StripeError:
+            log.error("Failed to cancel Stripe subscriptions for user %s", user_id, exc_info=True)
+            raise HTTPException(
+                status_code=502,
+                detail="Couldn't cancel your subscription. Please try again.",
+            ) from None
+        if cancelled:
+            log.info("Cancelled %d subscription(s) for deleted user %s", len(cancelled), user_id)
+
     if user and user.supabase_id:
         # Before the local delete: if the sign-in survived, the next login
         # would silently re-provision the account, so keep both and let the
@@ -129,6 +147,9 @@ async def delete_me(request: Request):
             ) from None
 
     db.delete_user(user_id)
+    # Best-effort: the account is already gone, and an analytics outage must
+    # not leave the user unable to delete it. Failures are logged.
+    await delete_person(str(user_id))
     return {"ok": True}
 
 

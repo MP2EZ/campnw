@@ -3,6 +3,7 @@
 import logging
 import os
 
+import httpx
 from posthog import Posthog
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,48 @@ def capture_event(
         client.capture(distinct_id=distinct_id, event=event, properties=payload)
     except Exception:
         logger.warning("PostHog capture failed for event %s", event, exc_info=True)
+
+
+async def delete_person(distinct_id: str) -> bool:
+    """Delete the PostHog person behind `distinct_id`, with its events and
+    recordings. Never raises; returns True when PostHog accepted it.
+
+    Needs a personal API key with the person:write scope and the numeric
+    project id. Skipped when either is unset (local dev). PostHog queues the
+    deletion and returns 202.
+    """
+    key = os.getenv("POSTHOG_PERSONAL_API_KEY", "")
+    project_id = os.getenv("POSTHOG_PROJECT_ID", "")
+    if not key or not project_id:
+        logger.warning("PostHog person delete skipped: admin API not configured")
+        return False
+    url = f"{_api_host()}/api/projects/{project_id}/persons/bulk_delete/"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                url,
+                headers={"Authorization": f"Bearer {key}"},
+                json={
+                    "distinct_ids": [distinct_id],
+                    "delete_events": True,
+                    "delete_recordings": True,
+                },
+            )
+        resp.raise_for_status()
+    except httpx.HTTPError:
+        logger.error("PostHog person delete failed for user %s", distinct_id, exc_info=True)
+        return False
+    return True
+
+
+def _api_host() -> str:
+    """The private API host for this project's region.
+
+    POSTHOG_HOST is the ingestion host (eu.i.posthog.com); the REST API lives
+    on eu.posthog.com.
+    """
+    host = os.getenv("POSTHOG_API_HOST") or os.getenv("POSTHOG_HOST", "https://eu.i.posthog.com")
+    return host.rstrip("/").replace(".i.posthog.com", ".posthog.com")
 
 
 # ---------------------------------------------------------------------------

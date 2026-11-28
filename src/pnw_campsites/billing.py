@@ -13,7 +13,13 @@ import os
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from stripe import RequestsClient, SignatureVerificationError, StripeClient, Webhook
+from stripe import (
+    InvalidRequestError,
+    RequestsClient,
+    SignatureVerificationError,
+    StripeClient,
+    Webhook,
+)
 
 from pnw_campsites.monitor.db import User, WatchDB
 from pnw_campsites.posthog_client import capture_event
@@ -118,6 +124,32 @@ def create_checkout_session(
         },
     )
     return session.url, customer_id
+
+
+def cancel_customer_subscriptions(customer_id: str) -> list[str]:
+    """Cancel every open subscription on a Stripe customer, immediately.
+
+    Used by account deletion: a deleted account must stop being billed.
+    Returns the cancelled subscription ids. Raises StripeError on failure so
+    the caller can keep the account and let the user retry. A customer that
+    no longer exists in Stripe has nothing to cancel.
+    """
+    if not customer_id or not _env("STRIPE_SECRET_KEY"):
+        return []
+    client = _get_client()
+    try:
+        # Without a status filter Stripe lists every subscription that isn't
+        # already canceled (active, trialing, past_due, unpaid, incomplete...).
+        subs = client.v1.subscriptions.list(params={"customer": customer_id, "limit": 100})
+    except InvalidRequestError as exc:
+        if exc.code == "resource_missing":
+            return []
+        raise
+    cancelled = []
+    for sub in subs.data:
+        client.v1.subscriptions.cancel(sub.id)
+        cancelled.append(sub.id)
+    return cancelled
 
 
 def portal_return_url() -> str:
